@@ -56,12 +56,17 @@ Source of truth for types: **`src/lib/schema.ts`** — import it, never redefine
 the types. (Domain field names stay in Spanish: they are the real Drive
 columns/contract.)
 
-Three stores:
+Three stores (all JSON files in the user's Drive):
 
-- `Movimiento[]` — **flow** (in/out) → a tab in the Drive spreadsheet.
-- `Activo[]` — **balance** (what you own and what it's worth today) → another tab.
-- `Config` (sections, categories, preferences, schemaVersion) → **appDataFolder**
-  (syncs across devices).
+- `Movimiento[]` — **flow** (in/out) → `movimientos.json` in the `Moneta` folder.
+- `Activo[]` — **balance** (what you own and what it's worth today) → `activos.json`
+  in the same folder.
+- `Config` (sections, categories, preferences, schemaVersion) → `config.json` in
+  the **appDataFolder** (syncs across devices). Location abstracted behind a single
+  repo function so it could move to the visible folder later (no UI for it in v1).
+
+Storage format is **JSON files** (1:1 with the types below, only the Drive Files
+API under `drive.file`). A Google Sheets export is a possible future, not v1.
 
 Local cache of everything in IndexedDB (disposable; re-downloaded from Drive if cleared).
 
@@ -88,9 +93,14 @@ Derived (computed, not stored): `ganancia = valorActual - (capitalInvertido ?? 0
   public client **with no client secret**.
 - **Scopes:** `drive.file` (per-file, non-sensitive) + `drive.appdata`. If an
   existing file must be opened, use the Google Picker together with `drive.file`.
-- Identity = Google **ID token** (JWT); the `sub` claim is the user id. No users table.
-- **Bootstrap:** on first login, find the app folder in Drive (via `drive.file`);
-  if it doesn't exist, create it with its spreadsheet.
+- Identity = the user's Google account, read from `GET drive/v3/about?fields=user`
+  (email + displayName) with the same access token — no second consent, no ID-token
+  flow in v1. No users table.
+- **Bootstrap:** on first login, find the `Moneta` folder in Drive (via `drive.file`);
+  if it doesn't exist, create it. Ensure `movimientos.json` + `activos.json` exist
+  in it (`[]`), and `config.json` (seeded from `CONFIG_SEMILLA`) in `appDataFolder`.
+  Idempotent (find-before-create). Access token kept in memory only until `pinLock.ts`
+  adds encrypted caching.
 - **Access-token-only** (no stored refresh token). Silent re-auth while the
   Google session is alive.
 - **PIN lock** (`pinLock.ts`): local, per-device. With WebCrypto: derive a key
@@ -128,7 +138,7 @@ Do not add a backend unless one of those explicitly requires it.
 - Do not use `localStorage`/`sessionStorage` for sensitive data. Use IndexedDB;
   the token is stored encrypted (key derived from the PIN).
 - Respect the `schema.ts` contract. Structural changes bump `schemaVersion` and
-  require an idempotent migration + a backup of the spreadsheet before running it.
+  require an idempotent migration + a backup of the JSON data files before running it.
 
 ## 8. Build order (scaffold → features)
 
@@ -136,10 +146,12 @@ Do not add a backend unless one of those explicitly requires it.
 2. ✅ `vite-plugin-pwa` (manifest + service worker).
 3. ✅ Correct `.gitignore` (node_modules, dist, `.env*`).
 4. ✅ `schema.ts` as source of truth.
-5. ⬜ Two independent pieces (any order):
-   - `auth.ts` (GIS token client + PKCE) + `pinLock.ts` (WebCrypto).
-   - `repo.ts` (CRUD of movements/assets in the Drive spreadsheet; load/save
-     Config in appDataFolder; IndexedDB cache; schemaVersion check on startup).
+5. ⬜ Independent pieces (any order):
+   - `auth.ts` (GIS token client) + Drive bootstrap (`drive.ts` + `bootstrap.ts`)
+     — see §10.1.
+   - `pinLock.ts` (WebCrypto) — its own spec.
+   - `repo.ts` (CRUD of movements/assets in the JSON data files; load/save Config
+     in appDataFolder; IndexedDB cache; schemaVersion check on startup) — its own spec.
 
 ## 9. How we work
 
@@ -153,7 +165,26 @@ in §11.
 > One subsection per feature, written before implementation. Template:
 > **Goal · User story · UI · Data touched · Edge cases · Done when.**
 
-_(none yet — first feature spec goes here)_
+### 10.1 Google login + Drive bootstrap
+
+Full design: `docs/superpowers/specs/2026-06-25-auth-drive-bootstrap-design.md`.
+
+- **Goal:** sign in with Google and provision the user's own Drive storage on
+  first login.
+- **User story:** as a user, I log in with Google and the app silently creates (or
+  reuses) my `Moneta` folder with empty data files and a seed config, then lets me in.
+- **UI:** login screen with a "Sign in with Google" button; a route guard sends
+  unauthenticated users there and blocks `/` until ready.
+- **Data touched:** creates `Moneta/movimientos.json`, `Moneta/activos.json` (`[]`),
+  and `appDataFolder/config.json` (from `CONFIG_SEMILLA`). Reads `drive/v3/about`
+  for identity.
+- **Edge cases:** GIS load failure, consent denied/cancelled, token expiry (silent
+  re-auth → else login), Drive `401`/`403`, offline on first launch, repeated
+  bootstrap must not duplicate.
+- **Done when:** a fresh account ends with the folder + 3 files; re-login reuses
+  them (no dupes); access token never persisted unencrypted; guard blocks `/` until
+  authenticated; `auth.ts`/`drive.ts`/`bootstrap.ts` tests + `typecheck` + `lint` green.
+- **Out of scope (own specs):** `pinLock.ts`, `repo.ts` CRUD.
 
 ## 11. Decisions log
 
@@ -169,3 +200,17 @@ _(none yet — first feature spec goes here)_
 - 2026-06-25 — State: adopt **zustand** from the start (not "only if it grows").
 - 2026-06-25 — Tests: **Vitest + Testing Library + user-event**. `fireEvent` is
   banned — always use `user-event` for interactions.
+- 2026-06-25 — Drive storage format: **JSON files** (`movimientos.json`,
+  `activos.json`, `config.json`), not a Google Sheets spreadsheet. 1:1 with
+  `schema.ts`, only the Drive Files API under `drive.file`. Sheets export is a
+  possible future, not v1.
+- 2026-06-25 — Identity via `GET drive/v3/about?fields=user` with the access token,
+  instead of a separate Google ID-token flow — avoids a second consent. Deviates
+  from the literal "ID-token `sub`"; acceptable for v1.
+- 2026-06-25 — Access token kept **in memory only** until `pinLock.ts` lands;
+  no `localStorage`/unencrypted IndexedDB.
+- 2026-06-25 — `config.json` lives in `appDataFolder`, but its location is
+  abstracted behind one repo function so it could move to the visible folder later.
+  No toggle UI in v1 (YAGNI).
+- 2026-06-25 — First feature spec scoped to **login + Drive bootstrap only**; PIN
+  lock and CRUD (`repo.ts`) are separate specs.
