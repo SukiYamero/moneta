@@ -69,7 +69,6 @@ type LockVault = {
   }
   // throttle
   failedAttempts: number
-  lockedOutUntil?: number
   // 7-min background timeout
   lastActiveAt: number
 }
@@ -131,7 +130,8 @@ in-memory DEK; the envelopes are untouched.
 
 ### Throttle & reset
 
-- 5 failed PIN attempts → set `lockedOutUntil` and force Google re-login.
+- 5 failed PIN attempts → terminal `LockedOutError`; force Google re-login (wipe
+  vault). No timed cooldown window (YAGNI) — lockout is "until re-login".
 - "Forgot PIN" → **wipe the vault** → full Google re-login → re-enable lock.
   (Matches §5: PIN reset = re-login, no email flows.)
 
