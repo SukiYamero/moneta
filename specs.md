@@ -186,6 +186,32 @@ Full design: `docs/superpowers/specs/2026-06-25-auth-drive-bootstrap-design.md`.
   authenticated; `auth.ts`/`drive.ts`/`bootstrap.ts` tests + `typecheck` + `lint` green.
 - **Out of scope (own specs):** `pinLock.ts`, `repo.ts` CRUD.
 
+### 10.2 PIN lock + biometric unlock
+
+Full design: `docs/superpowers/specs/2026-06-26-pin-lock-design.md`.
+
+- **Goal:** optional per-device lock. Unlock prioritises biometrics (FaceID /
+  TouchID / fingerprint via WebAuthn) with a mandatory 4-digit PIN fallback. The
+  cached OAuth token is encrypted at rest; either method decrypts it.
+- **User story:** I enable the lock, set a 4-digit PIN, optionally turn on
+  biometrics; on cold start or after 7 min in background the app asks for
+  biometrics, falling back to the PIN.
+- **UI:** minimal here (PIN keypad + biometric button + enable toggle); the
+  polished lock-screen design is a separate spec the user will propose.
+- **Data touched:** a single encrypted `LockVault` record in IndexedDB (token
+  cipher, PIN/biometric DEK envelopes, salts, throttle counters, `lastActiveAt`).
+  No `schema.ts` change.
+- **Crypto:** envelope encryption — one random DEK encrypts the token; the DEK is
+  wrapped separately by `PBKDF2(PIN)` and by the WebAuthn `PRF` secret (HKDF).
+- **Edge cases:** no WebAuthn/PRF → PIN-only; biometric cancel → PIN; wrong PIN →
+  throttle (5 → forced re-login); corrupt vault → re-login; logout keeps the
+  vault; offline unlock defers silent re-auth.
+- **Done when:** lock enables with a 4-digit PIN; biometric offered only where PRF
+  exists; cold start + 7-min background re-lock; token never stored unencrypted;
+  `pinLock.ts`/`lockStore.ts` tests + `typecheck` + `lint` green.
+- **Out of scope (own specs):** polished UI, `repo.ts` CRUD, encrypting the local
+  financial-data cache.
+
 ## 11. Decisions log
 
 - 2026-06-25 — Package manager: **bun**. Node: **24 LTS** (`.nvmrc`).
@@ -214,3 +240,29 @@ Full design: `docs/superpowers/specs/2026-06-25-auth-drive-bootstrap-design.md`.
   No toggle UI in v1 (YAGNI).
 - 2026-06-25 — First feature spec scoped to **login + Drive bootstrap only**; PIN
   lock and CRUD (`repo.ts`) are separate specs.
+- 2026-06-26 — Integrated `feat/auth-drive-bootstrap` to `main` (trunk-based, no
+  `develop`). Real end-to-end OAuth still unverified — see §12.
+- 2026-06-26 — PIN lock unlock model: **biometrics prioritised, mandatory PIN
+  fallback** (option C). Biometrics = WebAuthn platform authenticator (one
+  mechanism; the device picks FaceID/TouchID/fingerprint), not three methods.
+- 2026-06-26 — Lock crypto: **envelope encryption** (one DEK encrypts the token;
+  DEK wrapped per method) over two separate ciphertexts — single token cipher
+  survives rotation cleanly. Biometric key via **WebAuthn PRF extension**; no PRF
+  → biometrics not offered (PIN-only), never a weak gate-only fallback.
+- 2026-06-26 — Lock triggers: re-lock on **cold start** + after **7 min** in
+  background, detected via the Page Visibility API (elapsed computed on return,
+  no background timer).
+- 2026-06-26 — **4-digit PIN**; brute-force resistance relies on the 5-attempt
+  throttle + PBKDF2, not PIN entropy (casual-access threat model, §5).
+- 2026-06-26 — PIN-lock UI kept minimal in this spec; polished lock-screen design
+  deferred to its own spec (user to propose).
+
+## 12. Backlog (pending verification / deferred work)
+
+- **Verify login + Drive bootstrap end-to-end (§10.1).** Code + unit tests are
+  merged, but the real OAuth flow has never run against Google. Needs a Google
+  Cloud OAuth client (`VITE_GOOGLE_CLIENT_ID` in `.env.local`), `http://localhost`
+  as an authorized JS origin, and the consent screen in **Testing** mode with the
+  dev Gmail as a test user. Confirm: fresh account → `Moneta` folder + 3 files;
+  re-login reuses them (no dupes); token never persisted unencrypted. The custom
+  domain / app verification is a production concern, not required for this test.
