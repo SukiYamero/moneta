@@ -3,6 +3,7 @@ import type { AuthSession } from '@/lib/auth'
 
 const PIN_ITERATIONS = 310_000
 const MAX_ATTEMPTS = 5
+export const BACKGROUND_TIMEOUT_MS = 7 * 60_000
 const enc = new TextEncoder()
 const dec = new TextDecoder()
 const HKDF_INFO = enc.encode('moneta-lock-dek')
@@ -258,4 +259,14 @@ export async function updateSession(session: AuthSession): Promise<void> {
   const dekKey = await importAesKey(activeDek)
   const token = await aesEncrypt(dekKey, enc.encode(JSON.stringify(session)))
   await db.vault.update(VAULT_ID, { tokenCipher: token.cipher, tokenIv: token.iv })
+}
+
+export async function markActive(now: number = Date.now()): Promise<void> {
+  await db.vault.update(VAULT_ID, { lastActiveAt: now })
+}
+
+export async function isBackgroundExpired(now: number = Date.now()): Promise<boolean> {
+  const vault = await db.vault.get(VAULT_ID)
+  if (!vault) return false
+  return now - vault.lastActiveAt > BACKGROUND_TIMEOUT_MS
 }

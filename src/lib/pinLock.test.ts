@@ -12,6 +12,9 @@ import {
   BiometricUnavailableError,
   isBiometricAvailable,
   unlockWithBiometric,
+  BACKGROUND_TIMEOUT_MS,
+  markActive,
+  isBackgroundExpired,
 } from '@/lib/pinLock'
 import type { AuthSession } from '@/lib/auth'
 
@@ -158,4 +161,15 @@ test('no PRF result -> no biometric envelope written (PIN-only)', async () => {
   await enableLock({ pin: '1234', session, biometric: true })
   expect(await biometricEnabled()).toBe(false)
   await expect(unlockWithBiometric()).rejects.toBeInstanceOf(BiometricUnavailableError)
+})
+
+test('background is expired only after the timeout elapses', async () => {
+  await enableLock({ pin: '1234', session })
+  await markActive(1_000_000)
+  expect(await isBackgroundExpired(1_000_000 + BACKGROUND_TIMEOUT_MS - 1)).toBe(false)
+  expect(await isBackgroundExpired(1_000_000 + BACKGROUND_TIMEOUT_MS + 1)).toBe(true)
+})
+
+test('no vault is never background-expired', async () => {
+  expect(await isBackgroundExpired(Date.now())).toBe(false)
 })
