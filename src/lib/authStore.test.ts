@@ -75,3 +75,37 @@ describe('useAuthStore.logout', () => {
     expect(s).toMatchObject({ status: 'idle', user: null, session: null, drive: null })
   })
 })
+
+describe('useAuthStore.hydrate', () => {
+  it('populates user and drive from an existing session', async () => {
+    const session = { accessToken: 'tok', expiresAt: Date.now() + 3_600_000 }
+    mUser.mockResolvedValue({ email: 'a@b.com', name: 'Ana' })
+    mBootstrap.mockResolvedValue({
+      folderId: 'F',
+      movimientosFileId: 'M',
+      activosFileId: 'A',
+      configFileId: 'C',
+    })
+
+    await useAuthStore.getState().hydrate(session)
+
+    const s = useAuthStore.getState()
+    expect(s.status).toBe('authenticated')
+    expect(s.session).toEqual(session)
+    expect(s.user).not.toBeNull()
+  })
+
+  it('transitions to error on failure', async () => {
+    const session = { accessToken: 'bad', expiresAt: Date.now() + 3_600_000 }
+    mUser.mockRejectedValue(new Error('network error'))
+
+    await useAuthStore.getState().hydrate(session)
+
+    const s = useAuthStore.getState()
+    expect(s.status).toBe('error')
+    expect(s.error).toBe('network error')
+    expect(s.session).toBeNull()
+    expect(s.user).toBeNull()
+    expect(s.drive).toBeNull()
+  })
+})

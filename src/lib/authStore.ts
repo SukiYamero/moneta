@@ -13,6 +13,7 @@ type AuthState = {
   login: () => Promise<void>
   restore: () => Promise<void>
   logout: () => void
+  hydrate: (session: AuthSession) => Promise<void>
 }
 
 async function authenticate(prompt: '' | 'consent') {
@@ -48,6 +49,18 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
   logout: () => set({ status: 'idle', user: null, session: null, drive: null, error: null }),
+  hydrate: async (session) => {
+    set({ status: 'authenticating', error: null })
+    try {
+      const [user, drive] = await Promise.all([
+        fetchGoogleUser(session.accessToken),
+        bootstrap(session.accessToken),
+      ])
+      set({ status: 'authenticated', session, user, drive })
+    } catch (e) {
+      set({ status: 'error', session: null, user: null, drive: null, error: errorMessage(e) })
+    }
+  },
 }))
 
 function errorMessage(e: unknown): string {
