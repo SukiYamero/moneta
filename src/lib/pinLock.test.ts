@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from 'vitest'
+import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { db } from '@/lib/db'
 import {
   enableLock,
@@ -8,6 +8,10 @@ import {
   LockedOutError,
   resetVault,
   updateSession,
+  biometricEnabled,
+  BiometricUnavailableError,
+  isBiometricAvailable,
+  unlockWithBiometric,
 } from '@/lib/pinLock'
 import type { AuthSession } from '@/lib/auth'
 
@@ -82,4 +86,76 @@ test('updateSession re-encrypts a refreshed token under the same DEK', async () 
 
   expect(unlocked).toEqual(refreshed)
   expect(dekAfter).toEqual(dekBefore)
+})
+
+// Deterministic 32-byte PRF secret returned by both create and get.
+const PRF_SECRET = new Uint8Array(32).fill(7).buffer
+
+function mockWebAuthn(prf: ArrayBuffer | undefined) {
+  const credentialId = new Uint8Array([9, 9, 9])
+  const extResults = prf ? { prf: { results: { first: prf } } } : { prf: {} }
+  const credential = {
+    rawId: credentialId.buffer,
+    getClientExtensionResults: () => extResults,
+  }
+  vi.stubGlobal('navigator', {
+    credentials: {
+      create: vi.fn().mockResolvedValue(credential),
+      get: vi.fn().mockResolvedValue(credential),
+    },
+  })
+  vi.stubGlobal('PublicKeyCredential', {
+    isUserVerifyingPlatformAuthenticatorAvailable: vi.fn().mockResolvedValue(true),
+  })
+  vi.stubGlobal('location', { hostname: 'localhost' })
+}
+
+beforeEach(() => {
+  vi.unstubAllGlobals()
+})
+
+test('isBiometricAvailable reflects platform authenticator support', async () => {
+  mockWebAuthn(PRF_SECRET)
+  expect(await isBiometricAvailable()).toBe(true)
+})
+
+test('enable with biometric then unlock via PRF returns the session', async () => {
+  mockWebAuthn(PRF_SECRET)
+  await enableLock({ pin: '1234', session, biometric: true })
+  expect(await biometricEnabled()).toBe(true)
+
+  const unlocked = await unlockWithBiometric()
+  expect(unlocked).toEqual(session)
+
+  const getSpy = navigator.credentials.get as ReturnType<typeof vi.fn>
+  // enableLock's registration also calls get; the LAST call is the unlock ceremony.
+  const getArg = getSpy.mock.calls.at(-1)![0] as { publicKey: PublicKeyCredentialRequestOptions }
+  const passedSalt = new Uint8Array(getArg.publicKey.extensions!.prf!.eval!.first as ArrayBuffer)
+  const storedSalt = (await db.vault.get(1))!.biometric!.prfSalt
+  // vault binary fields round-trip as plain numeric-keyed objects:
+  const toBytes = (v: unknown) => Uint8Array.from(Object.values(v as Record<string, number>))
+  expect(passedSalt).toEqual(toBytes(storedSalt))
+})
+
+test('PIN still unlocks when biometric is enabled', async () => {
+  mockWebAuthn(PRF_SECRET)
+  await enableLock({ pin: '1234', session, biometric: true })
+  expect(await unlockWithPin('1234')).toEqual(session)
+})
+
+test('biometric unlock clears the PIN throttle', async () => {
+  mockWebAuthn(PRF_SECRET)
+  await enableLock({ pin: '1234', session, biometric: true })
+  for (let i = 0; i < 3; i++) {
+    await expect(unlockWithPin('0000')).rejects.toBeInstanceOf(WrongPinError)
+  }
+  await unlockWithBiometric()
+  expect((await db.vault.get(1))!.failedAttempts).toBe(0)
+})
+
+test('no PRF result -> no biometric envelope written (PIN-only)', async () => {
+  mockWebAuthn(undefined)
+  await enableLock({ pin: '1234', session, biometric: true })
+  expect(await biometricEnabled()).toBe(false)
+  await expect(unlockWithBiometric()).rejects.toBeInstanceOf(BiometricUnavailableError)
 })
