@@ -40,7 +40,7 @@ async function resume(
     if (e instanceof LockedOutError) {
       await resetVault()
       useAuthStore.getState().logout()
-      set({ phase: 'locked', error: 'locked out' })
+      set({ phase: 'unlocked', error: 'locked out' })
       return
     }
     set({ error: e instanceof Error ? e.message : 'unlock failed' })
@@ -72,6 +72,6 @@ export const useLockStore = create<LockState>((set, get) => ({
   reset: async () => {
     await resetVault()
     useAuthStore.getState().logout()
-    set({ phase: 'locked', error: null })
+    set({ phase: 'unlocked', error: null })
   },
 }))

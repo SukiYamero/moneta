@@ -206,11 +206,16 @@ Full design: `docs/superpowers/specs/2026-06-26-pin-lock-design.md`.
 - **Edge cases:** no WebAuthn/PRF → PIN-only; biometric cancel → PIN; wrong PIN →
   throttle (5 → forced re-login); corrupt vault → re-login; logout keeps the
   vault; offline unlock defers silent re-auth.
-- **Done when:** lock enables with a 4-digit PIN; biometric offered only where PRF
-  exists; cold start + 7-min background re-lock; token never stored unencrypted;
-  `pinLock.ts`/`lockStore.ts` tests + `typecheck` + `lint` green.
-- **Out of scope (own specs):** polished UI, `repo.ts` CRUD, encrypting the local
-  financial-data cache.
+- **Done when:** (crypto/store core — DONE) `pinLock.ts` + `lockStore.ts` provide
+  envelope encryption, biometric/PIN unlock, throttle, token rotation, and the
+  re-lock triggers; biometric offered only where PRF exists; token never stored
+  unencrypted; tests + `typecheck` + `lint` green. (Activation — DEFERRED, see §12)
+  the user-facing "enable lock" flow and the `updateSession` token-refresh wiring
+  land with the polished UI spec.
+- **Out of scope (own specs / deferred — see §12):** the **enable-lock UI** (entry
+  point that calls `lockStore.enable`) and wiring `updateSession` into the token
+  refresh path — both ride with the polished UI; the polished lock-screen visual
+  design; `repo.ts` CRUD; encrypting the local financial-data cache.
 
 ## 11. Decisions log
 

@@ -78,13 +78,22 @@ describe('useLockStore', () => {
     expect(useLockStore.getState().error).toBe('wrong pin')
   })
 
-  test('lockout resets the vault and logs out', async () => {
+  test('lockout resets the vault, logs out, and unlocks for fresh login', async () => {
     pinLock.unlockWithPin.mockRejectedValue(new pinLock.LockedOutError())
     const { useLockStore } = await import('@/lib/lockStore')
     await useLockStore.getState().unlockPin('0000')
     expect(pinLock.resetVault).toHaveBeenCalled()
     expect(logout).toHaveBeenCalled()
-    expect(useLockStore.getState().phase).toBe('locked')
+    expect(useLockStore.getState().phase).toBe('unlocked')
+  })
+
+  test('reset wipes the vault, logs out, and unlocks for fresh login', async () => {
+    const { useLockStore } = await import('@/lib/lockStore')
+    useLockStore.setState({ phase: 'locked' })
+    await useLockStore.getState().reset()
+    expect(pinLock.resetVault).toHaveBeenCalled()
+    expect(logout).toHaveBeenCalled()
+    expect(useLockStore.getState().phase).toBe('unlocked')
   })
 
   test('onHidden marks active only when unlocked', async () => {
