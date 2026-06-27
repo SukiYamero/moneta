@@ -6,6 +6,10 @@ const MAX_ATTEMPTS = 5
 const enc = new TextEncoder()
 const dec = new TextDecoder()
 
+// WebCrypto's BufferSource requires an ArrayBuffer-backed view; TS 5.7+ widens a
+// bare Uint8Array to ArrayBufferLike (incl. SharedArrayBuffer). Ours never are.
+type Bytes = Uint8Array<ArrayBuffer>
+
 export class WrongPinError extends Error {
   constructor() {
     super('lock: wrong pin')
@@ -20,33 +24,30 @@ export class LockedOutError extends Error {
   }
 }
 
-function randomBytes(length: number): Uint8Array {
+function randomBytes(length: number): Bytes {
   return crypto.getRandomValues(new Uint8Array(length))
 }
 
-function generateDek(): Uint8Array {
+function generateDek(): Bytes {
   return randomBytes(32)
 }
 
-function importAesKey(raw: Uint8Array): Promise<CryptoKey> {
+function importAesKey(raw: Bytes): Promise<CryptoKey> {
   return crypto.subtle.importKey('raw', raw, 'AES-GCM', false, ['encrypt', 'decrypt'])
 }
 
-async function aesEncrypt(
-  key: CryptoKey,
-  data: Uint8Array,
-): Promise<{ iv: Uint8Array; cipher: Uint8Array }> {
+async function aesEncrypt(key: CryptoKey, data: Bytes): Promise<{ iv: Bytes; cipher: Bytes }> {
   const iv = randomBytes(12)
   const cipher = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, data)
   return { iv, cipher: new Uint8Array(cipher) }
 }
 
-async function aesDecrypt(key: CryptoKey, iv: Uint8Array, cipher: Uint8Array): Promise<Uint8Array> {
+async function aesDecrypt(key: CryptoKey, iv: Bytes, cipher: Bytes): Promise<Bytes> {
   const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, cipher)
   return new Uint8Array(plain)
 }
 
-async function derivePinKey(pin: string, salt: Uint8Array, iterations: number): Promise<CryptoKey> {
+async function derivePinKey(pin: string, salt: Bytes, iterations: number): Promise<CryptoKey> {
   const base = await crypto.subtle.importKey('raw', enc.encode(pin), 'PBKDF2', false, ['deriveKey'])
   return crypto.subtle.deriveKey(
     { name: 'PBKDF2', salt, iterations, hash: 'SHA-256' },
@@ -87,10 +88,11 @@ export async function enableLock(opts: { pin: string; session: AuthSession }): P
 // A partial db.vault.update() makes the store round-trip the untouched binary
 // fields back as plain numeric-keyed objects, which WebCrypto rejects.
 // Re-wrap them into a real Uint8Array before any crypto call.
-function asBytes(v: unknown): Uint8Array {
-  if (v instanceof Uint8Array) return v
-  if (ArrayBuffer.isView(v)) return new Uint8Array(v.buffer, v.byteOffset, v.byteLength)
+function asBytes(v: unknown): Bytes {
+  if (v instanceof Uint8Array) return Uint8Array.from(v)
   if (v instanceof ArrayBuffer) return new Uint8Array(v)
+  if (ArrayBuffer.isView(v))
+    return Uint8Array.from(new Uint8Array(v.buffer, v.byteOffset, v.byteLength))
   if (Array.isArray(v)) return Uint8Array.from(v as number[])
   if (v !== null && typeof v === 'object')
     return Uint8Array.from(Object.values(v as Record<string, number>))
@@ -103,7 +105,7 @@ async function readVault(): Promise<LockVault> {
   return vault
 }
 
-async function decryptSession(vault: LockVault, dek: Uint8Array): Promise<AuthSession> {
+async function decryptSession(vault: LockVault, dek: Bytes): Promise<AuthSession> {
   const dekKey = await importAesKey(dek)
   const plain = await aesDecrypt(dekKey, asBytes(vault.tokenIv), asBytes(vault.tokenCipher))
   return JSON.parse(dec.decode(plain)) as AuthSession
@@ -118,7 +120,7 @@ export async function unlockWithPin(pin: string): Promise<AuthSession> {
   if (vault.failedAttempts >= MAX_ATTEMPTS) throw new LockedOutError()
 
   const pinKey = await derivePinKey(pin, asBytes(vault.pinSalt), vault.pinIterations)
-  let dek: Uint8Array
+  let dek: Bytes
   try {
     dek = await aesDecrypt(pinKey, asBytes(vault.pinWrapIv), asBytes(vault.dekWrappedByPin))
   } catch {
