@@ -2,6 +2,7 @@ import { db, VAULT_ID, type LockVault } from '@/lib/db'
 import type { AuthSession } from '@/lib/auth'
 
 const PIN_ITERATIONS = 310_000
+const MAX_ATTEMPTS = 5
 const enc = new TextEncoder()
 const dec = new TextDecoder()
 
@@ -9,6 +10,13 @@ export class WrongPinError extends Error {
   constructor() {
     super('lock: wrong pin')
     this.name = 'WrongPinError'
+  }
+}
+
+export class LockedOutError extends Error {
+  constructor() {
+    super('lock: too many attempts')
+    this.name = 'LockedOutError'
   }
 }
 
@@ -76,6 +84,19 @@ export async function enableLock(opts: { pin: string; session: AuthSession }): P
   await db.vault.put({ id: VAULT_ID, ...vault })
 }
 
+// A partial db.vault.update() makes the store round-trip the untouched binary
+// fields back as plain numeric-keyed objects, which WebCrypto rejects.
+// Re-wrap them into a real Uint8Array before any crypto call.
+function asBytes(v: unknown): Uint8Array {
+  if (v instanceof Uint8Array) return v
+  if (ArrayBuffer.isView(v)) return new Uint8Array(v.buffer, v.byteOffset, v.byteLength)
+  if (v instanceof ArrayBuffer) return new Uint8Array(v)
+  if (Array.isArray(v)) return Uint8Array.from(v as number[])
+  if (v !== null && typeof v === 'object')
+    return Uint8Array.from(Object.values(v as Record<string, number>))
+  throw new TypeError('lock: expected binary field')
+}
+
 async function readVault(): Promise<LockVault> {
   const vault = await db.vault.get(VAULT_ID)
   if (!vault) throw new Error('lock: no vault')
@@ -84,18 +105,27 @@ async function readVault(): Promise<LockVault> {
 
 async function decryptSession(vault: LockVault, dek: Uint8Array): Promise<AuthSession> {
   const dekKey = await importAesKey(dek)
-  const plain = await aesDecrypt(dekKey, vault.tokenIv, vault.tokenCipher)
+  const plain = await aesDecrypt(dekKey, asBytes(vault.tokenIv), asBytes(vault.tokenCipher))
   return JSON.parse(dec.decode(plain)) as AuthSession
+}
+
+export async function resetVault(): Promise<void> {
+  await db.vault.delete(VAULT_ID)
 }
 
 export async function unlockWithPin(pin: string): Promise<AuthSession> {
   const vault = await readVault()
-  const pinKey = await derivePinKey(pin, vault.pinSalt, vault.pinIterations)
+  if (vault.failedAttempts >= MAX_ATTEMPTS) throw new LockedOutError()
+
+  const pinKey = await derivePinKey(pin, asBytes(vault.pinSalt), vault.pinIterations)
   let dek: Uint8Array
   try {
-    dek = await aesDecrypt(pinKey, vault.pinWrapIv, vault.dekWrappedByPin)
+    dek = await aesDecrypt(pinKey, asBytes(vault.pinWrapIv), asBytes(vault.dekWrappedByPin))
   } catch {
+    await db.vault.update(VAULT_ID, { failedAttempts: vault.failedAttempts + 1 })
     throw new WrongPinError()
   }
+
+  if (vault.failedAttempts !== 0) await db.vault.update(VAULT_ID, { failedAttempts: 0 })
   return decryptSession(vault, dek)
 }
