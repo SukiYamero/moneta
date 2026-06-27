@@ -261,6 +261,13 @@ Full design: `docs/superpowers/specs/2026-06-26-pin-lock-design.md`.
   throttle + PBKDF2, not PIN entropy (casual-access threat model, §5).
 - 2026-06-26 — PIN-lock UI kept minimal in this spec; polished lock-screen design
   deferred to its own spec (user to propose).
+- 2026-06-26 — Lockout (5 wrong PINs) and "forgot PIN" wipe the vault and return
+  the app to **`unlocked`** phase (not `locked`), so the guard falls through to
+  `LoginScreen` for a fresh Google re-login. Setting `locked` after wiping the
+  vault would strand the user on a lock screen that can never unlock.
+- 2026-06-26 — PIN-lock shipped as **crypto/store core only**; the enable-lock UI
+  entry point and `updateSession` token-refresh wiring are deferred to the polished
+  UI work (§12). The feature is dormant until those land.
 
 ## 12. Backlog (pending verification / deferred work)
 
@@ -271,3 +278,17 @@ Full design: `docs/superpowers/specs/2026-06-26-pin-lock-design.md`.
   dev Gmail as a test user. Confirm: fresh account → `Moneta` folder + 3 files;
   re-login reuses them (no dupes); token never persisted unencrypted. The custom
   domain / app verification is a production concern, not required for this test.
+- **Wire the PIN-lock activation (§10.2).** The lock's crypto/store core is merged
+  and green, but two pieces are intentionally deferred to the polished-UI spec, so
+  the lock is dormant until then:
+  1. **Enable-lock UI** — a user-facing entry point (settings toggle) that collects
+     a 4-digit PIN + optional biometric and calls `lockStore.enable`. Without it the
+     vault is never created, so the lock never engages.
+  2. **`updateSession` wiring** — `pinLock.updateSession` (re-encrypt a rotated
+     token under the same DEK) exists and is tested but has no caller. Wire it into
+     the token-refresh / `authStore` success path so the vault's token stays fresh;
+     otherwise, once enabled, the cached token goes stale after first expiry and
+     every cold start forces a Google re-login (lock gives no convenience).
+     Both were flagged by the final whole-branch review (2026-06-26) as the gap
+     between the §10.2 "Done when" and what shipped; tracked here so code and spec
+     don't silently drift.
