@@ -10,6 +10,8 @@ const dec = new TextDecoder()
 // bare Uint8Array to ArrayBufferLike (incl. SharedArrayBuffer). Ours never are.
 type Bytes = Uint8Array<ArrayBuffer>
 
+let activeDek: Bytes | null = null
+
 export class WrongPinError extends Error {
   constructor() {
     super('lock: wrong pin')
@@ -113,6 +115,7 @@ async function decryptSession(vault: LockVault, dek: Bytes): Promise<AuthSession
 
 export async function resetVault(): Promise<void> {
   await db.vault.delete(VAULT_ID)
+  activeDek = null
 }
 
 export async function unlockWithPin(pin: string): Promise<AuthSession> {
@@ -129,5 +132,13 @@ export async function unlockWithPin(pin: string): Promise<AuthSession> {
   }
 
   if (vault.failedAttempts !== 0) await db.vault.update(VAULT_ID, { failedAttempts: 0 })
+  activeDek = dek
   return decryptSession(vault, dek)
+}
+
+export async function updateSession(session: AuthSession): Promise<void> {
+  if (!activeDek) throw new Error('lock: not unlocked')
+  const dekKey = await importAesKey(activeDek)
+  const token = await aesEncrypt(dekKey, enc.encode(JSON.stringify(session)))
+  await db.vault.update(VAULT_ID, { tokenCipher: token.cipher, tokenIv: token.iv })
 }

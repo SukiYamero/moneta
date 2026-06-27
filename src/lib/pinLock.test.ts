@@ -7,6 +7,7 @@ import {
   WrongPinError,
   LockedOutError,
   resetVault,
+  updateSession,
 } from '@/lib/pinLock'
 import type { AuthSession } from '@/lib/auth'
 
@@ -62,4 +63,23 @@ test('resetVault wipes the vault', async () => {
   await enableLock({ pin: '1234', session })
   await resetVault()
   expect(await hasVault()).toBe(false)
+})
+
+test('updateSession re-encrypts a refreshed token under the same DEK', async () => {
+  await enableLock({ pin: '1234', session })
+  await unlockWithPin('1234')
+
+  const refreshed: AuthSession = { accessToken: 'tok-new', expiresAt: 1_111_111_111_000 }
+
+  // A partial vault.update round-trips untouched binary fields as plain
+  // numeric-keyed objects, so compare byte content, not the representation.
+  const bytes = (v: unknown) => Uint8Array.from(Object.values(v as Record<string, number>))
+  const dekBefore = bytes((await db.vault.get(1))!.dekWrappedByPin)
+  await updateSession(refreshed)
+  const dekAfter = bytes((await db.vault.get(1))!.dekWrappedByPin)
+
+  const unlocked = await unlockWithPin('1234')
+
+  expect(unlocked).toEqual(refreshed)
+  expect(dekAfter).toEqual(dekBefore)
 })
