@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { requestAccessToken, fetchGoogleUser, AuthError, DRIVE_SCOPES } from '@/lib/auth'
+import {
+  requestAccessToken,
+  fetchGoogleUser,
+  AuthError,
+  DRIVE_SCOPES,
+  IDENTITY_SCOPES,
+} from '@/lib/auth'
 
 type Cb = (resp: { access_token?: string; expires_in?: number; error?: string }) => void
 type ErrCb = (err: { type: string }) => void
@@ -30,8 +36,17 @@ afterEach(() => {
 })
 
 describe('requestAccessToken', () => {
-  it('requests only the drive.file + drive.appdata scopes', async () => {
+  it('defaults to identity-only scopes — no Drive access at login', async () => {
     const p = requestAccessToken('consent')
+    lastInit!.callback({ access_token: 'tok', expires_in: 3600 })
+    await p
+    expect(IDENTITY_SCOPES).toBe('openid email profile')
+    expect(lastInit!.scope).toBe(IDENTITY_SCOPES)
+    expect(lastInit!.scope).not.toContain('drive')
+  })
+
+  it('requests Drive scopes only when asked explicitly (incremental auth)', async () => {
+    const p = requestAccessToken('', DRIVE_SCOPES)
     lastInit!.callback({ access_token: 'tok', expires_in: 3600 })
     await p
     expect(DRIVE_SCOPES).toBe(
@@ -62,19 +77,18 @@ describe('requestAccessToken', () => {
 })
 
 describe('fetchGoogleUser', () => {
-  it('reads identity from drive/v3/about with a Bearer token', async () => {
+  it('reads identity from the userinfo endpoint with a Bearer token', async () => {
     const fetchMock = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>(
       async () =>
-        new Response(
-          JSON.stringify({ user: { emailAddress: 'a@b.com', displayName: 'Ana', photoLink: 'p' } }),
-          { status: 200 },
-        ),
+        new Response(JSON.stringify({ email: 'a@b.com', name: 'Ana', picture: 'p' }), {
+          status: 200,
+        }),
     )
     vi.stubGlobal('fetch', fetchMock)
     const user = await fetchGoogleUser('tok')
     expect(user).toEqual({ email: 'a@b.com', name: 'Ana', photoLink: 'p' })
     const [url, init] = fetchMock.mock.calls[0]!
-    expect(url).toBe('https://www.googleapis.com/drive/v3/about?fields=user')
+    expect(url).toBe('https://www.googleapis.com/oauth2/v3/userinfo')
     expect((init as RequestInit).headers).toMatchObject({ Authorization: 'Bearer tok' })
   })
 

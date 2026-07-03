@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 vi.mock('@/lib/auth', () => ({
   requestAccessToken: vi.fn(),
   fetchGoogleUser: vi.fn(),
+  DRIVE_SCOPES: 'drive-scopes',
 }))
 vi.mock('@/lib/bootstrap', () => ({ bootstrap: vi.fn() }))
 
@@ -20,15 +21,9 @@ beforeEach(() => {
 })
 
 describe('useAuthStore.login', () => {
-  it('transitions to authenticated with user, session and drive layout', async () => {
+  it('authenticates with identity only and does not touch Drive', async () => {
     mToken.mockResolvedValue({ accessToken: 'tok', expiresAt: 1 })
     mUser.mockResolvedValue({ email: 'a@b.com', name: 'Ana' })
-    mBootstrap.mockResolvedValue({
-      folderId: 'F',
-      movimientosFileId: 'M',
-      activosFileId: 'A',
-      configFileId: 'C',
-    })
 
     await useAuthStore.getState().login()
 
@@ -36,7 +31,8 @@ describe('useAuthStore.login', () => {
     expect(s.status).toBe('authenticated')
     expect(s.user).toEqual({ email: 'a@b.com', name: 'Ana' })
     expect(s.session?.accessToken).toBe('tok')
-    expect(s.drive?.folderId).toBe('F')
+    expect(s.drive).toBeNull()
+    expect(mBootstrap).not.toHaveBeenCalled()
     expect(mToken).toHaveBeenCalledWith('consent')
   })
 
@@ -76,16 +72,37 @@ describe('useAuthStore.logout', () => {
   })
 })
 
-describe('useAuthStore.hydrate', () => {
-  it('populates user and drive from an existing session', async () => {
-    const session = { accessToken: 'tok', expiresAt: Date.now() + 3_600_000 }
-    mUser.mockResolvedValue({ email: 'a@b.com', name: 'Ana' })
+describe('useAuthStore.connectDrive', () => {
+  it('requests Drive scopes incrementally, provisions the layout and upgrades the session', async () => {
+    mToken.mockResolvedValue({ accessToken: 'drive-tok', expiresAt: 2 })
     mBootstrap.mockResolvedValue({
       folderId: 'F',
       movimientosFileId: 'M',
       activosFileId: 'A',
       configFileId: 'C',
     })
+    useAuthStore.setState({
+      status: 'authenticated',
+      user: { email: 'a@b.com', name: 'Ana' },
+      session: { accessToken: 'identity-tok', expiresAt: 1 },
+      drive: null,
+      error: null,
+    })
+
+    await useAuthStore.getState().connectDrive()
+
+    expect(mToken).toHaveBeenCalledWith('', 'drive-scopes')
+    expect(mBootstrap).toHaveBeenCalledWith('drive-tok')
+    const s = useAuthStore.getState()
+    expect(s.drive?.folderId).toBe('F')
+    expect(s.session?.accessToken).toBe('drive-tok')
+  })
+})
+
+describe('useAuthStore.hydrate', () => {
+  it('populates user from an existing session without touching Drive', async () => {
+    const session = { accessToken: 'tok', expiresAt: Date.now() + 3_600_000 }
+    mUser.mockResolvedValue({ email: 'a@b.com', name: 'Ana' })
 
     await useAuthStore.getState().hydrate(session)
 
@@ -93,6 +110,8 @@ describe('useAuthStore.hydrate', () => {
     expect(s.status).toBe('authenticated')
     expect(s.session).toEqual(session)
     expect(s.user).not.toBeNull()
+    expect(s.drive).toBeNull()
+    expect(mBootstrap).not.toHaveBeenCalled()
   })
 
   it('transitions to error on failure', async () => {

@@ -5,7 +5,7 @@
 > in §10. After a decision is made, record it in §11. If reality and this file
 > disagree, this file is wrong — fix it, don't silently diverge.
 
-Schema version: **1** · Last updated: 2026-06-25
+Schema version: **1** · Last updated: 2026-07-02
 
 ---
 
@@ -91,16 +91,19 @@ Derived (computed, not stored): `ganancia = valorActual - (capitalInvertido ?? 0
 
 - Google Identity Services, **token model** (`initTokenClient`), **PKCE**,
   public client **with no client secret**.
-- **Scopes:** `drive.file` (per-file, non-sensitive) + `drive.appdata`. If an
-  existing file must be opened, use the Google Picker together with `drive.file`.
-- Identity = the user's Google account, read from `GET drive/v3/about?fields=user`
-  (email + displayName) with the same access token — no second consent, no ID-token
-  flow in v1. No users table.
-- **Bootstrap:** on first login, find the `Moneta` folder in Drive (via `drive.file`);
-  if it doesn't exist, create it. Ensure `movimientos.json` + `activos.json` exist
-  in it (`[]`), and `config.json` (seeded from `CONFIG_SEMILLA`) in `appDataFolder`.
-  Idempotent (find-before-create). Access token kept in memory only until `pinLock.ts`
-  adds encrypted caching.
+- **Scopes (incremental authorization):** login requests **identity only**
+  (`openid email profile`); the Drive scopes `drive.file` (per-file, non-sensitive) +
+  `drive.appdata` are requested **later**, when the user opts into Drive sync
+  (`connectDrive`). So logging in shows no Drive consent — the app is local-first.
+  If an existing file must be opened, use the Google Picker together with `drive.file`.
+- Identity = the user's Google account, read from the **`userinfo` endpoint**
+  (`https://www.googleapis.com/oauth2/v3/userinfo` → email + name) with the identity
+  token. No users table.
+- **Bootstrap (deferred, via `connectDrive`):** when Drive sync is enabled, request the
+  Drive scopes, then find the `Moneta` folder (via `drive.file`); if absent, create it.
+  Ensure `movimientos.json` + `activos.json` exist in it (`[]`), and `config.json`
+  (seeded from `CONFIG_SEMILLA`) in `appDataFolder`. Idempotent (find-before-create).
+  Access token kept in memory only until `pinLock.ts` adds encrypted caching.
 - **Access-token-only** (no stored refresh token). Silent re-auth while the
   Google session is alive.
 - **PIN lock** (`pinLock.ts`): local, per-device. With WebCrypto: derive a key
@@ -169,22 +172,26 @@ in §11.
 
 Full design: `docs/superpowers/specs/2026-06-25-auth-drive-bootstrap-design.md`.
 
-- **Goal:** sign in with Google and provision the user's own Drive storage on
-  first login.
-- **User story:** as a user, I log in with Google and the app silently creates (or
-  reuses) my `Moneta` folder with empty data files and a seed config, then lets me in.
+- **Goal:** sign in with Google (identity only); Drive provisioning is a separate,
+  opt-in step so the app is usable local-first without forcing Drive on first login.
+- **User story:** as a user, I log in with Google and get in immediately; my `Moneta`
+  folder + data files are created only when I turn on Drive sync (`connectDrive`).
 - **UI:** login screen with a "Sign in with Google" button; a route guard sends
-  unauthenticated users there and blocks `/` until ready.
-- **Data touched:** creates `Moneta/movimientos.json`, `Moneta/activos.json` (`[]`),
-  and `appDataFolder/config.json` (from `CONFIG_SEMILLA`). Reads `drive/v3/about`
-  for identity.
+  unauthenticated users there and blocks `/` until authenticated.
+- **Data touched (login):** requests identity scopes only (`openid email profile`) and
+  reads the `userinfo` endpoint. **No Drive access, no writes.**
+- **Data touched (connectDrive, deferred):** creates `Moneta/movimientos.json`,
+  `Moneta/activos.json` (`[]`), and `appDataFolder/config.json` (from `CONFIG_SEMILLA`).
 - **Edge cases:** GIS load failure, consent denied/cancelled, token expiry (silent
-  re-auth → else login), Drive `401`/`403`, offline on first launch, repeated
-  bootstrap must not duplicate.
-- **Done when:** a fresh account ends with the folder + 3 files; re-login reuses
-  them (no dupes); access token never persisted unencrypted; guard blocks `/` until
-  authenticated; `auth.ts`/`drive.ts`/`bootstrap.ts` tests + `typecheck` + `lint` green.
-- **Out of scope (own specs):** `pinLock.ts`, `repo.ts` CRUD.
+  re-auth → else login), offline on first launch; for `connectDrive`: Drive `401`/`403`,
+  repeated bootstrap must not duplicate (find-before-create).
+- **Done when (login):** a fresh account reaches `authenticated` with identity, no
+  Drive writes; access token never persisted unencrypted; guard blocks `/` until
+  authenticated; `auth.ts` + `authStore` tests + `typecheck` + `lint` green.
+- **Done when (connectDrive):** calling it ends with the folder + 3 files; calling it
+  again reuses them (no dupes); `drive.ts`/`bootstrap.ts` tests green. UI entry point
+  ships with the Drive-sync opt-in (deferred, see §12).
+- **Out of scope (own specs):** `pinLock.ts`, `repo.ts` CRUD, the Drive-sync opt-in UI.
 
 ### 10.2 PIN lock + biometric unlock
 
@@ -268,16 +275,37 @@ Full design: `docs/superpowers/specs/2026-06-26-pin-lock-design.md`.
 - 2026-06-26 — PIN-lock shipped as **crypto/store core only**; the enable-lock UI
   entry point and `updateSession` token-refresh wiring are deferred to the polished
   UI work (§12). The feature is dormant until those land.
+- 2026-07-02 — **Data layer goes local-first.** `repo.ts` is built as a storage
+  **port** (interface) the rest of the app consumes; the first implementation is
+  local (IndexedDB via dexie). Drive stays the v1 sync target but is a swappable
+  implementation behind the same port, so features can be built without a working
+  OAuth/Drive path. A hosted **DB backend is explicitly rejected for now** — it
+  breaks §2 (developer would host users' financial data) and is only reconsidered
+  if a §6 trigger appears; the port keeps that migration cheap.
+- 2026-07-02 — **Bootstrap decoupled from login.** `login()`/`restore()` fetch
+  identity only (no Drive writes); Drive provisioning moved to `authStore.connectDrive`
+  (calls `bootstrap`), to be triggered by a Drive-sync opt-in. Lets login be verified
+  end-to-end without exercising Drive, and keeps the app usable local-first. `hydrate`
+  (post-unlock) likewise no longer bootstraps.
+- 2026-07-02 — **Incremental authorization; identity via `userinfo`.** Login requests
+  only `openid email profile`, so no Drive consent appears at sign-in; Drive scopes are
+  requested on demand in `connectDrive`, which upgrades the in-memory session to the
+  Drive-capable token. **Reverses the 2026-06-25 decision** to read identity from
+  `drive/v3/about` (that required a Drive scope at login); identity now comes from the
+  `userinfo` endpoint. The "second consent" the old decision avoided is now the desired
+  behavior — the Drive prompt should appear only when sync is turned on.
 
 ## 12. Backlog (pending verification / deferred work)
 
-- **Verify login + Drive bootstrap end-to-end (§10.1).** Code + unit tests are
-  merged, but the real OAuth flow has never run against Google. Needs a Google
-  Cloud OAuth client (`VITE_GOOGLE_CLIENT_ID` in `.env.local`), `http://localhost`
-  as an authorized JS origin, and the consent screen in **Testing** mode with the
-  dev Gmail as a test user. Confirm: fresh account → `Moneta` folder + 3 files;
-  re-login reuses them (no dupes); token never persisted unencrypted. The custom
-  domain / app verification is a production concern, not required for this test.
+- ✅ **Login verified end-to-end (§10.1)** — 2026-07-02. Real OAuth ran against Google
+  with a Testing-mode client (`http://localhost:5173` origin, dev Gmail as test user):
+  identity-only consent (name + email, **no Drive**), reached `authenticated`, no Drive
+  writes. Production domain / app verification remains a later, production-only concern.
+- **Drive-sync opt-in UI (§10.1).** `authStore.connectDrive` provisions the `Moneta`
+  folder + 3 files but has no caller yet (bootstrap decoupled from login, 2026-07-02).
+  A user-facing "enable Drive sync" entry point must call it; until then the app runs
+  local-first with no Drive writes. Verify then: first call → folder + 3 files; second
+  call reuses them (no dupes).
 - **Wire the PIN-lock activation (§10.2).** The lock's crypto/store core is merged
   and green, but two pieces are intentionally deferred to the polished-UI spec, so
   the lock is dormant until then:

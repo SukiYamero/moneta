@@ -1,8 +1,11 @@
+// Login asks for identity only; Drive scopes are requested incrementally
+// (see connectDrive) so the app is usable local-first without a Drive consent.
+export const IDENTITY_SCOPES = 'openid email profile'
 export const DRIVE_SCOPES =
   'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.appdata'
 
 const GIS_SRC = 'https://accounts.google.com/gsi/client'
-const ABOUT_URL = 'https://www.googleapis.com/drive/v3/about?fields=user'
+const USERINFO_URL = 'https://www.googleapis.com/oauth2/v3/userinfo'
 
 export class AuthError extends Error {
   constructor(reason: string) {
@@ -40,12 +43,15 @@ export function loadGis(): Promise<void> {
   })
 }
 
-export function requestAccessToken(prompt: '' | 'consent' = ''): Promise<AuthSession> {
+export function requestAccessToken(
+  prompt: '' | 'consent' = '',
+  scope: string = IDENTITY_SCOPES,
+): Promise<AuthSession> {
   const makeRequest = (): Promise<AuthSession> =>
     new Promise<AuthSession>((resolve, reject) => {
       const client = google.accounts.oauth2.initTokenClient({
         client_id: clientId(),
-        scope: DRIVE_SCOPES,
+        scope,
         callback: (resp) => {
           if (resp.error) {
             reject(new AuthError(resp.error))
@@ -68,14 +74,8 @@ export function requestAccessToken(prompt: '' | 'consent' = ''): Promise<AuthSes
 }
 
 export async function fetchGoogleUser(accessToken: string): Promise<GoogleUser> {
-  const res = await fetch(ABOUT_URL, { headers: { Authorization: `Bearer ${accessToken}` } })
-  if (!res.ok) throw new AuthError(`about ${res.status}`)
-  const data = (await res.json()) as {
-    user: { emailAddress: string; displayName: string; photoLink?: string }
-  }
-  return {
-    email: data.user.emailAddress,
-    name: data.user.displayName,
-    photoLink: data.user.photoLink,
-  }
+  const res = await fetch(USERINFO_URL, { headers: { Authorization: `Bearer ${accessToken}` } })
+  if (!res.ok) throw new AuthError(`userinfo ${res.status}`)
+  const data = (await res.json()) as { email: string; name: string; picture?: string }
+  return { email: data.email, name: data.name, photoLink: data.picture }
 }
