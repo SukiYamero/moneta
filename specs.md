@@ -307,11 +307,12 @@ Full design: `docs/superpowers/specs/2026-06-26-pin-lock-design.md`.
   local-first with no Drive writes. Verify then: first call → folder + 3 files; second
   call reuses them (no dupes).
 - **Wire the PIN-lock activation (§10.2).** The lock's crypto/store core is merged
-  and green, but two pieces are intentionally deferred to the polished-UI spec, so
-  the lock is dormant until then:
-  1. **Enable-lock UI** — a user-facing entry point (settings toggle) that collects
-     a 4-digit PIN + optional biometric and calls `lockStore.enable`. Without it the
-     vault is never created, so the lock never engages.
+  and green; activation now has a minimal harness, one piece still pending:
+  1. ✅ **Enable-lock UI (minimal)** — 2026-07-02. `LockSettings` on `Home` collects a
+     4-digit PIN + optional biometric → `lockStore.enable`, plus "Lock now" (`lockStore.lock`,
+     new manual re-lock action) and "Desactivar" (`reset`). `lockStore` gained an `enabled`
+     flag so the UI knows the vault state. This is a **dev/test harness**, not the polished
+     settings UI — that still rides with the polished-UI spec.
   2. **`updateSession` wiring** — `pinLock.updateSession` (re-encrypt a rotated
      token under the same DEK) exists and is tested but has no caller. Wire it into
      the token-refresh / `authStore` success path so the vault's token stays fresh;

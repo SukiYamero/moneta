@@ -1,0 +1,84 @@
+import { useState } from 'react'
+import { useLockStore } from '@/lib/lockStore'
+import { Button } from '@/components/ui/button'
+
+export function LockSettings() {
+  const enabled = useLockStore((s) => s.enabled)
+  const biometricAvailable = useLockStore((s) => s.biometricAvailable)
+  const enable = useLockStore((s) => s.enable)
+  const lock = useLockStore((s) => s.lock)
+  const reset = useLockStore((s) => s.reset)
+  const [pin, setPin] = useState('')
+  const [biometric, setBiometric] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  if (enabled) {
+    return (
+      <div className="flex flex-col items-center gap-3">
+        <p className="text-muted-foreground text-sm">Lock activo</p>
+        <div className="flex gap-2">
+          <Button type="button" className="min-h-11" onClick={() => lock()}>
+            Lock now
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            className="min-h-11"
+            onClick={() => void reset()}
+          >
+            Desactivar
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  const onEnable = async () => {
+    setError(null)
+    try {
+      await enable(pin, biometric && biometricAvailable)
+      setPin('')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'no se pudo activar')
+    }
+  }
+
+  return (
+    <div className="flex flex-col items-center gap-3">
+      <label className="flex flex-col gap-1">
+        <span className="text-sm">PIN (4 dígitos)</span>
+        <input
+          inputMode="numeric"
+          pattern="\d*"
+          maxLength={4}
+          value={pin}
+          onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+          className="min-h-11 rounded-md border px-3 text-center tracking-widest"
+        />
+      </label>
+      {biometricAvailable && (
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={biometric}
+            onChange={(e) => setBiometric(e.target.checked)}
+          />
+          Usar biometría
+        </label>
+      )}
+      <Button
+        type="button"
+        className="min-h-11"
+        disabled={pin.length !== 4}
+        onClick={() => void onEnable()}
+      >
+        Activar lock
+      </Button>
+      {error && (
+        <p role="alert" className="text-destructive text-sm">
+          {error}
+        </p>
+      )}
+    </div>
+  )
+}

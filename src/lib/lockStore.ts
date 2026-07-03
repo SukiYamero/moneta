@@ -17,12 +17,14 @@ type LockPhase = 'unknown' | 'unlocked' | 'locked'
 
 type LockState = {
   phase: LockPhase
+  enabled: boolean
   biometricAvailable: boolean
   error: string | null
   init: () => Promise<void>
   enable: (pin: string, biometric: boolean) => Promise<void>
   unlockPin: (pin: string) => Promise<void>
   unlockBiometric: () => Promise<void>
+  lock: () => void
   onHidden: () => void
   onVisible: () => Promise<void>
   reset: () => Promise<void>
@@ -40,7 +42,7 @@ async function resume(
     if (e instanceof LockedOutError) {
       await resetVault()
       useAuthStore.getState().logout()
-      set({ phase: 'unlocked', error: 'locked out' })
+      set({ phase: 'unlocked', enabled: false, error: 'locked out' })
       return
     }
     set({ error: e instanceof Error ? e.message : 'unlock failed' })
@@ -49,20 +51,24 @@ async function resume(
 
 export const useLockStore = create<LockState>((set, get) => ({
   phase: 'unknown',
+  enabled: false,
   biometricAvailable: false,
   error: null,
   init: async () => {
     const [locked, biometricAvailable] = await Promise.all([hasVault(), isBiometricAvailable()])
-    set({ phase: locked ? 'locked' : 'unlocked', biometricAvailable })
+    set({ phase: locked ? 'locked' : 'unlocked', enabled: locked, biometricAvailable })
   },
   enable: async (pin, biometric) => {
     const session = useAuthStore.getState().session
     if (!session) throw new Error('lock: no session to protect')
     await enableLock({ pin, session, biometric })
-    set({ phase: 'unlocked' })
+    set({ phase: 'unlocked', enabled: true })
   },
   unlockPin: (pin) => resume(set, () => unlockWithPin(pin)),
   unlockBiometric: () => resume(set, () => unlockWithBiometric()),
+  lock: () => {
+    if (get().enabled) set({ phase: 'locked' })
+  },
   onHidden: () => {
     if (get().phase === 'unlocked') void markActive()
   },
@@ -72,6 +78,6 @@ export const useLockStore = create<LockState>((set, get) => ({
   reset: async () => {
     await resetVault()
     useAuthStore.getState().logout()
-    set({ phase: 'unlocked', error: null })
+    set({ phase: 'unlocked', enabled: false, error: null })
   },
 }))
