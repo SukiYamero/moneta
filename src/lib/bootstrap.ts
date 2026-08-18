@@ -1,7 +1,10 @@
 import { findFile, createFolder, createJsonFile, type DriveSpace } from '@/lib/drive'
 import { CONFIG_SEMILLA } from '@/lib/schema'
 
-export const FOLDER_NAME = 'Moneta'
+// Storage id frozen at the 2026-08-18 brand: bootstrap finds the folder by this
+// name, so once user data exists renaming it requires a Drive migration — it
+// must not track APP_NAME (specs.md §11).
+export const FOLDER_NAME = 'KuroBello'
 export const MOVIMIENTOS_FILE = 'movimientos.json'
 export const ACTIVOS_FILE = 'activos.json'
 export const CONFIG_FILE = 'config.json'

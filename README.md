@@ -1,32 +1,37 @@
-# React + TypeScript + Vite
+# KuroBello
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Personal-finance PWA, mobile-first and local-first. Income/expenses and assets,
+organized in user-defined sections and categories, optionally synced to the
+user's own Google Drive. No backend: identity is Google, data lives in the
+user's Drive, the developer stores nothing.
 
-Currently, two official plugins are available:
+> The user-facing brand lives in `src/lib/branding.ts` (`APP_NAME`) and changes
+> freely — currently **KuroBello**. Storage identifiers (Drive folder, dexie DB,
+> lock HKDF info) are frozen at the 2026-08-18 baseline and do not follow later
+> renames ("Moneta", the old codename, survives only in git history and the
+> dated design docs).
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Where to start
 
-## React Compiler
+- **`specs.md`** — the source of truth: architecture, data model, security
+  model, feature specs, decisions log and backlog. Read it before touching code.
+- **`AGENTS.md`** — rules for AI coding agents (any model). `CLAUDE.md` just
+  points there.
+- **`src/lib/schema.ts`** — the data contract. Import it, never redefine it.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Stack
 
-## Expanding the Oxlint configuration
+React 19 + Vite + TypeScript (SPA, no SSR) · Tailwind CSS v4 + shadcn/ui ·
+zustand · React Router v8 · dexie (IndexedDB) · vite-plugin-pwa ·
+Vitest + Testing Library · bun · oxlint + Prettier.
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+## Commands
 
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```sh
+bun install
+bun run dev        # local dev server
+bun run check      # typecheck + lint + test (the done-gate)
+bun run build      # production build
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+Google login needs `VITE_GOOGLE_CLIENT_ID` in `.env.local` (see `.env.example`).

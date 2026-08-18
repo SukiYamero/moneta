@@ -1,5 +1,5 @@
 {
-  "name": "moneta",
+  "name": "kurobello",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -12,6 +12,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "tsc -b --noEmit",
+    "check": "bun run typecheck && bun run lint && bun run test",
     "test": "vitest run",
     "test:watch": "vitest",
     "prepare": "husky"

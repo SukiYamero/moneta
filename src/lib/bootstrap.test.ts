@@ -34,7 +34,7 @@ describe('bootstrap', () => {
       activosFileId: 'ACT',
       configFileId: 'CFG',
     })
-    expect(mCreateFolder).toHaveBeenCalledWith('tok', 'Moneta')
+    expect(mCreateFolder).toHaveBeenCalledWith('tok', 'KuroBello')
     expect(mCreateJson).toHaveBeenCalledWith('tok', {
       name: 'movimientos.json',
       data: [],

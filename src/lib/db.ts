@@ -22,7 +22,9 @@ export type LockVault = {
 
 type VaultRow = LockVault & { id: number }
 
-export const db = new Dexie('moneta') as Dexie & {
+// Storage id frozen at the 2026-08-18 brand: renaming it orphans the local
+// vault, so it must not track APP_NAME.
+export const db = new Dexie('kurobello') as Dexie & {
   vault: EntityTable<VaultRow, 'id'>
 }
 

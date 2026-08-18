@@ -1,11 +1,16 @@
-# Moneta — Specs (source of truth)
+# KuroBello — Specs (source of truth)
 
 > **This file is the source of truth.** We work spec-driven: nothing gets built
 > that isn't described here first. Before implementing a feature, write its spec
 > in §10. After a decision is made, record it in §11. If reality and this file
 > disagree, this file is wrong — fix it, don't silently diverge.
 
-Schema version: **1** · Last updated: 2026-07-02
+Schema version: **1** · Last updated: 2026-08-18
+
+Display brand: **`APP_NAME`** in `src/lib/branding.ts` (currently "KuroBello",
+provisional and expected to change freely). Storage identifiers are frozen at
+the 2026-08-18 baseline (`KuroBello` / `kurobello` / `kurobello-lock-dek`) and
+do NOT follow later display renames — see §11 2026-08-18.
 
 ---
 
@@ -58,7 +63,7 @@ columns/contract.)
 
 Three stores (all JSON files in the user's Drive):
 
-- `Movimiento[]` — **flow** (in/out) → `movimientos.json` in the `Moneta` folder.
+- `Movimiento[]` — **flow** (in/out) → `movimientos.json` in the `KuroBello` folder.
 - `Activo[]` — **balance** (what you own and what it's worth today) → `activos.json`
   in the same folder.
 - `Config` (sections, categories, preferences, schemaVersion) → `config.json` in
@@ -100,7 +105,7 @@ Derived (computed, not stored): `ganancia = valorActual - (capitalInvertido ?? 0
   (`https://www.googleapis.com/oauth2/v3/userinfo` → email + name) with the identity
   token. No users table.
 - **Bootstrap (deferred, via `connectDrive`):** when Drive sync is enabled, request the
-  Drive scopes, then find the `Moneta` folder (via `drive.file`); if absent, create it.
+  Drive scopes, then find the `KuroBello` folder (via `drive.file`); if absent, create it.
   Ensure `movimientos.json` + `activos.json` exist in it (`[]`), and `config.json`
   (seeded from `CONFIG_SEMILLA`) in `appDataFolder`. Idempotent (find-before-create).
   Access token kept in memory only until `pinLock.ts` adds encrypted caching.
@@ -174,14 +179,14 @@ Full design: `docs/superpowers/specs/2026-06-25-auth-drive-bootstrap-design.md`.
 
 - **Goal:** sign in with Google (identity only); Drive provisioning is a separate,
   opt-in step so the app is usable local-first without forcing Drive on first login.
-- **User story:** as a user, I log in with Google and get in immediately; my `Moneta`
+- **User story:** as a user, I log in with Google and get in immediately; my `KuroBello`
   folder + data files are created only when I turn on Drive sync (`connectDrive`).
 - **UI:** login screen with a "Sign in with Google" button; a route guard sends
   unauthenticated users there and blocks `/` until authenticated.
 - **Data touched (login):** requests identity scopes only (`openid email profile`) and
   reads the `userinfo` endpoint. **No Drive access, no writes.**
-- **Data touched (connectDrive, deferred):** creates `Moneta/movimientos.json`,
-  `Moneta/activos.json` (`[]`), and `appDataFolder/config.json` (from `CONFIG_SEMILLA`).
+- **Data touched (connectDrive, deferred):** creates `KuroBello/movimientos.json`,
+  `KuroBello/activos.json` (`[]`), and `appDataFolder/config.json` (from `CONFIG_SEMILLA`).
 - **Edge cases:** GIS load failure, consent denied/cancelled, token expiry (silent
   re-auth → else login), offline on first launch; for `connectDrive`: Drive `401`/`403`,
   repeated bootstrap must not duplicate (find-before-create).
@@ -295,13 +300,35 @@ Full design: `docs/superpowers/specs/2026-06-26-pin-lock-design.md`.
   `userinfo` endpoint. The "second consent" the old decision avoided is now the desired
   behavior — the Drive prompt should appear only when sync is turned on.
 
+- 2026-08-18 — **Display brand decoupled from storage identifiers.** The
+  user-facing name is `APP_NAME` in `src/lib/branding.ts` (single source: UI,
+  `index.html` title via a Vite `transformIndexHtml` hook, PWA manifest, WebAuthn
+  `rp.name`). Currently "KuroBello"; it will change often, so a rebrand = edit
+  one constant + the Google Cloud Console branding field. Since no user data
+  exists yet, the storage identifiers were rebased once from the old "Moneta"
+  codename and are **frozen from now on** at: Drive folder `KuroBello`, dexie DB
+  `kurobello`, HKDF info `kurobello-lock-dek`, package name `kurobello`. They
+  must NOT follow later display renames — once real data exists, changing any of
+  them requires an explicit migration recorded here. (Supersedes the 2026-06-25
+  "App name: Moneta" entry; "Moneta" survives only in git history and in the
+  dated design docs under `docs/`.)
+- 2026-08-18 — **Agent rules are model-agnostic.** Project rules moved from
+  `CLAUDE.md` to **`AGENTS.md`** (the cross-tool standard read by Codex, Cursor,
+  Gemini CLI, Zed…); `CLAUDE.md` is now a thin pointer that imports it. Any
+  agent gets identical instructions.
+- 2026-08-18 — **`bun run check`** (typecheck + lint + test) added as the single
+  done-gate: no task is "done" and nothing merges without it passing.
+- 2026-08-18 — **Parallel-agent workflow adopted.** One agent = one branch = one
+  worktree, with per-track file ownership declared in §12; `specs.md` edits from
+  parallel tracks are append-only. Trunk-based merges to `main` stay the rule.
+
 ## 12. Backlog (pending verification / deferred work)
 
 - ✅ **Login verified end-to-end (§10.1)** — 2026-07-02. Real OAuth ran against Google
   with a Testing-mode client (`http://localhost:5173` origin, dev Gmail as test user):
   identity-only consent (name + email, **no Drive**), reached `authenticated`, no Drive
   writes. Production domain / app verification remains a later, production-only concern.
-- **Drive-sync opt-in UI (§10.1).** `authStore.connectDrive` provisions the `Moneta`
+- **Drive-sync opt-in UI (§10.1).** `authStore.connectDrive` provisions the `KuroBello`
   folder + 3 files but has no caller yet (bootstrap decoupled from login, 2026-07-02).
   A user-facing "enable Drive sync" entry point must call it; until then the app runs
   local-first with no Drive writes. Verify then: first call → folder + 3 files; second
@@ -321,3 +348,23 @@ Full design: `docs/superpowers/specs/2026-06-26-pin-lock-design.md`.
      Both were flagged by the final whole-branch review (2026-06-26) as the gap
      between the §10.2 "Done when" and what shipped; tracked here so code and spec
      don't silently drift.
+- **Rename the OAuth consent screen to the current brand** (user, in Google Cloud
+  Console → Google Auth Platform → Branding → App name → "KuroBello"). Client ID
+  and origins are untouched — no code change. In Testing mode the change is
+  instant, no re-verification.
+- **App icon for the brand.** The PWA still ships the scaffold `favicon.svg`;
+  a KuroBello icon (maskable + favicon) is pending. Cosmetic, not blocking.
+
+### Parallel track plan (2026-08-18)
+
+Wave 1 — three tracks, no shared files, can run simultaneously:
+
+| Track                                | Scope                                                                                                                                                                                                                                | Owns (nobody else touches)                                              |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------- |
+| **A — data port**                    | Spec §10.3 first: `Repo` port (interface) + local IndexedDB impl (dexie), CRUD for `Movimiento`/`Activo`/`Config`, schemaVersion check. TDD. **Blocker for every feature — its port interface lands in §10.3 before wave 1 starts.** | `src/lib/repo.ts`, `src/lib/repo.test.ts`, `src/lib/db.ts`, specs §10.3 |
+| **B — Drive opt-in + token refresh** | The two §12 items above: "enable Drive sync" entry point calling `authStore.connectDrive`, and wiring `pinLock.updateSession` into the token-refresh path. Entry point mounts on `Home` (like `LockSettings`), no new route.         | `src/features/settings/**`, `src/lib/authStore.ts`, specs §10.4         |
+| **C — movimientos UI**               | Spec §10.5 first: add/list/delete movements + section/category pickers, built against the §10.3 port interface with an in-memory fake. Merges after A.                                                                               | `src/features/movimientos/**`, `src/router.tsx`, specs §10.5            |
+
+Wave 2 (after A+C merge): dashboard/totals + charts · Drive-backed repo impl
+(sync strategy, own spec) · polished lock screen (user proposes design) + PWA
+icon polish.

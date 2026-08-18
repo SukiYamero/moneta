@@ -38,7 +38,7 @@ describe('findFile', () => {
   it('uses the appDataFolder space and folder mimeType filter', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ files: [] }))
     const id = await findFile('tok', {
-      name: 'Moneta',
+      name: 'KuroBello',
       mimeType: 'application/vnd.google-apps.folder',
       space: 'appDataFolder',
     })
@@ -52,12 +52,12 @@ describe('findFile', () => {
 describe('createFolder', () => {
   it('POSTs folder metadata and returns the new id', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ id: 'new' }))
-    const id = await createFolder('tok', 'Moneta')
+    const id = await createFolder('tok', 'KuroBello')
     expect(id).toBe('new')
     const [url, init] = fetchMock.mock.calls[0]!
     expect(url).toBe('https://www.googleapis.com/drive/v3/files?fields=id')
     const body = JSON.parse((init as RequestInit).body as string)
-    expect(body).toEqual({ name: 'Moneta', mimeType: 'application/vnd.google-apps.folder' })
+    expect(body).toEqual({ name: 'KuroBello', mimeType: 'application/vnd.google-apps.folder' })
   })
 })
 

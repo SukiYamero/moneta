@@ -57,7 +57,7 @@ export async function createJsonFile(
   const parents =
     opts.space === 'appDataFolder' ? ['appDataFolder'] : opts.parent ? [opts.parent] : []
   const metadata = { name: opts.name, parents }
-  const boundary = `moneta-${crypto.randomUUID()}`
+  const boundary = `boundary-${crypto.randomUUID()}`
   const body =
     `--${boundary}\r\n` +
     'Content-Type: application/json; charset=UTF-8\r\n\r\n' +

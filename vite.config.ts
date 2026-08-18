@@ -4,6 +4,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
+import { APP_NAME } from './src/lib/branding.ts'
 
 export default defineConfig({
   resolve: {
@@ -12,14 +13,18 @@ export default defineConfig({
     },
   },
   plugins: [
+    {
+      name: 'html-app-name',
+      transformIndexHtml: (html) => html.replaceAll('{{APP_NAME}}', APP_NAME),
+    },
     react(),
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg'],
       manifest: {
-        name: 'Moneta',
-        short_name: 'Moneta',
+        name: APP_NAME,
+        short_name: APP_NAME,
         description:
           'Personal finance: income, expenses and assets, synced to your own Google Drive.',
         theme_color: '#0f172a',

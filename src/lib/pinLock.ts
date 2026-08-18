@@ -1,12 +1,14 @@
 import { db, VAULT_ID, type LockVault } from '@/lib/db'
 import type { AuthSession } from '@/lib/auth'
+import { APP_NAME } from '@/lib/branding'
 
 const PIN_ITERATIONS = 310_000
 const MAX_ATTEMPTS = 5
 export const BACKGROUND_TIMEOUT_MS = 7 * 60_000
 const enc = new TextEncoder()
 const dec = new TextDecoder()
-const HKDF_INFO = enc.encode('moneta-lock-dek')
+// Frozen: changing this string breaks decryption of every existing vault.
+const HKDF_INFO = enc.encode('kurobello-lock-dek')
 
 // WebCrypto's BufferSource requires an ArrayBuffer-backed view; TS 5.7+ widens a
 // bare Uint8Array to ArrayBufferLike (incl. SharedArrayBuffer). Ours never are.
@@ -106,8 +108,8 @@ async function registerBiometric(
   const created = (await navigator.credentials.create({
     publicKey: {
       challenge: randomBytes(32),
-      rp: { name: 'Moneta', id: location.hostname },
-      user: { id: randomBytes(16), name: 'moneta-lock', displayName: 'Moneta lock' },
+      rp: { name: APP_NAME, id: location.hostname },
+      user: { id: randomBytes(16), name: 'kurobello-lock', displayName: `${APP_NAME} lock` },
       pubKeyCredParams: [
         { type: 'public-key', alg: -7 },
         { type: 'public-key', alg: -257 },
