@@ -368,3 +368,20 @@ Wave 1 — three tracks, no shared files, can run simultaneously:
 Wave 2 (after A+C merge): dashboard/totals + charts · Drive-backed repo impl
 (sync strategy, own spec) · polished lock screen (user proposes design) + PWA
 icon polish.
+
+### Worktree log
+
+Every agent that creates a `git worktree` logs a row here the moment it does,
+and updates the **Status** the moment the track's work merges to `main`. This
+is how we know which worktrees are safe to `git worktree remove` — check this
+table against `git worktree list` at the start of any parallel session and
+remove anything marked done (or orphaned: on disk but not in this table, or in
+this table but the branch is already merged/gone).
+
+| Created    | Track / task    | Path | Branch | Status | Notes                                                                                 |
+| ---------- | --------------- | ---- | ------ | ------ | ------------------------------------------------------------------------------------- |
+| 2026-08-18 | _(none active)_ | —    | —      | —      | No worktrees exist right now — only the main checkout (`git worktree list` verified). |
+
+Status values: `active` (work in progress) → `merged, pending cleanup` (branch
+merged to `main`, worktree not yet removed) → row deleted once
+`git worktree remove <path>` runs.

@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:status": "lsof -tiTCP:5173 -sTCP:LISTEN >/dev/null 2>&1 && echo '🟢 dev server RUNNING on :5173' || echo '🔴 dev server STOPPED'",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "lint": "oxlint",

@@ -67,6 +67,8 @@ We follow **spec-driven development**. `specs.md` is the source of truth.
 ## Commands
 
 - `bun run dev` · `bun run build` · `bun run preview`
+- `bun run dev:status` — check whether the dev server is up on :5173
+  (independent of what an agent last said; run it yourself anytime).
 - `bun run typecheck` · `bun run lint` · `bun run format`
 - `bun run test` (CI) · `bun run test:watch`
 - **`bun run check` = typecheck + lint + test. It must pass before you claim any
@@ -104,3 +106,21 @@ Local-only state stays in React hooks. No Redux.
   subsection or §11/§12 lines, never rewrite someone else's.
 - Merge to `main` early and often (trunk-based, no `develop`); rebase your
   worktree on `main` before finishing.
+- Every agent in every track follows the Coding rules comment policy above
+  strictly: add a comment only when it is genuinely necessary to explain a
+  non-obvious _why_. No exceptions per-track.
+- **Log every worktree** you create in `specs.md` §12 "Worktree log" the
+  moment you create it (path, branch, status `active`). When your track's
+  branch merges to `main`, remove the worktree (`git worktree remove <path>`)
+  and delete its row — don't leave it lying around "just in case".
+  At the start of any parallel session, check the log against
+  `git worktree list` and prune anything stale (merged-but-not-removed, or
+  present on disk but missing/finished in the log).
+- **Subagent model/effort:** always Sonnet 5, never downgrade to another
+  model. Only two effort tiers — pick per task, don't default to `high` out
+  of habit:
+  - `normal` — straightforward/mechanical work: search/lookup, boilerplate,
+    small well-scoped edits, running commands and reporting results.
+  - `high` — anything correctness-critical or open-ended: architecture or
+    design decisions, money math, auth/lock/crypto code, debugging a real
+    bug, code review/verification passes.
