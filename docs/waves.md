@@ -214,7 +214,13 @@ should eventually use. The operator swaps one for the other after both merge.
 
 ---
 
-## Wave 3 — foundations (planned, 2026-08-19)
+## Wave 3 — foundations (stage 1 in flight, 2026-08-19)
+
+> **Execution detail lives in [`wave-3-plan.md`](wave-3-plan.md)** — the
+> operator's decomposition: file ownership, the conflicts resolved up front,
+> the per-track briefs and the live status table. This file keeps only the
+> shape of the wave. If the two disagree on execution, `wave-3-plan.md` wins;
+> on behavior, `specs.md` wins over both.
 
 The feature tracks that used to be Wave 3 moved to Wave 4 (user decision,
 2026-08-19) so a wave of **foundations** can land first: the plumbing every
@@ -298,7 +304,17 @@ Check this table against `git worktree list` at the start of any parallel
 session; prune anything stale (merged-but-not-removed, or on disk but
 missing/finished here).
 
-_Empty — every Wave 2.1/2.2 worktree was removed when its branch merged._
+| Path                          | Branch              | Status |
+| ----------------------------- | ------------------- | ------ |
+| `../moneta-worktrees/wave3-r` | `wave3/r-offline`   | active |
+| `../moneta-worktrees/wave3-s` | `wave3/s-export`    | active |
+| `../moneta-worktrees/wave3-u` | `wave3/u-forms`     | active |
+| `../moneta-worktrees/wave3-v` | `wave3/v-profiles`  | active |
+| `../moneta-worktrees/wave3-w` | `wave3/w-sw-update` | active |
+
+Paths are relative to the repo root (`web/moneta`), i.e. a sibling
+`web/moneta-worktrees/` directory outside the repo — deliberately not nested
+inside it, so a worktree never shows up as untracked content in `main`.
 
 Status values: `active` → `merged, pending cleanup` → row deleted once
 `git worktree remove <path>` runs.
