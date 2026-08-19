@@ -28,18 +28,24 @@ export const BalanceCard = ({ totals, moneda }: BalanceCardProps) => {
         <span className="text-ms font-semibold tracking-wide text-success">
           {t('balance.title')}
         </span>
+        {/* Hit area (min-h/w-11, AGENTS.md's 44px floor) and visible pill are
+            split: the design's pill is 34px, growing it to 44px would resize
+            the badge itself, not just its tap target (same pattern as the
+            month-nav buttons in DateChipPicker.tsx). */}
         <button
           type="button"
           onClick={() => setHidden((v) => !v)}
           aria-label={t(hidden ? 'balance.show' : 'balance.hide')}
           aria-pressed={hidden}
-          className="flex size-8.5 items-center justify-center rounded-lg bg-success/15 text-success"
+          className="flex min-h-11 min-w-11 items-center justify-center"
         >
-          {hidden ? (
-            <EyeOff className="size-4.5" aria-hidden="true" />
-          ) : (
-            <Eye className="size-4.5" aria-hidden="true" />
-          )}
+          <span className="flex size-8.5 items-center justify-center rounded-lg bg-success/15 text-success">
+            {hidden ? (
+              <EyeOff className="size-4.5" aria-hidden="true" />
+            ) : (
+              <Eye className="size-4.5" aria-hidden="true" />
+            )}
+          </span>
         </button>
       </div>
       <div className="mt-1.5 min-h-9.5 text-3xl font-extrabold tracking-tight">
