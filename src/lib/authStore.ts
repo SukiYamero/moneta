@@ -113,29 +113,48 @@ const reacquireDrive = async (): Promise<{ session: AuthSession; drive: DriveLay
   }
 }
 
-// Called right after driveOptIn lands in state. Guarded on `drive === null`,
-// not on driveOptIn alone: a mid-session re-lock/unlock already has `drive`
-// populated from earlier this session (either connectDrive() or an earlier
-// call to this same function), so it must not re-run bootstrap() on every
-// unlock — only a genuinely fresh session (drive still null) needs this.
-// Returns the session to hand to syncLockedSession: the upgraded
-// Drive-scoped one if reacquisition happened, the identity-only one
-// otherwise.
+// Fire-and-forget (callers do `void reacquireDriveIfNeeded(...)`), never
+// awaited by login/restore/hydrate — CONFIRMED in code review: awaiting it
+// there meant lockStore.resume() (which awaits hydrate()'s full promise
+// before leaving `phase: 'locked'`) blocked a correct-PIN unlock on a
+// silent token request plus bootstrap()'s up to five sequential, un-timed-
+// out Drive calls, with LockScreen showing no busy state at all. The auth
+// flow's outcome never depended on this completing — status/driveOptIn are
+// already settled and synced (syncLockedSession(session), the identity-only
+// token) before this is even fired — so it must not be on that flow's
+// critical path.
+//
+// Guarded on `drive === null`, not on driveOptIn alone: a mid-session
+// re-lock/unlock already has `drive` populated from earlier this session
+// (either connectDrive() or an earlier call to this same function), so it
+// must not re-run bootstrap() on every unlock — only a genuinely fresh
+// session (drive still null) needs this. Also guarded on `authGeneration`,
+// same as connectDrive() below — now load-bearing rather than
+// belt-and-suspenders, since going fire-and-forget widens (not narrows) the
+// window in which a logout() can land while this is still in flight: a
+// stale resolve must not resurrect a session/drive for an account the user
+// already signed out of. On success it owns its own follow-up —
+// syncLockedSession() with the upgraded Drive-scoped session — since the
+// caller already synced the identity-only one and isn't waiting around for
+// this to finish; two writes to the vault, later one wins, which is
+// strictly better than the vault sync blocking on a network round trip that
+// may never resolve.
 const reacquireDriveIfNeeded = async (
   driveOptIn: DriveOptIn,
-  session: AuthSession,
   set: (partial: Partial<AuthState>) => void,
   get: () => AuthState,
-): Promise<AuthSession> => {
-  if (driveOptIn !== 'connected' || get().drive !== null) return session
+): Promise<void> => {
+  if (driveOptIn !== 'connected' || get().drive !== null) return
+  const generation = authGeneration
   const reacquired = await reacquireDrive()
-  if (!reacquired) return session
+  if (!reacquired || generation !== authGeneration) return
   set({ session: reacquired.session, drive: reacquired.drive })
-  return reacquired.session
+  await syncLockedSession(reacquired.session)
 }
 
-// logout() bumps this so a connectDrive() request already in flight can tell,
-// on resolve, that it should discard its result instead of resurrecting state.
+// logout() bumps this so a connectDrive()/reacquireDriveIfNeeded() request
+// already in flight can tell, on resolve, that it should discard its result
+// instead of resurrecting state.
 let authGeneration = 0
 
 const errorMessage = (e: unknown): string => {
@@ -157,8 +176,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const { session, user } = await authenticate('consent')
       const driveOptIn = await resolveDriveOptIn(get().driveOptIn)
       set({ status: 'authenticated', session, user, driveOptIn })
-      const activeSession = await reacquireDriveIfNeeded(driveOptIn, session, set, get)
-      await syncLockedSession(activeSession)
+      await syncLockedSession(session)
+      void reacquireDriveIfNeeded(driveOptIn, set, get)
       // Explicit, user-initiated success only — the signal restore() below
       // gates on (specs.md §11, 2026-08-19). markLoggedIn() self-catches, so
       // this can never fail the login it rides on.
@@ -195,8 +214,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const { session, user } = await authenticate('')
       const driveOptIn = await resolveDriveOptIn(get().driveOptIn)
       set({ status: 'authenticated', session, user, driveOptIn })
-      const activeSession = await reacquireDriveIfNeeded(driveOptIn, session, set, get)
-      await syncLockedSession(activeSession)
+      await syncLockedSession(session)
+      void reacquireDriveIfNeeded(driveOptIn, set, get)
     } catch {
       // Deliberately silent, unlike syncLockedSession's console.warn
       // (docs/error-handling.md §2): a silent-auth attempt failing is the
@@ -237,15 +256,20 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   // when this tab opened) is the one path where this *is* the first
   // resolution this session, and must look the persisted decision up —
   // and, via reacquireDriveIfNeeded, must also re-fetch `drive` itself,
-  // since 'drive' is never persisted alongside the decision.
+  // since 'drive' is never persisted alongside the decision. Deliberately
+  // does not await reacquireDriveIfNeeded: lockStore.resume() awaits this
+  // function's whole promise before leaving `phase: 'locked'`, so anything
+  // awaited here directly delays a correct-PIN unlock (see
+  // reacquireDriveIfNeeded's own comment) — syncLockedSession(session) still
+  // is awaited, but that's a fast local IndexedDB write, not a network call.
   hydrate: async (session) => {
     set({ status: 'authenticating', error: null })
     try {
       const user = await fetchGoogleUser(session.accessToken)
       const driveOptIn = await resolveDriveOptIn(get().driveOptIn)
       set({ status: 'authenticated', session, user, driveOptIn })
-      const activeSession = await reacquireDriveIfNeeded(driveOptIn, session, set, get)
-      await syncLockedSession(activeSession)
+      await syncLockedSession(session)
+      void reacquireDriveIfNeeded(driveOptIn, set, get)
     } catch (e) {
       set({ status: 'error', session: null, user: null, drive: null, error: errorMessage(e) })
     }
