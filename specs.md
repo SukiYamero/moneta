@@ -2936,6 +2936,76 @@ lint` clean bar the one pre-existing `components/ui` warning). `AGENTS.md`
   portability, not recovery. Recorded so a later agent does not "finish" the
   missing import half: it is absent by decision. Spec in §10.12.
 
+- 2026-08-19 — **Wave 3 stage 1 shipped: tracks S, U, V and W** (specs in
+  §10.12, §10.14, §10.15, §10.16). The decisions each one closed:
+
+  - **CSV export writes the schema field names as its header row**, not
+    localized labels — they are the real Drive column contract, stable across
+    locales, and a file re-opened anywhere keeps meaning the same thing.
+    `extra` is deliberately **excluded**: it is the escape hatch for fields
+    not yet promoted to a column, its shape is not uniform across rows, and
+    it is where anything sensitive smuggled onto a `Movimiento` would land.
+    Numbers go out with `useGrouping: false` and `maximumFractionDigits: 20`
+    — a data export must preserve the exact stored `monto`, so the locale
+    decides only _which mark_ is the decimal separator, never how much
+    precision survives (Intl's default of 3 would silently round).
+  - **The export pages through the `Repo` port by cursor** rather than one
+    unbounded `list()`. Both current implementations answer a limit-less
+    `list()` with the whole table, but `repo.ts` promises no such thing, and
+    a Drive-backed implementation is the likeliest to cap a response. A page
+    that comes back **empty ends the export regardless of `nextCursor`** —
+    the port documents no "last page's cursor is undefined" invariant, so
+    trusting the cursor alone would spin forever against a future repo.
+  - **A blob-URL revoke is deferred past the click task.** Revoking in the
+    same task as `anchor.click()` races the browser's blob read; iOS Safari
+    is a stated target for this feature and is exactly where an early revoke
+    cancels the download.
+  - **`AmountField` is a controlled string, not a controlled number**, and
+    is never `<input type="number">` (native spinners, and `valueAsNumber`
+    ignores the locale's decimal mark entirely). Parsing lives in one pure
+    module built on `Intl.NumberFormat().formatToParts`, and it **gates on a
+    strict decimal pattern before `Number()`**: bare `Number()` turns an
+    empty normalization into `0` and accepts hex literals, so a lone
+    separator once parsed as $0 and `0x1a` as 26. Money math is on
+    `AGENTS.md`'s TDD list for exactly this class of bug.
+  - **`ConfirmDialog` ships without a `pending` or `confirmVariant` prop.**
+    Both known Wave 4 callers are deletes, and nothing calls it yet — a prop
+    added before a caller exists is the "defaulted parameter nobody passed"
+    shape Wave 2's review named as its most expensive finding. Wave 4's
+    first real caller shapes them.
+  - **Local data is scoped as one dexie database per profile**, with the
+    frozen `kurobello` database **adopted** as the first profile and every
+    additional one named `kurobello-<profileId>` — a suffix, never a rename.
+    The registry is its own device-scoped database (`kurobello-profiles`).
+    The **active profile is resolved by recency**, not by a persisted
+    "active" flag: nothing today needs the two to differ, and Wave 5+'s
+    switcher can add the distinction when something does.
+  - **`repoProvider.getRepo()` still returns the fake repo, deliberately.**
+    The real per-profile binding is built and proven to isolate a guest from
+    a signed-in account, but flipping it before Wave 4's create UI exists
+    would leave a technically-correct, unusable, empty app.
+  - **The service worker registers with `registerType: 'prompt'`.** A deploy
+    no longer takes over an open tab silently — the classic way a lazily
+    loaded chunk 404s against a stale manifest. A failed periodic update
+    check is logged and never toasted (offline is not an error), but it is
+    **not** swallowed empty: a background poll has no second, user-visible
+    path the way `authStore.restore()`'s silent re-auth has an explicit
+    `login()` behind it, so a persistently broken check would otherwise
+    surface to nobody. `pagehide`, not `beforeunload`, cleans up the poll —
+    `beforeunload` is unreliable on mobile Safari and disqualifies the page
+    from bfcache.
+
+- 2026-08-19 — **A test that only fails under parallel-agent load is a real
+  fragility, not an environment quirk.** Three Wave 3 tracks independently
+  reported `src/router.kitError.test.tsx` timing out at vitest's default 5s
+  while sibling worktrees ran their own suites; it passes in ~1.9s in
+  isolation. The test does a dynamic `import('@/router')`, so the budget was
+  bounding transform time under CPU contention, not a race — the assertion
+  was already event-based. Raising it does not weaken what the test proves.
+  Recorded because parallel worktrees are this project's normal workflow, so
+  "it only fails when agents run in parallel" describes the common case, not
+  an edge one.
+
 ## 12. Backlog (pending verification / deferred work)
 
 - **The lock feature is not internationalised at all.** `LockScreen`,
@@ -3146,6 +3216,46 @@ lint` clean bar the one pre-existing `components/ui` warning). `AGENTS.md`
   2026-08-18).** Explicitly out of scope for the code-review pass: no
   screen has asked for a bounded date range yet, so adding the prop now
   would be speculative. Revisit once a Wave 2 screen actually needs it.
+
+- **The Toast has no action-button capability, so the service-worker update
+  prompt is a notification the user cannot act on in one tap.** `ToastItem`
+  carries a message and a dismiss affordance, nothing else. §10.16's copy is
+  honest ("reload the page to update") but weakly actionable in an installed
+  PWA, which has no browser reload chrome. `applyServiceWorkerUpdate()` is
+  built and tested and waiting for the surface; the missing half is an
+  additive `ToastItem.action` on `toastStore.ts` + `Toast.tsx` (a concrete
+  proposed shape is in `docs/wave-3/w.md`). Whoever next touches the Toast
+  should fold it in — it closes the last gap in §10.16's "done when".
+
+- **`button.tsx`'s entire size scale is under the 44px touch-target rule**
+  (`default` h-8/32px, `lg` h-9/36px — nothing reaches `h-11`). Every caller
+  works around it with a per-call-site `className="min-h-11"` override:
+  `LockSettings.tsx` first, now `ConfirmDialog` too. `AGENTS.md` mandates
+  ≥44px, so the component is currently the thing making its callers break
+  the rule. Whoever next touches `button.tsx` should add a compliant size
+  variant before Wave 4 copy-pastes the override a fourth and fifth time.
+
+- **`parseAmount`/`formatAmountForInput` may belong in `src/lib/i18n/`, not
+  `src/components/shared/`.** They are pure locale logic with no React in
+  them — conceptually siblings of `localeFormatting.ts`'s BCP-47 resolution
+  — and they live under `components/` only because that is the directory the
+  track that wrote them owned. Not urgent; worth folding in whenever a track
+  legitimately owns both directories.
+
+- **CSV export has no caller-visible error surface yet.**
+  `exportMovimientosToCsv()` can reject (a failing `repo.ready()`/`list()`),
+  and nothing catches it because nothing calls it. §10.18's button must route
+  that to the toast per `docs/error-handling.md` §7. Noted so it is not
+  rediscovered as a gap when the button is wired.
+
+- **No `Activo` export.** §10.12's title and user story are scoped to
+  movements only. Asset export would be a new §10.x, not implicit in that one.
+
+- **If the profile registry is ever synced across devices, revisit its
+  monotonic-timestamp fix.** `getActiveProfile()` compares `lastUsedAt`
+  among profiles local to one device, where the only hazard was same-tick
+  ties (found and fixed by TDD in Track V). Real clock skew between devices
+  is a different problem, and the current fix does not address it.
 
 ### Development waves (parallel tracks, sequencing, worktree log)
 
