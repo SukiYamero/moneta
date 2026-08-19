@@ -359,6 +359,88 @@ describe('createFakeRepo — parity with the real (dexie) repo contract', () => 
     expect(updated.id).toBe(first.id)
   })
 
+  it('add() rejects a duplicate id with RepoError("invalid_input"), no mutation', async () => {
+    const repo = createFakeRepo({ today: TODAY })
+    const before = await repo.movimientos.list()
+    const [first] = before.items
+    if (!first) throw new Error('expected at least one seeded movimiento')
+
+    const dup: Movimiento = { ...first, nota: 'dup' }
+    await expect(repo.movimientos.add(dup)).rejects.toMatchObject({ code: 'invalid_input' })
+
+    const after = await repo.movimientos.list()
+    expect(after.items.length).toBe(before.items.length)
+    expect(after.items.filter((m) => m.id === first.id).length).toBe(1)
+  })
+
+  it('addMany() rejects the whole batch when an id already exists in the store', async () => {
+    const repo = createFakeRepo({ today: TODAY })
+    const before = await repo.movimientos.list()
+    const [first] = before.items
+    if (!first) throw new Error('expected at least one seeded movimiento')
+
+    const dup: Movimiento = { ...first, nota: 'dup' }
+    const fresh: Movimiento = {
+      id: 'mov_batch_fresh',
+      fecha: '2026-08-18',
+      seccion: 'sec_personal',
+      categoria: 'Comida',
+      tipo: 'gasto',
+      monto: 500,
+      moneda: 'COP',
+      createdAt: TODAY.toISOString(),
+    }
+
+    await expect(repo.movimientos.addMany([fresh, dup])).rejects.toMatchObject({
+      code: 'invalid_input',
+    })
+
+    // all-or-nothing: `fresh` must NOT have landed even though it was valid on its own
+    const after = await repo.movimientos.list()
+    expect(after.items.length).toBe(before.items.length)
+    expect(after.items.some((m) => m.id === 'mov_batch_fresh')).toBe(false)
+  })
+
+  it('addMany() rejects the whole batch when the batch itself repeats an id', async () => {
+    const repo = createFakeRepo({ today: TODAY })
+    const before = await repo.movimientos.list()
+
+    const a: Movimiento = {
+      id: 'mov_batch_a',
+      fecha: '2026-08-18',
+      seccion: 'sec_personal',
+      categoria: 'Comida',
+      tipo: 'gasto',
+      monto: 500,
+      moneda: 'COP',
+      createdAt: TODAY.toISOString(),
+    }
+    const b: Movimiento = { ...a, nota: 'segundo con el mismo id' }
+
+    await expect(repo.movimientos.addMany([a, b])).rejects.toMatchObject({
+      code: 'invalid_input',
+    })
+
+    const after = await repo.movimientos.list()
+    expect(after.items.length).toBe(before.items.length)
+  })
+
+  it('removeMany() rejects the whole batch with RepoError("not_found") when any id is missing', async () => {
+    const repo = createFakeRepo({ today: TODAY })
+    const before = await repo.movimientos.list()
+    const [first] = before.items
+    if (!first) throw new Error('expected at least one seeded movimiento')
+
+    await expect(repo.movimientos.removeMany([first.id, 'does-not-exist'])).rejects.toMatchObject({
+      code: 'not_found',
+    })
+
+    // all-or-nothing: `first` must still be there even though its id was valid
+    const after = await repo.movimientos.list()
+    expect(after.items.some((m) => m.id === first.id)).toBe(true)
+    expect(after.items.length).toBe(before.items.length)
+  })
+
   it('the shared singleton seeds from a pinned clock, reproducible across different boot days', async () => {
     // The singleton's seed must not depend on the real wall-clock date it happens
     // to be imported on — re-import it under two different mocked "todays" and

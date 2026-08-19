@@ -513,12 +513,15 @@ Full design: Claude Design canvas `Moneta.dc.html` ("AUTH: WELCOME" and
   fake at all. The one intentional difference is the cursor's wire shape:
   the fake keeps a plain index-encoded cursor (fine for an in-memory store
   with no compound index to walk) instead of `repo.local.ts`'s opaque
-  `{ sortValue, tiebreakValue, id }` envelope — the *behavior* (default
+  `{ sortValue, tiebreakValue, id }` envelope — the _behavior_ (default
   sort, tiebreaks, rejecting garbage) is what's mirrored, not the wire
-  format. **Known open gap (§11, 2026-08-18 final-sweep entry):**
-  `add`/`addMany` don't reject a duplicate `id` and `removeMany` doesn't
-  reject a missing `id`, unlike `repo.local.ts`'s dexie-enforced/explicit
-  checks — flagged, not yet fixed.**
+  format. `add`/`addMany` reject a duplicate `id` with
+  `RepoError('invalid_input')` (an `addMany` batch is all-or-nothing: a
+  duplicate anywhere in it — against the store or within the batch itself —
+  aborts the whole batch, no partial insert), and `removeMany` rejects any
+  missing id with `RepoError('not_found')`, aborting the whole batch —
+  symmetric with what single-id `remove`/`update` already guaranteed
+  (§11, 2026-08-18 final-sweep entry).**
 - **Done when:** every component has a colocated `*.test.tsx`
   (`user-event`, not `fireEvent`), is keyboard-reachable with ≥44px touch
   targets and sensible `role`/`aria`; `repo.fake.ts` has `repo.fake.test.ts`
@@ -939,30 +942,39 @@ m.monto <= 0` (was `m.monto <= 0` alone, which lets `NaN` through since
   a second. `validateMovimiento` now checks `monto`, `fecha`, and `moneda`,
   matching `repo.local.ts` exactly.
 
-- 2026-08-18 — **Final sweep of `repo.fake.ts` against the §10.3 port
-  contract found a tenth divergence: `add()`/`addMany()` never reject a
-  duplicate `id`, and `removeMany()` never rejects a missing `id`.**
-  Reported to the operator per the same "report, don't quietly fix or
-  ignore" rule as the ninth — **not fixed in this pass**, since it wasn't
-  in the original reproduced-findings list and the operator asked for an
-  explicit report this round, not another silent fix. Reproduced directly
-  (throwaway probe, not committed): `movimientos.add()` with an `id` that
-  already exists in the store resolves instead of throwing, leaving two
-  rows sharing one `id`; `movimientos.addMany()` with a duplicate `id`
-  inside the batch does the same; `movimientos.removeMany(['missing-id'])`
-  resolves instead of throwing. `repo.local.ts` diverges from all three:
-  `table.add`/`table.bulkAdd` throw on a primary-key collision (dexie
-  `ConstraintError`, wrapped to `RepoError('unknown')`), and `removeMany`
-  explicitly checks every id exists before `bulkDelete`, throwing
-  `RepoError('not_found')` and aborting the whole batch on any miss — the
-  same guarantee `remove()` already gives for a single id. The fake is
-  self-inconsistent here too: `remove()`/`update()` already throw
-  `not_found` on a missing id; `removeMany()` silently doesn't. Left open
-  for the operator to triage, noting the other fixer's in-flight
-  `repo.local.ts` changes (stricter `limit` validation, a richer cursor
-  payload, transactional writes) don't appear to touch this specific
-  behavior, but should be re-checked against whatever that track lands
-  with before this is picked up.
+- 2026-08-18 — **Tenth divergence resolved same-day: `add()`/`addMany()`
+  now reject a duplicate `id`, and `removeMany()` now rejects a missing
+  `id`.** Reported first (see previous entry), then fixed on operator
+  confirmation. TDD: four failing tests added first — `add()` with an id
+  already in the store; `addMany()` with an id already in the store
+  (asserting the batch's _other_, otherwise-valid row also did NOT land —
+  the all-or-nothing check); `addMany()` with the same id repeated twice
+  inside one batch; `removeMany()` with one real id plus one missing id
+  (asserting the real id was NOT removed either) — all four confirmed to
+  fail for the right reason (each resolved instead of rejecting) before
+  the fix. `add`/`addMany` now check for a colliding id (against the
+  store, and — for `addMany` — within the batch itself) _before_ touching
+  `store`, and throw `RepoError('invalid_input')`; `removeMany` now checks
+  every id exists before removing any of them, throwing
+  `RepoError('not_found')` on the first miss — bringing it in line with
+  what `remove()`/`update()` already guaranteed for a single id, closing
+  the self-inconsistency noted in the previous entry.
+  **One correction to what was reported, not copied into the fix:** the
+  reproduced-today `repo.local.ts` behavior for a duplicate id on `add`/
+  `addMany` is `RepoError('unknown')` (a Dexie `ConstraintError` falling
+  through the generic `wrapUnknown` wrapper) — the operator confirmed
+  that's itself a bug in `repo.local.ts` (a duplicate id is the caller
+  violating the contract, not an unexpected storage failure — the same
+  distinction `invalid_input` exists for) and is having the other track
+  fix it there. The fake targets the _corrected_ behavior,
+  `RepoError('invalid_input')`, not the code as currently reproduced —
+  matching a defect byte-for-byte would have propagated it instead of
+  agreeing with the intended contract.
+  **Explicit sweep result: no eleventh divergence found.** Re-swept
+  `add`/`get`/`addMany`/`update`/`remove`/`removeMany`/`list`/`ready`/
+  `getConfig`/`updateConfig` against §10.3's bullets and edge cases after
+  this fix; nothing else stood out as disagreeing with the documented
+  contract.
 
 ## 12. Backlog (pending verification / deferred work)
 

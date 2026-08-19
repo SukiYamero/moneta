@@ -502,12 +502,30 @@ function createCrudRepo<T extends { id: EntityId }>(
     },
     async add(item) {
       validate(item)
+      if (store.some((existing) => existing.id === item.id)) {
+        throw new RepoError(`id "${item.id}" already exists`, 'invalid_input')
+      }
       const fresh = { ...item }
       store = [...store, fresh]
       return { ...fresh }
     },
     async addMany(items) {
       items.forEach(validate)
+      // All-or-nothing, mirroring repo.local.ts's bulkAdd-inside-a-transaction
+      // guarantee: every id (within the batch, and against the existing store)
+      // is checked before the store is touched, so a bad row never leaves a
+      // partial batch committed.
+      const existingIds = new Set(store.map((item) => item.id))
+      const seenInBatch = new Set<EntityId>()
+      for (const item of items) {
+        if (existingIds.has(item.id)) {
+          throw new RepoError(`id "${item.id}" already exists`, 'invalid_input')
+        }
+        if (seenInBatch.has(item.id)) {
+          throw new RepoError(`duplicate id "${item.id}" in addMany batch`, 'invalid_input')
+        }
+        seenInBatch.add(item.id)
+      }
       const fresh = items.map((item) => ({ ...item }))
       store = [...store, ...fresh]
       return fresh.map((item) => ({ ...item }))
@@ -528,6 +546,14 @@ function createCrudRepo<T extends { id: EntityId }>(
     },
     async removeMany(ids) {
       const idsToRemove = new Set(ids)
+      // Symmetric with `remove`'s not_found guarantee: any missing id aborts
+      // the whole batch (checked before the store is touched), never a
+      // partial delete.
+      for (const id of idsToRemove) {
+        if (!store.some((item) => item.id === id)) {
+          throw new RepoError(`Not found: ${id}`, 'not_found')
+        }
+      }
       store = store.filter((item) => !idsToRemove.has(item.id))
     },
   }
