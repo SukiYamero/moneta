@@ -132,12 +132,43 @@ $ vitest run
 The one lint warning is pre-existing in `src/components/ui/button.tsx`
 (shadcn-generated, outside this track's scope — untouched by this diff).
 
-## Cross-screen guarantee
+## Cross-screen guarantee — corrected mid-task by the operator
 
-`HistoryScreen.test.tsx`'s "mes scope totals match movimientoStats for the
-same month — the cross-screen guarantee" test computes the expected month
-totals independently via `periodRange('mes', …)` + `filterByRange` +
-`totals()` (the exact same call Home's own dashboard will make for "this
-month") and asserts the rendered balance/income/expense figures match — it
-would fail if History's period-range wiring ever diverged from
-`movimientoStats`'s contract.
+The brief's original "Done when" asked for a test asserting "History's
+month total equals Home's for the same month." That guarantee cannot hold:
+Track E2 landed with Home's balance card all-time (the design's own
+`renderVals()` computes it unconditionally), and its only period figure is
+a weekly expense total — there is no month number on Home to compare
+against. The operator caught this and corrected the brief before I built
+against it (message received mid-task, addressed on this branch before
+finishing).
+
+The guarantee actually meant, and what's implemented:
+`HistoryScreen.test.tsx` has an `it.each` over all four `Periodo` values
+that computes the expected totals independently in the test —
+`totals(filterByRange(movimientos, periodRange(periodo, anchor,
+primerDiaSemana)))`, the same call any other screen would make — and
+asserts the rendered balance/income/expense figures match, for each scope
+after clicking it. It would fail if `HistoryScreen` ever computed a total
+through any path other than `movimientoStats`. Not a diff against Home;
+Home has nothing period-scoped to diff against yet. Combined with Home's
+own tests asserting the same property on its side, and E1's bucket-range
+invariant proving the module internally consistent, this is the real
+cross-screen guarantee: every screen traces to one shared aggregation
+module, not a comparison between two screens that legitimately show
+different things.
+
+## Other operator corrections addressed mid-task
+
+- **`AppShell.test.tsx`'s `/historial/i` heading assertion for `/history`**
+  (written against Track L's placeholder) — no change needed.
+  `HistoryScreen`'s real body keeps an `sr-only` `<h1>{t('title')}</h1>`
+  ("Historial") for exactly this reason (screen-reader/landmark identity
+  independent of the visible period-scoped header), so the existing
+  assertion already passes against the real screen — confirmed via
+  `bun run check`, not just reasoned about.
+- **Currency/date formatting** — already compliant. `BreakdownCard.tsx`
+  imports `formatMonto` from `movimientoView.ts` (never a second
+  formatter), and `historyPeriodLabel.ts`/`historyPeriodOptions.ts` use
+  `date-fns/locale`'s `es`, matching `MovimientoRow.tsx`'s own convention —
+  no locale-aware formatting was invented for this screen.

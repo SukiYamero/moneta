@@ -57,24 +57,46 @@ describe('HistoryScreen', () => {
     expect(screen.getByText('No hay registros en este periodo')).toBeInTheDocument()
   })
 
-  it('mes scope totals match movimientoStats for the same month — the cross-screen guarantee', async () => {
-    const user = userEvent.setup()
-    render(<HistoryScreen />)
-    await screen.findByText('Café de la mañana')
+  // The guarantee this track exists to produce: every figure on screen
+  // traces to movimientoStats called with the screen's own scope/anchor —
+  // never a second aggregation path living inside the component. Checked
+  // for all four Periodo values, each computed independently in the test
+  // rather than read back out of the component, so a local shortcut in
+  // HistoryScreen would make this fail. (Home has no month-scoped total to
+  // compare against — its balance card is all-time — so this is the
+  // guarantee against movimientoStats itself, not a cross-screen diff.)
+  it.each([
+    ['dia', 'Día'],
+    ['semana', 'Semana'],
+    ['mes', 'Mes'],
+    ['anio', 'Año'],
+  ] as const)(
+    "the %s scope's balance card matches an independent movimientoStats computation for the same range",
+    async (periodo, scopeLabel) => {
+      const user = userEvent.setup()
+      render(<HistoryScreen />)
+      await screen.findByText('Café de la mañana')
 
-    await user.click(screen.getByRole('radio', { name: 'Mes' }))
+      await user.click(screen.getByRole('radio', { name: scopeLabel }))
 
-    const movimientos = (await fakeRepo.movimientos.list()).items
-    const config = await fakeRepo.getConfig()
-    const range = periodRange('mes', seedTodayIso, config.preferencias.primerDiaSemana)
-    const expected = totals(filterByRange(movimientos, range))
-    const moneda = config.preferencias.monedaPrincipal
+      const movimientos = (await fakeRepo.movimientos.list()).items
+      const config = await fakeRepo.getConfig()
+      const range = periodRange(periodo, seedTodayIso, config.preferencias.primerDiaSemana)
+      const expected = totals(filterByRange(movimientos, range))
+      const moneda = config.preferencias.monedaPrincipal
 
-    expect(
-      await screen.findByText(money(`+${formatMonto(expected.ingresos, moneda)}`)),
-    ).toBeInTheDocument()
-    expect(screen.getByText(money(`-${formatMonto(expected.gastos, moneda)}`))).toBeInTheDocument()
-  })
+      // getAllByText, not getByText: when ingresos is 0 the balance figure
+      // and the gasto mini-total render the identical "-$X" text, which is
+      // correct (balance == -gastos) rather than a bug to avoid — a single
+      // occurrence is still enough to prove the number reached the screen.
+      expect(
+        await screen.findAllByText(money(`+${formatMonto(expected.ingresos, moneda)}`)),
+      ).not.toHaveLength(0)
+      expect(
+        screen.getAllByText(money(`-${formatMonto(expected.gastos, moneda)}`)),
+      ).not.toHaveLength(0)
+    },
+  )
 
   it('breakdown tabs switch between gasto/ingreso shares via breakdownBy, not a local computation', async () => {
     const user = userEvent.setup()
