@@ -142,6 +142,10 @@ We follow **spec-driven development**. `specs.md` is the source of truth.
   fluid range (~360px min width up through ~430px), not one fixed width;
   Tailwind's `sm`/`md`/`lg` breakpoints are the only fixed numbers that
   matter, and only as the enhancement layer above.
+  Enforced by `bun run lint:units` (part of `bun run check`): any arbitrary
+  px length in a class — `h-[5px]`, `px-[22px]` — fails the build. Relative
+  arbitrary values (`max-h-[88dvh]`) and non-length ones
+  (`transition-[left]`, gradients, `data-[...]`) are fine and untouched.
 - **Touch/swipe is the primary interaction model, not click/hover.** This
   app should feel like a native app, not a website with touch support
   bolted on. Concretely:
