@@ -38,9 +38,24 @@ export const HistoryScreen = () => {
     return (
       <main className="flex min-h-full animate-push-in flex-col px-5 pt-14 pb-6">
         <h1 className="sr-only">{t('title')}</h1>
-        <p className="pt-10 text-center text-sm font-semibold text-fg-tertiary" role="status">
-          {status === 'error' ? t('error') : t('loading')}
-        </p>
+        {status === 'error' ? (
+          <div className="flex flex-col items-center gap-3 pt-16 text-center">
+            <p role="alert" className="text-sm font-medium text-destructive">
+              {t('error')}
+            </p>
+            <button
+              type="button"
+              onClick={() => void load()}
+              className="min-h-11 rounded-lg border border-border-subtle px-4 text-sm font-bold text-fg-secondary"
+            >
+              {t('retry')}
+            </button>
+          </div>
+        ) : (
+          <p className="pt-10 text-center text-sm font-semibold text-fg-tertiary" role="status">
+            {t('loading')}
+          </p>
+        )}
       </main>
     )
   }

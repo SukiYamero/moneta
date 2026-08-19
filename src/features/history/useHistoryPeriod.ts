@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { addDays, addMonths, addWeeks, addYears, format, parseISO, setYear } from 'date-fns'
+import { addDays, addMonths, addWeeks, addYears, format, getYear, parseISO } from 'date-fns'
 import type { Periodo } from '@/lib/schema'
 
 const ISO_DATE_FORMAT = 'yyyy-MM-dd'
@@ -54,8 +54,16 @@ export const useHistoryPeriod = ({
     [scope],
   )
 
+  // `addYears` by the year delta, not date-fns's own `setYear`: `setYear`
+  // sets the native `Date`'s year component directly and does not clamp a
+  // Feb 29 anchor for a non-leap target year (it overflows into March 1),
+  // whereas `addYears`/`addMonths` clamp day-of-month overflow the same way
+  // `step` above already relies on.
   const selectYear = useCallback((year: number) => {
-    setAnchor((current) => toIsoDate(setYear(parseISO(current), year)))
+    setAnchor((current) => {
+      const date = parseISO(current)
+      return toIsoDate(addYears(date, year - getYear(date)))
+    })
   }, [])
 
   return { scope, anchor, setScope, selectAnchor: setAnchor, step, selectYear }

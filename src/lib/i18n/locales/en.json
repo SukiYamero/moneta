@@ -148,6 +148,7 @@
     "title": "History",
     "loading": "Loading your history…",
     "error": "We couldn't load your history. Try again.",
+    "retry": "Retry",
     "scope": {
       "ariaLabel": "Period scope",
       "dia": "Day",
