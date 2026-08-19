@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { db } from '@/lib/db'
+import { RepoError } from '@/lib/repo'
 import { testRepoContract } from '@/lib/repo.contract'
 import {
   __resetReadyMemoForTests,
@@ -223,6 +224,22 @@ describe('movimientos bulk paths (addMany / removeMany)', () => {
       new RegExp(dup.id),
     )
   })
+
+  it('addMany() wraps a failure in the post-conflict duplicate-id lookup (bulkGet) as RepoError too', async () => {
+    // The ConstraintError handler in addMany()'s catch block awaits
+    // findDuplicateId() (a second storage call, table.bulkGet) to name the
+    // offending id. If THAT call itself rejects — a second, unrelated
+    // storage failure racing the first — the raw rejection must not escape
+    // addMany() unwrapped; same guarantee as the primary bulkAdd failure.
+    const repo = createLocalRepo()
+    const existing = await repo.movimientos.add(movimiento())
+    const bulkGetSpy = vi.spyOn(db.movimientos, 'bulkGet').mockRejectedValueOnce(new Error('boom'))
+    const error: unknown = await repo.movimientos
+      .addMany([movimiento(), { ...existing }])
+      .catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(RepoError)
+    bulkGetSpy.mockRestore()
+  })
 })
 
 describe('list() — filtering', () => {
@@ -375,6 +392,48 @@ describe('Config', () => {
     await repo.updateConfig({ secciones: [] })
     const config = await repo.getConfig()
     expect(config.secciones).toEqual([])
+  })
+})
+
+describe('Config — error normalization (docs/error-handling.md §6)', () => {
+  // getConfig()/updateConfig() sit outside createCrudRepo's factory and must
+  // funnel a raw storage failure through the same wrapUnknown() normalization
+  // every CrudRepo method uses, or a caller's `instanceof RepoError` check
+  // silently falls through to an unhandled bare Error.
+  it('getConfig() wraps an unexpected db.config.get() failure as RepoError', async () => {
+    const repo = createLocalRepo()
+    await repo.ready()
+    const getSpy = vi.spyOn(db.config, 'get').mockRejectedValueOnce(new Error('boom'))
+    const error: unknown = await repo.getConfig().catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(RepoError)
+    expect(error).toMatchObject({ code: 'unknown' })
+    getSpy.mockRestore()
+  })
+
+  it('updateConfig() wraps an unexpected db.config.get() failure as RepoError', async () => {
+    const repo = createLocalRepo()
+    await repo.ready()
+    const getSpy = vi.spyOn(db.config, 'get').mockRejectedValueOnce(new Error('boom'))
+    await expect(repo.updateConfig({ secciones: [] })).rejects.toBeInstanceOf(RepoError)
+    getSpy.mockRestore()
+  })
+
+  it('updateConfig() wraps an unexpected db.config.put() failure as RepoError', async () => {
+    const repo = createLocalRepo()
+    await repo.ready()
+    const putSpy = vi.spyOn(db.config, 'put').mockRejectedValueOnce(new Error('boom'))
+    await expect(repo.updateConfig({ secciones: [] })).rejects.toBeInstanceOf(RepoError)
+    putSpy.mockRestore()
+  })
+
+  it('updateConfig() still rejects a caller-supplied schemaVersion as invalid_input, not unknown', async () => {
+    // Regression guard: the schemaVersion guard must stay outside the
+    // wrapping try/catch's "everything unexpected is unknown" umbrella.
+    const repo = createLocalRepo()
+    await repo.ready()
+    await expect(repo.updateConfig({ schemaVersion: 999 })).rejects.toMatchObject({
+      code: 'invalid_input',
+    })
   })
 })
 

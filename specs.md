@@ -1518,6 +1518,88 @@ type { ComponentProps } from 'react'`, matching the type-only-import
   this test file can construct), and `lockStore.ts` isn't an owned file
   this track can refactor to expose a reusable constant instead.
 
+- 2026-08-19 — **`repo.local.ts`'s `getConfig()`/`updateConfig()` now
+  guarantee `RepoError` on every failure path, closing a gap the final
+  whole-codebase review found (`fix/repo-wrap`).** Both functions sit
+  outside the `createCrudRepo` factory (`Config` is deliberately atomic,
+  §10.3) and skipped the `wrapUnknown()` normalization every `CrudRepo`
+  method funnels through — a mocked `db.config.get`/`put` rejection
+  surfaced as a bare `Error`, not `RepoError`. Currently dormant (no UI
+  consumer of `Repo` exists yet, Wave 2 hasn't started) but would have
+  silently broken any `catch (e) { if (e instanceof RepoError) … }` the
+  moment Track G's Settings screen called `updateConfig`. Fixed by wrapping
+  both bodies in the same try/catch → `wrapUnknown(error)` shape as
+  `add()`/`update()`/etc., keeping the `schemaVersion` `invalid_input` guard
+  outside the try (a caller-input rejection, not a storage failure to
+  normalize — same placement as `add()`'s pre-storage `validate(item)`
+  call). TDD: `repo.local.test.ts` mocks `db.config.get`/`put` to reject and
+  asserts `RepoError` (watched failing first against the un-fixed code).
+  - **Sweep, mechanical not by inspection, per `docs/error-handling.md` §6:**
+    a second, real defect of the identical shape was found this same pass —
+    `createCrudRepo<T>`'s `addMany()` catch handler calls `await
+findDuplicateId(table, items)` (a second storage call, `table.bulkGet`)
+    to name the conflicting id, but that nested await sat outside any
+    try/catch: a failure _there_ (a second, unrelated storage fault racing
+    the original `ConstraintError`) would have escaped `addMany()` as a bare
+    `Error` too. Fixed by wrapping that inner lookup in its own
+    try/catch → `wrapUnknown(lookupError)`, mirrored by a TDD test that
+    mocks `db.movimientos.bulkGet` to reject after a genuine duplicate-id
+    `bulkAdd` failure.
+  - **Full sweep results, by category (both findings above already listed):**
+    every other exported path out of `repo.local.ts` (`ready()`,
+    `migrateSchema()`'s only production call site via `performReady()`,
+    every `CrudRepo` method, cursor decode/encode) already funnels through
+    `wrapUnknown()` or `ready()`'s own equivalent inline wrapping — verified
+    by re-reading the whole file method by method, not by trusting the
+    pattern held. `migrateSchema()` itself stays unwrapped when a
+    registered `Migration` throws raw — left as-is deliberately: it's
+    explicitly documented as "not part of the frozen `Repo` port" (test-only
+    export for unit-testing the dispatch registry in isolation), and its
+    one real call site (`performReady()`, via `ready()`) already gets the
+    outer wrapping, so duplicating it inside `migrateSchema()` would be
+    redundant, not protective.
+  - **`repo.fake.ts` parity: nothing to fix.** It has zero `try`/`catch`
+    blocks anywhere in the file (grepped to confirm) — every throw is a
+    deliberate, already-typed `RepoError`, because the fake is pure
+    in-memory logic with no I/O boundary that can fail unexpectedly. Its
+    `getConfig()`/`updateConfig()` use `structuredClone(config)` on a
+    `Config` that's plain JSON-serializable data (`schema.ts`: numbers,
+    strings, arrays, plain objects — no functions/non-cloneable values), so
+    there's no realistic clone-failure mode either. The real repo's two
+    fixed gaps were genuinely real-repo-only: they exist because Dexie/
+    IndexedDB is a real I/O boundary the fake doesn't have.
+  - **Contract-suite question: should `repo.contract.ts` assert an
+    _unexpected_ storage failure surfaces as `RepoError`, not just known
+    failure codes?** Judged untestable at the contract level without
+    over-coupling it to one implementation's internals, so not added.
+    `testRepoContract(makeRepo)`'s only injection point is `makeRepo(): Repo
+| Promise<Repo>` — a finished `Repo` instance, with no shared seam to
+    fault-inject an "unexpected storage failure" through, because the two
+    implementations don't share an underlying storage engine to fault-inject
+    into (Dexie/IndexedDB vs. a plain in-memory array/variable — there is no
+    common thing to break). Adding one would mean either a bespoke hook per
+    implementation (exactly the internals-coupling the suite's own doc
+    comment says to avoid) or asserting only on the known-failure paths the
+    suite already covers (duplicate id, missing id, bad input, malformed
+    cursor) — which it already does, via `.rejects.toMatchObject({ code })`
+    on every one of them. The gap this pass closed (an _unexpected_,
+    non-deliberate failure, e.g. the underlying store rejecting) is
+    necessarily implementation-specific to exercise — it needs mocking
+    `db.config.get`/`table.bulkGet`/etc., which only exists on the dexie
+    side — so it correctly belongs in `repo.local.test.ts`'s own file (done
+    above), not the shared suite.
+  - **`bun.lock`'s root `"name"` field corrected from `"moneta"` to
+    `"kurobello"`** (matching `package.json`, per the frozen-storage-
+    identifier rule) — silent drift `bun install` does not self-heal (a
+    plain `bun install` left it untouched; confirmed empirically before
+    touching anything). Hand-edited as a single-line change rather than
+    regenerated: a full `rm bun.lock && bun install` was tried in a scratch
+    copy first and churns ~1150 lines (transitive dependency version bumps
+    unrelated to this fix), so the targeted edit was used instead, verified
+    with `bun install` afterward reporting no further lockfile changes.
+  - `bun run check` green (typecheck, lint, `no-raw-px.sh`, 32 test files /
+    314 tests) after all of the above.
+
 ## 12. Backlog (pending verification / deferred work)
 
 - ✅ **Login verified end-to-end (§10.1)** — 2026-07-02. Real OAuth ran against Google
