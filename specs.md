@@ -2014,7 +2014,77 @@ lint` clean bar the one pre-existing `components/ui` warning). `AGENTS.md`
   second message never truncates the first. Deliberately a notification, not
   a dialog: no blocking, no focus trap, no questions.
 
+- 2026-08-19 — **Wave 2 decomposition, and the operating rules that go with
+  it** (`docs/wave-2-plan.md`, the wave's execution source of truth). Scope:
+  Wave 2 ships i18n (I), the aggregation/data layer (E1), the Toast (K), the
+  Drive-consent refinements (J), the app shell (L), and the three read-only
+  screens (E2 Home, E3 Search, E4 History). **Tracks F, G and H move to
+  Wave 3.** Four process decisions taken because Wave 1's parallel pass lost
+  time to exactly these:
+  1. **The operator owns every shared doc for the duration of a wave** —
+     `specs.md`, `docs/waves.md`, `ARCHITECTURE.md`, `AGENTS.md`, and any
+     pre-existing directory `README.md`. Tracks write what they want recorded
+     into `docs/wave-2/<track>.md`, a file each one alone owns, and the
+     operator folds it in after the merge. `AGENTS.md`'s append-only rule
+     stops textual conflicts between two tracks appending at the same anchor
+     in a 137 KB file, not the risk of a subagent resolving one badly. A new
+     `README.md` for a new directory stays the track's job — it cannot
+     conflict.
+  2. **The operator creates and removes worktrees, not the agents**, and owns
+     the `docs/waves.md` log rows. Same reason.
+  3. **The Toast ships in Wave 2 with no consumer.** With Track F deferred,
+     Wave 2's screens are read-only and no failed write needs a home, so
+     §12's original "it blocks the screen tracks" justification lapses for
+     this wave. It is built anyway because Wave 3 is three tracks that all
+     need it: a shared surface built one wave early is what lets them start
+     in parallel instead of serialising behind it.
+  4. **Track E is split five ways** (E1 data layer → L shell → E2/E3/E4
+     screens in parallel) rather than one agent building Home + Search +
+     History serially. The split is drawn along file ownership: the router
+     and bottom nav belong to exactly one track (L), so the three screen
+     tracks share no file at all.
+
+- 2026-08-19 — **The chosen locale is not persisted in Wave 2, because
+  nothing can choose it yet.** `docs/waves.md` Track I left "where the locale
+  lives" open, leaning toward `Config.preferencias`. Resolved: Wave 2 ships no
+  locale picker, so detection from `navigator.languages` is deterministic and
+  reproduces the same result on every boot — there is nothing to remember.
+  Persistence, the `Preferencias` field, and the picker land together in
+  Track G (Wave 3), where they have a user action to persist. This keeps
+  Track I out of `schema.ts` and out of the device-scoped IndexedDB store,
+  which in turn keeps it out of `pinLock.ts`/`authStore.ts` — files Track J
+  needs in the same wave. Deferring the persistence decision removed a
+  cross-track coupling rather than postponing work.
+
+- 2026-08-19 — **Wave 2's screens read the fake repo through one named swap
+  point** (`src/lib/repoProvider.ts`, Track E1), not through scattered
+  imports. Surfaced while scoping the wave: `bootstrap.ts` creates the three
+  JSON files in Drive and `repo.local.ts` is a dexie-only implementation, but
+  **nothing reads or writes those Drive files through the `Repo` port** — no
+  Drive-backed `Repo` implementation exists at all. So the screens have no
+  real data source to read, and saying so in one file with one
+  `// STUB(wave3)` marker is more honest than environment-branching a choice
+  that has only one option. Recorded as the largest Wave 3 candidate in §12.
+
 ## 12. Backlog (pending verification / deferred work)
+
+- **No Drive-backed `Repo` implementation exists — the largest structural gap
+  (found while scoping Wave 2, 2026-08-19).** `bootstrap.ts` provisions
+  `movimientos.json` / `activos.json` / `config.json`, and `repo.local.ts`
+  reads and writes dexie, but no code path connects the two: the Drive files
+  are created and then never touched again. Every Wave 2 screen therefore
+  reads `repo.fake` through `src/lib/repoProvider.ts`'s single
+  `// STUB(wave3)` line. Wave 3 needs a `repo.drive.ts` behind the same port
+  (it already has a shared contract suite, `repo.contract.ts`, so a new
+  implementation cannot ship without its error behavior being exercised) plus
+  a sync/conflict story that does not exist yet.
+
+- **The PIN lock has no production entry point once Home is rebuilt (Wave 2,
+  Track L).** `LockSettings` — the only UI that enables, disables, or
+  manually re-locks the vault — lived on `Home` as a dev harness. Track L
+  moves it to the dev-only `/kit` route so rebuilding Home does not silently
+  delete the feature. The real Settings entry is Track G's job (Wave 3);
+  until it lands, the lock is only configurable at `/kit` in dev.
 
 - **Toast (§10.6) blocks Wave 2 — build it before the screen tracks, not
   inside one of them.** `docs/ui/implementation-plan.md` files it under the

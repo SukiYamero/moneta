@@ -71,8 +71,22 @@ entry — not silently building past it.
 
 ## Wave 2 — active
 
+> **Execution detail lives in [`wave-2-plan.md`](wave-2-plan.md)** — the
+> operator's decomposition: per-track specs, file ownership, stage
+> sequencing, the conflict analysis, and the live status table. This file
+> keeps only the shape of the wave. If the two disagree on execution,
+> `wave-2-plan.md` wins; on behavior, `specs.md` wins over both.
+
 `src/components/shared/**` + `repo.fake.ts` are on `main`; every track below
 can build against them.
+
+**Scope decision (2026-08-19, operator + user): Wave 2 ships tracks I, J, E
+and the Toast; tracks F, G and H move to Wave 3.** The Toast stays in Wave 2
+even though its only Wave-2 consumer moved out with Track F — Wave 3 is three
+tracks that all need it, and building the shared surface a wave early is what
+lets all three start in parallel. Track E is split into four tracks (E1 data
+layer, L shell, E2 Home, E3 Search, E4 History) so stage 3 runs three screens
+concurrently instead of one agent serialising them; see `wave-2-plan.md` §2.
 
 **Blocker before the screen tracks: the Toast (`specs.md` §10.6).** It is
 the only surface for an error raised where no screen owns it — a failed
@@ -163,6 +177,14 @@ Search/Filter sheet + History overlay. One track: all three share
 
 Owns: `src/routes/Home.tsx`, `src/lib/movimientoStats.ts`,
 `src/features/search/**`, `src/features/history/**`
+
+---
+
+## Wave 3 — planned (deferred from Wave 2 on 2026-08-19)
+
+These three were originally Wave 2. They move out so Wave 2 can land the
+i18n/Toast/shell foundations first; all three consume the Toast (Track K) and
+the i18n table, which is exactly why those were built a wave early.
 
 ### Track F — Movement/Add sheet + Voice
 
