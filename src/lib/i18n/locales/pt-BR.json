@@ -47,8 +47,50 @@
   },
   "home": {},
   "search": {
-    "title": "Pesquisar",
-    "placeholder": "Esta tela está em construção."
+    "title": "Pesquisar movimentos",
+    "searchInputLabel": "Descrição ou etiqueta",
+    "clearSearchLabel": "Limpar pesquisa",
+    "filterButtonLabel": "Filtros",
+    "resultsCount_one": "{{count}} resultado",
+    "resultsCount_other": "{{count}} resultados",
+    "loading": "Carregando movimentos…",
+    "error": "Não conseguimos carregar seus movimentos.",
+    "retry": "Tentar de novo",
+    "emptyData": {
+      "title": "Você ainda não tem movimentos",
+      "subtitle": "Registre seu primeiro movimento para poder buscá-lo aqui."
+    },
+    "emptyResults": {
+      "title": "Nenhum resultado",
+      "withQuery": "Não encontramos \"{{query}}\"",
+      "withoutQuery": "Tente outro período ou remova os filtros"
+    },
+    "filters": {
+      "heading": "Filtros de busca",
+      "dateRange": {
+        "heading": "Período",
+        "all": "Todo o histórico",
+        "last7Days": "Últimos 7 dias",
+        "last30Days": "Últimos 30 dias",
+        "thisMonth": "Este mês",
+        "thisYear": "Este ano",
+        "custom": "Personalizado",
+        "from": "De",
+        "to": "Até"
+      },
+      "type": {
+        "heading": "Tipo",
+        "all": "Todos",
+        "gasto": "Despesas",
+        "ingreso": "Receitas"
+      },
+      "tags": {
+        "heading": "Etiquetas"
+      },
+      "clear": "Limpar",
+      "apply_one": "Ver {{count}} resultado",
+      "apply_other": "Ver {{count}} resultados"
+    }
   },
   "history": {
     "title": "Histórico",

@@ -47,8 +47,50 @@
   },
   "home": {},
   "search": {
-    "title": "Buscar",
-    "placeholder": "Esta pantalla está en construcción."
+    "title": "Buscar movimientos",
+    "searchInputLabel": "Descripción o etiqueta",
+    "clearSearchLabel": "Borrar búsqueda",
+    "filterButtonLabel": "Filtros",
+    "resultsCount_one": "{{count}} resultado",
+    "resultsCount_other": "{{count}} resultados",
+    "loading": "Cargando movimientos…",
+    "error": "No pudimos cargar tus movimientos.",
+    "retry": "Reintentar",
+    "emptyData": {
+      "title": "Aún no tienes movimientos",
+      "subtitle": "Registra tu primer movimiento para poder buscarlo aquí."
+    },
+    "emptyResults": {
+      "title": "Sin resultados",
+      "withQuery": "No encontramos \"{{query}}\"",
+      "withoutQuery": "Prueba con otro rango o quitando filtros"
+    },
+    "filters": {
+      "heading": "Filtros de búsqueda",
+      "dateRange": {
+        "heading": "Rango de fechas",
+        "all": "Todo el historial",
+        "last7Days": "Últimos 7 días",
+        "last30Days": "Últimos 30 días",
+        "thisMonth": "Este mes",
+        "thisYear": "Este año",
+        "custom": "Personalizado",
+        "from": "Desde",
+        "to": "Hasta"
+      },
+      "type": {
+        "heading": "Tipo",
+        "all": "Todos",
+        "gasto": "Gastos",
+        "ingreso": "Ingresos"
+      },
+      "tags": {
+        "heading": "Etiquetas"
+      },
+      "clear": "Limpiar",
+      "apply_one": "Ver {{count}} resultado",
+      "apply_other": "Ver {{count}} resultados"
+    }
   },
   "history": {
     "title": "Historial",
