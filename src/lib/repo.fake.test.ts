@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { createFakeRepo } from '@/lib/repo.fake'
+import { createFakeRepo, fakeRepo } from '@/lib/repo.fake'
 import type { Repo } from '@/lib/repo'
 import { testRepoContract } from '@/lib/repo.contract'
 import type { Movimiento } from '@/lib/schema'
@@ -167,5 +167,19 @@ describe('createFakeRepo — parity with the real (dexie) repo contract', () => 
       vi.useRealTimers()
       vi.resetModules()
     }
+  })
+})
+
+describe('seed dates are timezone-safe', () => {
+  // The exported singleton is what every screen renders in dev, and this
+  // app's audience is entirely west of UTC. FAKE_REPO_SEED_DATE is evaluated
+  // at import time, so this can only be exercised by the process TZ, not by
+  // vi.stubEnv — hence the assertion on the singleton rather than on a
+  // locally-constructed repo, which would silently bypass the constant.
+  // Guards the regression Track E4 found: a UTC-midnight seed formatted as a
+  // local calendar day landed a day early for every targeted timezone.
+  it('anchors the seed on its intended calendar day', async () => {
+    const { items } = await fakeRepo.movimientos.list()
+    expect(items.map((m) => m.fecha).toSorted().at(-1)).toBe('2026-08-18')
   })
 })

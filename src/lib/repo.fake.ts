@@ -1,4 +1,4 @@
-import { format, subDays } from 'date-fns'
+import { format, parseISO, subDays } from 'date-fns'
 import type { Activo, Categoria, Config, Movimiento } from '@/lib/schema'
 import { CONFIG_SEMILLA } from '@/lib/schema'
 import type { CrudRepo, EntityId, ListQuery, ListResult, Repo } from '@/lib/repo'
@@ -632,7 +632,13 @@ export const createFakeRepo = ({ today = new Date() }: CreateFakeRepoOptions = {
 // relative seed dates depending on which real day the app happens to boot on,
 // breaking reproducibility across Playwright runs or between two people
 // looking at the same screen on different days.
-const FAKE_REPO_SEED_DATE = new Date('2026-08-18T00:00:00.000Z')
+// `parseISO`, not `new Date('…T00:00:00.000Z')`: the latter is UTC midnight,
+// and `format()` below renders in *local* time, so under any negative-offset
+// timezone — every timezone this app targets — the seeded `fecha` came out
+// one calendar day early and disagreed with its own `createdAt`. `parseISO`
+// on a date-only string yields local midnight, so the seed lands on the
+// intended calendar day everywhere (found by Track E4, docs/wave-2/track-e4.md).
+const FAKE_REPO_SEED_DATE = parseISO('2026-08-18')
 
 // Every screen must read the SAME repo instance (docs/ui/implementation-plan.md)
 // so a write from the Add sheet shows up on Home immediately. This is the
