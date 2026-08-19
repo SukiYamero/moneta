@@ -11,12 +11,12 @@ export interface InfoButtonProps {
 }
 
 /** The small "?" affordance that opens an info tooltip (CenterModal owned by the caller). */
-export function InfoButton({
+export const InfoButton = ({
   onClick,
   label = 'Más información',
   className,
   ref,
-}: InfoButtonProps) {
+}: InfoButtonProps) => {
   return (
     <button
       type="button"

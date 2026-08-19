@@ -20,7 +20,7 @@ const markerDb = new Dexie('kurobello-device') as Dexie & {
 }
 markerDb.version(1).stores({ marker: 'id' })
 
-export async function hasLoggedInBefore(): Promise<boolean> {
+export const hasLoggedInBefore = async (): Promise<boolean> => {
   try {
     return (await markerDb.marker.get(MARKER_ID))?.loggedInBefore ?? false
   } catch (e) {
@@ -32,7 +32,7 @@ export async function hasLoggedInBefore(): Promise<boolean> {
   }
 }
 
-export async function markLoggedIn(): Promise<void> {
+export const markLoggedIn = async (): Promise<void> => {
   try {
     await markerDb.marker.put({ id: MARKER_ID, loggedInBefore: true })
   } catch (e) {
@@ -43,7 +43,7 @@ export async function markLoggedIn(): Promise<void> {
   }
 }
 
-export async function clearLoggedIn(): Promise<void> {
+export const clearLoggedIn = async (): Promise<void> => {
   try {
     await markerDb.marker.delete(MARKER_ID)
   } catch (e) {

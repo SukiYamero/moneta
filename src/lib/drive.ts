@@ -11,19 +11,19 @@ export class DriveError extends Error {
   }
 }
 
-function auth(token: string): HeadersInit {
+const auth = (token: string): HeadersInit => {
   return { Authorization: `Bearer ${token}` }
 }
 
-async function ok(res: Response, what: string): Promise<Response> {
+const ok = async (res: Response, what: string): Promise<Response> => {
   if (!res.ok) throw new DriveError(`${what} ${res.status}`)
   return res
 }
 
-export async function findFile(
+export const findFile = async (
   token: string,
   opts: { name: string; mimeType?: string; parent?: string; space?: DriveSpace },
-): Promise<string | null> {
+): Promise<string | null> => {
   const q = [`name = '${opts.name}'`, 'trashed = false']
   if (opts.mimeType) q.push(`mimeType = '${opts.mimeType}'`)
   if (opts.parent) q.push(`'${opts.parent}' in parents`)
@@ -38,7 +38,7 @@ export async function findFile(
   return data.files[0]?.id ?? null
 }
 
-export async function createFolder(token: string, name: string): Promise<string> {
+export const createFolder = async (token: string, name: string): Promise<string> => {
   const res = await ok(
     await fetch(`${FILES_URL}?fields=id`, {
       method: 'POST',
@@ -50,10 +50,10 @@ export async function createFolder(token: string, name: string): Promise<string>
   return ((await res.json()) as { id: string }).id
 }
 
-export async function createJsonFile(
+export const createJsonFile = async (
   token: string,
   opts: { name: string; data: unknown; parent?: string; space?: DriveSpace },
-): Promise<string> {
+): Promise<string> => {
   const parents =
     opts.space === 'appDataFolder' ? ['appDataFolder'] : opts.parent ? [opts.parent] : []
   const metadata = { name: opts.name, parents }
@@ -77,7 +77,7 @@ export async function createJsonFile(
   return ((await res.json()) as { id: string }).id
 }
 
-export async function readJsonFile<T>(token: string, fileId: string): Promise<T> {
+export const readJsonFile = async <T>(token: string, fileId: string): Promise<T> => {
   const res = await ok(
     await fetch(`${FILES_URL}/${fileId}?alt=media`, { headers: auth(token) }),
     'read',
@@ -85,7 +85,11 @@ export async function readJsonFile<T>(token: string, fileId: string): Promise<T>
   return (await res.json()) as T
 }
 
-export async function writeJsonFile(token: string, fileId: string, data: unknown): Promise<void> {
+export const writeJsonFile = async (
+  token: string,
+  fileId: string,
+  data: unknown,
+): Promise<void> => {
   await ok(
     await fetch(`${UPLOAD_URL}/${fileId}?uploadType=media`, {
       method: 'PATCH',

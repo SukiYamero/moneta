@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { CenterModal } from '@/components/shared/CenterModal'
 
-function Harness({ open, onClose }: { open: boolean; onClose: () => void }) {
+const Harness = ({ open, onClose }: { open: boolean; onClose: () => void }) => {
   return (
     <CenterModal open={open} onClose={onClose} ariaLabel="Confirmación de prueba">
       <button type="button">Cancelar</button>

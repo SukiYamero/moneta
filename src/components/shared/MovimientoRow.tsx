@@ -18,14 +18,14 @@ export interface MovimientoRowProps {
   ref?: Ref<HTMLDivElement>
 }
 
-export function MovimientoRow({
+export const MovimientoRow = ({
   movimiento,
   onClick,
   pending,
   meta,
   className,
   ref,
-}: MovimientoRowProps) {
+}: MovimientoRowProps) => {
   const { icon, tint } = getMovimientoVisual(movimiento)
   const amount = getMovimientoAmountView(movimiento)
   const label = meta ?? format(parseISO(movimiento.fecha), 'd MMM', { locale: es })

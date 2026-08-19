@@ -172,7 +172,7 @@ test('updateSession re-encrypts a refreshed token under the same DEK', async () 
 // Deterministic 32-byte PRF secret returned by both create and get.
 const PRF_SECRET = new Uint8Array(32).fill(7).buffer
 
-function mockWebAuthn(prf: ArrayBuffer | undefined) {
+const mockWebAuthn = (prf: ArrayBuffer | undefined) => {
   const credentialId = new Uint8Array([9, 9, 9])
   const extResults = prf ? { prf: { results: { first: prf } } } : { prf: {} }
   const credential = {

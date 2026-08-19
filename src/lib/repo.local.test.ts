@@ -21,7 +21,7 @@ afterEach(async () => {
   __resetReadyMemoForTests()
 })
 
-function movimiento(overrides: Partial<Movimiento> = {}): Movimiento {
+const movimiento = (overrides: Partial<Movimiento> = {}): Movimiento => {
   return {
     id: crypto.randomUUID(),
     fecha: '2026-01-01',
@@ -35,7 +35,7 @@ function movimiento(overrides: Partial<Movimiento> = {}): Movimiento {
   }
 }
 
-function activo(overrides: Partial<Activo> = {}): Activo {
+const activo = (overrides: Partial<Activo> = {}): Activo => {
   return {
     id: crypto.randomUUID(),
     nombre: 'CDT Bancolombia',
@@ -438,7 +438,10 @@ describe('Config — error normalization (docs/error-handling.md §6)', () => {
 })
 
 describe('list() — fast path is a bounded read, not a full scan', () => {
-  async function seedManyMovimientos(count: number, distinctDates: number): Promise<Movimiento[]> {
+  const seedManyMovimientos = async (
+    count: number,
+    distinctDates: number,
+  ): Promise<Movimiento[]> => {
     const rows: Movimiento[] = []
     for (let i = 0; i < count; i++) {
       const day = i % distinctDates
@@ -533,10 +536,10 @@ describe('list() — fast path is a bounded read, not a full scan', () => {
 })
 
 describe('list() — fast path correctness at the exact-tie boundary', () => {
-  async function walkAllPages(
+  const walkAllPages = async (
     repo: ReturnType<typeof createLocalRepo>,
     limit: number,
-  ): Promise<string[]> {
+  ): Promise<string[]> => {
     const seen: string[] = []
     let cursor: string | undefined
     for (let guard = 0; guard < 200; guard++) {

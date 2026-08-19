@@ -19,7 +19,7 @@ export interface TagChipProps {
  * padding (same split used by Toggle/InfoButton) so the tap target doesn't
  * inflate the pill.
  */
-export function TagChip({
+export const TagChip = ({
   icon: Icon,
   label,
   selected = false,
@@ -27,7 +27,7 @@ export function TagChip({
   onClick,
   className,
   ref,
-}: TagChipProps) {
+}: TagChipProps) => {
   return (
     <button
       type="button"

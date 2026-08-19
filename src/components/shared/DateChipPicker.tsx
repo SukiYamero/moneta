@@ -35,13 +35,13 @@ export interface DateChipPickerProps {
 const WEEKDAY_SLOTS = [0, 1, 2, 3, 4, 5, 6]
 
 /** A chip showing the selected date that expands into an inline month grid (Add/Edit/Filter sheets). */
-export function DateChipPicker({
+export const DateChipPicker = ({
   value,
   onChange,
   firstDayOfWeek = 1,
   className,
   ref,
-}: DateChipPickerProps) {
+}: DateChipPickerProps) => {
   const selected = parseISO(value)
   const [open, setOpen] = useState(false)
   const [viewMonth, setViewMonth] = useState(() => startOfMonth(selected))

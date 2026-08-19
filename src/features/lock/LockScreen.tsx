@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useLockStore } from '@/lib/lockStore'
 import { unlockErrorCopy } from '@/features/lock/errorCopy'
 
-export default function LockScreen() {
+const LockScreen = () => {
   const phase = useLockStore((s) => s.phase)
   // Gated on whether *this vault* enrolled biometrics, not just whether the
   // platform supports it — a user who declined biometrics at enrollment
@@ -50,3 +50,5 @@ export default function LockScreen() {
     </div>
   )
 }
+
+export default LockScreen

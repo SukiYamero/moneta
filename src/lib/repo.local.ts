@@ -28,11 +28,11 @@ const MIGRATIONS: Record<number, Migration> = {}
 // Exported (not part of the frozen `Repo` port) so the dispatch/error
 // behaviour is unit-testable independently of the real, currently-empty
 // registry above.
-export async function migrateSchema(
+export const migrateSchema = async (
   fromVersion: number,
   toVersion: number,
   registry: Record<number, Migration>,
-): Promise<void> {
+): Promise<void> => {
   for (let version = fromVersion + 1; version <= toVersion; version++) {
     const migration = registry[version]
     if (!migration) {
@@ -49,13 +49,13 @@ export async function migrateSchema(
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 
-function isValidIsoDate(value: string): boolean {
+const isValidIsoDate = (value: string): boolean => {
   if (!ISO_DATE_RE.test(value)) return false
   const date = new Date(`${value}T00:00:00.000Z`)
   return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value
 }
 
-function validateMovimiento(item: Movimiento): void {
+const validateMovimiento = (item: Movimiento): void => {
   if (!Number.isFinite(item.monto) || item.monto <= 0) {
     throw new RepoError(
       `monto must be a finite, positive number (got ${item.monto})`,
@@ -70,7 +70,7 @@ function validateMovimiento(item: Movimiento): void {
   }
 }
 
-function validateActivo(item: Activo): void {
+const validateActivo = (item: Activo): void => {
   if (!isValidIsoDate(item.fechaActualizacion)) {
     throw new RepoError(
       `fechaActualizacion must be ISO "yyyy-mm-dd" (got "${item.fechaActualizacion}")`,
@@ -90,7 +90,7 @@ function validateActivo(item: Activo): void {
 
 // --- generic sort/cursor helpers -------------------------------------------
 
-function compareValues(a: unknown, b: unknown): number {
+const compareValues = (a: unknown, b: unknown): number => {
   if (a === b) return 0
   if (a === undefined || a === null) return -1
   if (b === undefined || b === null) return 1
@@ -110,11 +110,11 @@ function compareValues(a: unknown, b: unknown): number {
 // flips, so the comparator has to agree with that or the two disagree on
 // which side of a cursor a tied row falls (a real bug this fixed — see
 // specs.md §11, 2026-08-18).
-function makeComparator<T extends { id: EntityId }>(
+const makeComparator = <T extends { id: EntityId }>(
   sortBy: keyof T,
   sortDir: 'asc' | 'desc',
   tiebreakField: (keyof T & string) | undefined,
-): (a: T, b: T) => number {
+): ((a: T, b: T) => number) => {
   const dirMul = sortDir === 'asc' ? 1 : -1
   return (a, b) => {
     const primary = compareValues(a[sortBy], b[sortBy]) * dirMul
@@ -138,12 +138,12 @@ interface CursorPayload {
   id: EntityId
 }
 
-function encodeCursor<T extends { id: EntityId }>(
+const encodeCursor = <T extends { id: EntityId }>(
   item: T,
   sortBy: keyof T,
   sortDir: 'asc' | 'desc',
   tiebreakField: (keyof T & string) | undefined,
-): string {
+): string => {
   const payload: CursorPayload = {
     sortBy: String(sortBy),
     sortDir,
@@ -154,7 +154,7 @@ function encodeCursor<T extends { id: EntityId }>(
   return btoa(encodeURIComponent(JSON.stringify(payload)))
 }
 
-function decodeCursor(cursor: string, sortBy: string, sortDir: 'asc' | 'desc'): CursorPayload {
+const decodeCursor = (cursor: string, sortBy: string, sortDir: 'asc' | 'desc'): CursorPayload => {
   try {
     const parsed = JSON.parse(decodeURIComponent(atob(cursor))) as Partial<CursorPayload>
     if (
@@ -191,7 +191,7 @@ function decodeCursor(cursor: string, sortBy: string, sortDir: 'asc' | 'desc'): 
 // not a meaningful page request and would silently drop that signal (an
 // empty `page` makes `lastItem` undefined — see specs.md §11, 2026-08-18).
 // Erroring is more honest than returning an ambiguous `{ items: [] }`.
-function validateLimit(limit: number | undefined): void {
+const validateLimit = (limit: number | undefined): void => {
   if (limit === undefined) return
   if (!Number.isInteger(limit) || limit < 1) {
     throw new RepoError(`limit must be a positive integer (got ${limit})`, 'invalid_input')
@@ -235,7 +235,7 @@ interface EntityConfig<T extends { id: EntityId }> {
 // bounded read even when it fires.
 const TIE_SAFETY_MARGIN = 32
 
-function wrapUnknown(error: unknown): never {
+const wrapUnknown = (error: unknown): never => {
   if (error instanceof RepoError) throw error
   throw new RepoError(error instanceof Error ? error.message : String(error), 'unknown', {
     cause: error,
@@ -253,15 +253,15 @@ function wrapUnknown(error: unknown): never {
 // would silently exclude exactly the batch case this exists for. `.name` is
 // the one property both shapes reliably carry, and message text is
 // locale-/version-fragile on top of that.
-function hasErrorName(error: unknown, name: string): boolean {
+const hasErrorName = (error: unknown, name: string): boolean => {
   return typeof error === 'object' && error !== null && (error as { name?: unknown }).name === name
 }
 
-function isConstraintError(error: unknown): boolean {
+const isConstraintError = (error: unknown): boolean => {
   return hasErrorName(error, 'ConstraintError')
 }
 
-function hasConstraintFailure(error: unknown): boolean {
+const hasConstraintFailure = (error: unknown): boolean => {
   if (!hasErrorName(error, 'BulkError')) return false
   const failures = (error as { failures?: Record<string, unknown> }).failures
   if (!failures) return false
@@ -274,10 +274,10 @@ function hasConstraintFailure(error: unknown): boolean {
 // "0"), so the offending id is determined independently instead of trusting
 // that index: first a duplicate within the batch itself, then — the
 // remaining case — one of the batch's ids already present in the table.
-async function findDuplicateId<T extends { id: EntityId }>(
+const findDuplicateId = async <T extends { id: EntityId }>(
   table: Table<T, EntityId, T>,
   items: T[],
-): Promise<EntityId | undefined> {
+): Promise<EntityId | undefined> => {
   const seen = new Set<EntityId>()
   for (const item of items) {
     if (seen.has(item.id)) return item.id
@@ -287,25 +287,25 @@ async function findDuplicateId<T extends { id: EntityId }>(
   return existing.find((row): row is T => row !== undefined)?.id
 }
 
-function matchesFilters<T>(
+const matchesFilters = <T>(
   item: T,
   dateField: keyof T & string,
   seccionField: (keyof T & string) | undefined,
   dateFrom: string | undefined,
   dateTo: string | undefined,
   seccion: string | undefined,
-): boolean {
+): boolean => {
   if (dateFrom !== undefined && String(item[dateField]) < dateFrom) return false
   if (dateTo !== undefined && String(item[dateField]) > dateTo) return false
   if (seccionField && seccion !== undefined && item[seccionField] !== seccion) return false
   return true
 }
 
-function buildCursorItem<T extends { id: EntityId }>(
+const buildCursorItem = <T extends { id: EntityId }>(
   payload: CursorPayload,
   sortBy: keyof T,
   tiebreakField: (keyof T & string) | undefined,
-): T {
+): T => {
   return {
     [sortBy]: payload.sortValue,
     ...(tiebreakField ? { [tiebreakField]: payload.tiebreakValue } : {}),
@@ -313,10 +313,10 @@ function buildCursorItem<T extends { id: EntityId }>(
   } as T
 }
 
-function createCrudRepo<T extends { id: EntityId }>(
+const createCrudRepo = <T extends { id: EntityId }>(
   config: EntityConfig<T>,
   ensureReady: () => Promise<void>,
-): CrudRepo<T> {
+): CrudRepo<T> => {
   const {
     table,
     dateField,
@@ -329,11 +329,11 @@ function createCrudRepo<T extends { id: EntityId }>(
     entityLabel,
   } = config
 
-  async function fetchCandidates(
+  const fetchCandidates = async (
     dateFrom: string | undefined,
     dateTo: string | undefined,
     seccion: string | undefined,
-  ): Promise<T[]> {
+  ): Promise<T[]> => {
     const hasDateRange = dateFrom !== undefined || dateTo !== undefined
 
     if (seccionField && seccion !== undefined && hasDateRange && compoundIndex) {
@@ -357,7 +357,7 @@ function createCrudRepo<T extends { id: EntityId }>(
   // filters, sorts the full set, then slices. Correct for any `sortBy`, but
   // its cost scales with the size of the matching set — the documented
   // exception, used whenever the fast path below doesn't apply.
-  async function listSlow(
+  const listSlow = async (
     dateFrom: string | undefined,
     dateTo: string | undefined,
     seccion: string | undefined,
@@ -365,7 +365,7 @@ function createCrudRepo<T extends { id: EntityId }>(
     sortDir: 'asc' | 'desc',
     limit: number | undefined,
     cursor: string | undefined,
-  ): Promise<ListResult<T>> {
+  ): Promise<ListResult<T>> => {
     const candidates = await fetchCandidates(dateFrom, dateTo, seccion)
     const filtered = candidates.filter((item) =>
       matchesFilters(item, dateField, seccionField, dateFrom, dateTo, seccion),
@@ -401,14 +401,14 @@ function createCrudRepo<T extends { id: EntityId }>(
   //
   // Returns `null` when it can't safely answer (see `TIE_SAFETY_MARGIN`) —
   // the caller falls back to `listSlow`, which is always correct.
-  async function tryFastPath(
+  const tryFastPath = async (
     dateFrom: string | undefined,
     dateTo: string | undefined,
     seccion: string | undefined,
     sortDir: 'asc' | 'desc',
     limit: number,
     cursor: string | undefined,
-  ): Promise<ListResult<T> | null> {
+  ): Promise<ListResult<T> | null> => {
     const useSeccion = seccionField !== undefined && seccion !== undefined
     const indexName = useSeccion ? fastSeccionIndex : fastIndex
 
@@ -473,7 +473,7 @@ function createCrudRepo<T extends { id: EntityId }>(
     }
   }
 
-  async function list(query: ListQuery<T> = {}): Promise<ListResult<T>> {
+  const list = async (query: ListQuery<T> = {}): Promise<ListResult<T>> => {
     await ensureReady()
     try {
       const { dateFrom, dateTo, seccion, sortDir = 'desc', limit, cursor } = query
@@ -487,20 +487,20 @@ function createCrudRepo<T extends { id: EntityId }>(
 
       return await listSlow(dateFrom, dateTo, seccion, sortBy, sortDir, limit, cursor)
     } catch (error) {
-      wrapUnknown(error)
+      return wrapUnknown(error)
     }
   }
 
-  async function get(id: EntityId): Promise<T | undefined> {
+  const get = async (id: EntityId): Promise<T | undefined> => {
     await ensureReady()
     try {
       return await table.get(id)
     } catch (error) {
-      wrapUnknown(error)
+      return wrapUnknown(error)
     }
   }
 
-  async function add(item: T): Promise<T> {
+  const add = async (item: T): Promise<T> => {
     await ensureReady()
     validate(item)
     try {
@@ -511,11 +511,11 @@ function createCrudRepo<T extends { id: EntityId }>(
       if (isConstraintError(error)) {
         throw new RepoError(`id "${item.id}" already exists`, 'invalid_input', { cause: error })
       }
-      wrapUnknown(error)
+      return wrapUnknown(error)
     }
   }
 
-  async function addMany(items: T[]): Promise<T[]> {
+  const addMany = async (items: T[]): Promise<T[]> => {
     await ensureReady()
     items.forEach(validate)
     try {
@@ -547,11 +547,11 @@ function createCrudRepo<T extends { id: EntityId }>(
           wrapUnknown(lookupError)
         }
       }
-      wrapUnknown(error)
+      return wrapUnknown(error)
     }
   }
 
-  async function update(id: EntityId, patch: Partial<Omit<T, 'id'>>): Promise<T> {
+  const update = async (id: EntityId, patch: Partial<Omit<T, 'id'>>): Promise<T> => {
     await ensureReady()
     try {
       // Read-merge-write must be one atomic unit: two concurrent updates on
@@ -569,11 +569,11 @@ function createCrudRepo<T extends { id: EntityId }>(
         return merged
       })
     } catch (error) {
-      wrapUnknown(error)
+      return wrapUnknown(error)
     }
   }
 
-  async function remove(id: EntityId): Promise<void> {
+  const remove = async (id: EntityId): Promise<void> => {
     await ensureReady()
     try {
       // Same atomicity treatment as `update()` — today's worst case without
@@ -587,11 +587,11 @@ function createCrudRepo<T extends { id: EntityId }>(
         await table.delete(id)
       })
     } catch (error) {
-      wrapUnknown(error)
+      return wrapUnknown(error)
     }
   }
 
-  async function removeMany(ids: EntityId[]): Promise<void> {
+  const removeMany = async (ids: EntityId[]): Promise<void> => {
     await ensureReady()
     try {
       // Symmetric with `remove`'s not_found guarantee: any missing id aborts
@@ -607,7 +607,7 @@ function createCrudRepo<T extends { id: EntityId }>(
         await table.bulkDelete(ids)
       })
     } catch (error) {
-      wrapUnknown(error)
+      return wrapUnknown(error)
     }
   }
 
@@ -616,7 +616,7 @@ function createCrudRepo<T extends { id: EntityId }>(
 
 // --- ready() / schemaVersion gate -------------------------------------------
 
-async function performReady(): Promise<void> {
+const performReady = async (): Promise<void> => {
   const stored = await db.config.get(CONFIG_ID)
 
   if (!stored) {
@@ -651,7 +651,7 @@ async function performReady(): Promise<void> {
 // of being stuck replaying the same failure forever.
 const readyPromises = new WeakMap<typeof db, Promise<void>>()
 
-function ready(): Promise<void> {
+const ready = (): Promise<void> => {
   let promise = readyPromises.get(db)
   if (!promise) {
     promise = performReady().catch((error: unknown) => {
@@ -672,13 +672,13 @@ function ready(): Promise<void> {
 // cleared between tests), so a resolved run-once memo would otherwise leak
 // across unrelated tests instead of resetting the way a real fresh database
 // connection would. Not exported from the `Repo` port.
-export function __resetReadyMemoForTests(): void {
+export const __resetReadyMemoForTests = (): void => {
   readyPromises.delete(db)
 }
 
 // --- factory -----------------------------------------------------------------
 
-export function createLocalRepo(): Repo {
+export const createLocalRepo = (): Repo => {
   const movimientos = createCrudRepo<Movimiento>(
     {
       table: db.movimientos as Table<Movimiento, EntityId, Movimiento>,
@@ -709,7 +709,7 @@ export function createLocalRepo(): Repo {
     ready,
   )
 
-  async function getConfig(): Promise<Config> {
+  const getConfig = async (): Promise<Config> => {
     await ready()
     try {
       const row = await db.config.get(CONFIG_ID)
@@ -719,11 +719,11 @@ export function createLocalRepo(): Repo {
       const { id: _id, ...config } = row
       return config
     } catch (error) {
-      wrapUnknown(error)
+      return wrapUnknown(error)
     }
   }
 
-  async function updateConfig(patch: Partial<Config>): Promise<Config> {
+  const updateConfig = async (patch: Partial<Config>): Promise<Config> => {
     await ready()
     // schemaVersion is owned by ready()/migrations, never by callers — the
     // `Partial<Config>` patch type structurally allows it, but honoring it
@@ -744,7 +744,7 @@ export function createLocalRepo(): Repo {
       const { id: _mergedId, ...config } = merged
       return config
     } catch (error) {
-      wrapUnknown(error)
+      return wrapUnknown(error)
     }
   }
 

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { AppErrorBoundary } from '@/AppErrorBoundary'
 
-function Bomb(): never {
+const Bomb = (): never => {
   throw new Error('boom')
 }
 

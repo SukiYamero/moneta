@@ -44,7 +44,7 @@ export interface IconAvatarProps {
   className?: string
 }
 
-export function IconAvatar({ icon: Icon, size = 'md', tint, className }: IconAvatarProps) {
+export const IconAvatar = ({ icon: Icon, size = 'md', tint, className }: IconAvatarProps) => {
   return (
     <div
       className={cn(

@@ -22,16 +22,16 @@ const ARROW_DELTA: Record<ArrowKey, number> = {
   ArrowRight: 1,
 }
 
-function isArrowKey(key: string): key is ArrowKey {
+const isArrowKey = (key: string): key is ArrowKey => {
   return key === 'ArrowLeft' || key === 'ArrowRight'
 }
 
 /** Steps from `from` in `delta` direction, wrapping, skipping disabled options. `null` if every option is disabled. */
-function findNextEnabledIndex<T extends string>(
+const findNextEnabledIndex = <T extends string>(
   options: SegmentedControlOption<T>[],
   from: number,
   delta: number,
-): number | null {
+): number | null => {
   const count = options.length
   for (let step = 1; step <= count; step++) {
     const index = (((from + delta * step) % count) + count) % count
@@ -48,13 +48,13 @@ function findNextEnabledIndex<T extends string>(
  * height; each segment's button grows to the 44px touch-target floor via
  * invisible padding so the tap target doesn't inflate the pill.
  */
-export function SegmentedControl<T extends string>({
+export const SegmentedControl = <T extends string>({
   options,
   value,
   onChange,
   'aria-label': ariaLabel,
   className,
-}: SegmentedControlProps<T>) {
+}: SegmentedControlProps<T>) => {
   const buttonRefs = useRef<(HTMLButtonElement | null)[]>([])
   const selectedIndex = Math.max(
     0,

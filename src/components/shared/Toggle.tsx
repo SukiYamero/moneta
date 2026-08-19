@@ -12,14 +12,14 @@ export interface ToggleProps {
 }
 
 /** On/off switch. Touch target is 44px even though the visual pill is smaller, per AGENTS.md. */
-export function Toggle({
+export const Toggle = ({
   checked,
   onCheckedChange,
   disabled,
   'aria-label': ariaLabel,
   className,
   ref,
-}: ToggleProps) {
+}: ToggleProps) => {
   return (
     <button
       type="button"

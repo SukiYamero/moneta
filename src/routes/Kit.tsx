@@ -79,7 +79,7 @@ const SCOPE_OPTIONS_WITH_DISABLED = [
   { value: 'year', label: 'Año' },
 ] as const
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+const Section = ({ title, children }: { title: string; children: ReactNode }) => {
   return (
     <section className="flex flex-col gap-3">
       <h2 className="text-xs font-bold tracking-wide text-fg-tertiary uppercase">{title}</h2>
@@ -89,7 +89,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 }
 
 /** Dev-only gallery for src/components/shared/** — gated on import.meta.env.DEV in router.tsx. */
-export function Kit() {
+export const Kit = () => {
   const [scope, setScope] = useState<(typeof SCOPE_OPTIONS)[number]['value']>('week')
   const [scopeWithDisabled, setScopeWithDisabled] =
     useState<(typeof SCOPE_OPTIONS_WITH_DISABLED)[number]['value']>('day')

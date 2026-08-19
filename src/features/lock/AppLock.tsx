@@ -3,7 +3,7 @@ import { useLockStore } from '@/lib/lockStore'
 import LockScreen from '@/features/lock/LockScreen'
 import { unlockErrorCopy } from '@/features/lock/errorCopy'
 
-export function AppLock({ children }: { children: ReactNode }) {
+export const AppLock = ({ children }: { children: ReactNode }) => {
   const phase = useLockStore((s) => s.phase)
   const error = useLockStore((s) => s.error)
   const clearError = useLockStore((s) => s.clearError)

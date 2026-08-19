@@ -16,7 +16,7 @@ const DRAG_DISMISS_THRESHOLD_PX = 120
  * Drag-to-dismiss is driven by Pointer Events (one path for touch/mouse/pen)
  * with `touch-none` on the handle so the browser doesn't fight the gesture.
  */
-export function BottomSheet({
+export const BottomSheet = ({
   open,
   onClose,
   children,
@@ -25,7 +25,7 @@ export function BottomSheet({
   className,
   initialFocus,
   ref,
-}: BottomSheetProps) {
+}: BottomSheetProps) => {
   const panelRef = useOverlay<HTMLDivElement>({ open, onClose, initialFocus, ref })
   const [dragY, setDragY] = useState(0)
   const [dragging, setDragging] = useState(false)

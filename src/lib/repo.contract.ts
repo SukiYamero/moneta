@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { Activo, Movimiento } from '@/lib/schema'
 import type { Repo } from '@/lib/repo'
 
-function movimiento(overrides: Partial<Movimiento> = {}): Movimiento {
+const movimiento = (overrides: Partial<Movimiento> = {}): Movimiento => {
   return {
     id: crypto.randomUUID(),
     fecha: '2026-01-01',
@@ -16,7 +16,7 @@ function movimiento(overrides: Partial<Movimiento> = {}): Movimiento {
   }
 }
 
-function activo(overrides: Partial<Activo> = {}): Activo {
+const activo = (overrides: Partial<Activo> = {}): Activo => {
   return {
     id: crypto.randomUUID(),
     nombre: 'CDT Bancolombia',
@@ -49,7 +49,7 @@ function activo(overrides: Partial<Activo> = {}): Activo {
 // Precondition: `makeRepo()` must hand back a `Repo` whose `movimientos` and
 // `activos` stores are empty — repo.fake.ts's `createFakeRepo()` seeds demo
 // data by design, so its caller clears the seed first (see repo.fake.test.ts).
-export function testRepoContract(makeRepo: () => Promise<Repo> | Repo): void {
+export const testRepoContract = (makeRepo: () => Promise<Repo> | Repo): void => {
   describe('Repo contract', () => {
     describe('get()', () => {
       it('returns undefined for a missing id, never throws', async () => {

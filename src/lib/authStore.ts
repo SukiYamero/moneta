@@ -30,7 +30,7 @@ type AuthState = {
   dismissDrive: () => void
 }
 
-async function authenticate(prompt: '' | 'consent') {
+const authenticate = async (prompt: '' | 'consent') => {
   const session = await requestAccessToken(prompt)
   const user = await fetchGoogleUser(session.accessToken)
   return { session, user }
@@ -45,7 +45,7 @@ async function authenticate(prompt: '' | 'consent') {
 // call that can throw on its own: Safari private mode, storage-quota errors, a
 // blocking extension). Failures are logged, not swallowed silently, so a
 // genuine vault problem stays visible without breaking the auth flow.
-async function syncLockedSession(session: AuthSession): Promise<void> {
+const syncLockedSession = async (session: AuthSession): Promise<void> => {
   try {
     if (!(await hasVault())) return
     await updateSession(session)
@@ -57,6 +57,10 @@ async function syncLockedSession(session: AuthSession): Promise<void> {
 // logout() bumps this so a connectDrive() request already in flight can tell,
 // on resolve, that it should discard its result instead of resurrecting state.
 let authGeneration = 0
+
+const errorMessage = (e: unknown): string => {
+  return e instanceof Error ? e.message : 'unknown error'
+}
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   status: 'idle',
@@ -166,7 +170,3 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
   dismissDrive: () => set({ driveOptIn: 'dismissed' }),
 }))
-
-function errorMessage(e: unknown): string {
-  return e instanceof Error ? e.message : 'unknown error'
-}
