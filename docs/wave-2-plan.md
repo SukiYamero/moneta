@@ -734,6 +734,24 @@ design.
 
 ## 5. Review stage (stage 4)
 
+**Operator findings already open, handed to the relevant reviewer rather
+than fixed by the operator** (so the reviewer verifies its own fix):
+
+- **Track E4 — `HistoryScreen`'s error state is the odd one out.** It renders
+  the failure inside `role="status"` (polite) with no retry, while Home and
+  Search both use `role="alert"` with a retry. `docs/error-handling.md` §7 is
+  explicit that errors reach the user through a `role="alert"` node. Three
+  screens landed in parallel and one drifted — fix E4's, and check the shape
+  across all three rather than just the instance.
+- **Shared — `formatMonto` and the date formatting in `movimientoView.ts` /
+  `MovimientoRow.tsx` are hardcoded to `es-CO`/`es`**, from before i18n
+  existed. An `en` or `pt-BR` user now sees a fully translated screen with
+  Colombian number and date formatting. Found by Track E2, which correctly
+  reused them rather than creating a second formatter. This is a shared
+  component no Wave 2 track owned; it belongs to whoever reviews the shared
+  tree, and needs one locale-aware formatter, not four call-site fixes.
+
+
 One review agent per merged track, dispatched after **all** build tracks are
 merged — deliberately at the end, not per-merge, so a reviewer never files
 findings against code a later stage rewrites.
@@ -768,9 +786,9 @@ live Google account (needs a human in the OAuth popup).
 | K     | `feat/wave2-toast`         | 2     | merged      |
 | J     | `feat/wave2-drive-consent` | 2     | merged      |
 | L     | `feat/wave2-shell`         | 2     | merged      |
-| E2    | `feat/wave2-home`          | 3     | dispatched  |
+| E2    | `feat/wave2-home`          | 3     | merged      |
 | E3    | `feat/wave2-search`        | 3     | merged      |
-| E4    | `feat/wave2-history`       | 3     | dispatched  |
+| E4    | `feat/wave2-history`       | 3     | merged      |
 
 Status values: `not started` → `dispatched` → `reported, verifying` →
 `merged` → `reviewed`.
