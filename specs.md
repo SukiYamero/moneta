@@ -2179,6 +2179,53 @@ lint` clean bar the one pre-existing `components/ui` warning). `AGENTS.md`
   impossible cross-screen test. Briefs should keep saying what to build and
   why; they should not be trusted as descriptions of reality.
 
+- 2026-08-19 — **Touch targets: the hit area grows, the visible control does
+  not.** A control smaller than 44px gets `min-h-11`/`min-w-11` on the
+  interactive element and keeps its designed size on an inner `<span>`; the
+  two are never the same element. Growing the element that also carries the
+  background/border/radius resizes the _visual_ — a regression dressed as an
+  accessibility fix, which is exactly what a first pass over Home shipped
+  (caught in review). Square icon buttons need both `min-h-11` and
+  `min-w-11`; text pills need only `min-h-11`, since they are already wide.
+  Precedents to copy rather than reinvent: `DateChipPicker`'s month-nav
+  buttons, `InfoButton`, `TagChip`. A comment justifying such a change must
+  say what it does to the element's appearance, not just cite the 44px rule —
+  a class list that reads as a strict superset of the old one is how this
+  regression stayed invisible in a diff.
+
+- 2026-08-19 — **One place maps the active locale to formatting:
+  `src/lib/i18n/localeFormatting.ts`.** `useLocaleFormatting()` returns
+  `{ locale, dateFnsLocale }`; no other module derives that mapping. Pure
+  modules (`movimientoView.ts`, `homeView.ts`, `historyPeriodLabel.ts`, …)
+  take the locale as a **parameter** and never read i18next themselves, so
+  they stay independently testable — the same judgment
+  `docs/error-handling.md` §7 applies to `errorCopy.ts` and `specs.md` §10.5
+  applies to `DateChipPicker`'s `firstDayOfWeek`. Components read the hook
+  and pass it down.
+
+  The supported locales are **copy** locales, not formatting ones: `es` is
+  neutral Spanish for Colombia/Mexico/Ecuador/Venezuela/Peru and has no
+  number formatting of its own, so it resolves to the `es-CO` tag every
+  amount was already formatted with. That is a deliberate trade-off, not an
+  oversight — a Mexican user reading neutral Spanish gets Colombian grouping
+  (see §12).
+
+- 2026-08-19 — **Bottom-nav clearance belongs to `AppShell`'s scroll pane,
+  not to each screen.** `--bottom-nav-clearance` is applied once by the
+  shell; a routed screen that adds its own copy doubles the reserved space.
+  Search had done exactly that and was the only screen that had.
+
+- 2026-08-19 — **`user-event` + `vi.useFakeTimers()` do not pair reliably
+  here; prefer real timers.** Both documented pairings
+  (`userEvent.setup({ delay: null })` and
+  `userEvent.setup({ advanceTimers: vi.advanceTimersByTime })`) hung for the
+  full test timeout and leaked fake-timer state into every later test in the
+  file. A debounce race is testable on real timers: `await user.type(...)`
+  plus `waitFor` to settle, then a second `user.type` with **no `await` gap**
+  before the assertion — nothing yields in between, so the race is
+  deterministic. This is why the `fireEvent` ban (2026-06-25) did not need an
+  exception carved out of it.
+
 ## 12. Backlog (pending verification / deferred work)
 
 - **The lock feature is not internationalised at all.** `LockScreen`,
@@ -2273,6 +2320,25 @@ lint` clean bar the one pre-existing `components/ui` warning). `AGENTS.md`
   row there that reads `authStore.drive`/`driveOptIn` and can call
   `connectDrive()` on demand — the "turn it back on" counterpart that makes
   a persistent "don't ask again" viable later, if ever wanted.
+- **Neutral `es` formats numbers as `es-CO` for every country it covers.**
+  `localeFormatting.ts` maps the neutral Spanish copy locale to the `es-CO`
+  tag, so a Mexican or Peruvian user reading neutral Spanish sees Colombian
+  grouping (`1.234,56`, not `1,234.56`). Deliberate — it preserves the
+  formatting every amount already had, and the currency itself comes from
+  `Config.preferencias.monedaPrincipal` either way. Revisit when a Settings
+  language/region picker exists (Track G, Wave 3): region is the right input
+  for number formatting, and it is not the same choice as the copy language.
+
+- **Review dispatch races a moving `main`.** Both Wave 2 reviewers reported
+  the same process gap independently: a worktree briefed as "already rebased
+  on `main`" went stale mid-review as other tracks merged, and one of them
+  produced a `git reset --soft main` diff that appeared to revert files it
+  had never touched — caught by reading `git status` by hand, not by any
+  tooling. The rule that fixes it is cheap: **re-diff against `main`'s tip
+  immediately before the final squash**, and treat one rebase as insufficient
+  rather than sufficient. Whether review dispatches should instead serialize
+  against in-flight merges is still open.
+
 - **`DateChipPicker` `min`/`max` date bounds — deferred (Track D follow-up,
   2026-08-18).** Explicitly out of scope for the code-review pass: no
   screen has asked for a bounded date range yet, so adding the prop now
