@@ -882,59 +882,17 @@ b DESC`, not a mix) and made the fast path's range-bound construction
   instant, no re-verification.
 - **App icon for the brand.** The PWA still ships the scaffold `favicon.svg`;
   a KuroBello icon (maskable + favicon) is pending. Cosmetic, not blocking.
-- **Persistent Drive-sync toggle (follow-up from §10.4/§11 2026-08-18,
-  Track G, Wave 2).** The "Ahora no" dismissal deliberately doesn't persist
-  (per-session only, see §11). Once the Profile sheet exists, add a Drive
-  row there that reads `authStore.drive`/`driveOptIn` and can call
-  `connectDrive()` on demand — the "turn it back on" counterpart that makes
-  a persistent "don't ask again" viable later, if ever wanted.
+- **Drive-sync opt-in persistence + screen refinements.** See
+  `docs/waves.md` Track J — the "Ahora no" dismissal deliberately doesn't
+  persist today (in-memory, per-session only, see §11 2026-08-18); Track J
+  fixes that plus trims/resizes the screen and adds reassurance copy.
 
-### Parallel track plan (refreshed 2026-08-18, after UI analysis)
+### Development waves (parallel tracks, sequencing, worktree log)
 
-`src/components/shared/**` is a **new** location, distinct from
-`src/components/ui` (shadcn primitives only, per `AGENTS.md`): it holds the
-cross-feature composed components from `docs/ui/implementation-plan.md`
-(`BottomSheet`, `MovimientoRow`, etc.) — reused across screens, so they
-don't belong to any one feature folder. Same barrel/naming rule applies
-(each component named after itself, never `index.tsx`).
-
-**Wave 1 — ✅ COMPLETE (merged to `main` 2026-08-18).** All three tracks shipped:
-`repo.local.ts` (A), Welcome + Drive-permission screens and `updateSession`
-wiring (B), and `src/components/shared/**` + `repo.fake.ts` (D). Kept below as
-the record of what each track owned.
-
-| Track                                   | Scope                                                                                                                                                                                                                                                                                                                  | Owns                                                                 |
-| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| **A — data port (real impl)**           | Real dexie-backed implementation of the `Repo` interface (interface already landed, §10.3). CRUD for `Movimiento`/`Activo`/`Config`, `schemaVersion` check. TDD.                                                                                                                                                       | `src/lib/repo.ts` (extend), `src/lib/repo.test.ts`, `src/lib/db.ts`  |
-| **B — Drive opt-in + token refresh**    | Implements the real "Drive permission" screen (`docs/ui/implementation-plan.md`, Auth unit) — the entry point that finally calls `authStore.connectDrive`, closing the standing §12 backlog item. Also the Welcome screen (replaces `LoginScreen.tsx`), and wiring `pinLock.updateSession` into token refresh.         | `src/features/auth/**` (extend), `src/lib/authStore.ts`, specs §10.4 |
-| **D — Foundational UI kit + fake repo** | Build, in this order: `BottomSheet`, `CenterModal`, `IconAvatar`, `MovimientoRow`, `TagChip`, `DateChipPicker`, `SegmentedControl`, `Toggle`, `InfoButton` (`docs/ui/implementation-plan.md`). Plus `repo.fake.ts` — one shared in-memory `Repo` impl, seeded Spanish sample data. **Blocker for every Wave 2 track.** | `src/components/shared/**` (new), `src/lib/repo.fake.ts`             |
-
-**Wave 2 — ▶️ UNBLOCKED (D merged 2026-08-18: `src/components/shared/**`+`repo.fake.ts`are on`main`). Pick tracks per natural grouping, not
-necessarily all at once:\*\*
-
-| Track                              | Scope                                                                                                                                                                                                                         | Owns                                                                                                     |
-| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| **E — Home + Search + History**    | Dashboard (extend `Home.tsx`) + the `movimientoStats` aggregation module (real, pure computation, not a stub) + Search/Filter sheet + History overlay. One track: all three share `MovimientoRow` and the aggregation module. | `src/routes/Home.tsx`, `src/lib/movimientoStats.ts`, `src/features/search/**`, `src/features/history/**` |
-| **F — Movement/Add sheet + Voice** | View/edit sheet, create sheet, delete confirm, toast, the Voice unit (Web Speech API + regex parser, §11 2026-08-18).                                                                                                         | `src/features/movimientos/**`                                                                            |
-| **G — Tags + Profile + Settings**  | Tag picker, custom tag modal, profile sheet, "Personalizar" settings screen.                                                                                                                                                  | `src/features/tags/**`, `src/features/profile/**`, `src/features/settings/**`                            |
-| **H — Groups ("Áreas")**           | List + detail + editor. Needs a schema addition first (`Grupo` type or `extra` on `Categoria`, own §10 write-up) — don't invent the shape inline while implementing.                                                          | `src/features/groups/**`, `src/lib/schema.ts` (additive only)                                            |
-
-Not scheduled: receipt scan (deferred indefinitely, §11 2026-08-18); the PWA
-icon and polished lock-screen items already in the backlog above.
-
-### Worktree log
-
-Every agent that creates a `git worktree` logs a row here the moment it does,
-and updates the **Status** the moment the track's work merges to `main`. This
-is how we know which worktrees are safe to `git worktree remove` — check this
-table against `git worktree list` at the start of any parallel session and
-remove anything marked done (or orphaned: on disk but not in this table, or in
-this table but the branch is already merged/gone).
-
-| Created    | Track / task    | Path | Branch | Status | Notes                                                                  |
-| ---------- | --------------- | ---- | ------ | ------ | ---------------------------------------------------------------------- |
-| 2026-08-18 | _(none active)_ | —    | —      | —      | Wave 1 (tracks A, B, D) merged to `main`; all three worktrees removed. |
-
-Status values: `active` (work in progress) → `merged, pending cleanup` (branch
-merged to `main`, worktree not yet removed) → row deleted once
-`git worktree remove <path>` runs.
+Moved to **[`docs/waves.md`](../docs/waves.md)** — the full wave/track plan
+(what shipped in Wave 1, what's active in Wave 2, including the new i18n
+scaffolding track and the Drive-permission refinement task) plus the
+worktree log live there now, kept separate from this file's behavior/
+decision record so wave sequencing doesn't compete for space with what's
+actually decided. `specs.md` stays authoritative for decisions (§11) and
+feature specs (§10); `docs/waves.md` is pure sequencing/status.

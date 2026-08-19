@@ -1,0 +1,213 @@
+# KuroBello — Development waves
+
+This file is the **sequencing/status board**: which tracks exist, in what
+order, who owns what files, and whether they're done. It does not decide
+_behavior_ — that's `specs.md` (§10 feature specs, §11 decisions, §12
+verification backlog). If this file and `specs.md` ever disagree on a
+decision, `specs.md` wins; fix this file, not the other way.
+
+## Vision — what KuroBello is, and where the signals point
+
+The hard facts, from `specs.md` §1/§2: a **mobile-first personal-finance
+PWA**. Records income/expenses (flow) and assets/investments (balance),
+organized into user-defined sections/categories, with totals/breakdowns/
+charts by day/week/month/year, an optional PIN lock, and — the
+non-negotiable architectural spine — **no backend of any kind**: identity is
+Google, data lives in the user's own Drive, the developer hosts nothing.
+Privacy comes from that architecture, not from a promise.
+
+Reading the signals from decisions made so far (this section is synthesis,
+not a new decision — nothing here overrides `specs.md`):
+
+- **It started as a personal tool, but isn't staying that small.** `specs.md`
+  §1 already names "the future possibility of a friend using it with their
+  own Google account" as in-scope thinking. The `Moneda` type has supported
+  multi-currency since before multi-currency was needed. The UI investment
+  (native-app-feel transitions, a real design system, dark theme built from
+  an actual design canvas) is more polish than a single-user script needs.
+- **The locale list requested for i18n (English, Argentine Spanish,
+  Brazilian Portuguese, neutral Spanish for Colombia/Mexico/Ecuador/
+  Venezuela/Peru) is a concrete signal, not a guess:** this reads as
+  preparing for a Latin-America-first audience (Spanish-speaking countries
+  as the core, Brazil as the biggest adjacent market, English as the
+  catch-all) rather than a single country's personal tool. That's a
+  meaningful shift in ambition worth naming explicitly, even though it
+  hasn't been written up as a formal decision yet.
+- **The no-backend constraint is a product decision as much as a technical
+  one.** It caps what's possible (no push notifications with a real server,
+  no cross-device background jobs, no "smart" receipt scanning without
+  either an on-device model that doesn't exist for mobile yet or an
+  explicit, deliberate exception) — see `specs.md` §11 2026-08-18 for the
+  receipt-scan/voice research that ran into exactly this wall. The app's
+  identity is "your money, in your Drive, nobody else's server" — that's
+  the thing to protect when a feature request tempts a shortcut.
+
+If this reading is wrong, or the ambition is different from what the
+signals suggest, that's worth a real conversation and a `specs.md` §11
+entry — not silently building past it.
+
+## How the waves work
+
+- A **wave** is a batch of tracks that can run in parallel (separate
+  worktrees, zero shared files, per `AGENTS.md` § Working in parallel).
+- A **track** is one unit of work, one branch, one worktree, owned by one
+  agent at a time.
+- Waves are sequential (a track in Wave _N+1_ may depend on Wave _N_ having
+  merged); tracks within a wave are not.
+- When a track finishes, mark it ✅ here and log/clear its worktree row
+  below — don't leave the record stale.
+
+---
+
+## Wave 1 — ✅ COMPLETE (merged to `main`, 2026-08-18)
+
+| Track                                   | Scope                                                                                                                                                                                         | Owns                                                                  |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| **A — data port (real impl)**           | Real dexie-backed implementation of the `Repo` interface. CRUD for `Movimiento`/`Activo`/`Config`, `schemaVersion` check. TDD.                                                                | `src/lib/repo.ts` (extended), `src/lib/repo.test.ts`, `src/lib/db.ts` |
+| **B — Drive opt-in + token refresh**    | Real "Drive permission" + "Welcome" screens (replacing `LoginScreen.tsx`), calling `authStore.connectDrive`; `pinLock.updateSession` wired into every session-refresh path.                   | `src/features/auth/**`, `src/lib/authStore.ts`                        |
+| **D — Foundational UI kit + fake repo** | `BottomSheet`, `CenterModal`, `IconAvatar`, `MovimientoRow`, `TagChip`, `DateChipPicker`, `SegmentedControl`, `Toggle`, `InfoButton` + `repo.fake.ts` (shared in-memory `Repo`, seeded data). | `src/components/shared/**`, `src/lib/repo.fake.ts`                    |
+
+---
+
+## Wave 2 — active
+
+`src/components/shared/**` + `repo.fake.ts` are on `main`; every track below
+can build against them.
+
+**Sequencing note:** run **Track I (i18n) first**, before E/F/G/H write much
+new UI copy. Every new screen built before Track I lands is Spanish text
+that has to be retrofitted — the earlier the scaffolding exists, the less
+retrofit work piles up. Track J is small and can follow right after I.
+
+### Track I — i18n scaffolding (new, do this first)
+
+**Not started. Documented here for planning — no code written yet.**
+
+- **Goal:** every screen sources its copy from a translation table, never a
+  hardcoded string, so adding a locale later is data, not a code change.
+- **Locales:** `en` (English), `es` (neutral Spanish — Colombia, Mexico,
+  Ecuador, Venezuela, Peru; also the fallback for any unmatched Spanish
+  variant), `es-AR` (Argentina), `pt-BR` (Brazilian Portuguese).
+- **Library:** `react-i18next` — mature, actively maintained, works cleanly
+  with Vite, self-hostable (bundled JSON, no CDN — required by `AGENTS.md`'s
+  no-CDN rule).
+- **Structure (proposed, confirm when picked up):** `src/lib/i18n/index.ts`
+  (init) + `src/lib/i18n/locales/{en,es,es-AR,pt-BR}.json`.
+- **Locale selection:** detect from the browser on first run, mapped to the
+  nearest supported locale (unmatched Spanish variants fall back to `es`
+  neutral, unmatched everything else falls back to `en`); user-overridable
+  later from Settings (Track G).
+- **Persistence:** where the chosen locale lives is an open question to
+  resolve when this track starts, not here — `Config.preferencias` (per
+  `AGENTS.md`'s schema rule, new optional fields go through `extra` first,
+  not a first-class column) is the natural home since it already syncs via
+  Drive, but needs its own small `specs.md` §10 addendum before
+  implementing, same pattern as Track H's `Grupo` type below. Don't invent
+  the shape inline while implementing.
+- **Retrofit scope:** `WelcomeScreen.tsx` and `DrivePermissionScreen.tsx`
+  (Wave 1) are the only screens with hardcoded copy today — pull their
+  strings into the `es` locale file as part of this track.
+- **Done when:** the pattern exists, is documented in `AGENTS.md` § Coding
+  rules (supersedes the current "user-facing UI copy is Spanish" line — that
+  becomes "sourced from the i18n table, `es` as the base locale"), and the
+  two Wave 1 screens use it. Translating into the other 3 locales can follow
+  incrementally — the scaffolding existing is what unblocks everyone else,
+  not full translation coverage on day one.
+
+### Track J — Drive-permission screen refinements (small, do after I)
+
+**Not started. Documented here for planning — no code written yet.** Follow-up
+to Track B's `DrivePermissionScreen`, requested during Wave 2 planning:
+
+- **Trim to one permission item.** The screen currently shows two cards
+  ("Crear y editar sus propios archivos" / "No accede a tus otros
+  archivos"). Keep only the view/edit-your-own-files item; drop the other.
+- **Make that one item a bit bigger.** Step the remaining item's text up one
+  token in the type scale (`--text-sm` → `--text-ms`, per
+  `docs/ui/design-tokens.md`) and enlarge its icon badge slightly to match —
+  it's carrying the whole message alone now, so it should read as more
+  prominent, not identical in weight to before.
+- **Persist the decision — ask once per device, not once per session.**
+  Today `driveOptIn` is pure in-memory zustand state (`specs.md` §11
+  2026-08-18, "in-memory, per-session, never persisted") — a deliberate
+  choice at the time, made because the identity session itself was already
+  rebuilt every cold start. That reasoning has a gap: once persisted-session
+  paths exist (the PIN lock's cached vault, `hydrate()`), a user who already
+  connected or dismissed Drive sees this screen again on every reopen. Fix:
+  persist the decision locally (device-scoped IndexedDB record via
+  `db.ts`, **not** `localStorage`/`sessionStorage` per `AGENTS.md` §7, and
+  **not** `Config` — a user who dismisses Drive has no Drive to persist a
+  Config-based preference into). Only re-prompt when no persisted decision
+  exists yet. Supersedes the `specs.md` §11 2026-08-18 "in-memory,
+  per-session" entry — record that supersession when this lands.
+- **Add a short reassurance line near "Ahora no."** Something like _"Podés
+  continuar sin vincular tu Drive — más adelante podés hacerlo desde tu
+  Perfil."_ Dismissing isn't a dead end; say so. (The actual Profile "Drive"
+  row this promises is Track G's job — the copy can ship before that row
+  exists, since it just needs to be a promise Track G will keep, not a
+  working link yet.)
+
+### Track E — Home + Search + History
+
+Dashboard (extend `Home.tsx`) + the `movimientoStats` aggregation module
+(real, pure computation — `specs.md` §4, "views are derived," not a stub) +
+Search/Filter sheet + History overlay. One track: all three share
+`MovimientoRow` and the aggregation module.
+
+Owns: `src/routes/Home.tsx`, `src/lib/movimientoStats.ts`,
+`src/features/search/**`, `src/features/history/**`
+
+### Track F — Movement/Add sheet + Voice
+
+View/edit sheet, create sheet, delete confirm, toast, the Voice unit (Web
+Speech API + client-side regex parser — architecture resolved, `specs.md`
+§11 2026-08-18: on-device, no backend, cleared to build).
+
+Owns: `src/features/movimientos/**`
+
+### Track G — Tags + Profile + Settings
+
+Tag picker, custom tag modal, profile sheet (including the Drive
+reconnect row Track J's copy promises), "Personalizar" settings screen.
+
+Owns: `src/features/tags/**`, `src/features/profile/**`,
+`src/features/settings/**`
+
+### Track H — Groups ("Áreas")
+
+List + detail + editor. Needs a schema addition first (`Grupo` type, or
+`extra` on `Categoria`) — write that `specs.md` §10 addendum before
+implementing, don't invent the shape inline.
+
+Owns: `src/features/groups/**`, `src/lib/schema.ts` (additive only)
+
+---
+
+## Not scheduled
+
+- **Receipt scan** — deferred indefinitely. On-device OCR is unreliable on
+  real (thermal-paper) receipts; the on-device path good enough (Chrome's
+  Prompt API / Gemini Nano) is desktop-only, missing this app's mobile
+  target entirely. User explicitly declined a backend for this. See
+  `specs.md` §11 2026-08-18. Don't restart this research without a real
+  platform change.
+
+Cosmetic/small items not tied to a wave (PWA icon, OAuth consent branding,
+etc.) stay in `specs.md` §12 — they don't need worktree-level tracking.
+
+---
+
+## Worktree log
+
+Every agent that creates a `git worktree` logs a row here the moment it
+does, and updates **Status** the moment the track's work merges to `main`.
+Check this table against `git worktree list` at the start of any parallel
+session; prune anything stale (merged-but-not-removed, or on disk but
+missing/finished here).
+
+| Created    | Track / task    | Path | Branch | Status | Notes                                                           |
+| ---------- | --------------- | ---- | ------ | ------ | --------------------------------------------------------------- |
+| 2026-08-18 | _(none active)_ | —    | —      | —      | Wave 1 (A, B, D) merged to `main`; all three worktrees removed. |
+
+Status values: `active` → `merged, pending cleanup` → row deleted once
+`git worktree remove <path>` runs.

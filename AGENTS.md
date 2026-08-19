@@ -14,8 +14,9 @@ We follow **spec-driven development**. `specs.md` is the source of truth.
 3. If code and `specs.md` disagree, `specs.md` wins — update the code or update
    the spec, never let them silently drift.
 4. Bumping behavior or data shape ⇒ update `specs.md` in the same change.
-5. The work queue lives in `specs.md` §12 (Backlog) — pick up from there and
-   keep it updated when you finish or defer something.
+5. The verification/deferred-work backlog lives in `specs.md` §12; the
+   parallel-track wave plan and worktree log live in `docs/waves.md` — pick
+   up from either and keep it updated when you finish or defer something.
 
 ## Directory docs (agent-readable maps)
 
@@ -211,16 +212,17 @@ Local-only state stays in React hooks. No Redux.
 ## Working in parallel (multiple agents)
 
 - One agent = one branch = one worktree. Never two writers on the same branch.
-- Each task declares the files it owns (see the track plan in `specs.md` §12);
-  do not edit files owned by another in-flight track.
+- Each task declares the files it owns (see the wave/track plan in
+  `docs/waves.md`); do not edit files owned by another in-flight track.
 - `specs.md` edits from parallel tracks are **append-only**: add your own §10
-  subsection or §11/§12 lines, never rewrite someone else's.
+  subsection or §11/§12 lines, never rewrite someone else's. Same rule for
+  `docs/waves.md`'s worktree log.
 - Merge to `main` early and often (trunk-based, no `develop`); rebase your
   worktree on `main` before finishing.
 - Every agent in every track follows the Coding rules comment policy above
   strictly: add a comment only when it is genuinely necessary to explain a
   non-obvious _why_. No exceptions per-track.
-- **Log every worktree** you create in `specs.md` §12 "Worktree log" the
+- **Log every worktree** you create in `docs/waves.md` "Worktree log" the
   moment you create it (path, branch, status `active`). When your track's
   branch merges to `main`, remove the worktree (`git worktree remove <path>`)
   and delete its row — don't leave it lying around "just in case".

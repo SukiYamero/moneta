@@ -22,6 +22,9 @@ file is just "where do I look", not "how does it work".
 - `src/main.tsx` — app entry point (mounts `AppLock` + `RouterProvider`).
 - `docs/ui/` — UI implementation plan + design-token rationale, sourced from
   the Claude Design project. See [docs/ui/README.md](docs/ui/README.md).
+- `docs/waves.md` — the development-wave/track sequencing plan and worktree
+  log (what's shipped, what's active, who owns what files). Separate from
+  `specs.md`, which stays authoritative for behavior/decisions.
 
 Update this file only when a top-level folder appears, disappears, or its
 role fundamentally changes — not on every internal change. Internal detail
