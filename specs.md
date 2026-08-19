@@ -499,7 +499,29 @@ Full design: Claude Design canvas `Moneta.dc.html` ("AUTH: WELCOME" and
   `sortBy`/`sortDir`/`limit`/`cursor` together (index-encoded cursor,
   fine for an in-memory store); an unknown/custom category in
   `movimientoView.getMovimientoVisual` falls back to a `tipo`-based
-  icon/tint instead of throwing.
+  icon/tint instead of throwing. **`repo.fake.ts` deliberately mirrors
+  `repo.local.ts`'s (§10.3.1) `ListQuery` defaults (`sortBy` defaults to the
+  entity's own date field, `sortDir` defaults to `'desc'`), validation rules
+  (`monto`/`valorActual` finite, `fecha`/`fechaActualizacion` ISO, `moneda`
+  required, `updateConfig` rejecting a `schemaVersion` patch), comparator
+  (three-level: sort field → per-entity tiebreak field → `id`, `sortDir`
+  multiplied uniformly across all three levels), and error codes
+  (`invalid_input` on a malformed/negative pagination cursor, matching
+  `RepoError('invalid_input')` rather than silently treating it as index 0)
+  — every Wave 2 screen is built and tested against this fake, so a place
+  where it silently disagrees with the real implementation is worse than no
+  fake at all. The one intentional difference is the cursor's wire shape:
+  the fake keeps a plain index-encoded cursor (fine for an in-memory store
+  with no compound index to walk) instead of `repo.local.ts`'s opaque
+  `{ sortValue, tiebreakValue, id }` envelope — the _behavior_ (default
+  sort, tiebreaks, rejecting garbage) is what's mirrored, not the wire
+  format. `add`/`addMany` reject a duplicate `id` with
+  `RepoError('invalid_input')` (an `addMany` batch is all-or-nothing: a
+  duplicate anywhere in it — against the store or within the batch itself —
+  aborts the whole batch, no partial insert), and `removeMany` rejects any
+  missing id with `RepoError('not_found')`, aborting the whole batch —
+  symmetric with what single-id `remove`/`update` already guaranteed
+  (§11, 2026-08-18 final-sweep entry).**
 - **Done when:** every component has a colocated `*.test.tsx`
   (`user-event`, not `fireEvent`), is keyboard-reachable with ≥44px touch
   targets and sensible `role`/`aria`; `repo.fake.ts` has `repo.fake.test.ts`
@@ -962,6 +984,111 @@ landing on the locked phase`, `lock re-locks only when enabled` extended
   extended likewise, plus a negative case that a not-yet-expired
   `onVisible` leaves the DEK untouched — all three failed on the missing
   `forgetDek()` call pre-fix).
+- 2026-08-18 — **`repo.fake.ts` brought into parity with `repo.local.ts` on
+  eight reproduced divergences (code review, Track D).** All eight (plus a
+  ninth clock issue found on the same pass) had a failing test written
+  first, confirmed to fail for the stated reason, then fixed:
+  1. `list()` with no `sortBy` now defaults to the entity's own date field
+     (`fecha`/`fechaActualizacion`) instead of insertion order — the
+     seeded data happened to already read newest-first by insertion order,
+     which is why this was invisible until a row was appended out of that
+     order in a test.
+  2. Default `sortDir` flipped from `'asc'` to `'desc'`, matching
+     `repo.local.ts`.
+  3. `validateMovimiento` now checks `!Number.isFinite(m.monto) ||
+m.monto <= 0` (was `m.monto <= 0` alone, which lets `NaN` through since
+     `NaN <= 0` is `false` in JS).
+  4. `activos` now has a `validateActivo` (was unvalidated entirely):
+     ISO `fecha` format, `moneda` required, `valorActual` finite and
+     non-negative (zero explicitly allowed — an asset can be worth
+     nothing).
+  5. Sort ties now break via a three-level comparator (sort field →
+     per-entity tiebreak field → `id`) ported from `repo.local.ts`'s
+     `makeComparator`, with `sortDir` multiplied uniformly across all three
+     levels — reusing the exact fix from the entry above rather than
+     reintroducing the mixed-direction bug it corrected.
+  6. `updateConfig` now rejects a patch that sets `schemaVersion` with
+     `RepoError('invalid_input')` instead of silently applying it (which
+     used to desync the fake's own `ready()` version check from
+     `FAKE_CONFIG`, throwing `schema_mismatch` on every later call for a
+     reason nothing pointed back to).
+  7. A malformed or negative pagination cursor now throws
+     `RepoError('invalid_input')` instead of `Number('garbage')` → `NaN` →
+     `slice(NaN)` silently behaving like `slice(0)`. The index-encoded
+     cursor shape itself is unchanged (§10.5 names this as the one
+     deliberate simplification vs. `repo.local.ts`'s opaque cursor).
+  8. `update()` now re-pins `id` (`{ ...existing, ...patch, id }`) so a
+     patch can never change an entity's id.
+  9. (Found during the same pass, not in the original list.) The exported
+     `fakeRepo` singleton — the instance §10.5 says every Wave 2 screen
+     should import — defaulted through `createFakeRepo()`'s bare
+     `new Date()`, so its seeded relative dates silently drifted with
+     whatever real day the app happened to boot on. Pinned it to a fixed
+     `FAKE_REPO_SEED_DATE` (`2026-08-18`) instead; `createFakeRepo()`'s own
+     `today` parameter still defaults to `new Date()` for ad-hoc/isolated
+     use, only the shared singleton is pinned. Proven with a test that
+     re-imports the module under two different mocked system clocks and
+     asserts the seed comes out identical either way (a same-file dynamic
+     `import()` after `vi.resetModules()`, since the singleton evaluates
+     once at module load).
+     `get`/`add`/`addMany`/`update` were also changed to return fresh shallow
+     copies rather than references into the fake's internal `store` array —
+     not itself one of the eight, but required by the same "must never hand
+     out a mutable reference" rule the task brief stated, and `list()`'s
+     sorted output was already copy-safe only at the array level, not the
+     item level, before this pass.
+
+  **A further divergence spotted on this pass — resolved same-day, not left
+  open:** `repo.local.ts`'s `validateMovimiento` also checks `fecha` is a
+  valid ISO `yyyy-mm-dd` and that `moneda` is present; `repo.fake.ts`'s
+  `validateMovimiento` only ever checked `monto`. Flagged to the operator
+  rather than folded in silently (per the review brief); the operator
+  confirmed it's the same divergence class as #4 (`activos`) and asked for
+  it to be fixed. TDD, same as the eight above: added failing tests first
+  (`rejects an invalid fecha on a Movimiento` — bad format `'not-a-date'`
+  and three impossible calendar dates `'2026-13-40'`/`'2026-02-30'`/
+  `'2023-02-29'`; `rejects a Movimiento with missing moneda`; plus a
+  positive control, `accepts a real leap day fecha` — `'2024-02-29'`, which
+  already passed since `isValidIsoDate` itself was correct, only
+  `validateMovimiento` never called it), confirmed both failed for the
+  right reason, then added the same `isValidIsoDate`/`moneda` checks
+  `validateActivo` already had — reusing the one helper rather than adding
+  a second. `validateMovimiento` now checks `monto`, `fecha`, and `moneda`,
+  matching `repo.local.ts` exactly.
+
+- 2026-08-18 — **Tenth divergence resolved same-day: `add()`/`addMany()`
+  now reject a duplicate `id`, and `removeMany()` now rejects a missing
+  `id`.** Reported first (see previous entry), then fixed on operator
+  confirmation. TDD: four failing tests added first — `add()` with an id
+  already in the store; `addMany()` with an id already in the store
+  (asserting the batch's _other_, otherwise-valid row also did NOT land —
+  the all-or-nothing check); `addMany()` with the same id repeated twice
+  inside one batch; `removeMany()` with one real id plus one missing id
+  (asserting the real id was NOT removed either) — all four confirmed to
+  fail for the right reason (each resolved instead of rejecting) before
+  the fix. `add`/`addMany` now check for a colliding id (against the
+  store, and — for `addMany` — within the batch itself) _before_ touching
+  `store`, and throw `RepoError('invalid_input')`; `removeMany` now checks
+  every id exists before removing any of them, throwing
+  `RepoError('not_found')` on the first miss — bringing it in line with
+  what `remove()`/`update()` already guaranteed for a single id, closing
+  the self-inconsistency noted in the previous entry.
+  **One correction to what was reported, not copied into the fix:** the
+  reproduced-today `repo.local.ts` behavior for a duplicate id on `add`/
+  `addMany` is `RepoError('unknown')` (a Dexie `ConstraintError` falling
+  through the generic `wrapUnknown` wrapper) — the operator confirmed
+  that's itself a bug in `repo.local.ts` (a duplicate id is the caller
+  violating the contract, not an unexpected storage failure — the same
+  distinction `invalid_input` exists for) and is having the other track
+  fix it there. The fake targets the _corrected_ behavior,
+  `RepoError('invalid_input')`, not the code as currently reproduced —
+  matching a defect byte-for-byte would have propagated it instead of
+  agreeing with the intended contract.
+  **Explicit sweep result: no eleventh divergence found.** Re-swept
+  `add`/`get`/`addMany`/`update`/`remove`/`removeMany`/`list`/`ready`/
+  `getConfig`/`updateConfig` against §10.3's bullets and edge cases after
+  this fix; nothing else stood out as disagreeing with the documented
+  contract.
 
 ## 12. Backlog (pending verification / deferred work)
 

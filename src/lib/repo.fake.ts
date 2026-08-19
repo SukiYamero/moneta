@@ -355,24 +355,102 @@ function seedActivos(today: Date): Activo[] {
   ]
 }
 
+// --- validation --------------------------------------------------------------
+// Mirrors repo.local.ts's validateMovimiento/validateActivo exactly (§10.3.1):
+// a fake that silently accepted a violation the real repo rejects would
+// disagree with it, and every Wave 2 screen is built and tested against this
+// fake first.
+
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/
+
+function isValidIsoDate(value: string): boolean {
+  if (!ISO_DATE_RE.test(value)) return false
+  const date = new Date(`${value}T00:00:00.000Z`)
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value
+}
+
 function validateMovimiento(m: Movimiento): void {
-  // `monto` always positive is a mandatory schema.ts convention — a fake that
-  // silently accepted a violation would disagree with the real repo.
-  if (m.monto <= 0) {
-    throw new RepoError('monto must be a positive number (schema.ts §4)', 'invalid_input')
+  if (!Number.isFinite(m.monto) || m.monto <= 0) {
+    throw new RepoError(`monto must be a finite, positive number (got ${m.monto})`, 'invalid_input')
+  }
+  if (!isValidIsoDate(m.fecha)) {
+    throw new RepoError(`fecha must be ISO "yyyy-mm-dd" (got "${m.fecha}")`, 'invalid_input')
+  }
+  if (!m.moneda) {
+    throw new RepoError('moneda is required', 'invalid_input')
   }
 }
 
+function validateActivo(a: Activo): void {
+  if (!isValidIsoDate(a.fechaActualizacion)) {
+    throw new RepoError(
+      `fechaActualizacion must be ISO "yyyy-mm-dd" (got "${a.fechaActualizacion}")`,
+      'invalid_input',
+    )
+  }
+  if (!a.moneda) {
+    throw new RepoError('moneda is required', 'invalid_input')
+  }
+  if (!Number.isFinite(a.valorActual) || a.valorActual < 0) {
+    throw new RepoError(
+      `valorActual must be a finite, non-negative number (got ${a.valorActual})`,
+      'invalid_input',
+    )
+  }
+}
+
+// --- sort/cursor helpers ------------------------------------------------------
+// Mirrors repo.local.ts's compareValues/makeComparator exactly (§10.3.1): the
+// index-encoded cursor below is the one deliberate simplification (§10.5) —
+// everything else (defaults, comparator, error codes) is meant to agree.
+
 function compareValues(a: unknown, b: unknown): number {
   if (a === b) return 0
-  if (a === undefined) return 1
-  if (b === undefined) return -1
+  if (a === undefined || a === null) return -1
+  if (b === undefined || b === null) return 1
   if (typeof a === 'number' && typeof b === 'number') return a - b
-  return String(a).localeCompare(String(b))
+  const sa = String(a)
+  const sb = String(b)
+  if (sa < sb) return -1
+  if (sa > sb) return 1
+  return 0
+}
+
+// `sortDir` applies uniformly across the whole key tuple (primary field,
+// tiebreak field, final id fallback) — see specs.md §11, 2026-08-18: mixing
+// direction across levels was a real reproduced ordering bug in repo.local.ts.
+function makeComparator<T extends { id: EntityId }>(
+  sortBy: keyof T,
+  sortDir: 'asc' | 'desc',
+  tiebreakField: (keyof T & string) | undefined,
+): (a: T, b: T) => number {
+  const dirMul = sortDir === 'asc' ? 1 : -1
+  return (a, b) => {
+    const primary = compareValues(a[sortBy], b[sortBy]) * dirMul
+    if (primary !== 0) return primary
+    if (tiebreakField) {
+      const secondary = compareValues(a[tiebreakField], b[tiebreakField]) * dirMul
+      if (secondary !== 0) return secondary
+    }
+    return compareValues(a.id, b.id) * dirMul
+  }
+}
+
+// Index-encoded cursor (§10.5's deliberate simplification vs. the real repo's
+// opaque value-tuple cursor — fine for an in-memory store with no compound
+// index to walk). Still must reject garbage the same way the real repo does:
+// `Number('garbage')` is NaN and `slice(NaN)` silently behaves like `slice(0)`.
+function decodeCursor(cursor: string | undefined): number {
+  if (cursor === undefined) return 0
+  const index = Number(cursor)
+  if (!Number.isInteger(index) || index < 0) {
+    throw new RepoError(`invalid pagination cursor "${cursor}"`, 'invalid_input')
+  }
+  return index
 }
 
 function paginate<T>(items: T[], limit?: number, cursor?: string): ListResult<T> {
-  const start = cursor ? Number(cursor) : 0
+  const start = decodeCursor(cursor)
   if (limit === undefined) return { items: items.slice(start) }
   const pageItems = items.slice(start, start + limit)
   const nextIndex = start + limit
@@ -383,43 +461,33 @@ function paginate<T>(items: T[], limit?: number, cursor?: string): ListResult<T>
 }
 
 interface CrudRepoConfig<T> {
-  getDate?: (item: T) => string | undefined
-  getSeccion?: (item: T) => string | undefined
-  validate?: (item: T) => void
+  dateField: keyof T & string
+  seccionField?: keyof T & string
+  tiebreakField?: keyof T & string
+  validate: (item: T) => void
 }
 
 function createCrudRepo<T extends { id: EntityId }>(
   seed: T[],
-  config: CrudRepoConfig<T> = {},
+  config: CrudRepoConfig<T>,
 ): CrudRepo<T> {
   let store = [...seed]
+  const { dateField, seccionField, tiebreakField, validate } = config
 
   function applyFilters(query: ListQuery<T> | undefined): T[] {
-    let result = store
-    const { getDate, getSeccion } = config
-
-    if (query?.dateFrom !== undefined || query?.dateTo !== undefined) {
-      result = result.filter((item) => {
-        const date = getDate?.(item)
-        if (date === undefined) return false
-        if (query?.dateFrom !== undefined && date < query.dateFrom) return false
-        if (query?.dateTo !== undefined && date > query.dateTo) return false
-        return true
-      })
-    }
-
-    if (query?.seccion !== undefined) {
-      result = result.filter((item) => getSeccion?.(item) === query.seccion)
-    }
-
-    return result
+    const { dateFrom, dateTo, seccion } = query ?? {}
+    return store.filter((item) => {
+      if (dateFrom !== undefined && String(item[dateField]) < dateFrom) return false
+      if (dateTo !== undefined && String(item[dateField]) > dateTo) return false
+      if (seccionField && seccion !== undefined && item[seccionField] !== seccion) return false
+      return true
+    })
   }
 
   function sortItems(items: T[], query: ListQuery<T> | undefined): T[] {
-    const { sortBy, sortDir = 'asc' } = query ?? {}
-    if (!sortBy) return items
-    const dir = sortDir === 'desc' ? -1 : 1
-    return [...items].sort((a, b) => dir * compareValues(a[sortBy], b[sortBy]))
+    const sortBy = query?.sortBy ?? dateField
+    const sortDir = query?.sortDir ?? 'desc'
+    return items.toSorted(makeComparator<T>(sortBy, sortDir, tiebreakField))
   }
 
   return {
@@ -429,25 +497,46 @@ function createCrudRepo<T extends { id: EntityId }>(
       return paginate(sorted, query?.limit, query?.cursor)
     },
     async get(id) {
-      return store.find((item) => item.id === id)
+      const found = store.find((item) => item.id === id)
+      return found ? { ...found } : undefined
     },
     async add(item) {
-      config.validate?.(item)
-      store = [...store, item]
-      return item
+      validate(item)
+      if (store.some((existing) => existing.id === item.id)) {
+        throw new RepoError(`id "${item.id}" already exists`, 'invalid_input')
+      }
+      const fresh = { ...item }
+      store = [...store, fresh]
+      return { ...fresh }
     },
     async addMany(items) {
-      items.forEach((item) => config.validate?.(item))
-      store = [...store, ...items]
-      return items
+      items.forEach(validate)
+      // All-or-nothing, mirroring repo.local.ts's bulkAdd-inside-a-transaction
+      // guarantee: every id (within the batch, and against the existing store)
+      // is checked before the store is touched, so a bad row never leaves a
+      // partial batch committed.
+      const existingIds = new Set(store.map((item) => item.id))
+      const seenInBatch = new Set<EntityId>()
+      for (const item of items) {
+        if (existingIds.has(item.id)) {
+          throw new RepoError(`id "${item.id}" already exists`, 'invalid_input')
+        }
+        if (seenInBatch.has(item.id)) {
+          throw new RepoError(`duplicate id "${item.id}" in addMany batch`, 'invalid_input')
+        }
+        seenInBatch.add(item.id)
+      }
+      const fresh = items.map((item) => ({ ...item }))
+      store = [...store, ...fresh]
+      return fresh.map((item) => ({ ...item }))
     },
     async update(id, patch) {
       const existing = store.find((item) => item.id === id)
       if (!existing) throw new RepoError(`Not found: ${id}`, 'not_found')
-      const updated = { ...existing, ...patch } as T
-      config.validate?.(updated)
+      const updated = { ...existing, ...patch, id } as T
+      validate(updated)
       store = store.map((item) => (item.id === id ? updated : item))
-      return updated
+      return { ...updated }
     },
     async remove(id) {
       if (!store.some((item) => item.id === id)) {
@@ -457,6 +546,14 @@ function createCrudRepo<T extends { id: EntityId }>(
     },
     async removeMany(ids) {
       const idsToRemove = new Set(ids)
+      // Symmetric with `remove`'s not_found guarantee: any missing id aborts
+      // the whole batch (checked before the store is touched), never a
+      // partial delete.
+      for (const id of idsToRemove) {
+        if (!store.some((item) => item.id === id)) {
+          throw new RepoError(`Not found: ${id}`, 'not_found')
+        }
+      }
       store = store.filter((item) => !idsToRemove.has(item.id))
     },
   }
@@ -472,14 +569,16 @@ export function createFakeRepo({ today = new Date() }: CreateFakeRepoOptions = {
   let config: Config = { ...FAKE_CONFIG }
 
   const movimientos = createCrudRepo<Movimiento>(seedMovimientos(today), {
-    getDate: (m) => m.fecha,
-    getSeccion: (m) => m.seccion,
+    dateField: 'fecha',
+    seccionField: 'seccion',
+    tiebreakField: 'createdAt',
     validate: validateMovimiento,
   })
 
   const activos = createCrudRepo<Activo>(seedActivos(today), {
-    getDate: (a) => a.fechaActualizacion,
-    getSeccion: (a) => a.seccion,
+    dateField: 'fechaActualizacion',
+    seccionField: 'seccion',
+    validate: validateActivo,
   })
 
   return {
@@ -494,14 +593,30 @@ export function createFakeRepo({ today = new Date() }: CreateFakeRepoOptions = {
       return { ...config }
     },
     async updateConfig(patch) {
+      // schemaVersion is owned by ready(), never by callers — mirrors
+      // repo.local.ts's guard so a caller can't silently poison the fake's
+      // own version check via a patch that structurally allows the field.
+      if (patch.schemaVersion !== undefined) {
+        throw new RepoError(
+          'schemaVersion is not caller-writable via updateConfig',
+          'invalid_input',
+        )
+      }
       config = { ...config, ...patch }
       return { ...config }
     },
   }
 }
 
+// Fixed, not `new Date()` — this singleton is what every Wave 2 screen imports
+// (§10.5), so an unpinned clock would make the same code render different
+// relative seed dates depending on which real day the app happens to boot on,
+// breaking reproducibility across Playwright runs or between two people
+// looking at the same screen on different days.
+const FAKE_REPO_SEED_DATE = new Date('2026-08-18T00:00:00.000Z')
+
 // Every screen must read the SAME repo instance (docs/ui/implementation-plan.md)
 // so a write from the Add sheet shows up on Home immediately. This is the
 // default import for app code; tests should use `createFakeRepo()` directly
 // for an isolated instance instead of sharing this singleton.
-export const fakeRepo: Repo = createFakeRepo()
+export const fakeRepo: Repo = createFakeRepo({ today: FAKE_REPO_SEED_DATE })
