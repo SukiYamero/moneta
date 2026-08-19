@@ -307,8 +307,6 @@ missing/finished here).
 | Path                          | Branch            | Status |
 | ----------------------------- | ----------------- | ------ |
 | `../moneta-worktrees/wave3-r` | `wave3/r-offline` | active |
-| `../moneta-worktrees/wave3-u` | `wave3/u-review`  | merged, in review |
-| `../moneta-worktrees/wave3-w` | `wave3/w-review`  | merged, in review |
 
 Paths are relative to the repo root (`web/moneta`), i.e. a sibling
 `web/moneta-worktrees/` directory outside the repo — deliberately not nested

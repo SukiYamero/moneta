@@ -511,13 +511,16 @@ Never R, T, U, V or Y.
 
 ## 5. Live status
 
-| Track | Branch            | Worktree                      | Status                              |
-| ----- | ----------------- | ----------------------------- | ----------------------------------- |
-| R     | `wave3/r-offline` | `../moneta-worktrees/wave3-r` | in flight                           |
-| S     | —                 | removed                       | ✅ merged + reviewed (`823bf59` + review `1058b5c`) |
-| U     | `wave3/u-review`  | `../moneta-worktrees/wave3-u` | merged, review in flight            |
-| V     | —                 | removed                       | ✅ merged + reviewed (`f350705` + review `99f3dbf`) |
-| W     | `wave3/w-review`  | `../moneta-worktrees/wave3-w` | merged, review in flight            |
+| Track | Status                                                  |
+| ----- | ------------------------------------------------------- |
+| R     | in flight — worktree `../moneta-worktrees/wave3-r`, branch `wave3/r-offline` |
+| S     | ✅ merged `823bf59` + review `1058b5c`, worktree removed |
+| U     | ✅ merged `32d71d0` + review `3b98736`, worktree removed |
+| V     | ✅ merged `f350705` + review `99f3dbf`, worktree removed |
+| W     | ✅ merged `3138af7` + review `b44b643`, worktree removed |
+
+Stage-1 decisions and backlog are folded into `specs.md` §11/§12 as each
+track closed, per §1.2 — not batched at the end.
 
 The authoritative worktree log stays in `docs/waves.md`; this table is the
 per-track execution view.
