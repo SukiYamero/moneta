@@ -452,6 +452,14 @@ Full design: `docs/superpowers/specs/2026-06-26-pin-lock-design.md`.
   mobile-reachable on-device text API exists) — revisit only if that
   changes, don't re-research this without a real platform change.
 
+- 2026-08-18 — **Dark theme actually applied.** `.dark` is the only designed
+  palette but no element ever carried the class, so the app rendered with the
+  light _placeholder_ scaffold. `<html class="dark">` is now hardcoded in
+  `index.html`, and the PWA `theme_color`/`background_color` + the
+  `theme-color` meta moved from the scaffold `#0f172a` to the real canvas
+  `#0c0d10`. Reading `Config.preferencias.tema` to switch themes at runtime
+  stays deferred until a light design exists (Track G, settings).
+
 ## 12. Backlog (pending verification / deferred work)
 
 - ✅ **Login verified end-to-end (§10.1)** — 2026-07-02. Real OAuth ran against Google

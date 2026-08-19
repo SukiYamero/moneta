@@ -27,8 +27,8 @@ export default defineConfig({
         short_name: APP_NAME,
         description:
           'Personal finance: income, expenses and assets, synced to your own Google Drive.',
-        theme_color: '#0f172a',
-        background_color: '#0f172a',
+        theme_color: '#0c0d10',
+        background_color: '#0c0d10',
         display: 'standalone',
         orientation: 'portrait',
         start_url: '/',
