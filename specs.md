@@ -277,6 +277,73 @@ Full design: `docs/superpowers/specs/2026-06-26-pin-lock-design.md`.
 - **Out of scope (own spec/track):** the local (dexie) implementation, the
   Drive-backed implementation, the movimientos UI.
 
+### 10.4 Drive-sync opt-in + Welcome screen
+
+Full design: Claude Design canvas `Moneta.dc.html` ("AUTH: WELCOME" and
+"AUTH: DRIVE PERMISSION" blocks) — see `docs/ui/implementation-plan.md`,
+"Auth: Welcome + Drive permission".
+
+- **Goal:** replace the bare dev-harness `LoginScreen` with the real,
+  designed onboarding flow, and give `authStore.connectDrive` (provisions
+  the `KuroBello` folder + files, §10.1) its missing UI caller — closing the
+  §12 "Drive-sync opt-in UI" backlog item.
+- **User story:** as a user, I open the app, sign in with Google
+  (`WelcomeScreen`), and am then asked once whether to turn on Drive sync
+  (`DrivePermissionScreen`). Choosing "Permitir y continuar" upgrades my
+  session to the Drive scopes and provisions my Drive folder; choosing
+  "Ahora no" drops me straight into the app, local-first, and I'm not asked
+  again until my next fresh sign-in.
+- **UI:**
+  - `WelcomeScreen` (`src/features/auth/WelcomeScreen.tsx`): full-bleed dark
+    screen, `APP_NAME` wordmark, "Continuar con Google" triggers the real
+    `authStore.login()` (identity scopes only — no Drive consent here, §5).
+    Busy state while `status === 'authenticating'`; inline error on
+    `status === 'error'`.
+  - `DrivePermissionScreen` (`src/features/auth/DrivePermissionScreen.tsx`):
+    shown once per authenticated session, right after login, before the
+    rest of the app. Explains the two Drive permissions in plain language
+    (create-own-files, no-access-to-other-files) per the design copy.
+    "Permitir y continuar" calls `authStore.connectDrive()` with a busy
+    overlay ("Conectando con tu Drive…") while it runs; on failure shows a
+    real inline error and stays on the screen (retry or "Ahora no" both
+    stay reachable). "Ahora no" dismisses the screen without calling
+    `connectDrive`.
+  - `RequireAuth` (extended, not rewritten): unauthenticated → `WelcomeScreen`;
+    authenticated with `driveOptIn === 'pending'` → `DrivePermissionScreen`;
+    authenticated with `driveOptIn` `'connected'` or `'dismissed'` → the
+    app. Account-chooser screen in the design is **not built** — GIS's
+    `initTokenClient` shows Google's real chooser in its own popup; a
+    hand-rolled copy of Google's own UI would be redundant and would drift
+    from what Google actually renders.
+- **Data touched:** no `schema.ts` change. `authStore` gains an in-memory
+  `driveOptIn: 'pending' | 'connected' | 'dismissed'` field (default
+  `'pending'`, reset to `'pending'` on every fresh `login()`, never
+  persisted — see §11 decision below) plus `driveConnecting`/`driveError`
+  for the busy/error UI. `connectDrive` itself already touches Drive per
+  §10.1 (`KuroBello` folder + 3 files) — unchanged here, only wired to a
+  real caller.
+- **Edge cases:** GIS load failure / consent denied on `WelcomeScreen` →
+  existing `auth.ts`/`authStore` error surface, screen stays usable, retry
+  reachable. `connectDrive` failure (network, `401`/`403`, popup closed) →
+  `driveError` set, `driveOptIn` stays `'pending'` so the user can retry or
+  fall back to "Ahora no"; the already-authenticated identity session is
+  **not** torn down by a Drive failure (`status`/`error` are for identity
+  auth only, `driveError` is separate). Re-running `connectDrive` after an
+  earlier successful run must stay idempotent (already guaranteed by
+  `bootstrap`'s find-before-create, §10.1). Cold start with the PIN lock
+  enabled resumes via `hydrate` after unlock — `driveOptIn` is **not**
+  reset there, so re-locking/unlocking mid-session never re-prompts Drive.
+- **Done when:** `LoginScreen.tsx` is deleted; `RequireAuth.tsx` routes to
+  `WelcomeScreen`/`DrivePermissionScreen`/`children` per `status`/`driveOptIn`;
+  `authStore.connectDrive` has error handling and a real caller;
+  `pinLock.updateSession` is wired into every `authStore` path that lands a
+  fresh `AuthSession` (see the separate §11 decision below); `WelcomeScreen`,
+  `DrivePermissionScreen`, extended `authStore`/`RequireAuth` tests, and
+  `bun run check` are green.
+- **Out of scope (deferred, see §12):** a persistent "don't ask again" for
+  Drive sync and a way to re-enable it later — Profile sheet's Drive row,
+  Wave 2.
+
 ## 11. Decisions log
 
 - 2026-06-25 — Package manager: **bun**. Node: **24 LTS** (`.nvmrc`).
@@ -459,6 +526,39 @@ Full design: `docs/superpowers/specs/2026-06-26-pin-lock-design.md`.
   `theme-color` meta moved from the scaffold `#0f172a` to the real canvas
   `#0c0d10`. Reading `Config.preferencias.tema` to switch themes at runtime
   stays deferred until a light design exists (Track G, settings).
+- 2026-08-18 — **Drive-sync "Ahora no" dismissal is in-memory, per-session,
+  never persisted (Track B, §10.4).** `authStore.driveOptIn` lives only in
+  the zustand store, reset to `'pending'` on every fresh `login()`. Rationale:
+  the whole auth session is already access-token-only and rebuilt on every
+  cold start by design (§5) — a per-session "ask again next time" matches
+  that lifecycle exactly, no new persistence layer needed. A _persistent_
+  "don't ask again" only makes sense paired with a way to turn Drive sync
+  back on later, which doesn't exist yet — that pairing is Profile sheet's
+  Drive row (Track G, Wave 2; see §12 follow-up below). Not written to
+  `localStorage` (banned by §7) or to `db.ts` (Track A owns it this wave).
+- 2026-08-18 — **`connectDrive` failure never tears down the identity
+  session (Track B, §10.4).** `authStore` keeps `driveError`/`driveConnecting`
+  separate from `status`/`error` (the identity-auth fields) precisely so a
+  Drive provisioning failure (network, `401`/`403`, popup closed) leaves the
+  user authenticated and able to retry or fall back to "Ahora no" — reusing
+  the identity `status: 'error'` path would have wrongly booted an
+  already-authenticated user back to the Welcome screen over an unrelated
+  Drive failure.
+- 2026-08-18 — **`pinLock.updateSession` wired into every `authStore` path
+  that lands a fresh `AuthSession` (Track B, §12).** `login`/`restore`/
+  `hydrate`/`connectDrive` all call it after a successful session update, so
+  the vault's cached token stays fresh once the PIN lock is enabled — closing
+  the other standing §12 gap (previously the cached token went stale after
+  first expiry and every cold start forced a Google re-login, making the
+  lock give zero convenience). Deliberately a silent no-op both when no
+  vault exists (`pinLock.hasVault()` false — most users, lock never enabled)
+  and, defensively, if the vault exists but isn't unlocked in this tab
+  (`updateSession` throws `'lock: not unlocked'` in that race) — a
+  session-caching side effect must never fail the primary auth flow it rides
+  on. `hydrate` deliberately does **not** reset `driveOptIn` — it also fires
+  on a mid-session re-lock/unlock (Page Visibility timeout, §10.2), where
+  re-prompting Drive opt-in on every screen-unlock would be wrong; only an
+  explicit `login()` resets it.
 
 ## 12. Backlog (pending verification / deferred work)
 
@@ -494,6 +594,19 @@ Full design: `docs/superpowers/specs/2026-06-26-pin-lock-design.md`.
   instant, no re-verification.
 - **App icon for the brand.** The PWA still ships the scaffold `favicon.svg`;
   a KuroBello icon (maskable + favicon) is pending. Cosmetic, not blocking.
+- ✅ **Drive-sync opt-in UI (§10.1/§10.4) closed** — 2026-08-18 (Track B).
+  `DrivePermissionScreen` is the real caller for `authStore.connectDrive`,
+  wired through `RequireAuth` right after login. `WelcomeScreen` replaces
+  `LoginScreen`. See §10.4 and the §11 decisions above.
+- ✅ **`updateSession` wiring (§10.2 item 2) closed** — 2026-08-18 (Track B).
+  Wired into `login`/`restore`/`hydrate`/`connectDrive` in `authStore`; see
+  the §11 decision above. §10.2's "Done when — Activation" is now fully met.
+- **Persistent Drive-sync toggle (follow-up from §10.4/§11 2026-08-18,
+  Track G, Wave 2).** The "Ahora no" dismissal deliberately doesn't persist
+  (per-session only, see §11). Once the Profile sheet exists, add a Drive
+  row there that reads `authStore.drive`/`driveOptIn` and can call
+  `connectDrive()` on demand — the "turn it back on" counterpart that makes
+  a persistent "don't ask again" viable later, if ever wanted.
 
 ### Parallel track plan (refreshed 2026-08-18, after UI analysis)
 
@@ -534,11 +647,11 @@ table against `git worktree list` at the start of any parallel session and
 remove anything marked done (or orphaned: on disk but not in this table, or in
 this table but the branch is already merged/gone).
 
-| Created    | Track / task    | Path | Branch | Status | Notes                                                                                 |
-| ---------- | --------------- | ---- | ------ | ------ | ------------------------------------------------------------------------------------- |
-| 2026-08-18 | Wave 1 · Track A | `../moneta-wt/a-repo-dexie`  | `track/a-repo-dexie`  | active | Dexie-backed `Repo` implementation (§10.3). No dev server.        |
+| Created    | Track / task     | Path                         | Branch                | Status | Notes                                                                      |
+| ---------- | ---------------- | ---------------------------- | --------------------- | ------ | -------------------------------------------------------------------------- |
+| 2026-08-18 | Wave 1 · Track A | `../moneta-wt/a-repo-dexie`  | `track/a-repo-dexie`  | active | Dexie-backed `Repo` implementation (§10.3). No dev server.                 |
 | 2026-08-18 | Wave 1 · Track B | `../moneta-wt/b-drive-optin` | `track/b-drive-optin` | active | Welcome + Drive-permission screens, `updateSession` wiring. Dev port 5175. |
-| 2026-08-18 | Wave 1 · Track D | `../moneta-wt/d-ui-kit`      | `track/d-ui-kit`      | active | Shared UI kit + `repo.fake.ts`. Dev port 5174.                     |
+| 2026-08-18 | Wave 1 · Track D | `../moneta-wt/d-ui-kit`      | `track/d-ui-kit`      | active | Shared UI kit + `repo.fake.ts`. Dev port 5174.                             |
 
 Status values: `active` (work in progress) → `merged, pending cleanup` (branch
 merged to `main`, worktree not yet removed) → row deleted once
