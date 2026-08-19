@@ -894,6 +894,18 @@ small inline spinner. `WelcomeScreen`'s Google button already does the label
 swap; that is the pattern. Wave 3's sheets are the main consumers; today's
 are the auth buttons.
 
+- **Exception — the auth gate screens (`WelcomeScreen`,
+  `DrivePermissionScreen`) may block the whole screen** while their one
+  action runs, and `DrivePermissionScreen`'s existing overlay is
+  **deliberate, not a violation** (user, 2026-08-19). The Tier 3 rule exists
+  to stop a loader covering content the user was reading; on these two
+  screens there is no such content — the screen _is_ the single decision,
+  and the OAuth flow it waits on is genuinely modal and external to the app.
+  Blocking there communicates the truth. This exception is scoped to those
+  two screens by design intent, and does not extend to any screen that
+  renders data. An earlier draft of this section generalised the rule from
+  the data screens and wrongly flagged the overlay as a defect.
+
 - **The anti-flash rule, which is the whole point.** A shared hook gates
   every tier: **do not show a loader until the work has been pending for
   ~150ms, and once shown keep it for ~350ms** so it cannot blink in and out.
