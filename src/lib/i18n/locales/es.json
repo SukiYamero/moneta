@@ -7,6 +7,15 @@
       "googleCta": "Continuar con Google",
       "connecting": "Conectando…",
       "legal": "Al continuar aceptas los <terms>Términos</terms> y la <privacy>Política de privacidad</privacy>"
+    },
+    "errors": {
+      "missingClientId": "Error de configuración. Intenta más tarde.",
+      "gisFailedToLoad": "No pudimos cargar Google. Revisa tu conexión e intenta de nuevo.",
+      "accessDenied": "Cancelaste el inicio de sesión con Google.",
+      "popupClosed": "Cerraste la ventana de Google antes de terminar. Intenta de nuevo.",
+      "popupFailedToOpen": "El navegador bloqueó la ventana de Google. Revisa el bloqueador de ventanas emergentes.",
+      "loginDefault": "No se pudo iniciar sesión. Intenta de nuevo.",
+      "driveDefault": "No se pudo conectar con Drive. Intenta de nuevo."
     }
   },
   "driveConsent": {

@@ -84,7 +84,7 @@ export const WelcomeScreen = () => {
         </p>
         {status === 'error' && error ? (
           <p role="alert" className="text-center text-sm text-destructive">
-            {loginErrorCopy(error)}
+            {t(loginErrorCopy(error))}
           </p>
         ) : null}
       </div>

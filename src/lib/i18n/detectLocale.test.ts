@@ -35,7 +35,16 @@ describe('detectLocale', () => {
     expect(detectLocale(['en-GB'])).toBe('en')
   })
 
-  it('prefers an exact match anywhere in the list over an earlier non-exact one', () => {
+  // Regression: navigator.languages is an ordered preference list. A first
+  // choice served only by subtag must still beat a second choice that
+  // happens to be an exact match — the earlier two-pass implementation
+  // ("exact anywhere in the list" before "subtag anywhere in the list")
+  // got this backwards and returned 'es-AR' here instead of 'pt-BR'.
+  it('honors preference order: a first-choice subtag match beats a later exact match', () => {
+    expect(detectLocale(['pt-PT', 'es-AR'])).toBe('pt-BR')
+  })
+
+  it('skips a candidate with no match at all and uses the next preference', () => {
     expect(detectLocale(['fr-FR', 'es-AR'])).toBe('es-AR')
   })
 

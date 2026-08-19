@@ -7,6 +7,15 @@
       "googleCta": "Continue with Google",
       "connecting": "Connecting…",
       "legal": "By continuing you accept the <terms>Terms</terms> and the <privacy>Privacy Policy</privacy>"
+    },
+    "errors": {
+      "missingClientId": "Configuration error. Please try again later.",
+      "gisFailedToLoad": "We couldn't load Google. Check your connection and try again.",
+      "accessDenied": "You canceled Google sign-in.",
+      "popupClosed": "You closed the Google window before finishing. Try again.",
+      "popupFailedToOpen": "Your browser blocked the Google window. Check your pop-up blocker.",
+      "loginDefault": "We couldn't sign you in. Try again.",
+      "driveDefault": "We couldn't connect to Drive. Try again."
     }
   },
   "driveConsent": {

@@ -6,6 +6,7 @@ import { driveErrorCopy } from '@/features/auth/errorCopy'
 
 export const DrivePermissionScreen = () => {
   const { t } = useTranslation('driveConsent')
+  const { t: tAuth } = useTranslation('auth')
   const connecting = useAuthStore((s) => s.driveConnecting)
   const error = useAuthStore((s) => s.driveError)
   const connectDrive = useAuthStore((s) => s.connectDrive)
@@ -69,7 +70,7 @@ export const DrivePermissionScreen = () => {
       <div className="flex flex-col gap-2.5 px-7 pb-10">
         {error ? (
           <p role="alert" className="text-center text-sm font-medium text-destructive">
-            {driveErrorCopy(error)}
+            {tAuth(driveErrorCopy(error))}
           </p>
         ) : null}
         <button
