@@ -11,7 +11,9 @@ Shared stores, helpers, and the Drive/auth/lock logic layer. No UI here.
 - `auth.ts` — GIS token-client wrapper: identity scopes at login, Drive
   scopes requested incrementally via `connectDrive`.
 - `authStore.ts` — zustand store wrapping `auth.ts`; owns session status and
-  triggers `bootstrap.ts` through `connectDrive`.
+  triggers `bootstrap.ts` through `connectDrive`. Also owns
+  `continueAsGuest()`, the guest entry path (`status: 'guest'`, distinct
+  from `'authenticated'` — never a synthesized user, `specs.md` §10.10).
 - `drive.ts` — thin Drive REST client (find/create files & folders).
 - `bootstrap.ts` — idempotent provisioning of the `KuroBello` folder + the
   three JSON data files. Find-before-create: `config.json`'s seed is only

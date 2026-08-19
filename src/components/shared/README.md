@@ -30,6 +30,10 @@ doesn't belong to any one `src/features/**` folder. See `specs.md` §10.5.
 - `CenterModal.tsx` — centered popup shell (Delete confirm, Info tooltip,
   Custom tag modal, Group editor). `CenterModalProps` is
   `OverlayShellProps<HTMLDivElement>` too. Accepts `initialFocus`/`ref`.
+- `tintClasses.ts` — single source of truth for tint name → Tailwind class
+  strings, in the `icon`/`badge`/`pill` shapes `IconAvatar.tsx` and
+  `TagChip.tsx` each need — not part of the public barrel
+  (`docs/wave-2.1/review-o.md`).
 - `IconAvatar.tsx` — colored rounded-square icon badge; size/tint are
   `Record` lookups onto the `chart-1..5`/status tokens, not new hex.
 - `MovimientoRow.tsx` + `movimientoView.ts` — the movement list row, and
@@ -54,7 +58,12 @@ doesn't belong to any one `src/features/**` folder. See `specs.md` §10.5.
 - `TagChip.tsx` — icon + name pill (selected/unselected/`disabled`). The
   44px touch target is an invisible-padding wrapper around the visibly
   smaller designed pill (same split `Toggle`/`InfoButton` already use), so
-  the hit area grows without inflating the visible chip. Accepts `ref`.
+  the hit area grows without inflating the visible chip. Takes a required
+  `tint: IconAvatarTint` (from `movimientoView.getMovimientoVisual`, or its
+  type-based fallback) — the icon is always tinted; selecting tints the
+  whole pill in that family via the shared `TINT_CLASSES` table in
+  `src/components/shared/tintClasses.ts` (also used by `IconAvatar`, not a
+  separate copy). Accepts `ref`.
 - `DateChipPicker.tsx` — date chip that expands an inline month grid.
   Takes `firstDayOfWeek` as a prop; stays repo-agnostic (see `specs.md`
   §11, 2026-08-18). Takes required `locale` (BCP-47, used via a
@@ -98,6 +107,30 @@ doesn't belong to any one `src/features/**` folder. See `specs.md` §10.5.
   is documented there — it holds no domain state and reads no other store
   (`specs.md` §10.6); `AppLock` drives its suppression flag rather than the
   store importing `lockStore`.
+- `Skeleton.tsx` — `Skeleton` (a single `aria-hidden` decorative block,
+  shaped per call via `className`) and `SkeletonGroup` (the accessible
+  wrapper every loading tier shares: `aria-busy` on the container, one
+  `sr-only role="status"` announcement — not one per block). Home, Search
+  and History's loading states (`HomeLoadingState.tsx`,
+  `SearchLoadingState.tsx`, `HistoryLoadingState.tsx`) all compose these
+  two rather than hand-rolling skeleton markup.
+- `ScreenLoading.tsx` — Tier 1 (specs.md §10.9): full-screen,
+  brand-consistent loading for boot and lazy-route `Suspense` fallbacks —
+  never a tab change, which has no data wait (`dataStore.load()` is
+  once-per-session). No props required for its real callers; the one
+  optional `className` exists only so `/kit`'s gallery can preview it at a
+  bounded height. Used directly, ungated, at both its call sites: boot
+  (`RequireAuth.tsx`) and the `/kit` lazy route's `Suspense` fallback
+  (`src/router.tsx`).
+- `usePendingDelay.ts` — the two-sided anti-flash gate every loading tier
+  shares (specs.md §10.9): don't show a loader until the work has been
+  pending ~150ms, and once shown keep it visible ~350ms minimum. A
+  boolean-in/boolean-out hook (`usePendingDelay(isPending, opts?)`), not a
+  component — each screen wraps its own `status` read in it.
+- `InlineErrorState.tsx` — the minimal inline error state Search and
+  History share for a mid-screen load failure (`message`/`retryLabel`/
+  `onRetry`) — distinct from `HomeErrorState`'s card treatment, whether
+  intentionally is an open question (`docs/wave-2.2/review-general.md`).
 - `index.ts` — the public barrel. Component files are never `index.tsx`
   themselves (see `AGENTS.md` § Architecture & file naming).
 

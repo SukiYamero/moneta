@@ -23,9 +23,11 @@ Track L).
   degrading to `false` when `matchMedia` is unavailable (jsdom in tests).
   Gates the weekly chart's recharts animation; every CSS transition
   already respects reduced motion globally via `src/styles/index.css`.
-- `HomeHeader.tsx` — greeting + real Google profile name (`authStore.user`)
-  - the notifications bell, rendered `disabled` (`// STUB(wave3)`, no
-    unread dot — there is no notification source to back one).
+- `HomeHeader.tsx` — greeting + real Google profile name (`authStore.user`),
+  and an honest `home.guestName` label (never a blank name/avatar) when
+  `authStore.status === 'guest'` (specs.md §10.10) — the notifications bell,
+  rendered `disabled` (`// STUB(wave3)`, no unread dot — there is no
+  notification source to back one).
 - `WeekStrip.tsx` — read-only current-week overview (no prev/next, no
   day-tap; see `docs/wave-2/track-e2.md` for why).
 - `BalanceCard.tsx` — all-time balance (not period-scoped — matches the
@@ -43,7 +45,10 @@ Track L).
 - `HomeLoadingState.tsx` / `HomeEmptyState.tsx` / `HomeErrorState.tsx` —
   the three non-happy states `Home.tsx` switches on; the error state's
   retry button calls `useHomeDashboard`'s `retry` (re-invokes
-  `dataStore.load()`).
+  `dataStore.load()`). `HomeLoadingState` is built on the shared
+  `Skeleton`/`SkeletonGroup` primitives (`src/components/shared/Skeleton.tsx`)
+  rather than hand-rolled markup; `Home.tsx` gates it behind
+  `usePendingDelay` so a fast load shows nothing at all.
 
 See `docs/wave-2/track-e2.md` for the decisions behind the choices above
 (why "Áreas" is `disabled` and not just non-interactive, why the balance

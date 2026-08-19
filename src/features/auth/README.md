@@ -18,7 +18,17 @@ Onboarding screens and the route guard that sits in front of the app.
   fires when `authStore.restore()` finds the `deviceStore` set — never on a
   genuine first visit, and never right after a PIN lockout clears it
   (`pinLock.resetVault()` clears the marker and the persisted Drive decision too — `specs.md` §11,
-  2026-08-19).
+  2026-08-19). Guest entry: `WelcomeScreen`'s "Continuar como invitado"
+  button calls `authStore.continueAsGuest()`, landing on the distinct
+  `status: 'guest'` (never `'authenticated'` with a synthesized user).
+  `RequireAuth` checks `status === 'guest'` first and renders `children`
+  directly, skipping both `WelcomeScreen` and `DrivePermissionScreen`.
+  `RequireAuth` also renders the shared `ScreenLoading` (Tier 1, specs.md
+  §10.9) while the mount-time `restore()` attempt is still settling,
+  instead of flashing `WelcomeScreen` — gated by a `booted`/`attemptedBoot`
+  ref pair, not `status` alone, so an explicit `login()` from an
+  already-visible `WelcomeScreen` (or a `StrictMode` double-invoke) isn't
+  mistaken for the boot span.
 - `errorCopy.ts` — maps a raw `AuthError`/`DriveError` message to a
   translation key in the `auth` namespace's `errors` group
   (`loginErrorCopy`, `driveErrorCopy`) — never the raw message

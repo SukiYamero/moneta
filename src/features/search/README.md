@@ -18,7 +18,11 @@ client-side from the same `Movimiento[]` those screens read.
   Movement view/edit sheet doesn't exist until Wave 3. Calls
   `useLocaleFormatting()` for the custom-range chip's date formatting and
   for `MovimientoRow`'s `locale`/`dateFnsLocale` props
-  (`docs/wave-2/track-m.md`).
+  (`docs/wave-2/track-m.md`). Its loading state is `SearchLoadingState.tsx`
+  (skeleton rows over the results region only — the title/search input/
+  filter button stay mounted regardless of status), gated behind
+  `usePendingDelay` the same way Home is, replacing the old plain-text
+  loading label.
 - `FilterSheet.tsx` — `BottomSheet`-based date range (presets +
   `DateChipPicker` for `custom`), type (`SegmentedControl`), and tag
   (`TagChip`, multi-select) filters. No separate "apply" step: every tap
