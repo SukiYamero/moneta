@@ -9,6 +9,8 @@ beforeEach(() => {
   error = null
 })
 vi.mock('@/lib/lockStore', () => ({
+  LOCKED_OUT_ERROR: 'locked out',
+  NO_SESSION_ERROR: 'lock: no session to protect',
   useLockStore: (selector: (s: unknown) => unknown) =>
     selector({
       phase: 'locked',

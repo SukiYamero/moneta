@@ -458,15 +458,21 @@ action()` call site becomes an unhandled-rejection bug. Keep the rule
   (`"unknown" | "popup_closed" | "popup_failed_to_open"` in
   `@types/google.accounts`), so renaming what `auth.ts` passes to
   `AuthError` there is a TypeScript compile error, not a silent drift. The
-  two purely-internal ones (`'missing VITE_GOOGLE_CLIENT_ID'`,
-  `'GIS failed to load'`) and `lockStore.ts`'s two hand-thrown messages
-  (`'locked out'`, `'lock: no session to protect'`) have no such backstop —
-  a rename there degrades silently to the generic fallback (still a
-  reasonable, non-broken message, just less specific) unless whoever makes
-  that rename also greps for it. Accepted as a residual, lower-severity gap
-  rather than fixed by editing those unowned files to export named reason
-  constants — worth doing the day one of those files gets a real owner
-  making that change anyway, not on its own.
+  `lockStore.ts`'s two hand-thrown messages are now closed the same way, by
+  single-sourcing rather than by a test: `LOCKED_OUT_ERROR` and
+  `NO_SESSION_ERROR` are exported from `src/lib/lockStore.ts` and used as
+  the computed keys of the copy table, so the string is defined once and
+  the two sides cannot drift apart at all. (Note the two `lockStore` test
+  files mock that module and therefore restate those literals in the mock;
+  that is a test double, not a second source of truth — the production path
+  has exactly one.)
+
+  What remains unguarded is narrow: the two purely-internal auth reasons
+  (`'missing VITE_GOOGLE_CLIENT_ID'`, `'GIS failed to load'`), where a
+  rename in `auth.ts` degrades silently to the generic fallback — still a
+  reasonable, non-broken message, just less specific. Accepted as a
+  residual, lower-severity gap; close it the same way if `auth.ts` is ever
+  opened for related work.
 
 ## 8. How errors get tested
 

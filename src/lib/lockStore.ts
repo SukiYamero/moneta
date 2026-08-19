@@ -14,6 +14,13 @@ import {
 } from '@/lib/pinLock'
 import type { AuthSession } from '@/lib/auth'
 
+// lockStore substitutes its own message strings instead of forwarding the
+// error classes' — exported so `features/lock/errorCopy` keys off these
+// instead of restating the literal, making a rename a compile error rather
+// than a silent fallback to generic copy (docs/error-handling.md §7).
+export const LOCKED_OUT_ERROR = 'locked out'
+export const NO_SESSION_ERROR = 'lock: no session to protect'
+
 type LockPhase = 'unknown' | 'unlocked' | 'locked'
 
 type LockState = {
@@ -43,7 +50,7 @@ async function resume(
     if (e instanceof LockedOutError) {
       await resetVault()
       useAuthStore.getState().logout()
-      set({ phase: 'unlocked', enabled: false, error: 'locked out' })
+      set({ phase: 'unlocked', enabled: false, error: LOCKED_OUT_ERROR })
       return
     }
     set({ error: e instanceof Error ? e.message : 'unlock failed' })
@@ -65,7 +72,7 @@ export const useLockStore = create<LockState>((set, get) => ({
   },
   enable: async (pin, biometric) => {
     const session = useAuthStore.getState().session
-    if (!session) throw new Error('lock: no session to protect')
+    if (!session) throw new Error(NO_SESSION_ERROR)
     await enableLock({ pin, session, biometric })
     set({ phase: 'unlocked', enabled: true })
   },

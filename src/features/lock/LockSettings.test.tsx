@@ -8,6 +8,8 @@ const reset = vi.fn()
 
 let state: Record<string, unknown> = {}
 vi.mock('@/lib/lockStore', () => ({
+  LOCKED_OUT_ERROR: 'locked out',
+  NO_SESSION_ERROR: 'lock: no session to protect',
   useLockStore: (selector: (s: unknown) => unknown) => selector(state),
 }))
 
