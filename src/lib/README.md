@@ -100,3 +100,8 @@ Shared stores, helpers, and the Drive/auth/lock logic layer. No UI here.
   and `repo.fake.test.ts` (`docs/error-handling.md` §6). A plain module, not
   a `*.test.ts` file, so vitest doesn't collect it as its own standalone
   suite.
+- `export/` — CSV export of the user's movements (`specs.md` §10.12): pure
+  serialisation (`csv.ts`) split from platform delivery (`delivery.ts`,
+  `navigator.share` with a download-link fallback), orchestrated by
+  `index.ts`'s `exportMovimientosToCsv()`. Reads through `getRepo()`; no UI
+  trigger yet (`specs.md` §10.18 wires it in a later stage). Own `README.md`.
