@@ -843,7 +843,7 @@ live Google account (needs a human in the OAuth popup).
 | E2    | `feat/wave2-home`          | 3     | reviewed              |
 | E3    | `feat/wave2-search`        | 3     | review 4 (dispatched) |
 | E4    | `feat/wave2-history`       | 3     | reviewed              |
-| M     | `feat/wave2-locale-wiring` | 5     | not started           |
+| M     | `feat/wave2-locale-wiring` | 5     | merged, in review     |
 
 Status values: `not started` → `dispatched` → `reported, verifying` →
 `merged` → `reviewed`.
