@@ -60,4 +60,19 @@ describe('detectLocale', () => {
     stubLanguages(['pt-BR'])
     expect(detectLocale()).toBe('pt-BR')
   })
+
+  // Regression: some browsers/webviews expose `navigator` without a
+  // `languages` array (only the singular `navigator.language`). The default
+  // parameter read `navigator.languages` unguarded, so `for...of` on
+  // `undefined` threw at module-import time in `src/lib/i18n/index.ts`
+  // (`lng: detectLocale()`), crashing app init before any UI could render.
+  it('degrades to navigator.language, not straight to en, when navigator.languages is missing', () => {
+    vi.stubGlobal('navigator', { ...navigator, languages: undefined, language: 'es-AR' })
+    expect(detectLocale()).toBe('es-AR')
+  })
+
+  it('falls back to en only when neither navigator.languages nor navigator.language is available', () => {
+    vi.stubGlobal('navigator', { ...navigator, languages: undefined, language: undefined })
+    expect(detectLocale()).toBe('en')
+  })
 })
