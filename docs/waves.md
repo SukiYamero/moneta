@@ -205,9 +205,9 @@ Check this table against `git worktree list` at the start of any parallel
 session; prune anything stale (merged-but-not-removed, or on disk but
 missing/finished here).
 
-| Created    | Track / task            | Path                 | Branch      | Status | Notes                                          |
-| ---------- | ----------------------- | -------------------- | ----------- | ------ | ---------------------------------------------- |
-| 2026-08-19 | Shared types extraction | `../moneta-wt/types` | `fix/types` | active | De-duplicate type shapes; shared type modules. |
+| Created    | Track / task                                | Path                  | Branch       | Status | Notes                                                        |
+| ---------- | ------------------------------------------- | --------------------- | ------------ | ------ | ------------------------------------------------------------ |
+| 2026-08-19 | Arrow functions + modern-syntax enforcement | `../moneta-wt/syntax` | `fix/syntax` | active | func-style + unicorn plugin; shadcn exception via overrides. |
 
 Status values: `active` → `merged, pending cleanup` → row deleted once
 `git worktree remove <path>` runs.
