@@ -19,7 +19,13 @@ vi.mock('@/lib/lockStore', () => ({
 }))
 
 import { AppLock } from '@/features/lock/AppLock'
-import { toast, useToastStore } from '@/lib/toastStore'
+import { i18next } from '@/lib/i18n'
+import { toast, useToastStore, type ToastMessageKey } from '@/lib/toastStore'
+
+// Resolved lazily, at call time — i18next.language isn't forced to 'es'
+// until src/test/setup.ts's `beforeAll` runs, which is after this module's
+// own top-level code already evaluated.
+const T = (key: ToastMessageKey): string => i18next.t(key)
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -109,8 +115,8 @@ test('renders a toast raised while unlocked', () => {
       <div>app</div>
     </AppLock>,
   )
-  act(() => toast.success('Guardado'))
-  expect(screen.getByText('Guardado')).toBeInTheDocument()
+  act(() => toast.success('toast:demo.saved'))
+  expect(screen.getByText(T('toast:demo.saved'))).toBeInTheDocument()
 })
 
 test('never renders a toast over LockScreen', () => {
@@ -120,8 +126,8 @@ test('never renders a toast over LockScreen', () => {
       <div>app</div>
     </AppLock>,
   )
-  act(() => toast.success('Movimiento guardado en segundo plano'))
-  expect(screen.queryByText('Movimiento guardado en segundo plano')).not.toBeInTheDocument()
+  act(() => toast.success('toast:demo.saved'))
+  expect(screen.queryByText(T('toast:demo.saved'))).not.toBeInTheDocument()
 })
 
 test('a toast raised while locked is dropped, not queued for after unlock', () => {
@@ -131,7 +137,7 @@ test('a toast raised while locked is dropped, not queued for after unlock', () =
       <div>app</div>
     </AppLock>,
   )
-  act(() => toast.error('Falló mientras estaba bloqueado'))
+  act(() => toast.error('toast:demo.syncFailed'))
 
   state = { phase: 'unlocked', error: null }
   rerender(
@@ -140,7 +146,7 @@ test('a toast raised while locked is dropped, not queued for after unlock', () =
     </AppLock>,
   )
 
-  expect(screen.queryByText('Falló mientras estaba bloqueado')).not.toBeInTheDocument()
+  expect(screen.queryByText(T('toast:demo.syncFailed'))).not.toBeInTheDocument()
 })
 
 // The boot window: phase starts 'unknown' while lockStore.init() resolves,
@@ -154,7 +160,7 @@ test('a toast raised during the "unknown" boot window is dropped, not shown once
       <div>app</div>
     </AppLock>,
   )
-  act(() => toast.error('Falló durante el arranque'))
+  act(() => toast.error('toast:demo.syncFailed'))
 
   state = { phase: 'unlocked', error: null }
   rerender(
@@ -163,7 +169,7 @@ test('a toast raised during the "unknown" boot window is dropped, not shown once
     </AppLock>,
   )
 
-  expect(screen.queryByText('Falló durante el arranque')).not.toBeInTheDocument()
+  expect(screen.queryByText(T('toast:demo.syncFailed'))).not.toBeInTheDocument()
 })
 
 // Symmetric case: a toast already showing when the phase drops back to
@@ -178,8 +184,8 @@ test('a toast visible when the app re-locks does not resurface on the next unloc
       <div>app</div>
     </AppLock>,
   )
-  act(() => toast.success('Todavía visible'))
-  expect(screen.getByText('Todavía visible')).toBeInTheDocument()
+  act(() => toast.success('toast:demo.saved'))
+  expect(screen.getByText(T('toast:demo.saved'))).toBeInTheDocument()
 
   state = { phase: 'locked', error: null, biometricEnrolled: false, unlockPin: vi.fn() }
   rerender(
@@ -187,7 +193,7 @@ test('a toast visible when the app re-locks does not resurface on the next unloc
       <div>app</div>
     </AppLock>,
   )
-  expect(screen.queryByText('Todavía visible')).not.toBeInTheDocument()
+  expect(screen.queryByText(T('toast:demo.saved'))).not.toBeInTheDocument()
 
   state = { phase: 'unlocked', error: null }
   rerender(
@@ -195,5 +201,5 @@ test('a toast visible when the app re-locks does not resurface on the next unloc
       <div>app</div>
     </AppLock>,
   )
-  expect(screen.queryByText('Todavía visible')).not.toBeInTheDocument()
+  expect(screen.queryByText(T('toast:demo.saved'))).not.toBeInTheDocument()
 })

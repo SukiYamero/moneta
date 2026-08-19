@@ -14,14 +14,14 @@ export const ToastKitDemo = () => {
     <div className="flex flex-wrap gap-2">
       <button
         type="button"
-        onClick={() => toast.success('Movimiento guardado')}
+        onClick={() => toast.success('toast:demo.saved')}
         className="min-h-11 rounded-lg bg-success/15 px-3.5 text-sm font-semibold text-success"
       >
         Success
       </button>
       <button
         type="button"
-        onClick={() => toast.error('No se pudo guardar el movimiento')}
+        onClick={() => toast.error('toast:demo.saveFailed')}
         className="min-h-11 rounded-lg bg-danger/15 px-3.5 text-sm font-semibold text-danger"
       >
         Error
@@ -29,9 +29,9 @@ export const ToastKitDemo = () => {
       <button
         type="button"
         onClick={() => {
-          toast.error('Falló la sincronización')
-          toast.error('Falló la sincronización')
-          toast.error('Falló la sincronización')
+          toast.error('toast:demo.syncFailed')
+          toast.error('toast:demo.syncFailed')
+          toast.error('toast:demo.syncFailed')
         }}
         className="min-h-11 rounded-lg bg-muted px-3.5 text-sm font-semibold"
       >
@@ -40,10 +40,10 @@ export const ToastKitDemo = () => {
       <button
         type="button"
         onClick={() => {
-          toast.success('Uno')
-          toast.success('Dos')
-          toast.success('Tres')
-          toast.success('Cuatro')
+          toast.success('toast:demo.one')
+          toast.success('toast:demo.two')
+          toast.success('toast:demo.three')
+          toast.success('toast:demo.four')
         }}
         className="min-h-11 rounded-lg bg-muted px-3.5 text-sm font-semibold"
       >
