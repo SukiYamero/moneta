@@ -140,7 +140,7 @@ const requestDriveSession = async (): Promise<{ session: AuthSession; drive: Dri
 // owns it (docs/error-handling.md §7), not an automatic background retry.
 // requestAccessToken('', ...) fails silently rather than re-prompting if the
 // grant was revoked externally (specs.md §5) — correct: fail quietly, the
-// user recovers through Track G's Profile row (Wave 3).
+// user recovers through the profile sheet's identity row (specs.md §10.18).
 const reacquireDrive = async (): Promise<{ session: AuthSession; drive: DriveLayout } | null> => {
   try {
     return await requestDriveSession()

@@ -80,7 +80,8 @@ JSON resources — no `i18next-http-backend`, no CDN.
 ## Out of scope here (by design)
 
 No locale picker UI, no persisted locale (`Config.preferencias.idioma` is a
-Wave 3/Track G concern), and no number/currency/date formatting — that's
+`specs.md` §10.18 concern, gated on the write path), and no
+number/currency/date formatting — that's
 `Intl`/`date-fns` at the call site, not this table. Region _detection_ and
 the locale→tag mapping do live here (`detectRegion`, `localeFormatting.ts`);
 what stays out is the formatting itself.
