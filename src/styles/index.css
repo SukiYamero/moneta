@@ -129,6 +129,16 @@ body {
   --text-6xl: 1.75rem; /* 28px */
   --text-7xl: 1.875rem; /* 30px */
 
+  /* The bottom nav's own height, and the clearance any screen under it
+     needs. Not a "spacing value" in the sense design-tokens.md leaves
+     untokenized — it is a layout constant BottomNav, Toaster and every
+     screen must agree on, so it lives in one place (AGENTS.md, single
+     source of truth). The safe-area inset is added to the bar's height
+     rather than eaten out of its padding, so an iPhone home indicator
+     grows the bar instead of squeezing its icons. */
+  --bottom-nav-height: 6rem;
+  --bottom-nav-clearance: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom));
+
   /* Easing — the "native sheet" curve used for every sheet/push/pop
      transition in the design. This is what makes it feel native, not web. */
   --ease-ios: cubic-bezier(0.32, 0.72, 0, 1);

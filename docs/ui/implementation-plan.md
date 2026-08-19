@@ -84,7 +84,11 @@ Everything below depends on these. Suggested order:
 ### Home (dashboard) — `src/routes/Home.tsx` (extend existing)
 
 - Greeting header + notification bell (bell has no backend yet →
-  `StubNotifications`, badge dot only).
+  `StubNotifications`). **No badge dot** — superseded 2026-08-19 (Wave 2).
+  The design draws one, but it is static markup bound to no signal, so
+  rendering it states "you have something unread" when nothing can be
+  unread. A disabled control is an honest placeholder; a fake status
+  indicator is a claim the user acts on. Render the bell inert, no dot.
 - Search entry → routes to Search screen.
 - Calendar strip + balance card: week-day strip, balance total (hide/show
   toggle), income/expense mini-totals. **Real** aggregation from

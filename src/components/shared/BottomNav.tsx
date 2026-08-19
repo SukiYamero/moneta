@@ -50,7 +50,7 @@ export const BottomNav = () => {
   return (
     <nav
       aria-label={t('label')}
-      className="fixed inset-x-0 bottom-0 z-50 flex h-24 items-center justify-between bg-[linear-gradient(to_top,var(--color-canvas)_60%,color-mix(in_oklch,var(--color-canvas)_92%,transparent)_88%,transparent)] px-6 pb-[calc(env(safe-area-inset-bottom)+1.375rem)]"
+      className="fixed inset-x-0 bottom-0 z-50 flex h-(--bottom-nav-clearance) items-center justify-between bg-[linear-gradient(to_top,var(--color-canvas)_60%,color-mix(in_oklch,var(--color-canvas)_92%,transparent)_88%,transparent)] px-6 pb-[calc(env(safe-area-inset-bottom)+1.375rem)]"
     >
       <NavTab to="/" icon={House} label={t('home')} />
       <NavTab to="/history" icon={History} label={t('history')} />

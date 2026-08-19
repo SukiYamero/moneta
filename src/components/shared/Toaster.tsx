@@ -20,7 +20,7 @@ export const Toaster = () => {
   if (items.length === 0) return null
 
   return createPortal(
-    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[60] flex flex-col-reverse items-center gap-2 px-4 pb-[calc(6rem+env(safe-area-inset-bottom))]">
+    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[60] flex flex-col-reverse items-center gap-2 px-4 pb-(--bottom-nav-clearance)">
       {items.map((item) => (
         <Toast key={item.id} item={item} onDismiss={() => dismissToast(item.id)} />
       ))}

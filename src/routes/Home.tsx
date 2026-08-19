@@ -1,10 +1,9 @@
 import { APP_NAME } from '@/lib/branding'
 
-// The bottom nav / FAB / dashboard shell (Track L, docs/wave-2/track-l.md)
-// is blocked on a DesignSync pull that was unavailable this session — this
-// placeholder keeps '/' rendering until that lands. LockSettings moved to
-// /kit (src/routes/Kit.tsx): see that file and docs/wave-2/track-l.md for
-// why and how it was verified.
+// Placeholder body only: the dashboard content is Track E2's (docs/
+// wave-2-plan.md §4). The shell around it — persistent bottom nav, layout
+// route — is already live via AppShell. LockSettings moved to the dev-only
+// /kit route so rebuilding this file cannot delete the PIN lock's only UI.
 export const Home = () => {
   return (
     <main className="flex min-h-full flex-col items-center justify-center gap-6 p-6 text-center">
