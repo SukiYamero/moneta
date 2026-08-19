@@ -245,8 +245,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ status: 'authenticating', error: null })
     try {
       const { session, user } = await authenticate('consent')
-      if (generation !== authGeneration) return
       const driveOptIn = await resolveDriveOptIn(get().driveOptIn)
+      if (generation !== authGeneration) return
       set({ status: 'authenticated', session, user, driveOptIn })
       await syncLockedSession(session, user)
       void reacquireDriveIfNeeded(driveOptIn, set, get)
@@ -294,7 +294,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     // while every real request fails still reaches the catch below and
     // falls back to 'idle', same as before this fix).
     if (!useNetworkStore.getState().online) {
-      if (generation !== authGeneration) return
       // No vault exists on this path — restore() is the no-lock boot path,
       // lockStore.resume()/hydrate() owns the vaulted one — so there is
       // nothing locally encrypted to decrypt. The device's own "logged in
@@ -303,19 +302,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // comment). The local repo's own data is readable regardless of
       // session validity (specs.md §10.11's whole point) — a stale/absent
       // Google session blocks nothing here.
-      set({
-        status: 'authenticated',
-        session: null,
-        user: null,
-        driveOptIn: await resolveDriveOptIn(get().driveOptIn),
-        error: null,
-      })
+      const driveOptIn = await resolveDriveOptIn(get().driveOptIn)
+      if (generation !== authGeneration) return
+      set({ status: 'authenticated', session: null, user: null, driveOptIn, error: null })
       return
     }
     try {
       const { session, user } = await authenticate('')
-      if (generation !== authGeneration) return
       const driveOptIn = await resolveDriveOptIn(get().driveOptIn)
+      if (generation !== authGeneration) return
       set({ status: 'authenticated', session, user, driveOptIn })
       await syncLockedSession(session, user)
       void reacquireDriveIfNeeded(driveOptIn, set, get)
