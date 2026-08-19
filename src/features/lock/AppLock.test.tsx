@@ -1,5 +1,5 @@
 import { beforeEach, expect, test, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 const init = vi.fn().mockResolvedValue(undefined)
@@ -19,10 +19,12 @@ vi.mock('@/lib/lockStore', () => ({
 }))
 
 import { AppLock } from '@/features/lock/AppLock'
+import { toast, useToastStore } from '@/lib/toastStore'
 
 beforeEach(() => {
   vi.clearAllMocks()
   state = { phase: 'unlocked', error: null }
+  useToastStore.setState({ items: [] })
 })
 
 test('renders nothing while the lock phase is still unknown', () => {
@@ -98,4 +100,45 @@ test('dismissing the banner clears the error', async () => {
   )
   await user.click(screen.getByRole('button', { name: /cerrar|dismiss|×/i }))
   expect(clearError).toHaveBeenCalled()
+})
+
+test('renders a toast raised while unlocked', () => {
+  state = { phase: 'unlocked', error: null }
+  render(
+    <AppLock>
+      <div>app</div>
+    </AppLock>,
+  )
+  act(() => toast.success('Guardado'))
+  expect(screen.getByText('Guardado')).toBeInTheDocument()
+})
+
+test('never renders a toast over LockScreen', () => {
+  state = { phase: 'locked', error: null, biometricEnrolled: false, unlockPin: vi.fn() }
+  render(
+    <AppLock>
+      <div>app</div>
+    </AppLock>,
+  )
+  act(() => toast.success('Movimiento guardado en segundo plano'))
+  expect(screen.queryByText('Movimiento guardado en segundo plano')).not.toBeInTheDocument()
+})
+
+test('a toast raised while locked is dropped, not queued for after unlock', () => {
+  state = { phase: 'locked', error: null, biometricEnrolled: false, unlockPin: vi.fn() }
+  const { rerender } = render(
+    <AppLock>
+      <div>app</div>
+    </AppLock>,
+  )
+  act(() => toast.error('Falló mientras estaba bloqueado'))
+
+  state = { phase: 'unlocked', error: null }
+  rerender(
+    <AppLock>
+      <div>app</div>
+    </AppLock>,
+  )
+
+  expect(screen.queryByText('Falló mientras estaba bloqueado')).not.toBeInTheDocument()
 })

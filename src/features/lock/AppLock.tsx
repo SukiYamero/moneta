@@ -2,6 +2,7 @@ import { useEffect, type ReactNode } from 'react'
 import { useLockStore } from '@/lib/lockStore'
 import LockScreen from '@/features/lock/LockScreen'
 import { unlockErrorCopy } from '@/features/lock/errorCopy'
+import { Toaster } from '@/components/shared'
 
 export const AppLock = ({ children }: { children: ReactNode }) => {
   const phase = useLockStore((s) => s.phase)
@@ -45,6 +46,9 @@ export const AppLock = ({ children }: { children: ReactNode }) => {
         </div>
       )}
       {phase === 'locked' ? <LockScreen /> : children}
+      {/* Never renders over LockScreen — a notification about data is
+          content, and the lock exists to hide content (specs.md §10.6). */}
+      {phase !== 'locked' && <Toaster />}
     </>
   )
 }
