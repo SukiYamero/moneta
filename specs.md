@@ -277,6 +277,74 @@ Full design: `docs/superpowers/specs/2026-06-26-pin-lock-design.md`.
 - **Out of scope (own spec/track):** the local (dexie) implementation, the
   Drive-backed implementation, the movimientos UI.
 
+### 10.3.1 Local (dexie) implementation — `repo.local.ts` (Track A, 2026-08-18)
+
+Shipped `createLocalRepo(): Repo` in `src/lib/repo.local.ts`, backed by
+`src/lib/db.ts` `v2` (additive: `vault` unchanged, `+movimientos +activos
++config`). TDD, 114 tests total (`repo.local.test.ts` + extended
+`db.test.ts`), `bun run check` green. Implementation notes not obvious from
+the port spec alone:
+
+- **`ready()`** memoizes its in-flight promise per repo instance (closure
+  state, not module-global) so concurrent callers on the same `Repo` never
+  seed/migrate twice; a failed attempt clears the memo so a later call can
+  retry. Fresh install → seeds `CONFIG_SEMILLA`. `Config.schemaVersion` <
+  `SCHEMA_VERSION` → dispatches through a `Record<number, Migration>`
+  registry (`migrateSchema(from, to, registry)`, exported for unit testing
+  independently of the real registry, which is empty at v1). `>
+SCHEMA_VERSION` → `RepoError('schema_mismatch')`, no downgrade.
+- **`CrudRepo<T>` is one generic factory** parameterized per entity by
+  `{ table, dateField, seccionField, tiebreakField, compoundIndex, validate
+}` — `movimientos` uses `fecha`/`seccion`/`createdAt`, `activos` uses
+  `fechaActualizacion`/`seccion`/no tiebreak field. This is how
+  `dateFrom`/`dateTo`/`seccion` in the generic `ListQuery<T>` resolve to a
+  concrete field per entity without one-off methods.
+- **Keyset pagination**: each `list()` call re-sorts the full filtered set
+  in memory (stable comparator: `sortBy` per `sortDir`, then `tiebreakField`
+  ascending, then `id` ascending as the final deterministic fallback — this
+  is why an entity without a natural tiebreak field, like `Activo`, still
+  gets a total order). The opaque `cursor` is a base64 JSON envelope of the
+  last-returned row's `{ sortValue, tiebreakValue, id }`; the next page
+  filters the freshly re-sorted set to rows that compare strictly after
+  that tuple. Because the comparison is against a value tuple, not an
+  array offset, a row inserted between two page fetches never causes a
+  skip or a duplicate — verified with a dedicated test that inserts a row
+  between `list()` calls on both sides of the cursor.
+- **Dexie query narrowing**: `seccion`+date-range together use the
+  `[seccion+fecha]` (or `[seccion+fechaActualizacion]`) compound index as a
+  `.between()` range scan; `seccion` alone uses its single-field index;
+  date-range alone uses the date field's index; no filter falls back to
+  `.toArray()`. The in-memory filter pass still re-checks every condition
+  afterward as a correctness safety net — the index narrowing is purely an
+  optimization, never the source of truth.
+- **Bulk ops are all-or-nothing.** `addMany`/`removeMany` run inside a
+  single `db.transaction('rw', table, …)`; a bad row (failed validation,
+  duplicate id) or a missing id in `removeMany` throws inside the
+  transaction, which aborts the whole batch — verified empirically (a
+  duplicate-id item in a 3-item `addMany` batch leaves zero of the 3
+  committed, not 2-of-3). Rationale: a partially-committed financial import
+  is worse than a fully-rejected one — the caller can't tell which half
+  landed.
+- **Write validation** (`validateMovimiento`/`validateActivo`): `monto`
+  finite and `> 0`; `fecha`/`fechaActualizacion` a real ISO `yyyy-mm-dd`
+  (regex + round-trip through `Date`, rejects e.g. `2026-13-40`); `moneda`
+  required. `Activo.valorActual` is additionally required to be finite and
+  non-negative (not explicitly named in §10.3's bullet, which only calls
+  out `monto`, but left silently unvalidated it's the one other place a
+  malformed number could reach storage). All failures are
+  `RepoError('invalid_input', …)` — see the new `RepoErrorCode` member
+  below — and the row is never written.
+- **`updateConfig`** rejects a patch that sets `schemaVersion` explicitly
+  (`RepoError('invalid_input')`) rather than silently dropping it — the
+  field is structurally reachable through `Partial<Config>`, so a silent
+  drop would let a caller believe the write succeeded. Everything else
+  shallow-merges onto the stored row.
+- **Immutability**: `add`/`update`/`get`/`getConfig` never return the
+  literal in-memory object handed to or read from Dexie without going
+  through a fresh spread first, and reads never mutate caller input.
+  IndexedDB's structured-clone semantics mean this is also true "for free"
+  across separate reads, but the explicit spreads make the guarantee hold
+  even within one synchronous call.
 ### 10.4 Drive-sync opt-in + Welcome screen
 
 Full design: Claude Design canvas `Moneta.dc.html` ("AUTH: WELCOME" and
@@ -656,6 +724,37 @@ silently disagreeing with schema.ts's "monto always positive" invariant.
   untouched. Regression-tested with an overlay that has no focusable
   content (the case that actually triggers the panel-as-`activeElement`
   path).
+
+- 2026-08-18 — **Track A file layout: `repo.local.ts` / `repo.local.test.ts`
+  as new siblings of `repo.ts`, not an extension of it.** Confirms the
+  operator's assignment: `repo.ts` stays the frozen port; the dexie-backed
+  implementation is `createLocalRepo()` in a new file, symmetric with Track
+  D's `repo.fake.ts`. Neither implementation pollutes the port file.
+- 2026-08-18 — **`RepoErrorCode` gained `'invalid_input'` (additive).** The
+  §10.3 write-validation rule ("`monto` > 0 and finite … → `RepoError`,
+  never a silent coercion") needs a code distinct from `not_found` /
+  `schema_mismatch` / `network` / `unknown` so a caller can branch on "bad
+  input" vs. "unexpected failure." `Repo`/`CrudRepo`/`ListQuery`/
+  `ListResult`/`RepoError`/`EntityId` shapes are unchanged; no consumer
+  existed yet (grepped before changing), so this cannot break Track D's
+  `repo.fake.ts` or any other in-flight track — flagged to the operator at
+  the time via `SendMessage`.
+- 2026-08-18 — **Bulk writes (`addMany`/`removeMany`) are all-or-nothing.**
+  Both run inside one `db.transaction('rw', table, …)`; any failure (bad
+  validation, a duplicate id, or — for `removeMany` — a missing id) aborts
+  the whole batch, never a partial commit. Chosen over partial-success
+  because a half-committed financial import is worse than a fully-rejected
+  one: the caller has no way to know which rows landed. Verified directly
+  (a duplicate-id item in a 3-item `addMany` leaves 0 of 3 committed).
+- 2026-08-18 — **`db.ts` bumped to `v2`, additive.** `vault` (`v1`) is
+  untouched; `movimientos`/`activos` get `id, fecha|fechaActualizacion,
+seccion, [seccion+fecha|fechaActualizacion]` and `config` gets `id`
+  (single-row, same fixed-id pattern as `vault`). Indexes were chosen to
+  serve `ListQuery`'s actual filter shapes (`seccion` exact match, date
+  range, and the two combined via the compound index) — `createdAt` is
+  deliberately NOT indexed since it's only ever used as an in-memory sort
+  tiebreak, never queried via `.where()`. Full rationale in the code
+  comment above `db.version(2)`.
 
 ## 12. Backlog (pending verification / deferred work)
 
