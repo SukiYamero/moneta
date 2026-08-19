@@ -94,6 +94,35 @@ We follow **spec-driven development**. `specs.md` is the source of truth.
   style, so after `bunx shadcn@latest add <name>` normalize the new component's
   import before committing. Enforced by `import/no-namespace` in
   `.oxlintrc.json` — `bun run lint` fails on any reintroduction.
+- **Arrow functions, not `function` declarations.** `const foo = (x: T) => {}`,
+  not `function foo(x: T) {}` — everywhere under `src/`, including nested and
+  test-local helpers. A generic arrow in a `.tsx` file needs the trailing
+  comma (`<T,>(x: T) => x`) or TSX parses `<T>` as JSX. React components keep
+  their name on the `const` (`const Foo = () => {}`, `export default Foo`
+  as a separate statement for a default export) — Fast Refresh and
+  `react/only-export-components` key on the named binding. **Exception:
+  `src/components/ui/**` is shadcn-generated** (`bunx shadcn@latest add
+  <name>`emits`function`) — leave that directory alone rather than
+fighting the generator on every add. Enforced by `func-style`in`.oxlintrc.json`(with an override exempting`src/components/ui/\*\*`) —
+`bun run lint`fails on any reintroduced`function` declaration outside it.
+- **Modern-syntax rules are enforced, not just requested.** `.oxlintrc.json`
+  enables a curated set of `unicorn` rules (prefer `.at()`/`.toSorted()`/
+  `.toReversed()`/spread/`structuredClone`/`replaceAll()` and friends,
+  DOM-API and async/promise correctness, iterator-callback safety) chosen
+  for genuine modernization or error-prevention value — not the plugin's
+  full rule set. Deliberately **not** enabled: anything from `unicorn` that
+  would rename or reshape the Spanish domain terms `schema.ts` freezes
+  (`no-null`, `prevent-abbreviations`, naming/`filename-case` rules), plus
+  `no-array-for-each`/`no-array-reduce` (neither method is outdated) and
+  pure style preferences with no modernization or correctness payoff
+  (`prefer-query-selector`, `no-negated-condition`,
+  `consistent-function-scoping`). The `promise`, `node`, and `jsdoc`
+  plugins are available but unused — see `specs.md` §11, 2026-08-19, for
+  why. When a rule produces a genuine false positive against this
+  codebase (e.g. Dexie's `Collection#reverse()`, which shares a name with
+  but isn't `Array#reverse()`), suppress that one site with
+  `// oxlint-disable-next-line <rule>` and a comment explaining why —
+  don't disable the rule project-wide for one call site's sake.
 - **Error handling follows [docs/error-handling.md](docs/error-handling.md).**
   Read it before writing a `try`, adding an error type, or deciding what a
   failure returns. It is binding, not advisory: it fixes the error taxonomy,

@@ -1863,6 +1863,87 @@ connectDrive()` were already self-catching from the phase-2 pass and are
   auth/lock/drive store types) is single-use and colocated correctly — left
   as-is, not an oversight. `bun run check` green throughout (347 tests).
 
+- **2026-08-19, `fix/syntax` — converted every `function` declaration under
+  `src/` (excluding the shadcn-generated `src/components/ui/**`) to a const
+arrow function, and turned on real enforcement so it can't drift back.**
+151 declarations converted via an AST codemod (ts-morph, run once and
+discarded — never added as a project dependency); one additional
+`function`-expression (a named test-only equality tester in
+`src/test/setup.ts`) converted by hand since it wasn't a declaration and
+  so outside the codemod's scope. Two conversion-caused issues, not
+  stylistic ones:
+  - `repo.local.ts`'s `wrapUnknown(error): never`, called bare as the last
+    statement of 9 `catch` blocks, relied on TypeScript's control-flow
+    unreachability analysis for `never`-returning _function declarations_ —
+    confirmed with a minimal repro that this does not extend to
+    `never`-returning `const` arrows (`TS2366`, "lacks ending return
+    statement"). Fixed by adding `return` at each call site — the call
+    still throws unconditionally, so behavior is unchanged.
+  - `authStore.ts`'s `errorMessage` and `pinLock.ts`'s `asBytes`/
+    `readVault`/`decryptSession` were referenced (in file order) above
+    their declaration. Traced each call site: none is an actual TDZ hazard
+    — every one sits inside a closure invoked after module evaluation
+    finishes (a zustand action, an exported async function), never at
+    top-level synchronous module-eval time. Reordered anyway so
+    declaration precedes use, matching `const`'s lack of hoisting and
+    removing any doubt for future refactors.
+
+  **Enforcement:** `func-style: ["error", "expression"]` in
+  `.oxlintrc.json`, with an override exempting `src/components/ui/**`
+  (shadcn CLI output). Verified both directions by reintroducing a
+  `function` declaration in a normal file (lint fails) and inside
+  `src/components/ui/button.tsx` (lint stays clean); both probes reverted
+  before committing.
+
+  **Modern-syntax enforcement:** enabled 76 rules from the previously-unused
+  `unicorn` plugin (`.oxlintrc.json` ran 4 rules total before this pass),
+  picked for genuine modernization or error-prevention value, and fixed
+  every violation found rather than silencing it — `.replace(/…/g)` →
+  `.replaceAll()` in both PIN input handlers; bare `items.forEach(validate)`
+  / `.some(isConstraintError)` (an iterator-callback-reference footgun)
+  wrapped in explicit arrows in _both_ `repo.local.ts` and `repo.fake.ts`
+  (the mirrored fake/local pair `docs/error-handling.md` names — fixed in
+  both, not just one); index-math (`arr[arr.length - 1]`) and
+  `Array.from()` replaced with `.at()`/spread in `useOverlay.ts` and
+  `repo.local.ts`; `auth.ts`'s `loadGis()` had one branch already using
+  `addEventListener(..., { once: true })` and a second branch using
+  `onload`/`onerror` assignment for the same script element — brought the
+  second in line with the first's own established pattern. One rule fired
+  a genuine false positive: `no-array-reverse` flagged
+  `repo.local.ts`'s `collection.reverse()`, which is Dexie's
+  `Collection#reverse()` (flips index iteration direction) sharing a name
+  with, but not being, `Array#reverse()` — suppressed at that single site
+  with `// oxlint-disable-next-line unicorn/no-array-reverse` and a
+  comment, not disabled project-wide. Three candidate rules were enabled,
+  tested, and dropped after producing only noise: `no-useless-undefined`
+  (100% false-positive rate here — vitest's `mockResolvedValue` and a test
+  helper's `ArrayBuffer | undefined` parameter both require an explicit
+  `undefined` argument by TS arity, which isn't "useless"),
+  `consistent-function-scoping` (only ever fired on test-harness
+  components deliberately colocated with their test), and
+  `prefer-query-selector`/`no-negated-condition` (pure style preference,
+  not modernization or correctness). Deliberately never enabled: `no-null`
+  (real, intentional `null` usage across 11 files), `prevent-abbreviations`
+  and the naming/`filename-case` rules (would fight the Spanish domain
+  terms `schema.ts` §4 freezes), `no-array-for-each`/`no-array-reduce`
+  (neither method is outdated). The `promise`, `node`, and `jsdoc` plugins
+  were considered and left off: `promise`'s rules would misfire against
+  the two deliberate `new Promise`/`.catch()` usages already in the
+  codebase (`auth.ts`'s callback-API wrapper around GIS script loading,
+  and `repo.local.ts`'s synchronous promise-memoization cache in `ready()`
+  — both need to stay non-`async`/`await` on purpose); `node`'s rules
+  target Node built-ins this browser app barely touches; `jsdoc`'s rules
+  mostly require or shape doc comments, which runs against this file's own
+  "comments only when necessary" policy.
+
+  `bun run check` green throughout (347 tests, typecheck clean, `bun run
+lint` clean bar the one pre-existing `components/ui` warning). `AGENTS.md`
+  updated (owned this pass) with the arrow-function rule, the
+  `src/components/ui/**` exception, and the modern-syntax enforcement
+  policy. `ts-morph` was added as a devDependency for the codemod and
+  removed again before the first commit — it has no ongoing use once
+  `func-style` is enforcing.
+
 ## 12. Backlog (pending verification / deferred work)
 
 - ✅ **Login verified end-to-end (§10.1)** — 2026-07-02. Real OAuth ran against Google
