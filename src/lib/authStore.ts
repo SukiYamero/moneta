@@ -16,7 +16,13 @@ import {
   setDriveDecision,
 } from '@/lib/deviceStore'
 
-export type AuthStatus = 'idle' | 'authenticating' | 'authenticated' | 'error'
+// 'guest' is a distinct status, not an 'authenticated' session with a
+// synthesized user (specs.md §10.10) — anything gating on
+// `status === 'authenticated'` (Drive opt-in, the lock's session sync, a
+// future authenticated-only surface) is structurally false for a guest with
+// no extra check, instead of relying on every such call site to also
+// remember an orthogonal `mode` flag.
+export type AuthStatus = 'idle' | 'authenticating' | 'authenticated' | 'guest' | 'error'
 export type DriveOptIn = 'pending' | 'connected' | 'dismissed'
 
 type AuthState = {
@@ -31,6 +37,7 @@ type AuthState = {
   login: () => Promise<void>
   restore: () => Promise<void>
   logout: () => void
+  continueAsGuest: () => void
   hydrate: (session: AuthSession) => Promise<void>
   connectDrive: () => Promise<void>
   dismissDrive: () => void
@@ -247,6 +254,30 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     // self-catches (docs/error-handling.md §7), and logout() itself is
     // synchronous — nothing here can fail the state reset above.
     void clearDriveDecision()
+  },
+  // No Google session exists to acquire Drive scopes for (specs.md §10.10),
+  // so unlike login()/restore()/hydrate() this never touches driveOptIn's
+  // persisted device signal — it just resets the in-memory field back to
+  // its default so a stale 'connected'/'dismissed' from a *prior*
+  // authenticated session on this same store instance can't leak into the
+  // guest state (status === 'guest' already skips RequireAuth's driveOptIn
+  // check entirely, but a value other than the default would still be a
+  // lie about what this session's Drive state actually is). authGeneration
+  // bumps for the same reason logout() bumps it: an in-flight
+  // connectDrive()/reacquireDriveIfNeeded() from whatever session preceded
+  // this guest entry must not resurrect session/drive once resolved.
+  continueAsGuest: () => {
+    authGeneration += 1
+    set({
+      status: 'guest',
+      user: null,
+      session: null,
+      drive: null,
+      error: null,
+      driveOptIn: 'pending',
+      driveConnecting: false,
+      driveError: null,
+    })
   },
   // Fires on a mid-session re-lock/unlock too (Page Visibility timeout,
   // §10.2), not only on cold start — resolveDriveOptIn() only consults

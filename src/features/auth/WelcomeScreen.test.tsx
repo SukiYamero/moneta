@@ -57,4 +57,23 @@ describe('WelcomeScreen', () => {
     expect(screen.getByRole('button', { name: /continue with google/i })).toBeInTheDocument()
     vi.unstubAllGlobals()
   })
+
+  it('offers a guest entry below the Google button, behind an "or" divider', () => {
+    render(<WelcomeScreen />)
+    expect(screen.getByText('o')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /invitado/i })).toBeInTheDocument()
+  })
+
+  it('calls continueAsGuest when the guest button is clicked', async () => {
+    const continueAsGuest = vi.fn()
+    useAuthStore.setState({ continueAsGuest })
+    render(<WelcomeScreen />)
+    await userEvent.click(screen.getByRole('button', { name: /invitado/i }))
+    expect(continueAsGuest).toHaveBeenCalledOnce()
+  })
+
+  it('tells a guest their data stays on this device, unsynced', () => {
+    render(<WelcomeScreen />)
+    expect(screen.getByText(/este dispositivo/i)).toBeInTheDocument()
+  })
 })

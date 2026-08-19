@@ -6,7 +6,13 @@
       "subtitleLine2": "Vos sos el dueño de tus datos.",
       "googleCta": "Continuar con Google",
       "connecting": "Conectando…",
-      "legal": "Al continuar aceptás los <terms>Términos</terms> y la <privacy>Política de privacidad</privacy>"
+      "legal": "Al continuar aceptás los <terms>Términos</terms> y la <privacy>Política de privacidad</privacy>",
+      "orDivider": "o",
+      "guestCta": "Continuar como invitado",
+      "guestReassurance": "Como invitado, tus datos se guardan solo en este dispositivo. No se sincronizan: si lo perdés, se pierden con él."
+    },
+    "boot": {
+      "loading": "Cargando…"
     },
     "errors": {
       "missingClientId": "Error de configuración. Intentá más tarde.",

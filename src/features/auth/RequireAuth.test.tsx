@@ -142,4 +142,32 @@ describe('RequireAuth', () => {
     await waitFor(() => expect(screen.getByText('secret')).toBeInTheDocument())
     expect(screen.queryByRole('button', { name: /permitir y continuar/i })).not.toBeInTheDocument()
   })
+
+  it('renders children directly for a guest, skipping both Welcome and Drive screens', () => {
+    useAuthStore.setState({ status: 'guest', driveOptIn: 'pending' })
+    render(
+      <RequireAuth>
+        <div>secret</div>
+      </RequireAuth>,
+    )
+    expect(screen.getByText('secret')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /google/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /permitir y continuar/i })).not.toBeInTheDocument()
+  })
+
+  // The real boot-flash bug this track owns (specs.md §10.9): status is
+  // 'authenticating' for the whole duration of restore()'s network calls,
+  // not just the instant before/after — WelcomeScreen must not render for
+  // any of that window.
+  it('does not flash the welcome screen while status is authenticating', () => {
+    useAuthStore.setState({ status: 'authenticating' })
+    render(
+      <RequireAuth>
+        <div>secret</div>
+      </RequireAuth>,
+    )
+    expect(screen.queryByRole('button', { name: /google/i })).not.toBeInTheDocument()
+    expect(screen.queryByText('secret')).not.toBeInTheDocument()
+    expect(screen.getByRole('status')).toBeInTheDocument()
+  })
 })

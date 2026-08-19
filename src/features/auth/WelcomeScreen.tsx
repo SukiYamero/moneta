@@ -35,6 +35,7 @@ export const WelcomeScreen = () => {
   const status = useAuthStore((s) => s.status)
   const error = useAuthStore((s) => s.error)
   const login = useAuthStore((s) => s.login)
+  const continueAsGuest = useAuthStore((s) => s.continueAsGuest)
   const busy = status === 'authenticating'
 
   return (
@@ -82,6 +83,30 @@ export const WelcomeScreen = () => {
             }}
           />
         </p>
+        {/* Generous separation (specs.md §10.10): the divider's own my-6
+            margin stacks on top of the container's gap-4, so the guest
+            choice reads as a second, distinct zone rather than one more
+            item in the button stack above it. */}
+        <div className="my-6 flex items-center gap-3" aria-hidden="true">
+          <span className="h-px flex-1 bg-border-subtle" />
+          <span className="text-xs font-semibold tracking-wide text-fg-disabled uppercase">
+            {t('welcome.orDivider')}
+          </span>
+          <span className="h-px flex-1 bg-border-subtle" />
+        </div>
+        <div className="flex flex-col gap-2.5">
+          <button
+            type="button"
+            onClick={() => continueAsGuest()}
+            disabled={busy}
+            className="flex h-14 items-center justify-center rounded-2xl border border-border-subtle bg-transparent text-base font-bold text-foreground transition-opacity disabled:opacity-60"
+          >
+            {t('welcome.guestCta')}
+          </button>
+          <p className="text-center text-xs leading-relaxed font-medium text-fg-disabled">
+            {t('welcome.guestReassurance')}
+          </p>
+        </div>
         {status === 'error' && error ? (
           <p role="alert" className="text-center text-sm text-destructive">
             {t(loginErrorCopy(error))}

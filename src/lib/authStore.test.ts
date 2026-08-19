@@ -749,3 +749,31 @@ describe('useAuthStore.hydrate', () => {
     expect(s.drive).toBeNull()
   })
 })
+
+describe('useAuthStore.continueAsGuest', () => {
+  it('enters a distinct guest status with no user, session, or drive', () => {
+    useAuthStore.setState({ status: 'error', error: 'auth: access_denied' })
+
+    useAuthStore.getState().continueAsGuest()
+
+    const s = useAuthStore.getState()
+    expect(s.status).toBe('guest')
+    expect(s.status).not.toBe('authenticated')
+    expect(s.user).toBeNull()
+    expect(s.session).toBeNull()
+    expect(s.drive).toBeNull()
+    expect(s.error).toBeNull()
+  })
+
+  // driveOptIn must not sit 'pending' for a guest (specs.md §10.10) — pinned
+  // down here even though RequireAuth's status === 'guest' branch already
+  // never reads driveOptIn, since a future caller reading driveOptIn alone
+  // (without checking status first) must not be misled into re-prompting.
+  it('resets driveOptIn away from a stale connected/dismissed value from a prior session', () => {
+    useAuthStore.setState({ driveOptIn: 'connected' })
+
+    useAuthStore.getState().continueAsGuest()
+
+    expect(useAuthStore.getState().driveOptIn).toBe('pending')
+  })
+})
