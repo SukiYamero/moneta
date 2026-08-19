@@ -1199,16 +1199,109 @@ blast radius says has misunderstood the job.
 - **Blast radius:** one module + the existing `console.*` sites. Lowest
   priority of the seven — do it last, or drop it if the wave is too big.
 
-### Wave 3 — suggested order
+### 10.18 Profile / account screen — the access point
 
-`§10.11 offline` and `§10.12 export` first: both close a gap between what
-`specs.md` promises and what the code does, and offline touches the hottest
-files so it should not queue behind anything. `§10.15 profiles` next, because
-it **gates** the `repoProvider` swap that makes everything else real.
-`§10.13 write path` and `§10.14 form primitives` are day-scale, not
-track-scale, and are the "build once so three Wave 4 tracks share it" move
-that already paid off with the Toast. `§10.16 SW update` and `§10.17
-diagnostics` are cheap and can ride at the end or be cut.
+- **Goal:** one reachable place for account, profiles and settings. It is in
+  Wave 3 **as the access point, not as its features** — the point is that the
+  door exists and later work has an obvious home, instead of each feature
+  inventing its own entry.
+- **Why it earns a foundations slot:** it closes two backlog items that are
+  stuck purely for lack of a screen to live on.
+  1. **The PIN lock has no production entry point.** `LockSettings` — the
+     only UI that enables, disables or manually re-locks the vault — lives on
+     the dev-only `/kit` route. A shipped build today has a lock feature the
+     user cannot reach.
+  2. **Guest mode cannot persist because there is no way out of it**
+     (§10.10). A "sign in with Google" row here is that exit, and unblocks
+     persisting guest mode.
+- **User story:** I tap my avatar, and I can see which profile I'm in, reach
+  my settings, turn on the PIN lock, and export my data.
+- **UI:** the design's profile slide-up, **enlarged** — it now carries
+  profiles as well as settings, so the original height doesn't fit (user,
+  2026-08-19). Follows the existing sheet conventions: `BottomSheet` +
+  `useOverlay`, `animate-sheet-up`, Pointer Events, safe-area insets.
+  Sections:
+  - **Identity** — the Google account, or "Invitado" with the sign-in row.
+  - **Profiles** — the list from §10.15's registry, with the active one
+    marked. Read-only in this wave: switching, renaming and consolidating
+    come later. If only one profile exists, the section still renders — it is
+    how the user learns the concept exists.
+  - **Security** — the real home for `LockSettings`, moved off `/kit`.
+  - **Data** — export (§10.12's module gets its button here).
+  - **Preferences** — theme, language, currency, week start.
+- **Stubs must be honest.** Anything with no implementation renders as a
+  visibly inert row carrying `// STUB(waveN): <what the real thing needs>`
+  per `docs/ui/implementation-plan.md`. A row that looks tappable and does
+  nothing is worse than one that reads as "not yet" — and this project has
+  already ruled once (§11, on the notification dot) that a UI element making
+  a claim the app cannot keep is a defect, not a placeholder.
+- **Preferences are read-only until the write path exists.** Show current
+  values; make the controls inert stubs unless §10.13 has landed. Do not
+  invent a second write path here.
+- **Data touched:** none directly. Reads `Config.preferencias`, the profile
+  registry, and `authStore`.
+- **Edge cases:** a guest (no Google identity, no Drive row promise to keep —
+  but the sign-in row is the whole point); a device with one profile; the
+  sheet's height on a small screen (it grew — it must still scroll inside
+  `max-h` and clear the safe area, never push the nav off-screen).
+- **Done when:** the sheet opens from the app shell, shows identity, profile
+  list, lock settings and export; every unimplemented row is visibly inert
+  and carries its `STUB` comment; the lock is configurable in a production
+  build for the first time.
+- **Blast radius:** `src/features/profile/**` (new), one entry point in the
+  shell/Home header, and **moving** `LockSettings` out of `Kit.tsx`. It reads
+  stores; it writes nothing.
+- **Out of scope, deliberately:** switching profiles, renaming, deleting,
+  consolidating local into an account, and any working preference control.
+  Those arrive with the write path and the account work.
+
+### Wave 3 — staging and dependencies
+
+Not everything runs in parallel. A track in a later stage is **blocked** until
+every track in the previous stage has merged **and passed its code review** —
+not merely merged (`AGENTS.md` § Review protocol).
+
+**Stage 1 — five tracks, fully parallel (no shared files):**
+
+| Track | Spec   | Owns                                                                                                                         |
+| ----- | ------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| R     | §10.11 | `authStore.ts`, `lockStore.ts`, `pinLock.ts`, a new network store, the shared `errorCopy`, the three screens' error branches |
+| S     | §10.12 | the export module + tests — **no UI trigger this wave** (§10.18 wires its button), which is what keeps it off `Kit.tsx`      |
+| U     | §10.14 | `src/components/ui/**` (additive), the new shared form/confirm components, `Kit.tsx`                                         |
+| V     | §10.15 | `db.ts`, the profile registry, `repoProvider.ts` — **scoping and registry only**                                             |
+| W     | §10.16 | `vite.config.ts`, a small SW registration module                                                                             |
+
+**Stage 2 — blocked on stage 1:**
+
+| Track | Spec   | Blocked by | Why                                                                                                           |
+| ----- | ------ | ---------- | ------------------------------------------------------------------------------------------------------------- |
+| T     | §10.13 | **R**      | the write path must enforce §10.11's offline window **in one place**, so R's network store has to exist first |
+| X     | §10.17 | **S**      | the diagnostics log exports through S's download mechanism. Cuttable — drop it first if the wave is too big   |
+
+**Stage 3 — blocked on stage 2:**
+
+| Track | Spec   | Blocked by  | Why                                                                                           |
+| ----- | ------ | ----------- | --------------------------------------------------------------------------------------------- |
+| Y     | §10.18 | **V, U, T** | it lists V's profiles, uses U's controls, and shows preferences the write path (T) makes real |
+
+**The `repoProvider` stub flip is NOT in this wave, and that is deliberate.**
+§10.15 ships the scoping and registry so data is separated correctly from day
+one, but flipping `getRepo()` from the fake repo to the real dexie one would
+leave the app **showing an empty screen with no way to add anything** — no
+create UI exists until Wave 4's Track F. The flip is gated on either that
+sheet existing or an explicit decision to seed the local store. Sequencing it
+here would produce a technically-correct, unusable app.
+
+### Wave 3 — what to cut if the wave is too big
+
+The staging above is the plan; this is the trim order. Cut **§10.17
+diagnostics** first (it is the only track with no dependent and no promise
+behind it), then **§10.16 SW update** (cheap, but nothing breaks until a
+deploy lands on an open tab). Everything else is either closing a gap between
+what `specs.md` already promises and what the code does (§10.11 offline,
+§10.12 export), or is the "build once so three Wave 4 tracks share it" move
+that already paid off with the Toast (§10.13 write path, §10.14 form
+primitives). §10.15 and §10.18 are what make local data correct and reachable.
 
 ## 11. Decisions log
 
