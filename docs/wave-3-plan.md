@@ -513,7 +513,7 @@ Never R, T, U, V or Y.
 
 | Track | Status                                                  |
 | ----- | ------------------------------------------------------- |
-| R     | in flight — worktree `../moneta-worktrees/wave3-r`, branch `wave3/r-offline` |
+| R     | merged `1aea99e`, review in flight (`wave3/r-review`)   |
 | S     | ✅ merged `823bf59` + review `1058b5c`, worktree removed |
 | U     | ✅ merged `32d71d0` + review `3b98736`, worktree removed |
 | V     | ✅ merged `f350705` + review `99f3dbf`, worktree removed |

@@ -304,9 +304,9 @@ Check this table against `git worktree list` at the start of any parallel
 session; prune anything stale (merged-but-not-removed, or on disk but
 missing/finished here).
 
-| Path                          | Branch            | Status |
-| ----------------------------- | ----------------- | ------ |
-| `../moneta-worktrees/wave3-r` | `wave3/r-offline` | active |
+| Path                          | Branch           | Status            |
+| ----------------------------- | ---------------- | ----------------- |
+| `../moneta-worktrees/wave3-r` | `wave3/r-review` | merged, in review |
 
 Paths are relative to the repo root (`web/moneta`), i.e. a sibling
 `web/moneta-worktrees/` directory outside the repo — deliberately not nested
