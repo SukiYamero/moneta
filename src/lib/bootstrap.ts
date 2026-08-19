@@ -1,5 +1,5 @@
 import { findFile, createFolder, createJsonFile, type DriveSpace } from '@/lib/drive'
-import { CONFIG_SEMILLA } from '@/lib/schema'
+import { buildSeedConfig } from '@/lib/seedConfig'
 
 // Storage id frozen at the 2026-08-18 brand: bootstrap finds the folder by this
 // name, so once user data exists renaming it requires a Drive migration — it
@@ -42,9 +42,12 @@ export const bootstrap = async (token: string): Promise<DriveLayout> => {
     parent: folderId,
   })
   const activosFileId = await ensureJson(token, { name: ACTIVOS_FILE, data: [], parent: folderId })
+  // `ensureJson` finds-before-creates: `data` only actually gets written the
+  // first time (specs.md §10.7) — a stored config.json is reused as-is,
+  // never overwritten with a freshly region-derived seed.
   const configFileId = await ensureJson(token, {
     name: CONFIG_FILE,
-    data: CONFIG_SEMILLA,
+    data: buildSeedConfig(),
     space: 'appDataFolder',
   })
 

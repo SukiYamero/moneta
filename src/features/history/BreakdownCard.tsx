@@ -1,7 +1,11 @@
 import { useTranslation } from 'react-i18next'
 import type { Moneda, Periodo, TipoMovimiento } from '@/lib/schema'
 import type { BreakdownEntry, Totals } from '@/lib/movimientoStats'
-import { formatMonto, getMovimientoVisual } from '@/components/shared/movimientoView'
+import {
+  formatMonto,
+  formatMontoWithSign,
+  getMovimientoVisual,
+} from '@/components/shared/movimientoView'
 import { useLocaleFormatting } from '@/lib/i18n/localeFormatting'
 import { SegmentedControl, type SegmentedControlOption } from '@/components/shared/SegmentedControl'
 import type { IconAvatarTint } from '@/components/shared/IconAvatar'
@@ -73,16 +77,15 @@ export const BreakdownCard = ({
               balanceNegative ? 'text-danger' : 'text-foreground',
             )}
           >
-            {balanceNegative ? '-' : ''}
-            {formatMonto(Math.abs(totals.balance), moneda, locale)}
+            {formatMonto(totals.balance, moneda, locale)}
           </div>
         </div>
         <div className="shrink-0 pt-0.75 text-right">
           <div className="text-ms font-bold text-success">
-            +{formatMonto(totals.ingresos, moneda, locale)}
+            {formatMontoWithSign(totals.ingresos, moneda, locale)}
           </div>
           <div className="mt-1 text-ms font-bold text-foreground">
-            -{formatMonto(totals.gastos, moneda, locale)}
+            {formatMontoWithSign(-totals.gastos, moneda, locale)}
           </div>
         </div>
       </div>

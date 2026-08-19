@@ -21,7 +21,9 @@ describe('MovimientoRow', () => {
     render(<MovimientoRow movimiento={baseMovimiento} locale="es-CO" dateFnsLocale={es} />)
 
     expect(screen.getByText('Sueldo')).toBeInTheDocument()
-    expect(screen.getByText(/^\+/)).toBeInTheDocument()
+    // The sign attaches to the number, not the currency (specs.md §10.7) —
+    // it never leads the string.
+    expect(screen.getByText(/\+\d/)).toBeInTheDocument()
   })
 
   it('prefers the note as title when present', () => {
@@ -90,6 +92,6 @@ describe('MovimientoRow', () => {
         dateFnsLocale={enUS}
       />,
     )
-    expect(screen.getByText(/\+\$3,200\.00|\+US\$3,200\.00/)).toBeInTheDocument()
+    expect(screen.getByText(/\$\+3,200\.00|US\$\+3,200\.00/)).toBeInTheDocument()
   })
 })

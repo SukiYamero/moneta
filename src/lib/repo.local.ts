@@ -1,12 +1,7 @@
 import type { Table } from 'dexie'
 import { CONFIG_ID, db, type ConfigRow } from '@/lib/db'
-import {
-  CONFIG_SEMILLA,
-  SCHEMA_VERSION,
-  type Activo,
-  type Config,
-  type Movimiento,
-} from '@/lib/schema'
+import { buildSeedConfig } from '@/lib/seedConfig'
+import { SCHEMA_VERSION, type Activo, type Config, type Movimiento } from '@/lib/schema'
 import {
   RepoError,
   type CrudRepo,
@@ -623,7 +618,10 @@ const performReady = async (): Promise<void> => {
   const stored = await db.config.get(CONFIG_ID)
 
   if (!stored) {
-    const seeded: ConfigRow = { ...CONFIG_SEMILLA, id: CONFIG_ID }
+    // First-run only: monedaPrincipal derives from the device region
+    // (specs.md §10.7). A schemaVersion mismatch below never re-enters
+    // this branch, so a currency the user already has is never reassigned.
+    const seeded: ConfigRow = { ...buildSeedConfig(), id: CONFIG_ID }
     await db.config.put(seeded)
     return
   }

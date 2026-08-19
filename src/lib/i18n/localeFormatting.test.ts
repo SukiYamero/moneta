@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'vitest'
+import { describe, it, expect, afterEach, vi } from 'vitest'
 import { renderHook } from '@testing-library/react'
 import { enUS, es, ptBR } from 'date-fns/locale'
 import { i18next } from '@/lib/i18n'
@@ -7,33 +7,52 @@ import { formatMonto } from '@/components/shared/movimientoView'
 
 describe('localeFormatting', () => {
   afterEach(async () => {
+    vi.unstubAllGlobals()
     await i18next.changeLanguage('es')
   })
 
-  it('maps every supported locale to an Intl tag and a date-fns locale', () => {
-    expect(localeFormatting('es')).toEqual({ locale: 'es-CO', dateFnsLocale: es })
-    expect(localeFormatting('es-AR')).toEqual({ locale: 'es-AR', dateFnsLocale: es })
-    expect(localeFormatting('en')).toEqual({ locale: 'en-US', dateFnsLocale: enUS })
-    expect(localeFormatting('pt-BR')).toEqual({ locale: 'pt-BR', dateFnsLocale: ptBR })
+  it('combines the copy locale with the given region into an Intl tag', () => {
+    expect(localeFormatting('es', 'CO')).toEqual({ locale: 'es-CO', dateFnsLocale: es })
+    expect(localeFormatting('es-AR', 'AR')).toEqual({ locale: 'es-AR', dateFnsLocale: es })
+    expect(localeFormatting('en', 'US')).toEqual({ locale: 'en-US', dateFnsLocale: enUS })
+    expect(localeFormatting('pt-BR', 'BR')).toEqual({ locale: 'pt-BR', dateFnsLocale: ptBR })
   })
 
-  it('falls back to the base locale for an unknown or missing tag', () => {
-    expect(localeFormatting('de')).toEqual(localeFormatting('es'))
-    expect(localeFormatting(undefined)).toEqual(localeFormatting('es'))
+  // specs.md §10.7: region is the device's, independent of which region the
+  // copy locale would default to on its own — a neutral `es` copy locale on
+  // a device in Mexico must format as es-MX, not the old es-CO default.
+  it("prefers the given region over the copy locale's own default region", () => {
+    expect(localeFormatting('es', 'MX')).toEqual({ locale: 'es-MX', dateFnsLocale: es })
+    expect(localeFormatting('es', 'AR')).toEqual({ locale: 'es-AR', dateFnsLocale: es })
   })
 
-  it('keeps the es tag formatting amounts exactly as before any locale was wired', () => {
-    expect(formatMonto(3200, 'COP', localeFormatting('es').locale)).toBe(
+  it('falls back to the base locale for an unknown or missing tag, keeping the given region', () => {
+    expect(localeFormatting('de', 'CO')).toEqual(localeFormatting('es', 'CO'))
+    expect(localeFormatting(undefined, 'CO')).toEqual(localeFormatting('es', 'CO'))
+  })
+
+  it('keeps the es/CO tag formatting amounts exactly as before any locale was wired', () => {
+    expect(formatMonto(3200, 'COP', localeFormatting('es', 'CO').locale)).toBe(
       formatMonto(3200, 'COP', 'es-CO'),
     )
   })
 
-  it('reads the active i18next locale, and follows a language change', async () => {
+  // src/test/setup.ts stubs the device region to es-CO as the deterministic
+  // test baseline (jsdom's real default is en-US).
+  it('reads the active i18next copy locale and the device region, and follows a language change', async () => {
     const { result, rerender } = renderHook(() => useLocaleFormatting())
-    expect(result.current.locale).toBe('es-CO')
+    expect(result.current).toEqual({ locale: 'es-CO', dateFnsLocale: es })
 
     await i18next.changeLanguage('en')
     rerender()
-    expect(result.current).toEqual({ locale: 'en-US', dateFnsLocale: enUS })
+    // Copy language changed; the device region (CO) did not — the whole
+    // point of this being a second, independent axis (specs.md §10.7).
+    expect(result.current).toEqual({ locale: 'en-CO', dateFnsLocale: enUS })
+  })
+
+  it("prefers the device's real region over the copy locale's default, through the hook", () => {
+    vi.stubGlobal('navigator', { ...navigator, languages: ['es-MX'] })
+    const { result } = renderHook(() => useLocaleFormatting())
+    expect(result.current).toEqual({ locale: 'es-MX', dateFnsLocale: es })
   })
 })

@@ -336,7 +336,9 @@ describe('SearchScreen', () => {
     render(<SearchScreen />)
 
     expect(screen.getByText('10 Aug')).toBeInTheDocument()
-    expect(screen.getByText('-$1,999.00')).toBeInTheDocument()
+    // The sign attaches to the number, not the currency (specs.md §10.7):
+    // "$-1,999.00", not "-$1,999.00".
+    expect(screen.getByText('$-1,999.00')).toBeInTheDocument()
 
     await i18next.changeLanguage('es')
   })

@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { HistoryScreen } from '@/features/history/HistoryScreen'
 import { fakeRepo } from '@/lib/repo.fake'
 import { breakdownBy, filterByRange, periodRange, totals } from '@/lib/movimientoStats'
-import { formatMonto } from '@/components/shared/movimientoView'
+import { formatMonto, formatMontoWithSign } from '@/components/shared/movimientoView'
 import { i18next } from '@/lib/i18n'
 
 // The fake repo's seed data is pinned to a fixed clock (repo.fake.ts,
@@ -110,14 +110,14 @@ describe('HistoryScreen', () => {
       const moneda = config.preferencias.monedaPrincipal
 
       // getAllByText, not getByText: when ingresos is 0 the balance figure
-      // and the gasto mini-total render the identical "-$X" text, which is
+      // and the gasto mini-total render the identical "$ -X" text, which is
       // correct (balance == -gastos) rather than a bug to avoid — a single
       // occurrence is still enough to prove the number reached the screen.
       expect(
-        await screen.findAllByText(money(`+${formatMonto(expected.ingresos, moneda, 'es-CO')}`)),
+        await screen.findAllByText(money(formatMontoWithSign(expected.ingresos, moneda, 'es-CO'))),
       ).not.toHaveLength(0)
       expect(
-        screen.getAllByText(money(`-${formatMonto(expected.gastos, moneda, 'es-CO')}`)),
+        screen.getAllByText(money(formatMontoWithSign(-expected.gastos, moneda, 'es-CO'))),
       ).not.toHaveLength(0)
     },
   )
@@ -178,8 +178,11 @@ describe('HistoryScreen', () => {
     const moneda = config.preferencias.monedaPrincipal
 
     expect(screen.getByText(new RegExp(`^[A-Z][a-z]+ \\d{4}$`))).toBeInTheDocument()
+    // Device region is stubbed to CO (src/test/setup.ts); it's independent
+    // of the copy locale, so switching copy to `en` formats as en-CO here,
+    // not en-US (specs.md §10.7).
     expect(
-      await screen.findAllByText(money(`+${formatMonto(expected.ingresos, moneda, 'en-US')}`)),
+      await screen.findAllByText(money(formatMontoWithSign(expected.ingresos, moneda, 'en-CO'))),
     ).not.toHaveLength(0)
 
     await i18next.changeLanguage('es')
