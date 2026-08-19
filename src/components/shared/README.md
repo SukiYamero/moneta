@@ -100,21 +100,12 @@ doesn't belong to any one `src/features/**` folder. See `specs.md` §10.5.
   (always positive; sign comes from `tipo`). `type="text"` +
   `inputMode="decimal"`, never `type="number"` (native spinners, and
   `valueAsNumber` ignores locale entirely). A controlled **string** field,
-  not a controlled number — the parsing lives in `amountFormat.ts` below,
+  not a controlled number — the parsing lives in `src/lib/i18n/amountFormat.ts`,
   never a hand-rolled parser here. `aria-invalid` is true both for a
   caller-supplied `error` and for text `parseAmount` can't parse under the
   given `locale`, so malformed input is flagged even with no `error` copy
   passed. Required `locale` (BCP-47 from `useLocaleFormatting()`), same
   no-default convention as `MovimientoRow`/`formatMonto`. Accepts `ref`.
-- `amountFormat.ts` — the pure locale money helpers behind `AmountField`:
-  `parseAmount(raw, locale)` and its inverse `formatAmountForInput(value,
-locale)`, built on `Intl.NumberFormat(locale).formatToParts` to read the
-  locale's actual decimal/group separators (`es-CO` groups `.`/decimals
-  `,`; `en-US` the reverse). Its own module, not exported from the
-  component file, because a pure helper shipped alongside a component
-  breaks Fast Refresh. `parseAmount` gates on a strict decimal pattern
-  before `Number()`: bare `Number()` turns `''` into `0` and accepts hex,
-  so a lone separator once parsed as $0 and `0x1a` as 26.
 - `BottomNav.tsx` — the five-slot persistent tab bar (Home / History /
   centre Add / Search / Profile), mounted once by `src/routes/AppShell.tsx`.
   Home, History and Search are real `NavLink`s, so `aria-current="page"`
