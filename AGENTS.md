@@ -87,6 +87,13 @@ We follow **spec-driven development**. `specs.md` is the source of truth.
 - **Comments only when truly necessary** — explain the _why_ (tradeoff, workaround),
   never the _what_. No conversational/changelog/restating comments.
 - Use the `@/` alias for imports from `src`.
+- **Error handling follows [docs/error-handling.md](docs/error-handling.md).**
+  Read it before writing a `try`, adding an error type, or deciding what a
+  failure returns. It is binding, not advisory: it fixes the error taxonomy,
+  where you may and may not catch, when swallowing is legitimate (and what a
+  legitimate swallow must still do), the rule that a failure never returns a
+  success-shaped value, and that secrets never enter an error, a log, or the
+  DOM. Every rule in it traces to a real bug this codebase actually shipped.
 
 ## Security guardrails (see `specs.md` §5, §7)
 
