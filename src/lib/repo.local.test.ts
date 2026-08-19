@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { db } from '@/lib/db'
+import { createProfileDb, db } from '@/lib/db'
 import { RepoError } from '@/lib/repo'
 import { testRepoContract } from '@/lib/repo.contract'
 import {
@@ -620,5 +620,90 @@ describe('list() — fast path correctness at the exact-tie boundary', () => {
     }
     expect(seen).toHaveLength(120)
     expect(new Set(seen).size).toBe(120)
+  })
+})
+
+// specs.md §10.15: one dexie database per profile, not a `profileId` column.
+// createLocalRepo() must be able to open against any ProfileDb, not just the
+// frozen module-level `db` — this is what lets a guest and a signed-in
+// account read/write entirely separate stores on the same device.
+describe('createLocalRepo(database) — per-profile isolation', () => {
+  it('defaults to the frozen module-level db when no database is passed', async () => {
+    const repo = createLocalRepo()
+    const added = await repo.movimientos.add(movimiento())
+    expect(await db.movimientos.get(added.id)).toBeDefined()
+  })
+
+  it("a repo built against a second database never sees the default db's data, and vice versa", async () => {
+    const otherDb = createProfileDb('kurobello-profile-isolation-test')
+    try {
+      const defaultRepo = createLocalRepo()
+      const otherRepo = createLocalRepo(otherDb)
+
+      const inDefault = await defaultRepo.movimientos.add(movimiento())
+      const inOther = await otherRepo.movimientos.add(movimiento())
+
+      expect(await defaultRepo.movimientos.get(inOther.id)).toBeUndefined()
+      expect(await otherRepo.movimientos.get(inDefault.id)).toBeUndefined()
+      expect(await defaultRepo.movimientos.get(inDefault.id)).toBeDefined()
+      expect(await otherRepo.movimientos.get(inOther.id)).toBeDefined()
+    } finally {
+      otherDb.close()
+      await otherDb.delete()
+    }
+  })
+
+  it('two repos built against the same non-default database share writes (same store, not two copies)', async () => {
+    const otherDb = createProfileDb('kurobello-profile-shared-test')
+    try {
+      const repoA = createLocalRepo(otherDb)
+      const repoB = createLocalRepo(otherDb)
+
+      const added = await repoA.movimientos.add(movimiento())
+      expect(await repoB.movimientos.get(added.id)).toEqual(added)
+    } finally {
+      otherDb.close()
+      await otherDb.delete()
+    }
+  })
+
+  it("ready()'s in-flight memo is keyed per database: two concurrent instances on different databases each run performReady()", async () => {
+    const otherDb = createProfileDb('kurobello-profile-memo-test')
+    try {
+      const defaultRepo = createLocalRepo()
+      const otherRepo = createLocalRepo(otherDb)
+
+      const defaultPutSpy = vi.spyOn(db.config, 'put')
+      const otherPutSpy = vi.spyOn(otherDb.config, 'put')
+
+      await Promise.all([defaultRepo.ready(), otherRepo.ready()])
+
+      expect(defaultPutSpy).toHaveBeenCalledTimes(1)
+      expect(otherPutSpy).toHaveBeenCalledTimes(1)
+
+      defaultPutSpy.mockRestore()
+      otherPutSpy.mockRestore()
+    } finally {
+      otherDb.close()
+      await otherDb.delete()
+    }
+  })
+
+  it('getConfig()/updateConfig() operate on the passed database, not the default one', async () => {
+    const otherDb = createProfileDb('kurobello-profile-config-test')
+    try {
+      const otherRepo = createLocalRepo(otherDb)
+      await otherRepo.updateConfig({ secciones: [] })
+
+      const otherConfig = await otherRepo.getConfig()
+      expect(otherConfig.secciones).toEqual([])
+
+      const defaultRepo = createLocalRepo()
+      const defaultConfig = await defaultRepo.getConfig()
+      expect(defaultConfig.secciones.length).toBeGreaterThan(0)
+    } finally {
+      otherDb.close()
+      await otherDb.delete()
+    }
   })
 })

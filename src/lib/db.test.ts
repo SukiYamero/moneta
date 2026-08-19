@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from 'vitest'
-import { db, VAULT_ID, type LockVault } from '@/lib/db'
+import { createProfileDb, db, VAULT_ID, type LockVault } from '@/lib/db'
 
 afterEach(async () => {
   await db.vault.clear()
@@ -77,4 +77,48 @@ test('movimientos supports a seccion+fecha compound-index range query', async ()
     .between(['sec_trabajo', '2026-01-01'], ['sec_trabajo', '2026-02-01'], true, true)
     .toArray()
   expect(inRange.map((m) => m.id)).toEqual(['m1'])
+})
+
+test('db is the frozen "kurobello" instance, unchanged by the factory', () => {
+  expect(db.name).toBe('kurobello')
+})
+
+test('createProfileDb builds an independently-named database with the same schema shape', async () => {
+  const other = createProfileDb('kurobello-profile-test-a')
+  try {
+    expect(other.name).toBe('kurobello-profile-test-a')
+    expect(other.verno).toBe(2)
+    expect(other.tables.map((t) => t.name).toSorted()).toEqual(
+      ['activos', 'config', 'movimientos', 'vault'].toSorted(),
+    )
+  } finally {
+    other.close()
+    await other.delete()
+  }
+})
+
+test('two profile databases are fully isolated: a write to one is invisible to the other', async () => {
+  const profileA = createProfileDb('kurobello-profile-test-b')
+  const profileB = createProfileDb('kurobello-profile-test-c')
+  try {
+    await profileA.movimientos.put({
+      id: 'iso-1',
+      fecha: '2026-01-01',
+      seccion: 'sec_personal',
+      categoria: 'cat_sueldo',
+      tipo: 'ingreso',
+      monto: 1,
+      moneda: 'COP',
+      createdAt: '2026-01-01T00:00:00.000Z',
+    })
+
+    expect(await profileA.movimientos.get('iso-1')).toBeDefined()
+    expect(await profileB.movimientos.get('iso-1')).toBeUndefined()
+    expect(await db.movimientos.get('iso-1')).toBeUndefined()
+  } finally {
+    profileA.close()
+    profileB.close()
+    await profileA.delete()
+    await profileB.delete()
+  }
 })
