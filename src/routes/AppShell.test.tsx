@@ -40,7 +40,7 @@ describe('AppShell layout', () => {
   // everywhere at once. The scroll pane reserving a hardcoded pb-30 instead
   // would silently drift from that token (e.g. once safe-area-inset-bottom is
   // non-zero, 120px static falls short of the nav's actual 96px + inset).
-  it("reserves scroll-pane clearance via the --bottom-nav-clearance token, not a hardcoded value", () => {
+  it('reserves scroll-pane clearance via the --bottom-nav-clearance token, not a hardcoded value', () => {
     const router = createMemoryRouter(
       [{ element: <AppShell />, children: [{ index: true, element: <div>content</div> }] }],
       { initialEntries: ['/'] },
@@ -64,9 +64,7 @@ describe('AppShell resilience', () => {
       [
         {
           element: <AppShell />,
-          children: [
-            { index: true, element: <Bomb />, errorElement: <RouteErrorFallback /> },
-          ],
+          children: [{ index: true, element: <Bomb />, errorElement: <RouteErrorFallback /> }],
         },
       ],
       { initialEntries: ['/'] },

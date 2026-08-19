@@ -310,7 +310,16 @@ session, and the operator/orchestrator owns running it.
 4. **Anything delicate — a judgment call, a product decision, a
    cross-cutting change, or scope widening — is escalated to the operator,
    who decides.** The reviewer says what it would do and why, and stops.
-5. **At the end of the whole batch, the operator launches a general review**
+5. **A track's doc lines land in the same commit as its merge, never in a
+   batch at the end.** A track hands its `README.md` edits to the operator
+   (§1.2 of a wave plan makes those files operator-owned so parallel tracks
+   don't clobber each other) — and those drafts **rot**. Measured, not
+   feared: five sets sat unapplied at once on 2026-08-19 and two were
+   already wrong about the code they described, because later commits moved
+   it. A README that reads as trustworthy and is quietly wrong is worse than
+   one that was never written. If a draft is applied late anyway, **verify
+   every line against the current code first** rather than pasting it.
+6. **At the end of the whole batch, the operator launches a general review**
    across everything that landed, deliberately looking for what the
    per-track reviewers structurally _could not_ see: drift between tracks,
    the same concept solved two ways in two folders, a rule applied in one

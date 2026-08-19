@@ -198,7 +198,7 @@ and the filter sheet was discarding it.
 
 ---
 
-## Wave 2.2 — active (user-reported adjustments, 2026-08-19)
+## Wave 2.2 — ✅ COMPLETE (merged to `main`, 2026-08-19)
 
 Specified in `specs.md` §10.9 and §10.10 — read the spec, not this summary.
 
@@ -268,10 +268,7 @@ Check this table against `git worktree list` at the start of any parallel
 session; prune anything stale (merged-but-not-removed, or on disk but
 missing/finished here).
 
-| Created    | Track / task                 | Path                          | Branch             | Status | Notes                    |
-| ---------- | ---------------------------- | ----------------------------- | ------------------ | ------ | ------------------------ |
-| 2026-08-19 | Wave 2.2 · Track P (loading) | `../moneta-worktrees/loading` | `feat/w22-loading` | active | Spec: `specs.md` §10.9.  |
-| 2026-08-19 | Wave 2.2 · Track Q (guest)   | `../moneta-worktrees/guest`   | `feat/w22-guest`   | active | Spec: `specs.md` §10.10. |
+_Empty — every Wave 2.1/2.2 worktree was removed when its branch merged._
 
 Status values: `active` → `merged, pending cleanup` → row deleted once
 `git worktree remove <path>` runs.
