@@ -487,19 +487,35 @@ Full design: `docs/superpowers/specs/2026-06-26-pin-lock-design.md`.
 - **App icon for the brand.** The PWA still ships the scaffold `favicon.svg`;
   a KuroBello icon (maskable + favicon) is pending. Cosmetic, not blocking.
 
-### Parallel track plan (2026-08-18)
+### Parallel track plan (refreshed 2026-08-18, after UI analysis)
 
-Wave 1 — three tracks, no shared files, can run simultaneously:
+`src/components/shared/**` is a **new** location, distinct from
+`src/components/ui` (shadcn primitives only, per `AGENTS.md`): it holds the
+cross-feature composed components from `docs/ui/implementation-plan.md`
+(`BottomSheet`, `MovimientoRow`, etc.) — reused across screens, so they
+don't belong to any one feature folder. Same barrel/naming rule applies
+(each component named after itself, never `index.tsx`).
 
-| Track                                | Scope                                                                                                                                                                                                                                | Owns (nobody else touches)                                              |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------- |
-| **A — data port**                    | Spec §10.3 first: `Repo` port (interface) + local IndexedDB impl (dexie), CRUD for `Movimiento`/`Activo`/`Config`, schemaVersion check. TDD. **Blocker for every feature — its port interface lands in §10.3 before wave 1 starts.** | `src/lib/repo.ts`, `src/lib/repo.test.ts`, `src/lib/db.ts`, specs §10.3 |
-| **B — Drive opt-in + token refresh** | The two §12 items above: "enable Drive sync" entry point calling `authStore.connectDrive`, and wiring `pinLock.updateSession` into the token-refresh path. Entry point mounts on `Home` (like `LockSettings`), no new route.         | `src/features/settings/**`, `src/lib/authStore.ts`, specs §10.4         |
-| **C — movimientos UI**               | Spec §10.5 first: add/list/delete movements + section/category pickers, built against the §10.3 port interface with an in-memory fake. Merges after A.                                                                               | `src/features/movimientos/**`, `src/router.tsx`, specs §10.5            |
+**Wave 1 — 3 tracks, zero shared files, zero cross-dependency. Launchable now:**
 
-Wave 2 (after A+C merge): dashboard/totals + charts · Drive-backed repo impl
-(sync strategy, own spec) · polished lock screen (user proposes design) + PWA
-icon polish.
+| Track                                   | Scope                                                                                                                                                                                                                                                                                                                  | Owns                                                                 |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| **A — data port (real impl)**           | Real dexie-backed implementation of the `Repo` interface (interface already landed, §10.3). CRUD for `Movimiento`/`Activo`/`Config`, `schemaVersion` check. TDD.                                                                                                                                                       | `src/lib/repo.ts` (extend), `src/lib/repo.test.ts`, `src/lib/db.ts`  |
+| **B — Drive opt-in + token refresh**    | Implements the real "Drive permission" screen (`docs/ui/implementation-plan.md`, Auth unit) — the entry point that finally calls `authStore.connectDrive`, closing the standing §12 backlog item. Also the Welcome screen (replaces `LoginScreen.tsx`), and wiring `pinLock.updateSession` into token refresh.         | `src/features/auth/**` (extend), `src/lib/authStore.ts`, specs §10.4 |
+| **D — Foundational UI kit + fake repo** | Build, in this order: `BottomSheet`, `CenterModal`, `IconAvatar`, `MovimientoRow`, `TagChip`, `DateChipPicker`, `SegmentedControl`, `Toggle`, `InfoButton` (`docs/ui/implementation-plan.md`). Plus `repo.fake.ts` — one shared in-memory `Repo` impl, seeded Spanish sample data. **Blocker for every Wave 2 track.** | `src/components/shared/**` (new), `src/lib/repo.fake.ts`             |
+
+**Wave 2 — unlocked once D merges (every screen needs the shared kit + fake
+repo). Pick tracks per natural grouping, not necessarily all at once:**
+
+| Track                              | Scope                                                                                                                                                                                                                         | Owns                                                                                                     |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| **E — Home + Search + History**    | Dashboard (extend `Home.tsx`) + the `movimientoStats` aggregation module (real, pure computation, not a stub) + Search/Filter sheet + History overlay. One track: all three share `MovimientoRow` and the aggregation module. | `src/routes/Home.tsx`, `src/lib/movimientoStats.ts`, `src/features/search/**`, `src/features/history/**` |
+| **F — Movement/Add sheet + Voice** | View/edit sheet, create sheet, delete confirm, toast, the Voice unit (Web Speech API + regex parser, §11 2026-08-18).                                                                                                         | `src/features/movimientos/**`                                                                            |
+| **G — Tags + Profile + Settings**  | Tag picker, custom tag modal, profile sheet, "Personalizar" settings screen.                                                                                                                                                  | `src/features/tags/**`, `src/features/profile/**`, `src/features/settings/**`                            |
+| **H — Groups ("Áreas")**           | List + detail + editor. Needs a schema addition first (`Grupo` type or `extra` on `Categoria`, own §10 write-up) — don't invent the shape inline while implementing.                                                          | `src/features/groups/**`, `src/lib/schema.ts` (additive only)                                            |
+
+Not scheduled: receipt scan (deferred indefinitely, §11 2026-08-18); the PWA
+icon and polished lock-screen items already in the backlog above.
 
 ### Worktree log
 
