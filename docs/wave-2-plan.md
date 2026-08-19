@@ -708,8 +708,8 @@ live Google account (needs a human in the OAuth popup).
 
 | Track | Branch                     | Stage | Status      |
 | ----- | -------------------------- | ----- | ----------- |
-| I     | `feat/wave2-i18n`          | 1     | not started |
-| E1    | `feat/wave2-stats`         | 1     | not started |
+| I     | `feat/wave2-i18n`          | 1     | dispatched  |
+| E1    | `feat/wave2-stats`         | 1     | dispatched  |
 | K     | `feat/wave2-toast`         | 2     | not started |
 | J     | `feat/wave2-drive-consent` | 2     | not started |
 | L     | `feat/wave2-shell`         | 2     | not started |
