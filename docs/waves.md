@@ -180,6 +180,24 @@ Owns: `src/routes/Home.tsx`, `src/lib/movimientoStats.ts`,
 
 ---
 
+## Wave 2.1 — active (user-reported adjustments, 2026-08-19)
+
+Two small tracks raised by the user after using the merged Wave 2 build.
+Both are specified in `specs.md` (§10.7, §10.8) — read the spec, not this
+summary. They share no files and run in parallel.
+
+| Track                                | Scope                                                                                                                                      | Owns                                                                                                                                     |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| **N — region-aware formatting**      | Device region as an axis independent of the copy locale; region-derived initial `monedaPrincipal`; `narrowSymbol`; the sign on the number. | `src/lib/i18n/**`, `src/components/shared/movimientoView.ts`, `src/lib/schema.ts` (`Moneda` union only), `repo.local.ts`, `bootstrap.ts` |
+| **O — per-category `TagChip` color** | The chip's icon always carries its category tint; selecting tints the whole pill in that family instead of a uniform primary green.        | `src/components/shared/TagChip.tsx`, `src/features/search/FilterSheet.tsx`, `src/routes/Kit.tsx`                                         |
+
+Track N is the revisit condition `specs.md` §11 (2026-08-19) attached to the
+`es → es-CO` formatting trade-off; Track O closes a single-source-of-truth
+leak, not a design change — `getMovimientoVisual` already returned the tint
+and the filter sheet was discarding it.
+
+---
+
 ## Wave 3 — planned (deferred from Wave 2 on 2026-08-19)
 
 These three were originally Wave 2. They move out so Wave 2 can land the
@@ -234,7 +252,10 @@ Check this table against `git worktree list` at the start of any parallel
 session; prune anything stale (merged-but-not-removed, or on disk but
 missing/finished here).
 
-_Empty — every Wave 2 worktree was removed when its branch merged._
+| Created    | Track / task                   | Path                           | Branch              | Status | Notes                   |
+| ---------- | ------------------------------ | ------------------------------ | ------------------- | ------ | ----------------------- |
+| 2026-08-19 | Wave 2.1 · Track N (region)    | `../moneta-worktrees/region`   | `feat/w21-region`   | active | Spec: `specs.md` §10.7. |
+| 2026-08-19 | Wave 2.1 · Track O (tag color) | `../moneta-worktrees/tagcolor` | `feat/w21-tagcolor` | active | Spec: `specs.md` §10.8. |
 
 Status values: `active` → `merged, pending cleanup` → row deleted once
 `git worktree remove <path>` runs.
