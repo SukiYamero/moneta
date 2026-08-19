@@ -94,17 +94,7 @@ We follow **spec-driven development**. `specs.md` is the source of truth.
   style, so after `bunx shadcn@latest add <name>` normalize the new component's
   import before committing. Enforced by `import/no-namespace` in
   `.oxlintrc.json` — `bun run lint` fails on any reintroduction.
-- **Arrow functions, not `function` declarations.** `const foo = (x: T) => {}`,
-  not `function foo(x: T) {}` — everywhere under `src/`, including nested and
-  test-local helpers. A generic arrow in a `.tsx` file needs the trailing
-  comma (`<T,>(x: T) => x`) or TSX parses `<T>` as JSX. React components keep
-  their name on the `const` (`const Foo = () => {}`, `export default Foo`
-  as a separate statement for a default export) — Fast Refresh and
-  `react/only-export-components` key on the named binding. **Exception:
-  `src/components/ui/**` is shadcn-generated** (`bunx shadcn@latest add
-  <name>`emits`function`) — leave that directory alone rather than
-fighting the generator on every add. Enforced by `func-style`in`.oxlintrc.json`(with an override exempting`src/components/ui/\*\*`) —
-`bun run lint`fails on any reintroduced`function` declaration outside it.
+- **Arrow functions, not `function` declarations.** `const foo = (x: T) => {}`, not `function foo(x: T) {}` — everywhere under `src/`, including nested and test-local helpers. A generic arrow in a `.tsx` file needs the trailing comma (`<T,>(x: T) => x`) or TSX parses `<T>` as JSX. React components keep their name on the `const` (`const Foo = () => {}`, `export default Foo` as a separate statement for a default export) — Fast Refresh and `react/only-export-components` key on the named binding. **Exception:** the `src/components/ui` tree is shadcn-generated (`bunx shadcn@latest add <name>` emits `function`) — leave that directory alone rather than fighting the generator on every add. Enforced by `func-style` in `.oxlintrc.json` (with an override exempting that directory) — `bun run lint` fails on any reintroduced `function` declaration outside it.
 - **Modern-syntax rules are enforced, not just requested.** `.oxlintrc.json`
   enables a curated set of `unicorn` rules (prefer `.at()`/`.toSorted()`/
   `.toReversed()`/spread/`structuredClone`/`replaceAll()` and friends,
