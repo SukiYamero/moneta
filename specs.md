@@ -2640,6 +2640,26 @@ lint` clean bar the one pre-existing `components/ui` warning). `AGENTS.md`
   building it at module-import time, the defect shape §11 records twice, so
   it needs a lazy `getRepo()` rather than a one-line change.
 
+- **`logout()` never calls `lockStore.lock()`, so a same-tab logout leaves
+  the vault's DEK resident in memory.** Pre-existing, not introduced by the
+  guest work, and found while verifying that a guest cannot bypass the PIN
+  lock. Not a remote-attacker issue — it needs local access to a running
+  tab — but "logging out" plainly implies the vault re-locks, and today it
+  does not. Small, self-contained fix; worth doing before any release.
+
+- **`HistoryScreen`'s `semana` scope can render the seed default's week
+  boundary and then visibly change** once the real `Config` resolves with a
+  different `primerDiaSemana`. Reproduced with a test (kept, as a
+  characterization of current behaviour). **Unreachable today**: nothing can
+  write `primerDiaSemana`, so it is always the seed's `1` for every real
+  user. It becomes reachable the moment a preferences screen lets a user
+  pick a different week start — so this is a **prerequisite of Track G**
+  (Wave 3), not free-floating debt: whoever ships the week-start preference
+  fixes this in the same change. Deliberately not fixed now — every
+  available fix (gating the week chrome behind the load, or deriving the
+  default from locale week-info) adds real UX or a second source of "what's
+  the default" for a bug that cannot currently occur.
+
 - **The light theme has no category colors at all — the `chart-*` tokens are
   still the scaffold's zero-chroma greys.** `src/styles/index.css` defines
   `--chart-1..5` as `oklch(0.87 0 0)`…`oklch(0.269 0 0)` in `:root` (light)

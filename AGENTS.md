@@ -290,6 +290,34 @@ These apply to any agent on this project, whatever it was asked to do.
   outside what you own. Report it and let the operator decide; do not edit
   another track's files, and do not silently widen your scope.
 
+## Review protocol (operator-owned, user-mandated 2026-08-19)
+
+This is not optional and not per-wave — it applies to every track, in every
+session, and the operator/orchestrator owns running it.
+
+1. **Every track gets its own review subagent, scoped to that track's
+   section alone.** Dispatched after the track's work is verified and
+   merged, so a reviewer never files findings against code a later stage
+   rewrites.
+2. **The reviewer looks for four things, not one:** bugs, **redundancy**,
+   **optimization**, and **better approaches** than the one taken. A review
+   that only hunts correctness bugs is doing a quarter of the job — the
+   most valuable Wave 2 findings were a duplicated color table and a
+   defaulted parameter nobody passed, neither of which is a bug in the
+   "it crashes" sense.
+3. **The reviewer applies what it finds** when the fix is clearly correct
+   and in scope. It does not merely report a list for someone else.
+4. **Anything delicate — a judgment call, a product decision, a
+   cross-cutting change, or scope widening — is escalated to the operator,
+   who decides.** The reviewer says what it would do and why, and stops.
+5. **At the end of the whole batch, the operator launches a general review**
+   across everything that landed, deliberately looking for what the
+   per-track reviewers structurally _could not_ see: drift between tracks,
+   the same concept solved two ways in two folders, a rule applied in one
+   place and not its twin, dead seams left between tracks, and consistency
+   of the shared surface. Per-track reviewers are blind to the seams
+   between tracks by construction — this pass exists for exactly that.
+
 ## Working in parallel (multiple agents)
 
 - One agent = one branch = one worktree. Never two writers on the same branch.
