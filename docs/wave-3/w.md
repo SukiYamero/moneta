@@ -207,6 +207,19 @@ $ vitest run
 (The `button.tsx` warning is pre-existing and outside this track's ownership
 — unrelated to any file this track touched.)
 
+**Flake observed, investigated, not this track's:** twice during this run,
+`src/router.kitError.test.tsx` (a dynamic-import-failure/lazy-chunk test,
+unrelated to anything Track W touches) timed out at 5000ms only when run as
+part of the full suite, never in isolation (`bun run test
+src/router.kitError.test.tsx` passed cleanly both times it was tried).
+Re-running the full suite immediately after, unchanged, went green both
+times. This reads as worker-pool timing contention under load, not a defect
+introduced here — confirmed by running the full suite a third time
+immediately before pasting the output above, green. Flagging in case the
+operator sees the same pattern from other tracks' machines; not something I
+attempted to fix since it isn't in this track's ownership and isn't
+reproducible on demand.
+
 ## `bun run build` output (real, pasted)
 
 ```
