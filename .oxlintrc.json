@@ -9,6 +9,15 @@
         "allowConstantExport": true
       }
     ],
-    "import/no-namespace": "error"
-  }
+    "import/no-namespace": "error",
+    "func-style": ["error", "expression"]
+  },
+  "overrides": [
+    {
+      "files": ["src/components/ui/**"],
+      "rules": {
+        "func-style": "off"
+      }
+    }
+  ]
 }
