@@ -766,11 +766,11 @@ live Google account (needs a human in the OAuth popup).
 | I     | `feat/wave2-i18n`          | 1     | merged      |
 | E1    | `feat/wave2-stats`         | 1     | merged      |
 | K     | `feat/wave2-toast`         | 2     | merged      |
-| J     | `feat/wave2-drive-consent` | 2     | dispatched  |
-| L     | `feat/wave2-shell`         | 2     | dispatched  |
-| E2    | `feat/wave2-home`          | 3     | not started |
-| E3    | `feat/wave2-search`        | 3     | not started |
-| E4    | `feat/wave2-history`       | 3     | not started |
+| J     | `feat/wave2-drive-consent` | 2     | merged      |
+| L     | `feat/wave2-shell`         | 2     | merged      |
+| E2    | `feat/wave2-home`          | 3     | dispatched  |
+| E3    | `feat/wave2-search`        | 3     | dispatched  |
+| E4    | `feat/wave2-history`       | 3     | dispatched  |
 
 Status values: `not started` → `dispatched` → `reported, verifying` →
 `merged` → `reviewed`.
