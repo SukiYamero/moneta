@@ -672,4 +672,44 @@ describe('useAuthStore.hydrate', () => {
 
     expect(mUpdateSession).toHaveBeenCalledWith(session)
   })
+
+  // Same shape as connectDrive()'s own authGeneration guard below: a logout()
+  // firing while the silent re-acquire's network round trip is still pending
+  // (a real window — status already flipped to 'authenticated' before this
+  // runs, so the UI is interactive) must not have the reacquire's late result
+  // resurrect session/drive for an account the user already signed out of.
+  it('a logout() during an in-flight silent re-acquire does not resurrect session/drive', async () => {
+    const session = { accessToken: 'identity-tok', expiresAt: Date.now() + 3_600_000 }
+    mUser.mockResolvedValue({ email: 'a@b.com', name: 'Ana' })
+    mGetDriveDecision.mockResolvedValue('connected')
+    useAuthStore.setState({ driveOptIn: 'pending' })
+
+    let resolveToken!: (v: { accessToken: string; expiresAt: number }) => void
+    mToken.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveToken = resolve
+        }),
+    )
+
+    const hydratePromise = useAuthStore.getState().hydrate(session)
+    await vi.waitFor(() => expect(mToken).toHaveBeenCalled())
+
+    useAuthStore.getState().logout()
+    expect(useAuthStore.getState().session).toBeNull()
+    expect(useAuthStore.getState().drive).toBeNull()
+
+    mBootstrap.mockResolvedValue({
+      folderId: 'F',
+      movimientosFileId: 'M',
+      activosFileId: 'A',
+      configFileId: 'C',
+    })
+    resolveToken({ accessToken: 'drive-tok', expiresAt: 2 })
+    await hydratePromise
+
+    const s = useAuthStore.getState()
+    expect(s.session).toBeNull()
+    expect(s.drive).toBeNull()
+  })
 })

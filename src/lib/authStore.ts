@@ -118,9 +118,14 @@ const reacquireDrive = async (): Promise<{ session: AuthSession; drive: DriveLay
 // populated from earlier this session (either connectDrive() or an earlier
 // call to this same function), so it must not re-run bootstrap() on every
 // unlock — only a genuinely fresh session (drive still null) needs this.
-// Returns the session to hand to syncLockedSession: the upgraded
-// Drive-scoped one if reacquisition happened, the identity-only one
-// otherwise.
+// Also guarded on `authGeneration`, same as connectDrive() below: a logout()
+// firing while this is in flight (real window — login/restore/hydrate already
+// flip `status` to 'authenticated' before this runs, so the UI is interactive
+// and reachable while the reacquire's network round trip is still pending)
+// must not have its result resurrect a session/drive for an account the user
+// already signed out of. Returns the session to hand to syncLockedSession:
+// the upgraded Drive-scoped one if reacquisition happened, the identity-only
+// one otherwise.
 const reacquireDriveIfNeeded = async (
   driveOptIn: DriveOptIn,
   session: AuthSession,
@@ -128,14 +133,16 @@ const reacquireDriveIfNeeded = async (
   get: () => AuthState,
 ): Promise<AuthSession> => {
   if (driveOptIn !== 'connected' || get().drive !== null) return session
+  const generation = authGeneration
   const reacquired = await reacquireDrive()
-  if (!reacquired) return session
+  if (!reacquired || generation !== authGeneration) return session
   set({ session: reacquired.session, drive: reacquired.drive })
   return reacquired.session
 }
 
-// logout() bumps this so a connectDrive() request already in flight can tell,
-// on resolve, that it should discard its result instead of resurrecting state.
+// logout() bumps this so a connectDrive()/reacquireDriveIfNeeded() request
+// already in flight can tell, on resolve, that it should discard its result
+// instead of resurrecting state.
 let authGeneration = 0
 
 const errorMessage = (e: unknown): string => {
