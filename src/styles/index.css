@@ -1,7 +1,7 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';
-@import '@fontsource-variable/geist';
+@import '@fontsource-variable/manrope';
 
 @custom-variant dark (&:is(.dark *));
 
@@ -17,9 +17,25 @@ body {
     env(safe-area-inset-left);
 }
 
+/* Native-app feel: no double-tap-to-zoom flash, no callout menus on
+   long-press, no visible tap highlight — see AGENTS.md § UI. */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 @theme inline {
   --font-heading: var(--font-sans);
-  --font-sans: 'Geist Variable', sans-serif;
+  --font-sans: 'Manrope Variable', sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -51,15 +67,122 @@ body {
   --color-card: var(--card);
   --color-foreground: var(--foreground);
   --color-background: var(--background);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
+
+  /* Text-hierarchy tiers beyond shadcn's single muted-foreground slot — the
+     design uses 5 distinct foreground tiers (see docs/ui/design-tokens.md). */
+  --color-fg-secondary: var(--fg-secondary);
+  --color-fg-tertiary: var(--fg-tertiary);
+  --color-fg-faint: var(--fg-faint);
+  --color-fg-disabled: var(--fg-disabled);
+
+  /* Status colors — income/expense/info/warning read directly off these,
+     never off a raw hex in a component. */
+  --color-success: var(--success);
+  --color-success-strong: var(--success-strong);
+  --color-success-foreground: var(--success-foreground);
+  --color-danger: var(--danger);
+  --color-danger-strong: var(--danger-strong);
+  --color-danger-foreground: var(--danger-foreground);
+  --color-info: var(--info);
+  --color-warning: var(--warning);
+
+  /* Surface tiers — canvas (app bg) < card (default surface) < sunken
+     (inputs) < raised (menus/popovers, already --popover). */
+  --color-canvas: var(--canvas);
+  --color-surface-sunken: var(--surface-sunken);
+
+  /* Border/hairline opacity scale — pick the semantic step, never type a
+     raw rgba(255,255,255,.NN) in a component. */
+  --color-border-subtle: var(--border-subtle);
+  --color-border-strong: var(--border-strong);
+  --color-border-hover: var(--border-hover);
+
+  /* Radius scale. Not a single-base multiplier: the design's steps aren't a
+     clean geometric progression, so each is explicit (see design-tokens.md). */
+  --radius-xs: 8px;
+  --radius-sm: 10px;
+  --radius-md: 12px;
+  --radius-lg: 14px;
+  --radius-xl: 16px;
+  --radius-2xl: 18px;
+  --radius-3xl: 20px;
+  --radius-4xl: 26px;
+  --radius-5xl: 30px;
+
+  /* Font-size scale. Overrides Tailwind's default type scale on purpose —
+     this is a dense mobile UI; consolidates the design's many near-duplicate
+     half-px sizes into one step where the difference isn't meaningful
+     (documented in design-tokens.md). Rare one-off display sizes (welcome
+     title, giant amount input) intentionally stay as arbitrary values. */
+  --text-2xs: 0.625rem; /* 10px */
+  --text-xs: 0.6875rem; /* 11px */
+  --text-sm: 0.75rem; /* 12px */
+  --text-ms: 0.8125rem; /* 13px */
+  --text-base: 0.875rem; /* 14px — dense mobile UI base, not Tailwind's 16px default */
+  --text-md: 0.9375rem; /* 15px */
+  --text-lg: 1rem; /* 16px */
+  --text-xl: 1.0625rem; /* 17px */
+  --text-2xl: 1.125rem; /* 18px */
+  --text-3xl: 1.1875rem; /* 19px */
+  --text-4xl: 1.25rem; /* 20px */
+  --text-5xl: 1.3125rem; /* 21px */
+  --text-6xl: 1.75rem; /* 28px */
+  --text-7xl: 1.875rem; /* 30px */
+
+  /* Easing — the "native sheet" curve used for every sheet/push/pop
+     transition in the design. This is what makes it feel native, not web. */
+  --ease-ios: cubic-bezier(0.32, 0.72, 0, 1);
+
+  /* Screen/sheet/modal transitions, ported from the design's keyframes.
+     Respect prefers-reduced-motion (see @media block below). */
+  --animate-fade-in: fade-in 0.2s ease;
+  --animate-sheet-up: sheet-up 0.32s var(--ease-ios);
+  --animate-pop-in: pop-in 0.22s var(--ease-ios);
+  --animate-push-in: push-in 0.28s var(--ease-ios);
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes sheet-up {
+    from {
+      transform: translateY(100%);
+    }
+    to {
+      transform: translateY(0);
+    }
+  }
+  @keyframes pop-in {
+    from {
+      transform: scale(0.92);
+      opacity: 0;
+    }
+    to {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+  @keyframes push-in {
+    from {
+      transform: translateX(40px);
+      opacity: 0;
+    }
+    to {
+      transform: translateX(0);
+      opacity: 1;
+    }
+  }
 }
 
+/* Light theme is an UNSPECIFIED PLACEHOLDER — no light design exists yet
+   (specs.md §11, 2026-08-18). `Preferencias.tema` in schema.ts already plans
+   for 'claro' | 'oscuro' | 'sistema', so the slots stay populated with
+   shadcn's neutral scaffold values rather than left broken; replace these
+   with real values once a light design lands, never let it silently rot. */
 :root {
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
@@ -93,40 +216,79 @@ body {
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+
+  --fg-secondary: oklch(0.556 0 0);
+  --fg-tertiary: oklch(0.556 0 0);
+  --fg-faint: oklch(0.708 0 0);
+  --fg-disabled: oklch(0.708 0 0);
+  --success: oklch(0.72 0.19 155);
+  --success-strong: oklch(0.72 0.19 155);
+  --success-foreground: oklch(0.145 0 0);
+  --danger: oklch(0.704 0.191 22.216);
+  --danger-strong: oklch(0.577 0.245 27.325);
+  --danger-foreground: oklch(0.985 0 0);
+  --info: oklch(0.708 0.15 250);
+  --warning: oklch(0.75 0.15 75);
+  --canvas: oklch(1 0 0);
+  --surface-sunken: oklch(0.97 0 0);
+  --border-subtle: oklch(0.922 0 0);
+  --border-strong: oklch(0.85 0 0);
+  --border-hover: oklch(0.75 0 0);
 }
 
+/* Dark theme = the real KuroBello palette, extracted from the Claude Design
+   canvas (project 18d93152-c2e6-4bde-8eff-f944b1537ad8, Moneta.dc.html,
+   2026-08-18). This is the ONLY designed theme today — see specs.md §11. */
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --background: #0c0d10;
+  --foreground: #f4f4f5;
+  --card: #16181d;
+  --card-foreground: #f4f4f5;
+  --popover: #1f222a;
+  --popover-foreground: #f4f4f5;
+  --primary: #2fd896;
+  --primary-foreground: #06231a;
+  --secondary: #0f1115;
+  --secondary-foreground: #f4f4f5;
+  --muted: #16181d;
+  --muted-foreground: #85888f;
+  --accent: #16181d;
+  --accent-foreground: #f4f4f5;
+  --destructive: #f87171;
+  --border: rgba(255, 255, 255, 0.06);
+  --input: rgba(255, 255, 255, 0.08);
+  --ring: rgba(47, 216, 150, 0.5);
+  --chart-1: #2fd896;
+  --chart-2: #7ba7f0;
+  --chart-3: #f5b93f;
+  --chart-4: #fb8989;
+  --chart-5: #c084fc;
+  --sidebar: #16181d;
+  --sidebar-foreground: #f4f4f5;
+  --sidebar-primary: #2fd896;
+  --sidebar-primary-foreground: #06231a;
+  --sidebar-accent: #1f222a;
+  --sidebar-accent-foreground: #f4f4f5;
+  --sidebar-border: rgba(255, 255, 255, 0.06);
+  --sidebar-ring: rgba(47, 216, 150, 0.5);
+
+  --fg-secondary: #c9cbd0;
+  --fg-tertiary: #a8abb2;
+  --fg-faint: #6c6f76;
+  --fg-disabled: #5a5d64;
+  --success: #5be6ae;
+  --success-strong: #2fd896;
+  --success-foreground: #06231a;
+  --danger: #fb8989;
+  --danger-strong: #f87171;
+  --danger-foreground: #2a0a0a;
+  --info: #7ba7f0;
+  --warning: #f5b93f;
+  --canvas: #0c0d10;
+  --surface-sunken: #0f1115;
+  --border-subtle: rgba(255, 255, 255, 0.04);
+  --border-strong: rgba(255, 255, 255, 0.1);
+  --border-hover: rgba(255, 255, 255, 0.16);
 }
 
 @layer base {

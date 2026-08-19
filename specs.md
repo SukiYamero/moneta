@@ -41,7 +41,8 @@ review §6.
 - **PWA** via `vite-plugin-pwa` (manifest + service worker). Offline-first.
 - **Routing:** React Router (`react-router` v8, data router).
 - **Styling:** Tailwind CSS v4 (`@tailwindcss/vite`, no PostCSS) + **shadcn/ui**
-  (Radix primitives, Nova preset: Geist font + Lucide icons). Components live in
+  (Radix primitives, Manrope font + Lucide icons — see §11, 2026-08-18, which
+  supersedes the original Nova-preset Geist choice). Components live in
   `src/components/ui`; the `cn()` helper in `src/lib/utils.ts`.
 - **State:** **zustand** for shared/global state; React hooks for local state. No Redux.
 - **Charts:** recharts (migrate to uPlot only if the bundle gets heavy).
@@ -378,6 +379,36 @@ Full design: `docs/superpowers/specs/2026-06-26-pin-lock-design.md`.
   `addMany`/`removeMany`, a typed `RepoError`. `Config` was deliberately
   left atomic (not over-built) since it doesn't grow the way
   `Movimiento`/`Activo` do — the generosity is targeted, not blanket.
+- 2026-08-18 — **UI design source connected: Claude Design project
+  `18d93152-c2e6-4bde-8eff-f944b1537ad8` (`Moneta.dc.html`).** The user
+  actively keeps adding screens to it — treat as a living source, not a
+  snapshot; re-pull before implementing a screen. Read via `DesignSync`;
+  full screen-by-screen breakdown and the design ↔ code sync workflow live
+  in `docs/ui/implementation-plan.md`.
+- 2026-08-18 — **Native-app, touch-first UI direction adopted.** Touch/swipe
+  is the primary interaction model (Pointer Events, deliberate
+  `touch-action`, no hover-only affordances); native-feeling screen
+  transitions use the design's own easing (`cubic-bezier(.32,.72,0,1)`,
+  tokenized as `--ease-ios`). Mobile-first only for now — no desktop design
+  exists yet, but the interaction model must not assume click-only so
+  tablet/desktop can be added later without rework. See `AGENTS.md` § UI.
+- 2026-08-18 — **Design tokens centralized in `src/styles/index.css`**,
+  extracted from the Claude Design canvas: colors mapped onto shadcn's
+  existing semantic slots (so installed components adopt them for free) plus
+  extra tokens for the design's finer text/status/surface tiers; an explicit
+  (non-formulaic) radius scale; a dense-mobile-UI font-size scale overriding
+  Tailwind's default; the design's real animation keyframes/easing. Rationale
+  and what was deliberately left un-tokenized (one-off layout spacing) in
+  `docs/ui/design-tokens.md`. Light theme (`Preferencias.tema: 'claro'`)
+  stays an unspecified placeholder — no light design exists yet.
+- 2026-08-18 — **Fonts: Manrope, not Geist; icons: Lucide, not Phosphor.**
+  Manrope follows the design (self-hosted via
+  `@fontsource-variable/manrope`, same cost as Geist was) — supersedes the
+  2026-06-25 "Nova preset: Geist font" line. Icons stay Lucide/`lucide-react`
+  despite the design canvas using Phosphor via a CDN: a runtime icon CDN
+  breaks this PWA's offline-first requirement, and switching icon sets would
+  mean a new dependency plus remapping ~150+ icon references for a purely
+  cosmetic difference. Full reasoning in `docs/ui/design-tokens.md`.
 
 ## 12. Backlog (pending verification / deferred work)
 
@@ -388,7 +419,9 @@ Full design: `docs/superpowers/specs/2026-06-26-pin-lock-design.md`.
 - **Drive-sync opt-in UI (§10.1).** `authStore.connectDrive` provisions the `KuroBello`
   folder + 3 files but has no caller yet (bootstrap decoupled from login, 2026-07-02).
   A user-facing "enable Drive sync" entry point must call it; until then the app runs
-  local-first with no Drive writes. Verify then: first call → folder + 3 files; second
+  local-first with no Drive writes. The Claude Design canvas's "Drive permission"
+  screen is this entry point (see `docs/ui/implementation-plan.md`, "Auth" unit) —
+  implement it from there rather than designing a new one. Verify then: first call → folder + 3 files; second
   call reuses them (no dupes).
 - **Wire the PIN-lock activation (§10.2).** The lock's crypto/store core is merged
   and green; activation now has a minimal harness, one piece still pending:

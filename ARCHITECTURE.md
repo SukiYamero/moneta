@@ -17,6 +17,8 @@ file is just "where do I look", not "how does it work".
   [src/routes/README.md](src/routes/README.md).
 - `src/router.tsx` — the route table (React Router data router).
 - `src/main.tsx` — app entry point (mounts `AppLock` + `RouterProvider`).
+- `docs/ui/` — UI implementation plan + design-token rationale, sourced from
+  the Claude Design project. See [docs/ui/README.md](docs/ui/README.md).
 
 Update this file only when a top-level folder appears, disappears, or its
 role fundamentally changes — not on every internal change. Internal detail
