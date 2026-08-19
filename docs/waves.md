@@ -205,9 +205,9 @@ Check this table against `git worktree list` at the start of any parallel
 session; prune anything stale (merged-but-not-removed, or on disk but
 missing/finished here).
 
-| Created    | Track / task    | Path | Branch | Status | Notes                                                                                                |
-| ---------- | --------------- | ---- | ------ | ------ | ---------------------------------------------------------------------------------------------------- |
-| 2026-08-18 | _(none active)_ | —    | —      | —      | Wave 1, the code-review fixes, and the error-handling standard are all merged; no worktrees on disk. |
+| Created    | Track / task                            | Path                          | Branch               | Status | Notes                                                                    |
+| ---------- | --------------------------------------- | ----------------------------- | -------------------- | ------ | ------------------------------------------------------------------------ |
+| 2026-08-19 | Final-review fixes: lock/auth hardening | `../moneta-wt/lock-hardening` | `fix/lock-hardening` | active | Boot white-screen, PIN-lockout race, resume/restore seams + shape sweep. |
 
 Status values: `active` → `merged, pending cleanup` → row deleted once
 `git worktree remove <path>` runs.

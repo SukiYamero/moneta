@@ -227,6 +227,49 @@ Local-only state stays in React hooks. No Redux.
 - Use TDD for `auth.ts`, `repo.ts`, `pinLock.ts` and any money math — write the
   failing test first, then the implementation.
 
+## How every agent works (reviewers, implementers, researchers)
+
+These apply to any agent on this project, whatever it was asked to do.
+
+- **Fix the shape, not the instance.** When you fix a defect, sweep your whole
+  area for other occurrences of the _same shape_ before calling it done, and
+  report what the sweep found — including "nothing else" when that is the
+  honest answer. This is the single most expensive lesson this project has
+  learned: an unguarded storage read was fixed in one function while its twin
+  sat unfixed in a sibling function, and a read-modify-write race was fixed in
+  one module and never ported to the identical pattern in another. Both
+  shipped past a fully green test suite and were later found as CRITICAL.
+- **Question the framing you were given.** Whoever dispatched you has blind
+  spots, and a brief is an argument, not a specification of reality. If the
+  task is scoped wrongly, if a stated assumption is false, or if the real
+  problem is next to the one you were pointed at, say so. Disagreeing with
+  the operator, with reasoning, is doing the job — not a failure to follow
+  instructions.
+- **Name systematic blind spots.** If you notice that a _process_ keeps
+  producing a class of defect, report the process problem, not just the
+  defect. That finding is usually worth more than the bug that revealed it.
+- **Never pad a report.** A short, honest "three real issues, here they are"
+  beats a long one inflated to look thorough. Say plainly when something is
+  fine. Padding hides the real findings among the filler.
+- **Separate what you proved from what you reasoned.** Mark a finding
+  CONFIRMED only if you traced it precisely or reproduced it — say which —
+  and PLAUSIBLE otherwise. If you cannot write a concrete failure scenario
+  (specific inputs or actions leading to a specific bad outcome), say so and
+  lower your own confidence.
+- **Verify before you claim.** Never report a command as passing without
+  running it and reading its real output. A test you did not watch fail
+  proves nothing — write it first, see it fail for the right reason, then
+  fix.
+- **Read the project's own rules before applying generic best practice.**
+  This file, `specs.md` (the source of truth), `docs/error-handling.md`,
+  `docs/waves.md`, `ARCHITECTURE.md`, and the per-directory `README.md`s.
+  Check `specs.md` §11 before calling something a mistake — it may be a
+  recorded, deliberate decision. Check whether a relevant skill exists before
+  inventing an approach.
+- **Stop rather than guess** when something is genuinely cross-cutting or
+  outside what you own. Report it and let the operator decide; do not edit
+  another track's files, and do not silently widen your scope.
+
 ## Working in parallel (multiple agents)
 
 - One agent = one branch = one worktree. Never two writers on the same branch.
