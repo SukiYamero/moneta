@@ -743,6 +743,116 @@ check` green.
   reloads, and any queue that outlives the session — none are needed by the
   screens that consume it.
 
+### 10.7 Region-aware formatting + the initial currency (user request, 2026-08-19)
+
+- **Goal:** money and dates are formatted for the **region of the device**,
+  not for the region that happens to match the copy language, and a first-run
+  user is not silently assigned Colombian pesos because that is what the seed
+  file says.
+- **User story:** as a user in Mexico, I open the app for the first time and
+  see Mexican pesos grouped the Mexican way — not `COP 12,000.00`. As a user
+  anywhere, an expense reads `$ -12.000,00`: the minus belongs to the number,
+  not to the currency.
+- **Why this is a real gap, not a preference:** the copy locale and the
+  formatting region are two different things and Wave 2 conflated them.
+  `SupportedLocale` is a _copy_ locale — `es` is neutral Spanish for five
+  countries whose number formats disagree with each other (`es-CO` groups
+  `1.234,56`, `es-MX` groups `1,234.56`). §11's 2026-08-19 entry recorded the
+  `es → es-CO` mapping as a deliberate trade-off with this exact revisit
+  condition. This is that revisit.
+- **UI / behavior:**
+  - **Region comes from the device**, read from the region subtag of
+    `navigator.language`/`navigator.languages` (`es-MX` → `MX`), falling back
+    to the copy locale's canonical region when the browser gives no subtag.
+    The **copy** locale keeps resolving exactly as it does today
+    (`detectLocale`) — this adds a second, independent axis; it does not
+    change which language the UI speaks.
+  - **The initial `monedaPrincipal` derives from that region** (`MX` → `MXN`,
+    `AR` → `ARS`, `BR` → `BRL`, `PE` → `PEN`, `CO` → `COP`, `EC`/`US` → `USD`,
+    …), applied **only when seeding a config that does not exist yet**. A
+    stored `Config` always wins: this is a first-run default, never a
+    reassignment of a currency the user already has.
+  - **The currency always renders as a symbol** (`Intl`'s
+    `currencyDisplay: 'narrowSymbol'`), never the ISO code. Standard `Intl`
+    shows `COP` rather than `$` when the currency is foreign to the
+    formatting region; that disambiguation is deliberately traded away for a
+    consistent look (see Edge cases).
+  - **The sign attaches to the number, not to the currency:** `$ -12.000,00`,
+    not `-$ 12.000,00`; likewise `$ +3.200,00` for the signed income variant
+    `getMovimientoAmountView` renders. Build this from `formatToParts`, not by
+    string-prepending a character — the symbol's position is locale data
+    (`R$ ` leads in pt-BR; other locales trail it), so a hand-built string is
+    wrong the moment the locale changes.
+- **Data touched:** `Config.preferencias.monedaPrincipal` at seed time only.
+  `Moneda` widens from `'COP' | 'USD'` to include the currencies of the
+  regions the locale list already targets. **This is additive** — every
+  existing value stays valid, no stored data changes meaning — so it needs no
+  `SCHEMA_VERSION` bump and no migration, per `AGENTS.md`'s structural-change
+  rule (which covers rename/split/delete, not widening).
+- **Edge cases:**
+  - **`CONFIG_SEMILLA` must stay a static constant.** Deriving its currency
+    at module-import time would reproduce, exactly, the defect shape §11
+    (2026-08-19) records twice: _a value evaluated at import time from an
+    environment the test suite happens to make favourable_. The region-derived
+    currency is applied by the **seeding path**, as a function, not by the
+    constant.
+  - **There are two seeding paths and both must be fixed** — `repo.local.ts`
+    (dexie) and `bootstrap.ts` (the Drive files). Fixing one and leaving its
+    twin is the single most expensive mistake this project has recorded
+    (`AGENTS.md` § How every agent works).
+  - **An unknown or missing region** falls back to today's behavior (`COP`,
+    `es-CO` grouping) rather than guessing.
+  - **`narrowSymbol` collides across currencies**: `$` means COP, MXN, ARS
+    and USD alike. Accepted deliberately (user decision, 2026-08-19) — the app
+    shows one currency at a time and a multi-currency view does not exist yet.
+    When one does, it needs a way to disambiguate that is not the ISO code
+    bolted back on globally.
+  - **A negative balance** (`totals.balance`) already flows through the same
+    formatter, so the sign rule must be a property of the formatter, not of
+    the movement-row call site.
+- **Done when:** a device in `es-MX` seeds `MXN` and groups `1,234.56`; a
+  device in `es-CO` is unchanged from today; the stored config always beats
+  the detected region; expenses render `$ -12.000,00` in all four locales
+  (tested via `formatToParts`, not string equality against one locale);
+  `bun run check` green.
+- **Out of scope:** a currency/region picker in Settings (Track G, Wave 3),
+  FX conversion, and per-movement currency in the UI. The field has always
+  supported multi-currency; nothing here starts using it.
+
+### 10.8 Category color in `TagChip` (user request, 2026-08-19)
+
+- **Goal:** a category's color is one fact, shown consistently. Today the
+  movement rows tint each category via `getMovimientoVisual`'s
+  `CATEGORY_TINT`, while the selector chips ignore that tint and paint every
+  selected chip the same primary green.
+- **User story:** as a user, when I pick "Comida" in the filter sheet, it
+  reads amber — the same amber the Comida rows use — so I can scan by color
+  instead of by reading every label.
+- **UI:**
+  - The chip's **icon always carries its category tint**, selected or not, so
+    the palette is legible before anything is chosen.
+  - **Selecting tints the whole pill** in that same family (border,
+    background, text), replacing the single `primary` treatment.
+  - Unselected chips keep their neutral surface — only the icon is colored.
+  - The 44px touch-target split (`specs.md` §10.5.1, §11 2026-08-19) is
+    unchanged: the hit area grows, the pill does not.
+- **Data touched:** none. `CATEGORY_TINT` in
+  `src/components/shared/movimientoView.ts` stays the single source of truth
+  for which color a category is — `TagChip` receives a tint, it does not map
+  one.
+- **Edge cases:**
+  - **A custom category with no entry in `CATEGORY_TINT`** falls back to the
+    type-based tint that `getMovimientoVisual` already returns — the same
+    fallback the rows use, not a second rule.
+  - **`neutral` as a tint** must still read as selected when chosen;
+    a selected neutral chip cannot be indistinguishable from an unselected one.
+  - **Contrast** in both themes: the tints are the existing `chart-*`/status
+    tokens, so no new color values enter the system
+    (`docs/ui/design-tokens.md`).
+- **Done when:** every category chip shows its own color in the filter sheet,
+  selected chips are tinted per category rather than uniformly green, an
+  unknown category falls back to its type tint, and `bun run check` is green.
+
 ## 11. Decisions log
 
 - 2026-06-25 — Package manager: **bun**. Node: **24 LTS** (`.nvmrc`).
