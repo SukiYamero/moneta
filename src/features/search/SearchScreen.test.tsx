@@ -89,6 +89,15 @@ describe('SearchScreen', () => {
     expect(screen.getByRole('heading', { name: /buscar/i })).toBeInTheDocument()
   })
 
+  // AppShell's scroll pane already reserves --bottom-nav-clearance for
+  // every routed screen (docs/wave-2/review-l.md finding 1) — a second copy
+  // here would double the clearance under the nav on this one screen.
+  it("does not duplicate the shell's --bottom-nav-clearance padding on its own <main>", () => {
+    setReady([])
+    const { container } = render(<SearchScreen />)
+    expect(container.querySelector('main')?.className).not.toMatch(/bottom-nav-clearance/)
+  })
+
   it('shows a loading state while the data store is not ready', () => {
     useDataStore.setState({ status: 'loading' })
     render(<SearchScreen />)
@@ -166,6 +175,26 @@ describe('SearchScreen', () => {
     expect(screen.getByText('Viaje en camión')).toBeInTheDocument()
   })
 
+  it('the "no results" message names the query that actually produced zero results, not one still pending debounce', async () => {
+    const user = userEvent.setup()
+    setReady([movimiento({ nota: 'Café de la mañana' })])
+    render(<SearchScreen />)
+
+    const input = screen.getByRole('textbox', { name: /descripción o etiqueta/i })
+    await user.type(input, 'zzz')
+    await waitFor(() => {
+      expect(screen.getByText('No encontramos "zzz"')).toBeInTheDocument()
+    })
+
+    // Typed further immediately after, with no await in between: the
+    // committed (debounced) query driving the actual filter is still
+    // "zzz" for at least this tick, so the message must keep naming "zzz"
+    // — not "zzzq", which was never actually searched yet.
+    await user.type(input, 'q')
+    expect(screen.getByText('No encontramos "zzz"')).toBeInTheDocument()
+    expect(screen.queryByText('No encontramos "zzzq"')).not.toBeInTheDocument()
+  })
+
   it('shows "no results" (not "no data") when a query matches nothing, and clearing restores the list', async () => {
     const user = userEvent.setup()
     setReady([movimiento({ nota: 'Café de la mañana' })])
@@ -241,6 +270,39 @@ describe('SearchScreen', () => {
     await user.click(chip)
 
     expect(screen.getByText('Café de la mañana')).toBeInTheDocument()
+  })
+
+  // AGENTS.md § UI: touch targets ≥ 44px. specs.md §10.5.1 fixed this exact
+  // shape (a small visible icon/pill as the whole button, no invisible
+  // 44px hit-area padding) on TagChip/SegmentedControl/DateChipPicker —
+  // sweeping this track's own screen for the same shape.
+  it('the clear-search button meets the 44px touch-target floor without inflating the visible circle', async () => {
+    const user = userEvent.setup()
+    setReady([movimiento({ nota: 'Café de la mañana' })])
+    render(<SearchScreen />)
+
+    await user.type(screen.getByRole('textbox', { name: /descripción o etiqueta/i }), 'c')
+
+    const button = screen.getByRole('button', { name: /borrar búsqueda/i })
+    expect(button).toHaveClass('min-h-11')
+    expect(button).toHaveClass('min-w-11')
+    // the visible circle (background) lives on an inner element at its
+    // original, smaller designed size — only the button's hit area grows.
+    expect(button.firstElementChild).toHaveClass('size-6')
+  })
+
+  it('an active filter chip meets the 44px touch-target floor without inflating the visible pill', async () => {
+    const user = userEvent.setup()
+    setReady([movimiento({ nota: 'Café de la mañana', tipo: 'gasto' })])
+    render(<SearchScreen />)
+
+    await user.click(screen.getByRole('button', { name: /^filtros$/i }))
+    await user.click(within(screen.getByRole('dialog')).getByRole('radio', { name: /gastos/i }))
+    await user.keyboard('{Escape}')
+
+    const chip = screen.getByRole('button', { name: /gastos/i })
+    expect(chip).toHaveClass('min-h-11')
+    expect(chip.firstElementChild).toHaveClass('h-9')
   })
 
   it('"Limpiar" in the filter sheet clears every filter and restores the full list', async () => {

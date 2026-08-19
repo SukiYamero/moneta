@@ -157,7 +157,7 @@ export const SearchScreen = () => {
   ])
 
   return (
-    <main className="flex min-h-full animate-fade-in flex-col px-5 pt-6 pb-(--bottom-nav-clearance)">
+    <main className="flex min-h-full animate-fade-in flex-col px-5 pt-6">
       <div className="flex items-center gap-3">
         <div className="min-w-0 flex-1">
           <h1 className="text-5xl font-extrabold tracking-tight text-balance">{t('title')}</h1>
@@ -206,9 +206,11 @@ export const SearchScreen = () => {
             type="button"
             onClick={filters.clearSearch}
             aria-label={t('clearSearchLabel')}
-            className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-fg-secondary"
+            className="flex min-h-11 min-w-11 shrink-0 items-center justify-center"
           >
-            <X className="size-3.5" aria-hidden="true" />
+            <span className="flex size-6 items-center justify-center rounded-full bg-muted text-fg-secondary">
+              <X className="size-3.5" aria-hidden="true" />
+            </span>
           </button>
         )}
       </div>
@@ -220,10 +222,12 @@ export const SearchScreen = () => {
               key={chip.key}
               type="button"
               onClick={chip.onRemove}
-              className="flex h-9 shrink-0 items-center gap-1.5 rounded-md border border-primary/35 bg-primary/12 px-3 text-xs font-semibold whitespace-nowrap text-primary"
+              className="inline-flex min-h-11 shrink-0 items-center"
             >
-              <chip.icon className="size-3.5" aria-hidden="true" />
-              {chip.label}
+              <span className="flex h-9 items-center gap-1.5 rounded-md border border-primary/35 bg-primary/12 px-3 text-xs font-semibold whitespace-nowrap text-primary">
+                <chip.icon className="size-3.5" aria-hidden="true" />
+                {chip.label}
+              </span>
             </button>
           ))}
         </div>
@@ -245,7 +249,7 @@ export const SearchScreen = () => {
             title={t('emptyResults.title')}
             subtitle={
               hasQuery
-                ? t('emptyResults.withQuery', { query: filters.query })
+                ? t('emptyResults.withQuery', { query: filters.debouncedQuery })
                 : t('emptyResults.withoutQuery')
             }
           />
