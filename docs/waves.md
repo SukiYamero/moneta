@@ -69,7 +69,7 @@ entry — not silently building past it.
 
 ---
 
-## Wave 2 — active
+## Wave 2 — ✅ COMPLETE (merged to `main`, 2026-08-19)
 
 > **Execution detail lives in [`wave-2-plan.md`](wave-2-plan.md)** — the
 > operator's decomposition: per-track specs, file ownership, stage
@@ -234,9 +234,7 @@ Check this table against `git worktree list` at the start of any parallel
 session; prune anything stale (merged-but-not-removed, or on disk but
 missing/finished here).
 
-| Created    | Track / task               | Path                            | Branch             | Status | Notes                                       |
-| ---------- | -------------------------- | ------------------------------- | ------------------ | ------ | ------------------------------------------- |
-| 2026-08-19 | Wave 2 · review of Track M | `../moneta-worktrees/rv-locale` | `review/rv-locale` | active | Stage 5 review. Rules: `wave-2-plan.md` §5. |
+_Empty — every Wave 2 worktree was removed when its branch merged._
 
 Status values: `active` → `merged, pending cleanup` → row deleted once
 `git worktree remove <path>` runs.

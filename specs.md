@@ -2226,6 +2226,40 @@ lint` clean bar the one pre-existing `components/ui` warning). `AGENTS.md`
   deterministic. This is why the `fireEvent` ban (2026-06-25) did not need an
   exception carved out of it.
 
+- 2026-08-19 — **A locale parameter has no default.** `formatMonto`,
+  `getMovimientoAmountView`, `MovimientoRow`'s `locale`/`dateFnsLocale`,
+  `DateChipPicker`'s two locale props, and the pure label helpers in
+  `homeView.ts` / `historyPeriodLabel.ts` / `historyPeriodOptions.ts` all
+  **require** the caller to pass the active locale. The earlier `es-CO`/`es`
+  defaults were correct for the additive change that introduced them, and
+  then let every real screen keep calling the old way while the code looked
+  wired — the bug this closed. A forgotten call site is now a `tsc` error.
+  This matters more than usual here because **the seed data is Colombian
+  regardless of locale**, so a missed wire-up doesn't look broken; it looks
+  like the data happens to be in pesos.
+
+- 2026-08-19 — **Phrase-level date formatting uses `Intl.DateTimeFormat`,
+  not a date-fns pattern.** A pattern like `"d 'de' MMMM"` bakes the Spanish
+  connector `de` in as a **literal**, which no `Locale` object translates —
+  under `enUS` it renders `"10 de August"`. Day/month ordering and connector
+  words are locale data, not something one pattern string can parametrize.
+  date-fns stays correct for patterns with no embedded words (`'MMMM yyyy'`,
+  `'EEEEE'`, `'PPPP'`), which is why `DateChipPicker` and `MovimientoRow`
+  each take **both** a BCP-47 `locale` and a `dateFnsLocale`.
+
+  The shape worth remembering: **an inventory built by grepping imports
+  cannot find a translated literal embedded inside a format string.** This
+  bug sat in a file the sweep had already listed, and was found only by
+  writing the locale-switch test. When a sweep is scoped by import search,
+  say so and check the pattern strings by hand.
+
+- 2026-08-19 — **Leaf render components call `useLocaleFormatting()`
+  themselves** rather than receiving locale through props from a parent
+  hook. They already call `useTranslation()` for copy; adding locale fields
+  to `useHomeDashboard`'s return contract would duplicate what the hook
+  gives any component for free — the single-source-of-truth rule pointing
+  the opposite way from prop-threading here.
+
 ## 12. Backlog (pending verification / deferred work)
 
 - **The lock feature is not internationalised at all.** `LockScreen`,
@@ -2320,6 +2354,27 @@ lint` clean bar the one pre-existing `components/ui` warning). `AGENTS.md`
   row there that reads `authStore.drive`/`driveOptIn` and can call
   `connectDrive()` on demand — the "turn it back on" counterpart that makes
   a persistent "don't ask again" viable later, if ever wanted.
+- **`DateChipPicker`'s aria-labels are still hardcoded Spanish**
+  ("Mes anterior", "Mes siguiente", "Selector de fecha") — the component has
+  no assigned locale namespace, so Track M (a formatter-wiring track)
+  deliberately left them. A non-Spanish screen-reader user hears Spanish
+  button names in the Search filter sheet's custom date range, while the
+  day-cell labels around them are localized. Whoever next touches this
+  component for copy should pick a namespace and retrofit them the way
+  Track I did for the Wave 1 screens.
+
+- **"Doc lines to add" in a track report is a checklist to execute, not a
+  section to read.** `docs/wave-2-plan.md` §1.2 makes an existing folder's
+  `README.md` operator-owned for the whole wave, so tracks correctly hand
+  their doc edits over instead of applying them — which means the operator
+  is the single point of failure for every directory doc. Track M's five
+  README edits sat unapplied until its reviewer caught them, and two lines
+  in `src/components/shared/README.md` were by then actively false. The
+  reviewer initially filed this against the track, citing `AGENTS.md`'s
+  generic "update the README before calling the task done" without the
+  wave's own override — worth noting as its own small lesson about reading
+  the project's rules before the generic one.
+
 - **Neutral `es` formats numbers as `es-CO` for every country it covers.**
   `localeFormatting.ts` maps the neutral Spanish copy locale to the `es-CO`
   tag, so a Mexican or Peruvian user reading neutral Spanish sees Colombian

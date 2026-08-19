@@ -833,17 +833,17 @@ live Google account (needs a human in the OAuth popup).
 
 ## 7. Live status
 
-| Track | Branch                     | Stage | Status                |
-| ----- | -------------------------- | ----- | --------------------- |
-| I     | `feat/wave2-i18n`          | 1     | reviewed              |
-| E1    | `feat/wave2-stats`         | 1     | reviewed              |
-| K     | `feat/wave2-toast`         | 2     | reviewed              |
-| J     | `feat/wave2-drive-consent` | 2     | reviewed              |
-| L     | `feat/wave2-shell`         | 2     | reviewed              |
-| E2    | `feat/wave2-home`          | 3     | reviewed              |
-| E3    | `feat/wave2-search`        | 3     | review 4 (dispatched) |
-| E4    | `feat/wave2-history`       | 3     | reviewed              |
-| M     | `feat/wave2-locale-wiring` | 5     | merged, in review     |
+| Track | Branch                     | Stage | Status   |
+| ----- | -------------------------- | ----- | -------- |
+| I     | `feat/wave2-i18n`          | 1     | reviewed |
+| E1    | `feat/wave2-stats`         | 1     | reviewed |
+| K     | `feat/wave2-toast`         | 2     | reviewed |
+| J     | `feat/wave2-drive-consent` | 2     | reviewed |
+| L     | `feat/wave2-shell`         | 2     | reviewed |
+| E2    | `feat/wave2-home`          | 3     | reviewed |
+| E3    | `feat/wave2-search`        | 3     | reviewed |
+| E4    | `feat/wave2-history`       | 3     | reviewed |
+| M     | `feat/wave2-locale-wiring` | 5     | reviewed |
 
 Status values: `not started` → `dispatched` → `reported, verifying` →
 `merged` → `reviewed`.
