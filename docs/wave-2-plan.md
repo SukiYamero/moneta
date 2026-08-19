@@ -769,7 +769,7 @@ live Google account (needs a human in the OAuth popup).
 | J     | `feat/wave2-drive-consent` | 2     | merged      |
 | L     | `feat/wave2-shell`         | 2     | merged      |
 | E2    | `feat/wave2-home`          | 3     | dispatched  |
-| E3    | `feat/wave2-search`        | 3     | dispatched  |
+| E3    | `feat/wave2-search`        | 3     | merged      |
 | E4    | `feat/wave2-history`       | 3     | dispatched  |
 
 Status values: `not started` → `dispatched` → `reported, verifying` →
