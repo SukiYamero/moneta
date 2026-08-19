@@ -164,7 +164,7 @@
     },
     "breakdown": {
       "title": "Por etiqueta",
-      "gasto": "Gastos",
+      "gasto": "Despesas",
       "ingreso": "Receitas",
       "emptyGasto": "Sem gastos neste período",
       "emptyIngreso": "Sem receitas neste período"

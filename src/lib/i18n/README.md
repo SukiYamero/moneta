@@ -3,10 +3,14 @@
 Translation table + locale detection. `react-i18next` + `i18next`, bundled
 JSON resources — no `i18next-http-backend`, no CDN.
 
-- `index.ts` — initializes the shared `i18next` instance (synchronous:
-  `initImmediate: false`, `useSuspense: false`, so no screen flashes empty)
-  and keeps `<html lang>` in sync via `languageChanged`. Imported once, as a
-  side effect, from `src/main.tsx`.
+- `index.ts` — initializes the shared `i18next` instance. Passing inline
+  `resources` (no backend/CDN) makes `init()` load synchronously on its own
+  in this i18next version — no `initImmediate` option exists to set (it was
+  removed from i18next's types; confirmed by reading
+  `node_modules/i18next/dist/cjs/i18next.js`, not just the changelog) — so
+  combined with `useSuspense: false`, `t()` is usable on first render with
+  no flash of empty text. Also keeps `<html lang>` in sync via
+  `languageChanged`. Imported once, as a side effect, from `src/main.tsx`.
 - `resources.ts` — assembles the four locale JSON files into the shape
   `i18next` expects (`resources[locale][namespace]`).
 - `detectLocale.ts` — pure `navigator.languages` → `SupportedLocale` mapping
