@@ -1343,6 +1343,22 @@ once per call`) pins the run-once property so this can't silently regress
   decorative (`aria-hidden`, no interactive semantics) — there's no
   plausible screen need to measure or focus it, so it was left out of the
   React 19 `ref`-as-prop pass rather than adding an unused capability.
+- 2026-08-18 — **No `import * as React` namespace imports; named imports
+  only.** `src/components/ui/button.tsx` used `import * as React from
+'react'` purely to reach `React.ComponentProps` — converted to `import
+type { ComponentProps } from 'react'`, matching the type-only-import
+  convention already used elsewhere in `src/`. This is the one spot in the
+  tree that had it; verified with `rg` across `src` for `React\.`,
+  `import React`, and `JSX\.` — nothing else matched. The risk is
+  reintroduction: `bunx shadcn@latest add <name>` (the documented way to
+  add new `ui/` components, AGENTS.md) emits `import * as React from
+'react'` as its house style, so every future generated component would
+  bring it back. Enforcement: oxlint ships a real `import/no-namespace`
+  rule (needs the `import` plugin, not enabled by default) that flags any
+  `import * as x from 'y'` — verified it fires by temporarily
+  reintroducing the namespace import and running `bun run lint` with the
+  rule enabled (errored as expected), then reverting. `AGENTS.md` gets a
+  rule requiring the import be normalized after every `shadcn add`.
 
 ## 12. Backlog (pending verification / deferred work)
 
