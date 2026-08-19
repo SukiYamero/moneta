@@ -5,6 +5,7 @@ import { HistoryScreen } from '@/features/history/HistoryScreen'
 import { fakeRepo } from '@/lib/repo.fake'
 import { breakdownBy, filterByRange, periodRange, totals } from '@/lib/movimientoStats'
 import { formatMonto } from '@/components/shared/movimientoView'
+import { i18next } from '@/lib/i18n'
 
 // The fake repo's seed data is pinned to a fixed clock (repo.fake.ts,
 // independent of the system clock), so pinning the system clock here to the
@@ -113,10 +114,10 @@ describe('HistoryScreen', () => {
       // correct (balance == -gastos) rather than a bug to avoid — a single
       // occurrence is still enough to prove the number reached the screen.
       expect(
-        await screen.findAllByText(money(`+${formatMonto(expected.ingresos, moneda)}`)),
+        await screen.findAllByText(money(`+${formatMonto(expected.ingresos, moneda, 'es-CO')}`)),
       ).not.toHaveLength(0)
       expect(
-        screen.getAllByText(money(`-${formatMonto(expected.gastos, moneda)}`)),
+        screen.getAllByText(money(`-${formatMonto(expected.gastos, moneda, 'es-CO')}`)),
       ).not.toHaveLength(0)
     },
   )
@@ -139,7 +140,9 @@ describe('HistoryScreen', () => {
 
     expect(await screen.findByText(topIngreso!.key)).toBeInTheDocument()
     expect(
-      screen.getByText(money(formatMonto(topIngreso!.total, config.preferencias.monedaPrincipal))),
+      screen.getByText(
+        money(formatMonto(topIngreso!.total, config.preferencias.monedaPrincipal, 'es-CO')),
+      ),
     ).toBeInTheDocument()
   })
 
@@ -154,5 +157,31 @@ describe('HistoryScreen', () => {
       'aria-selected',
       'true',
     )
+  })
+
+  // The Done-when guarantee (docs/wave-2/track-m.md): switching locale must
+  // change the period's month name AND the currency formatting together —
+  // a translated header still showing es-CO-formatted totals would be a
+  // half-translated screen, worse than the original all-Spanish bug.
+  it('renders the period month name and totals together in the locale passed by the caller', async () => {
+    const user = userEvent.setup()
+    await i18next.changeLanguage('en')
+    render(<HistoryScreen />)
+    await screen.findByText('Café de la mañana')
+
+    await user.click(screen.getByRole('radio', { name: 'Month' }))
+
+    const movimientos = (await fakeRepo.movimientos.list()).items
+    const config = await fakeRepo.getConfig()
+    const range = periodRange('mes', seedTodayIso, config.preferencias.primerDiaSemana)
+    const expected = totals(filterByRange(movimientos, range))
+    const moneda = config.preferencias.monedaPrincipal
+
+    expect(screen.getByText(new RegExp(`^[A-Z][a-z]+ \\d{4}$`))).toBeInTheDocument()
+    expect(
+      await screen.findAllByText(money(`+${formatMonto(expected.ingresos, moneda, 'en-US')}`)),
+    ).not.toHaveLength(0)
+
+    await i18next.changeLanguage('es')
   })
 })

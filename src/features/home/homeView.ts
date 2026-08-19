@@ -1,8 +1,7 @@
 // Pure presentation helpers for the Home dashboard — date/label formatting
 // and the week-strip's day scaffold. None of these compute money; every
 // figure on screen still traces to `movimientoStats` (see useHomeDashboard.ts).
-import { addDays, format, parseISO } from 'date-fns'
-import { es } from 'date-fns/locale'
+import { addDays, format, parseISO, type Locale } from 'date-fns'
 import type { Movimiento } from '@/lib/schema'
 import type { DateRange } from '@/lib/movimientoStats'
 
@@ -26,16 +25,16 @@ export const getInitials = (name: string): string => {
 }
 
 /** 3-letter uppercase weekday abbreviation ("LUN"), matching the design's week strip. */
-export const shortDayLabel = (iso: string): string =>
-  format(parseISO(iso), 'EEE', { locale: es }).toUpperCase()
+export const shortDayLabel = (iso: string, locale: Locale): string =>
+  format(parseISO(iso), 'EEE', { locale }).toUpperCase()
 
 /** Single-letter uppercase weekday label ("L"), for the narrow chart labels. */
-export const narrowDayLabel = (iso: string): string =>
-  format(parseISO(iso), 'EEEEE', { locale: es }).toUpperCase()
+export const narrowDayLabel = (iso: string, locale: Locale): string =>
+  format(parseISO(iso), 'EEEEE', { locale }).toUpperCase()
 
-/** "Junio 2026", capitalized — date-fns' `MMMM` is lowercase in `es`. */
-export const monthYearLabel = (date: Date): string => {
-  const label = format(date, 'MMMM yyyy', { locale: es })
+/** "Junio 2026", capitalized — date-fns' `MMMM` is lowercase in most locales. */
+export const monthYearLabel = (date: Date, locale: Locale): string => {
+  const label = format(date, 'MMMM yyyy', { locale })
   return label.charAt(0).toUpperCase() + label.slice(1)
 }
 
@@ -59,6 +58,7 @@ export const buildWeekStripDays = (
   movimientos: Movimiento[],
   weekRange: DateRange,
   todayIso: string,
+  locale: Locale,
 ): WeekStripDay[] => {
   const datesWithMovimientos = new Set(movimientos.map((m) => m.fecha))
   const start = parseISO(weekRange.from)
@@ -67,7 +67,7 @@ export const buildWeekStripDays = (
     const iso = format(date, 'yyyy-MM-dd')
     return {
       iso,
-      dayLabel: shortDayLabel(iso),
+      dayLabel: shortDayLabel(iso, locale),
       dayNumber: date.getDate(),
       isToday: iso === todayIso,
       hasMovimientos: datesWithMovimientos.has(iso),

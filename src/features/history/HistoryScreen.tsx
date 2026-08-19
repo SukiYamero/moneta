@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import type { Periodo, TipoMovimiento } from '@/lib/schema'
 import { breakdownBy, filterByRange, periodRange, totals } from '@/lib/movimientoStats'
 import { useDataStore } from '@/lib/dataStore'
+import { useLocaleFormatting } from '@/lib/i18n/localeFormatting'
 import { MovimientoRow, SegmentedControl, type SegmentedControlOption } from '@/components/shared'
 import { useHistoryPeriod } from '@/features/history/useHistoryPeriod'
 import {
@@ -29,6 +30,7 @@ export const HistoryScreen = () => {
   const { movimientos, config, status, load } = useDataStore()
   const { scope, anchor, setScope, selectAnchor, step, selectYear } = useHistoryPeriod()
   const [bdType, setBdType] = useState<TipoMovimiento>('gasto')
+  const { locale, dateFnsLocale } = useLocaleFormatting()
 
   useEffect(() => {
     void load()
@@ -66,11 +68,17 @@ export const HistoryScreen = () => {
   const periodTotals = totals(periodMovimientos)
   const breakdown = breakdownBy(periodMovimientos, 'categoria', bdType)
   const years = buildYearOptions(movimientos, new Date())
-  const label = getPeriodLabel(scope, range, new Date(), {
-    today: t('today'),
-    week: t('weekLabel'),
-    summary: t('summary'),
-  })
+  const label = getPeriodLabel(
+    scope,
+    range,
+    new Date(),
+    {
+      today: t('today'),
+      week: t('weekLabel'),
+      summary: t('summary'),
+    },
+    dateFnsLocale,
+  )
 
   const scopeOptions: SegmentedControlOption<Periodo>[] = SCOPES.map((value) => ({
     value,
@@ -131,10 +139,10 @@ export const HistoryScreen = () => {
             onSelect={selectAnchor}
             options={
               pickerKind === 'day'
-                ? buildDayOptions(movimientos, anchor, range)
+                ? buildDayOptions(movimientos, anchor, range, dateFnsLocale)
                 : pickerKind === 'week'
-                  ? buildWeekOptions(movimientos, anchor, range, primerDiaSemana)
-                  : buildMonthOptions(movimientos, anchor, range, primerDiaSemana)
+                  ? buildWeekOptions(movimientos, anchor, range, primerDiaSemana, dateFnsLocale)
+                  : buildMonthOptions(movimientos, anchor, range, primerDiaSemana, dateFnsLocale)
             }
           />
         </div>
@@ -161,7 +169,12 @@ export const HistoryScreen = () => {
             />
             <div className="flex flex-col gap-2.5">
               {periodMovimientos.map((movimiento) => (
-                <MovimientoRow key={movimiento.id} movimiento={movimiento} />
+                <MovimientoRow
+                  key={movimiento.id}
+                  movimiento={movimiento}
+                  locale={locale}
+                  dateFnsLocale={dateFnsLocale}
+                />
               ))}
             </div>
           </>

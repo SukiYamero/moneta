@@ -1,11 +1,14 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { enUS, es } from 'date-fns/locale'
 import { DateChipPicker } from '@/components/shared/DateChipPicker'
 
 describe('DateChipPicker', () => {
   it('shows the selected date as a formatted label and starts collapsed', () => {
-    render(<DateChipPicker value="2026-08-10" onChange={() => {}} />)
+    render(
+      <DateChipPicker value="2026-08-10" onChange={() => {}} locale="es-CO" dateFnsLocale={es} />,
+    )
 
     expect(screen.getByText('10 de agosto')).toBeInTheDocument()
     expect(screen.queryByRole('group', { name: 'Selector de fecha' })).not.toBeInTheDocument()
@@ -13,7 +16,9 @@ describe('DateChipPicker', () => {
 
   it('expands the month grid on chip tap', async () => {
     const user = userEvent.setup()
-    render(<DateChipPicker value="2026-08-10" onChange={() => {}} />)
+    render(
+      <DateChipPicker value="2026-08-10" onChange={() => {}} locale="es-CO" dateFnsLocale={es} />,
+    )
 
     await user.click(screen.getByRole('button', { name: /10 de agosto/ }))
 
@@ -24,7 +29,9 @@ describe('DateChipPicker', () => {
   it('calls onChange with the tapped day in ISO format and collapses', async () => {
     const user = userEvent.setup()
     const onChange = vi.fn()
-    render(<DateChipPicker value="2026-08-10" onChange={onChange} />)
+    render(
+      <DateChipPicker value="2026-08-10" onChange={onChange} locale="es-CO" dateFnsLocale={es} />,
+    )
 
     await user.click(screen.getByRole('button', { name: /10 de agosto/ }))
     await user.click(screen.getByRole('button', { name: /15 de agosto/ }))
@@ -35,7 +42,9 @@ describe('DateChipPicker', () => {
 
   it('navigates months without changing the selected value', async () => {
     const user = userEvent.setup()
-    render(<DateChipPicker value="2026-08-10" onChange={() => {}} />)
+    render(
+      <DateChipPicker value="2026-08-10" onChange={() => {}} locale="es-CO" dateFnsLocale={es} />,
+    )
 
     await user.click(screen.getByRole('button', { name: /10 de agosto/ }))
     await user.click(screen.getByRole('button', { name: 'Mes siguiente' }))
@@ -45,7 +54,9 @@ describe('DateChipPicker', () => {
 
   it('closes the month grid on Escape', async () => {
     const user = userEvent.setup()
-    render(<DateChipPicker value="2026-08-10" onChange={() => {}} />)
+    render(
+      <DateChipPicker value="2026-08-10" onChange={() => {}} locale="es-CO" dateFnsLocale={es} />,
+    )
 
     await user.click(screen.getByRole('button', { name: /10 de agosto/ }))
     expect(screen.getByRole('group', { name: 'Selector de fecha' })).toBeInTheDocument()
@@ -57,7 +68,9 @@ describe('DateChipPicker', () => {
 
   it('meets the 44px touch-target floor on the chip and month-nav buttons without inflating their visible size', async () => {
     const user = userEvent.setup()
-    render(<DateChipPicker value="2026-08-10" onChange={() => {}} />)
+    render(
+      <DateChipPicker value="2026-08-10" onChange={() => {}} locale="es-CO" dateFnsLocale={es} />,
+    )
 
     const chipButton = screen.getByRole('button', { name: /10 de agosto/ })
     expect(chipButton).toHaveClass('min-h-11')
@@ -67,5 +80,22 @@ describe('DateChipPicker', () => {
     const prevMonth = screen.getByRole('button', { name: 'Mes anterior' })
     expect(prevMonth).toHaveClass('min-h-11', 'min-w-11')
     expect(prevMonth.firstElementChild).toHaveClass('size-7')
+  })
+
+  // `"d 'de' MMMM"` under date-fns would bake the Spanish connector "de"
+  // into every locale ("10 de August") — the chip label uses
+  // Intl.DateTimeFormat instead, which localizes the whole phrase, not just
+  // the month name (docs/wave-2/track-m.md).
+  it('renders the day+month label and the month header in the locale passed by the caller', async () => {
+    const user = userEvent.setup()
+    render(
+      <DateChipPicker value="2026-08-10" onChange={() => {}} locale="en-US" dateFnsLocale={enUS} />,
+    )
+
+    expect(screen.getByText('August 10')).toBeInTheDocument()
+    expect(screen.queryByText('10 de agosto')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /August 10/ }))
+    expect(screen.getByText('August 2026')).toBeInTheDocument()
   })
 })

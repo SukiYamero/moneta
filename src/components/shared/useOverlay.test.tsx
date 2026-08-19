@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { es } from 'date-fns/locale'
 import { BottomSheet } from '@/components/shared/BottomSheet'
 import { CenterModal } from '@/components/shared/CenterModal'
 import { DateChipPicker } from '@/components/shared/DateChipPicker'
@@ -196,7 +197,7 @@ describe('useOverlay + useEscapeToClose — DateChipPicker inside a BottomSheet'
       const [date, setDate] = useState('2026-08-10')
       return (
         <BottomSheet open onClose={onSheetClose} ariaLabel="Sheet con selector de fecha">
-          <DateChipPicker value={date} onChange={setDate} />
+          <DateChipPicker value={date} onChange={setDate} locale="es-CO" dateFnsLocale={es} />
         </BottomSheet>
       )
     }

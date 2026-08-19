@@ -21,11 +21,11 @@ describe('getMovimientoVisual', () => {
 
 describe('formatMonto', () => {
   it('formats a positive amount as COP currency', () => {
-    expect(formatMonto(1200, 'COP')).toContain('1.200')
+    expect(formatMonto(1200, 'COP', 'es-CO')).toContain('1.200')
   })
 
   it('formats a positive amount as USD currency', () => {
-    expect(formatMonto(1200, 'USD')).toMatch(/US\$|\$/)
+    expect(formatMonto(1200, 'USD', 'es-CO')).toMatch(/US\$|\$/)
   })
 
   it('reuses one Intl.NumberFormat per currency instead of constructing one per call', () => {
@@ -35,17 +35,19 @@ describe('formatMonto', () => {
     // MovimientoRow would be doing this per row per render.
     const constructorSpy = vi.spyOn(Intl, 'NumberFormat')
 
-    formatMonto(1000, 'COP')
-    formatMonto(2000, 'COP')
-    formatMonto(3000, 'USD')
-    formatMonto(4000, 'USD')
+    formatMonto(1000, 'COP', 'es-CO')
+    formatMonto(2000, 'COP', 'es-CO')
+    formatMonto(3000, 'USD', 'es-CO')
+    formatMonto(4000, 'USD', 'es-CO')
 
     expect(constructorSpy).not.toHaveBeenCalled()
     constructorSpy.mockRestore()
   })
 
-  it('defaults to es-CO formatting when no locale is passed (backward compatible)', () => {
-    expect(formatMonto(1200, 'COP')).toBe(formatMonto(1200, 'COP', 'es-CO'))
+  // `locale` has no default (docs/wave-2/track-m.md) — the only way to get
+  // es-CO formatting is to pass it explicitly, same as any other locale.
+  it('formats es-CO explicitly the same way on repeat calls', () => {
+    expect(formatMonto(1200, 'COP', 'es-CO')).toBe(formatMonto(1200, 'COP', 'es-CO'))
   })
 
   it('accepts an explicit locale and formats accordingly', () => {
@@ -70,13 +72,13 @@ describe('formatMonto', () => {
 
 describe('getMovimientoAmountView', () => {
   it('prefixes income with + and colors it success', () => {
-    const view = getMovimientoAmountView({ monto: 50, moneda: 'COP', tipo: 'ingreso' })
+    const view = getMovimientoAmountView({ monto: 50, moneda: 'COP', tipo: 'ingreso' }, 'es-CO')
     expect(view.text.startsWith('+')).toBe(true)
     expect(view.colorClass).toBe('text-success')
   })
 
   it('prefixes expense with - and colors it foreground', () => {
-    const view = getMovimientoAmountView({ monto: 50, moneda: 'COP', tipo: 'gasto' })
+    const view = getMovimientoAmountView({ monto: 50, moneda: 'COP', tipo: 'gasto' }, 'es-CO')
     expect(view.text.startsWith('-')).toBe(true)
     expect(view.colorClass).toBe('text-foreground')
   })
