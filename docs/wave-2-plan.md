@@ -732,6 +732,61 @@ design.
 
 ---
 
+### Track M — wire the active locale into every formatter (post-review sweep)
+
+- **Branch:** `feat/wave2-locale-wiring` · **Stage 5** · rigor: high
+- **Why it exists:** the Track K review made `formatMonto` /
+  `getMovimientoAmountView` / `MovimientoRow` accept a `locale` explicitly
+  and left the wiring as an operator follow-up, scoped as "three call
+  sites". The operator's own sweep found the shape is wider than that: six
+  non-test modules import `date-fns/locale`'s `es` directly and four render
+  money through the still-defaulted `formatMonto`. Fixing the three named
+  call sites would leave the same bug in the other seven — this is exactly
+  the "fix the shape, not the instance" case `AGENTS.md` names.
+- **Owns:** `src/features/home/**`, `src/features/search/**`,
+  `src/features/history/**`, `src/components/shared/MovimientoRow.tsx`,
+  `src/components/shared/movimientoView.ts`,
+  `src/components/shared/DateChipPicker.tsx`, `docs/wave-2/track-m.md`.
+  Every Wave 2 track has merged, so nothing is in flight against these.
+- **Must not touch:** `src/lib/i18n/localeFormatting.ts` (already built and
+  tested by the operator — consume it, don't reshape it), `src/lib/schema.ts`,
+  anything in §1.2/§1.3.
+
+#### Spec
+
+- **The mechanism already exists:** `useLocaleFormatting()` in
+  `src/lib/i18n/localeFormatting.ts` returns `{ locale, dateFnsLocale }` for
+  the active i18next locale, and is the single place that reads that locale.
+  No module may map a locale itself.
+- **Pure modules take a parameter; components read the hook.** This is the
+  judgment `docs/error-handling.md` §7 already applies to `errorCopy.ts` and
+  the Track K review applied to `movimientoView.ts`: a pure module stays
+  independently testable and never reads global state. So `homeView.ts`,
+  `historyPeriodLabel.ts` and `historyPeriodOptions.ts` gain a `Locale`
+  parameter; `BalanceCard`, `WeeklyChart`, `BreakdownCard`, `SearchScreen`,
+  `RecentMovimientos`, `HistoryScreen` and `DateChipPicker` call the hook (or
+  take a prop from a caller that did, where the component is shared).
+- **Full inventory to close — do not stop at the three the K review named.**
+  Money: `BalanceCard.tsx`, `WeeklyChart.tsx`, `BreakdownCard.tsx`,
+  `MovimientoRow.tsx`. Dates: `homeView.ts`, `SearchScreen.tsx`,
+  `historyPeriodLabel.ts`, `historyPeriodOptions.ts`, `DateChipPicker.tsx`,
+  `MovimientoRow.tsx`. Re-run the sweep yourself (`rg "date-fns/locale"`,
+  `rg "formatMonto"`) rather than trusting this list — if it is incomplete,
+  say so, that is a finding about the operator's brief.
+- **A defaulted parameter that nobody passes is the bug, not the fix.**
+  After this track, `formatMonto`'s `es-CO` default should be reachable only
+  by tests that deliberately assert the default. Consider whether the
+  default should be removed outright so a missed call site is a compile
+  error instead of silently Colombian — that is a judgment call: make it,
+  argue it in the report, don't just leave the default because it is safer.
+- **Done when:** switching the app to `en` or `pt-BR` changes the currency
+  grouping/symbol placement _and_ the month names on Home, Search and
+  History together — no screen left half-translated; a test per screen
+  proves it (render under a non-`es` locale, assert the formatted output);
+  `bun run check` green with real output pasted.
+
+---
+
 ## 5. Review stage (stage 4)
 
 **Operator findings already open, handed to the relevant reviewer rather
@@ -785,9 +840,10 @@ live Google account (needs a human in the OAuth popup).
 | K     | `feat/wave2-toast`         | 2     | reviewed              |
 | J     | `feat/wave2-drive-consent` | 2     | reviewed              |
 | L     | `feat/wave2-shell`         | 2     | reviewed              |
-| E2    | `feat/wave2-home`          | 3     | review 4 (dispatched) |
+| E2    | `feat/wave2-home`          | 3     | reviewed              |
 | E3    | `feat/wave2-search`        | 3     | review 4 (dispatched) |
 | E4    | `feat/wave2-history`       | 3     | reviewed              |
+| M     | `feat/wave2-locale-wiring` | 5     | not started           |
 
 Status values: `not started` → `dispatched` → `reported, verifying` →
 `merged` → `reviewed`.
