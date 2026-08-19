@@ -227,3 +227,85 @@ $ vitest run
 ```
 
 The one warning is a pre-existing shadcn-generated file (`src/components/ui/button.tsx`), outside this track and outside my files — not introduced by this pass.
+
+## Update — Finding 2 fixed per operator direction (2026-08-19)
+
+Operator confirmed both findings and identified the root cause of finding 1:
+the re-acquire was modeled on `syncLockedSession` (best-effort, sets no
+state) when `connectDrive()` (sets state, guards `authGeneration`) was the
+correct sibling to copy. Decision on finding 2: **fix in `authStore.ts`,
+not `lockStore.ts`** — the re-acquire becomes fire-and-forget.
+
+### What changed
+
+`reacquireDriveIfNeeded` no longer threads a `session` return value through
+`login`/`restore`/`hydrate`. Each of those three now calls
+`syncLockedSession(session)` immediately with the identity-only session it
+already has (fast, local, no network), then fires
+`void reacquireDriveIfNeeded(driveOptIn, set, get)` without awaiting it. On
+success, the reacquire calls `syncLockedSession` itself with the upgraded
+Drive-scoped session — two vault writes, later one wins. The
+`authGeneration` guard added for finding 1 is kept and is now load-bearing
+rather than defense-in-depth: fire-and-forget widens, not narrows, the
+window a stale `logout()` race can land in.
+
+`hydrate()`'s own promise now resolves as soon as `syncLockedSession`
+settles, without waiting on the reacquire — so `lockStore.resume()`
+(unchanged, not touched) unblocks a correct-PIN unlock immediately instead
+of blocking on a silent token request plus `bootstrap()`'s up to five
+sequential, un-timed-out Drive calls.
+
+### Tests watched fail, then pass
+
+1. **The delay itself.** Ran the new test
+   `'settles without waiting on the silent re-acquire, even if it never
+resolves'` (mocks `requestAccessToken` to a promise that never settles,
+   the realistic worst case since `bootstrap()` has no timeout) against the
+   pre-fix code: it timed out at 3s (`Error: Test timed out in 3000ms`),
+   proving `hydrate()` genuinely hung on the reacquire. Against the fixed
+   code: passes in ~300ms, `hydrate()` resolves immediately regardless of
+   the stalled request.
+2. **The five tests that asserted on `drive`/`session` right after `await
+login()/restore()/hydrate()`** now correctly fail against the _new_
+   shape (since those fields are no longer set before the awaited call
+   returns) — updated each to `await vi.waitFor(...)` the fire-and-forget
+   completion before asserting, rather than relying on incidental extra
+   `await`s to happen to give it enough ticks. Confirmed each updated test
+   fails without the `vi.waitFor` (assertion runs before the background
+   `set()` lands) and passes with it.
+3. **The finding-1 regression test** (`'a logout() during an in-flight
+silent re-acquire does not resurrect session/drive'`) still passes
+   unmodified — it asserts the eventual (whenever it runs) result of a
+   stale reacquire is discarded, which doesn't depend on exact timing, only
+   on the `authGeneration` guard, which is untouched.
+
+`bun run check`: 62 test files, 579 tests, all passing. Lint clean except
+the same pre-existing, out-of-scope `src/components/ui/button.tsx` warning
+noted above.
+
+### Re-checked: no-flash claim, now that `drive` lands in a separate `set()`
+
+Grepped every `useAuthStore((s) => s.<field>)` selector in `src/` (excluding
+tests): `RequireAuth.tsx` reads `status`/`driveOptIn` only;
+`DrivePermissionScreen.tsx` reads `driveConnecting`/`driveError`/action
+refs; `WelcomeScreen.tsx` reads `status`/`error`; `HomeHeader.tsx` reads
+`user`. The only two reads of `.drive` anywhere in non-test source are both
+inside `authStore.ts` itself (`reacquireDriveIfNeeded`'s own guard and its
+`set()` call) — no component subscribes to it. Confirmed, not just
+inherited from Track J's earlier sweep: since nothing renders off `drive`,
+a `set({session, drive})` landing in its own later tick than
+`status`/`driveOptIn` has no UI to flash. The claim holds, and the reason it
+holds is unrelated to whether the two `set()` calls are combined or
+separate — it holds because `drive` has zero consumers yet, which is also
+exactly why Wave 3's future Drive-backed repo must gate on `drive !== null`
+rather than trusting `driveOptIn` (per the original Track J sweep's own
+conclusion, unchanged by this fix).
+
+### Second question — backlogged, not acted on
+
+Per your direction, left the broader `authGeneration` gap
+(`login`/`restore`/`hydrate`'s own `set()` calls and `syncLockedSession`
+never check it) as a `specs.md` §12 follow-up rather than widening this fix
+to cover it — agreed the exploitable window shrinks back toward its
+original size now that the reacquire no longer sits in the same awaited
+chain, so it's not urgent, just worth closing deliberately.

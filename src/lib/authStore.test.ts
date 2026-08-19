@@ -193,6 +193,10 @@ describe('useAuthStore.login', () => {
     })
 
     await useAuthStore.getState().login()
+    // The re-acquire is fire-and-forget (never awaited by login() itself,
+    // docs/error-handling.md §2 — it must not delay the auth flow it rides
+    // on), so its own completion has to be waited for separately here.
+    await vi.waitFor(() => expect(useAuthStore.getState().drive).not.toBeNull())
 
     const s = useAuthStore.getState()
     expect(s.driveOptIn).toBe('connected')
@@ -218,13 +222,15 @@ describe('useAuthStore.login', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
     await useAuthStore.getState().login()
+    // Same reason as above: the reacquire's own failure (and its console.warn)
+    // happens after login()'s promise has already settled.
+    await vi.waitFor(() => expect(warn).toHaveBeenCalled())
 
     const s = useAuthStore.getState()
     expect(s.status).toBe('authenticated')
     expect(s.driveOptIn).toBe('connected')
     expect(s.drive).toBeNull()
     expect(s.driveError).toBeNull()
-    expect(warn).toHaveBeenCalled()
     warn.mockRestore()
   })
 
@@ -307,6 +313,8 @@ describe('useAuthStore.restore', () => {
     })
 
     await useAuthStore.getState().restore()
+    // Fire-and-forget, same as login() above — wait for it separately.
+    await vi.waitFor(() => expect(useAuthStore.getState().drive).not.toBeNull())
 
     const s = useAuthStore.getState()
     expect(s.driveOptIn).toBe('connected')
@@ -324,13 +332,13 @@ describe('useAuthStore.restore', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
     await useAuthStore.getState().restore()
+    await vi.waitFor(() => expect(warn).toHaveBeenCalled())
 
     const s = useAuthStore.getState()
     expect(s.status).toBe('authenticated')
     expect(s.driveOptIn).toBe('connected')
     expect(s.drive).toBeNull()
     expect(s.driveError).toBeNull()
-    expect(warn).toHaveBeenCalled()
     warn.mockRestore()
   })
 })
@@ -636,6 +644,8 @@ describe('useAuthStore.hydrate', () => {
     useAuthStore.setState({ driveOptIn: 'pending' })
 
     await useAuthStore.getState().hydrate(session)
+    // Fire-and-forget, same as login()/restore() above — wait for it separately.
+    await vi.waitFor(() => expect(useAuthStore.getState().drive).not.toBeNull())
 
     const s = useAuthStore.getState()
     expect(s.driveOptIn).toBe('connected')
@@ -653,14 +663,40 @@ describe('useAuthStore.hydrate', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
     await useAuthStore.getState().hydrate(session)
+    await vi.waitFor(() => expect(warn).toHaveBeenCalled())
 
     const s = useAuthStore.getState()
     expect(s.status).toBe('authenticated')
     expect(s.driveOptIn).toBe('connected')
     expect(s.drive).toBeNull()
     expect(s.driveError).toBeNull()
-    expect(warn).toHaveBeenCalled()
     warn.mockRestore()
+  })
+
+  // Operator-requested (code review, Track J): the re-acquire must never be
+  // on hydrate()'s critical path — lockStore.resume() awaits hydrate()'s
+  // whole promise before leaving `phase: 'locked'`, so if hydrate() waited
+  // on this too, a correct PIN would hang on a Drive network round trip with
+  // no busy state to explain it (LockScreen has none). Proven directly at
+  // the authStore level, since lockStore.test.ts mocks hydrate() entirely
+  // and so cannot exercise the real interaction — the lock-level path stays
+  // untested; this is the closest exercisable proxy for it.
+  it('settles without waiting on the silent re-acquire, even if it never resolves', async () => {
+    const session = { accessToken: 'identity-tok', expiresAt: Date.now() + 3_600_000 }
+    mUser.mockResolvedValue({ email: 'a@b.com', name: 'Ana' })
+    mGetDriveDecision.mockResolvedValue('connected')
+    // A token request that never settles simulates a stalled network call —
+    // bootstrap() has no timeout (src/lib/bootstrap.ts), so this is the
+    // realistic worst case, not a contrived one.
+    mToken.mockImplementation(() => new Promise(() => {}))
+    useAuthStore.setState({ driveOptIn: 'pending' })
+
+    await expect(useAuthStore.getState().hydrate(session)).resolves.toBeUndefined()
+
+    const s = useAuthStore.getState()
+    expect(s.status).toBe('authenticated')
+    expect(s.driveOptIn).toBe('connected')
+    expect(s.drive).toBeNull()
   })
 
   it('caches the fresh session in the lock vault when one exists', async () => {
