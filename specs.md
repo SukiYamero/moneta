@@ -416,6 +416,27 @@ Full design: `docs/superpowers/specs/2026-06-26-pin-lock-design.md`.
   relative units (`rem`, `dvh`/`dvw`) against a fluid width range, never a
   mockup frame's fixed pixel size. See `AGENTS.md` § UI for the concrete
   rules; both generalize decisions already made for fonts/icons above.
+- 2026-08-18 — **Voice input: on-device, no backend, cleared to build.**
+  Web Speech API's network round-trip goes to the browser vendor's own
+  servers (e.g. Google, for Chrome) — we manage no key and host nothing, so
+  this stays inside §2/§6 cleanly. It just means the mic is unavailable
+  offline (disable it then) — a UX limitation, not an architecture
+  exception. Transcript → fields via a client-side regex/keyword parser
+  (amount reliably; date/category as a pre-filled suggestion the user
+  confirms, not auto-committed).
+- 2026-08-18 — **Receipt scan: deferred indefinitely, on-device quality not
+  good enough yet.** Researched two on-device paths: Tesseract.js (OCR) is
+  self-hostable but unreliable on real receipts (thermal-paper printouts —
+  the common case — measured as low as ~60% character accuracy in one
+  documented case); Chrome's on-device Prompt API (Gemini Nano) would give
+  LLM-quality extraction with no backend, but is desktop-only in 2026 (no
+  Android/iOS/ChromeOS) — doesn't cover this mobile-first app's primary
+  platform at all. The alternative (a backend + cloud vision/LLM call, the
+  §6 "hiding a third-party API key" trigger) was explicitly declined for
+  now — user chose to defer the feature entirely rather than ship a weak
+  OCR-assisted version or add a backend for it. Entry button stays
+  disabled; revisit if mobile-grade on-device vision matures or the
+  backend trade-off gets reconsidered.
 
 ## 12. Backlog (pending verification / deferred work)
 

@@ -26,17 +26,25 @@ needs>` comment on its definition — greppable with `rg "// STUB\("`. Visually
 complete, functionally fixed/fake. This unblocks the screen without
 inventing real logic that belongs to another track.
 
-## Deferred, not cut (explicitly mocked in the design itself)
+## Voice ("dictation") — cleared to build, own unit
 
-- **"Escaneo de factura" (receipt scan)** and **"Voice" (dictation)** — the
-  design itself labels both `(mock)`. Both **will ship eventually** — they
-  are deferred pending an architecture decision, not rejected features.
-  Open question: do they need a backend (per `specs.md` §6, an LLM API key
-  can't be hidden client-side) or can they stay on-device (browser
-  Speech-to-Text + a client-side OCR library, no key, no server)? That
-  research is in progress — see `specs.md` §12 once it lands. Until
-  resolved, build their entry buttons as disabled/hidden; don't build the
-  mock flows or assume either answer.
+The design labels it `(mock)` but the architecture question is resolved
+(`specs.md` §11, 2026-08-18): Web Speech API, on-device parsing of the
+transcript (amount via regex, date/category as a pre-filled suggestion the
+user confirms). No backend. Build as its own small unit when the Movement
+sheet / Add sheet land — not blocked on anything else.
+
+## Deferred indefinitely (explicitly mocked in the design itself)
+
+- **"Escaneo de factura" (receipt scan)** — the design labels it `(mock)`.
+  Researched and explicitly deferred (`specs.md` §11, 2026-08-18): on-device
+  OCR (Tesseract.js) is unreliable on real (thermal-paper) receipts, and the
+  only on-device path good enough (Chrome's Prompt API / Gemini Nano) is
+  desktop-only — doesn't cover this mobile-first app. User chose not to add
+  a backend for this either. **Don't build it** — entry button stays
+  disabled/hidden. Revisit only if mobile-grade on-device vision matures or
+  the backend trade-off gets reconsidered; don't restart this research
+  without a real change in either of those.
 - **Auth "Account Chooser" screen** — this recreates Google's own native
   account picker. We never render a fake copy of Google's UI: with GIS
   (`initTokenClient`), Google renders the real chooser in its own popup.
@@ -106,7 +114,8 @@ Everything below depends on these. Suggested order:
 - View mode: `IconAvatar` + amount + title + meta, "Editar"/"Eliminar".
 - Edit mode: `DateChipPicker`, amount input, `TagChip` picker (+ opens
   Custom tag modal), optional description, save.
-- "Editar dictando" button → **out of scope** (voice, mocked in design).
+- "Editar dictando" button → wire to the **Voice** unit above (cleared to
+  build), not a stub.
 - Delete → `CenterModal` confirm.
 - Toast (generic, global — build once, used after save/delete/add).
 
@@ -115,8 +124,8 @@ Everything below depends on these. Suggested order:
 - Type toggle (gasto/ingreso), `DateChipPicker`, amount input (native
   numeric keyboard via `inputmode="decimal"`), `TagChip` category picker
   (+ Custom tag modal), optional description.
-- Scan button → **out of scope** (mocked). Voice button → **out of scope**
-  (mocked). Both render as disabled for now.
+- Scan button → **deferred indefinitely** (see above), stays disabled/hidden.
+  Voice button → wire to the **Voice** unit above, not a stub.
 - On save: writes through the fake repo, list screens must reflect it
   immediately (shared repo instance, not a per-screen copy).
 
