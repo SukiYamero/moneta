@@ -592,7 +592,7 @@ function createCrudRepo<T extends { id: EntityId }>(
         for (const id of ids) {
           const existing = await table.get(id)
           if (!existing) {
-            throw new RepoError(`no entity with id "${id}"`, 'not_found')
+            throw new RepoError(`no ${entityLabel} with id "${id}"`, 'not_found')
           }
         }
         await table.bulkDelete(ids)

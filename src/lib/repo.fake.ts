@@ -449,7 +449,20 @@ function decodeCursor(cursor: string | undefined): number {
   return index
 }
 
+// Mirrors repo.local.ts's validateLimit exactly (§10.3.1/docs/error-handling.md
+// §4): `limit` drives the "more data" signal (`nextCursor`), so 0 or a
+// fractional/negative/non-finite value is bad caller input, not a request
+// for an empty page — must reject, not silently answer with an ambiguous
+// `{ items: [] }`.
+function validateLimit(limit: number | undefined): void {
+  if (limit === undefined) return
+  if (!Number.isInteger(limit) || limit < 1) {
+    throw new RepoError(`limit must be a positive integer (got ${limit})`, 'invalid_input')
+  }
+}
+
 function paginate<T>(items: T[], limit?: number, cursor?: string): ListResult<T> {
+  validateLimit(limit)
   const start = decodeCursor(cursor)
   if (limit === undefined) return { items: items.slice(start) }
   const pageItems = items.slice(start, start + limit)
@@ -589,8 +602,14 @@ export function createFakeRepo({ today = new Date() }: CreateFakeRepoOptions = {
     },
     movimientos,
     activos,
+    // structuredClone, not a shallow `{ ...config }`: `config` is a plain
+    // in-memory variable here (unlike repo.local.ts, where every read comes
+    // back through IndexedDB's own structured-clone boundary), so a shallow
+    // copy still shares `secciones`/`categorias`/`preferencias` by reference
+    // with the live store — a caller mutating the returned array was
+    // silently corrupting the fake's own state (see docs/error-handling.md §4).
     async getConfig() {
-      return { ...config }
+      return structuredClone(config)
     },
     async updateConfig(patch) {
       // schemaVersion is owned by ready(), never by callers — mirrors
@@ -603,7 +622,7 @@ export function createFakeRepo({ today = new Date() }: CreateFakeRepoOptions = {
         )
       }
       config = { ...config, ...patch }
-      return { ...config }
+      return structuredClone(config)
     },
   }
 }

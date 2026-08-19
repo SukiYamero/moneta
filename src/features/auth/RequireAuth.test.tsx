@@ -50,7 +50,7 @@ describe('RequireAuth', () => {
         <div>secret</div>
       </RequireAuth>,
     )
-    expect(screen.getByRole('alert')).toHaveTextContent('access_denied')
+    expect(screen.getByRole('alert')).toHaveTextContent(/cancelaste el inicio de sesión/i)
   })
 
   it('shows the Drive permission screen right after login, before the app', () => {

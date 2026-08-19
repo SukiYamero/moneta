@@ -1383,6 +1383,118 @@ type { ComponentProps } from 'react'`, matching the type-only-import
   conversion is a no-op at the default root font size and now scales with
   the user's font-size preference.
 
+- 2026-08-18 — **Error-handling standard (phase 2, `fix/errors`): shared
+  `Repo` contract test suite, React error boundaries, Spanish error copy for
+  auth/lock screens.** Implements `docs/error-handling.md` (adopted the same
+  day, see `AGENTS.md`) against the three fixer branches
+  (`fix/a-repo`/`fix/b-auth`/`fix/d-fake`) once merged to `main`. Four
+  pieces:
+  1. **`src/lib/repo.contract.ts`** — a plain module (not `*.test.ts`,
+     per operator decision: a bare-helper test file gets collected by
+     vitest as a standalone suite with no top-level test of its own)
+     exporting `testRepoContract(makeRepo)`, invoked from both
+     `repo.local.test.ts` and `repo.fake.test.ts`. Consolidates the
+     behavior every `Repo` implementation must agree on (validation codes,
+     not_found/duplicate-id codes, malformed-cursor/limit rejection,
+     addMany/removeMany atomicity, default sort + tiebreak-uniform-with-
+     sortDir, Config shallow-merge/schemaVersion guard/fresh-object
+     reads) — asserting on `.code` only, never message text. Both
+     implementation test files had their now-redundant copies of these
+     same assertions removed (~50 `it()` blocks combined), keeping only
+     what's genuinely implementation-specific (dexie fast-path/keyset
+     mechanics, `ready()`/migration gate, the cursor's exact
+     sortBy/sortDir-bound identity vs. the fake's simpler index-encoded
+     one — §10.5's deliberate divergence, concurrency-race mechanics,
+     message-text regressions).
+  2. **The suite found two real divergences in `repo.fake.ts` on first
+     run against the merged `fix/d-fake` code**, both fixed the same
+     session:
+     - No `limit` validation at all: `list({ limit: 0 })` returned
+       `{ items: [], nextCursor: '-1' }` — the exact ambiguous-empty-page
+       shape the standard's §4 warns about — where `repo.local.ts`
+       correctly threw `invalid_input`. Fixed by porting
+       `repo.local.ts`'s `validateLimit`.
+     - `getConfig()`/`updateConfig()` returned `{ ...config }`, a shallow
+       copy whose nested `secciones`/`categorias`/`preferencias` were
+       still the _same_ array/object references as the live in-memory
+       store — a caller mutating the returned config silently corrupted
+       the fake's own state. Invisible in `repo.local.ts` only because
+       IndexedDB's structured-clone boundary happens to protect every
+       read there; `repo.fake.ts`'s plain in-memory variable gets no such
+       guarantee for free. Fixed with `structuredClone(config)` (native
+       platform API, no library).
+       Both are exactly the class of bug the suite exists to catch
+       structurally instead of by manual review — full detail in
+       `docs/error-handling.md` §6.
+  3. **React error boundaries, previously absent entirely.**
+     `src/RouteErrorFallback.tsx` (react-router's own `errorElement`,
+     wired onto every route in `src/router.tsx`) + `src/AppErrorBoundary.tsx`
+     (a class component — the only way to catch a render throw in React —
+     wrapping `AppLock`/`RouterProvider` in `src/main.tsx`, for failures
+     outside the router's own tree). Both log via `console.error` and
+     render a fixed Spanish fallback line, never the caught error's
+     message. Both tested (including that the raw error text never
+     reaches the DOM).
+  4. **Spanish, actionable error copy for the four auth/lock screens**
+     (`WelcomeScreen`, `DrivePermissionScreen`, `LockScreen`,
+     `LockSettings`), replacing raw `error.message` interpolation (e.g.
+     `"No se pudo iniciar sesión: auth: missing VITE_GOOGLE_CLIENT_ID"`
+     rendered verbatim) — an untranslated, internals-leaking string in a
+     Spanish UI. `src/features/auth/errorCopy.ts` and
+     `src/features/lock/errorCopy.ts`: a `Record<message, spanishCopy>`
+     lookup with a generic per-domain fallback for anything unmapped.
+     Keyed by the error's exact message, not a formal `code` — per the
+     operator's explicit instruction, `AuthError`/`DriveError`/the lock
+     error classes do **not** get a speculative `code` union added just
+     for this (`docs/error-handling.md` §1's "only add `code` when a
+     caller needs to branch on more than pass/fail" — no caller does).
+     The exact copy (operator asked to review the wording, not just the
+     mechanism):
+     - Login (`loginErrorCopy`, `src/features/auth/errorCopy.ts`):
+       `'auth: missing VITE_GOOGLE_CLIENT_ID'` → "Error de configuración.
+       Intenta más tarde."; `'auth: GIS failed to load'` → "No pudimos
+       cargar Google. Revisa tu conexión e intenta de nuevo.";
+       `'auth: access_denied'` → "Cancelaste el inicio de sesión con
+       Google."; `'auth: popup_closed'` → "Cerraste la ventana de Google
+       antes de terminar. Intenta de nuevo."; `'auth: popup_failed_to_open'`
+       → "El navegador bloqueó la ventana de Google. Revisa el bloqueador
+       de ventanas emergentes."; unmapped → "No se pudo iniciar sesión.
+       Intenta de nuevo."
+     - Drive (`driveErrorCopy`, same file, reuses the login map plus its
+       own fallback): unmapped (covers every dynamic `DriveError`, e.g.
+       HTTP-status messages) → "No se pudo conectar con Drive. Intenta de
+       nuevo."
+     - Unlock (`unlockErrorCopy`, `src/features/lock/errorCopy.ts`):
+       `'locked out'` → "Demasiados intentos. Inicia sesión con Google de
+       nuevo."; `'lock: wrong pin'` → "PIN incorrecto. Intenta de
+       nuevo."; `'lock: biometric unavailable'` → "La biometría no está
+       disponible en este dispositivo."; unmapped → "No se pudo
+       desbloquear. Intenta de nuevo."
+     - Enable-lock (`enableLockErrorCopy`, same file):
+       `'lock: no session to protect'` → "Necesitas iniciar sesión antes
+       de activar el bloqueo."; unmapped → "No se pudo activar el
+       bloqueo. Intenta de nuevo."
+       Two pre-existing tests (`WelcomeScreen.test.tsx`,
+       `RequireAuth.test.tsx`) and one (`DrivePermissionScreen.test.tsx`)
+       were asserting the _raw_ English message appeared in the rendered
+       alert — i.e. tests that enforced the exact bug this item fixes.
+       Updated to assert the Spanish copy renders and the raw string does
+       not.
+       Also, while re-verifying the three merged fixer branches against the
+       standard (all confirmed compliant): `authStore.restore()`'s silent-auth
+       `catch {}` turned out to be a legitimate, deliberate silent swallow (not
+       a gap) — routine failure for anyone without a live Google session, with
+       its own downstream error-visible path via an explicit `login()`. Gave it
+       an explanatory comment and used it to add a documented exception to
+       `docs/error-handling.md` §2's "never be silent" rule, since the standard
+       as written didn't account for this case. `repo.local.ts`'s
+       `removeMany()` not-found message also got the same `entityLabel` fix
+       `update()`/`remove()` already had (cosmetic — message text isn't
+       contract, `docs/error-handling.md` §8 — but inconsistent otherwise),
+       with a regression test.
+       `bun run check` green (283 tests) throughout; `bun run build` verified
+       after the router/main.tsx changes.
+
 ## 12. Backlog (pending verification / deferred work)
 
 - ✅ **Login verified end-to-end (§10.1)** — 2026-07-02. Real OAuth ran against Google

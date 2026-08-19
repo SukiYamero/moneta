@@ -1,6 +1,7 @@
 import { Coins } from 'lucide-react'
 import { useAuthStore } from '@/lib/authStore'
 import { APP_NAME } from '@/lib/branding'
+import { loginErrorCopy } from '@/features/auth/errorCopy'
 
 // Official "Sign in with Google" button surface: fixed white/near-black per
 // Google's own brand guidelines, not our app palette — same deliberate
@@ -75,7 +76,7 @@ export function WelcomeScreen() {
         </p>
         {status === 'error' && error ? (
           <p role="alert" className="text-center text-sm text-destructive">
-            No se pudo iniciar sesión: {error}
+            {loginErrorCopy(error)}
           </p>
         ) : null}
       </div>

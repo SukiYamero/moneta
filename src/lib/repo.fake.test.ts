@@ -1,9 +1,29 @@
 import { describe, it, expect, vi } from 'vitest'
 import { createFakeRepo } from '@/lib/repo.fake'
-import { RepoError } from '@/lib/repo'
-import type { Activo, Movimiento } from '@/lib/schema'
+import type { Repo } from '@/lib/repo'
+import { testRepoContract } from '@/lib/repo.contract'
+import type { Movimiento } from '@/lib/schema'
 
 const TODAY = new Date('2026-08-18T12:00:00.000Z')
+
+// The contract suite expects an empty store (repo.contract.ts's own
+// precondition doc); createFakeRepo() always seeds demo data, so strip it
+// before handing the repo to the shared suite.
+async function emptyFakeRepo(): Promise<Repo> {
+  const repo = createFakeRepo({ today: TODAY })
+  const [movs, acts] = await Promise.all([repo.movimientos.list(), repo.activos.list()])
+  await Promise.all([
+    repo.movimientos.removeMany(movs.items.map((m) => m.id)),
+    repo.activos.removeMany(acts.items.map((a) => a.id)),
+  ])
+  return repo
+}
+
+// Behavior every Repo implementation must agree on (docs/error-handling.md
+// §6) — the same suite runs in repo.local.test.ts. Anything below this point
+// in the file is implementation-specific to the fake (seed determinism, the
+// index-encoded cursor, message-text regressions).
+testRepoContract(emptyFakeRepo)
 
 describe('createFakeRepo', () => {
   it('seeds deterministic Spanish sample data for the same "today"', async () => {
@@ -19,49 +39,6 @@ describe('createFakeRepo', () => {
   it('ready() resolves for a freshly seeded repo', async () => {
     const repo = createFakeRepo({ today: TODAY })
     await expect(repo.ready()).resolves.toBeUndefined()
-  })
-
-  it('list() on an empty store returns { items: [] }, never an error', async () => {
-    const repo = createFakeRepo({ today: TODAY })
-    // remove every seeded movimiento to get to the empty-store case
-    const all = await repo.movimientos.list()
-    await repo.movimientos.removeMany(all.items.map((m) => m.id))
-
-    const result = await repo.movimientos.list()
-    expect(result).toEqual({ items: [] })
-  })
-
-  it('get() on a missing id returns undefined, not a throw', async () => {
-    const repo = createFakeRepo({ today: TODAY })
-    await expect(repo.movimientos.get('nope')).resolves.toBeUndefined()
-  })
-
-  it('update() on a missing id throws RepoError("not_found")', async () => {
-    const repo = createFakeRepo({ today: TODAY })
-    await expect(repo.movimientos.update('nope', { monto: 10 })).rejects.toMatchObject({
-      code: 'not_found',
-    } satisfies Partial<RepoError>)
-  })
-
-  it('remove() on a missing id throws RepoError("not_found")', async () => {
-    const repo = createFakeRepo({ today: TODAY })
-    await expect(repo.movimientos.remove('nope')).rejects.toMatchObject({ code: 'not_found' })
-  })
-
-  it('rejects a non-positive monto with RepoError("invalid_input")', async () => {
-    const repo = createFakeRepo({ today: TODAY })
-    const invalid: Movimiento = {
-      id: 'mov_invalid',
-      fecha: '2026-08-18',
-      seccion: 'sec_personal',
-      categoria: 'Comida',
-      tipo: 'gasto',
-      monto: -5,
-      moneda: 'COP',
-      createdAt: TODAY.toISOString(),
-    }
-
-    await expect(repo.movimientos.add(invalid)).rejects.toMatchObject({ code: 'invalid_input' })
   })
 
   it('add() then list() reflects the write immediately (single in-memory store)', async () => {
@@ -140,223 +117,11 @@ describe('createFakeRepo', () => {
 })
 
 describe('createFakeRepo — parity with the real (dexie) repo contract', () => {
-  it('list() with no sortBy defaults to the entity date field, newest first', async () => {
-    const repo = createFakeRepo({ today: TODAY })
-    // The seed array happens to already be authored newest-first by insertion
-    // order, which would hide this bug — so append a newer row last (store
-    // order puts it at the end) and prove it still surfaces first.
-    await repo.movimientos.add({
-      id: 'mov_newest',
-      fecha: '2026-08-19',
-      seccion: 'sec_personal',
-      categoria: 'Comida',
-      tipo: 'gasto',
-      monto: 1000,
-      moneda: 'COP',
-      createdAt: '2026-08-19T00:00:00.000Z',
-    })
-
-    const result = await repo.movimientos.list()
-
-    expect(result.items[0]?.id).toBe('mov_newest')
-    const fechas = result.items.map((m) => m.fecha)
-    expect(fechas).toEqual([...fechas].sort().reverse())
-  })
-
-  it('list() with sortBy but no sortDir defaults to "desc", not "asc"', async () => {
-    const repo = createFakeRepo({ today: TODAY })
-    const result = await repo.movimientos.list({ sortBy: 'fecha' })
-
-    const fechas = result.items.map((m) => m.fecha)
-    expect(fechas).toEqual([...fechas].sort().reverse())
-  })
-
-  it('rejects NaN monto with RepoError("invalid_input")', async () => {
-    const repo = createFakeRepo({ today: TODAY })
-    const invalid: Movimiento = {
-      id: 'mov_nan',
-      fecha: '2026-08-18',
-      seccion: 'sec_personal',
-      categoria: 'Comida',
-      tipo: 'gasto',
-      monto: Number.NaN,
-      moneda: 'COP',
-      createdAt: TODAY.toISOString(),
-    }
-
-    await expect(repo.movimientos.add(invalid)).rejects.toMatchObject({ code: 'invalid_input' })
-  })
-
-  it('rejects Infinity monto with RepoError("invalid_input")', async () => {
-    const repo = createFakeRepo({ today: TODAY })
-    const invalid: Movimiento = {
-      id: 'mov_inf',
-      fecha: '2026-08-18',
-      seccion: 'sec_personal',
-      categoria: 'Comida',
-      tipo: 'gasto',
-      monto: Number.POSITIVE_INFINITY,
-      moneda: 'COP',
-      createdAt: TODAY.toISOString(),
-    }
-
-    await expect(repo.movimientos.add(invalid)).rejects.toMatchObject({ code: 'invalid_input' })
-  })
-
-  it('rejects an invalid fecha on a Movimiento (bad format, impossible calendar date)', async () => {
-    const repo = createFakeRepo({ today: TODAY })
-    const base = {
-      id: 'mov_bad_fecha',
-      seccion: 'sec_personal',
-      categoria: 'Comida',
-      tipo: 'gasto' as const,
-      monto: 1000,
-      moneda: 'COP' as const,
-      createdAt: TODAY.toISOString(),
-    }
-
-    for (const fecha of ['not-a-date', '2026-13-40', '2026-02-30', '2023-02-29']) {
-      await expect(
-        repo.movimientos.add({ ...base, id: `mov_bad_fecha_${fecha}`, fecha }),
-      ).rejects.toMatchObject({ code: 'invalid_input' })
-    }
-  })
-
-  it('accepts a real leap day fecha on a Movimiento (2024-02-29)', async () => {
-    const repo = createFakeRepo({ today: TODAY })
-    const valid: Movimiento = {
-      id: 'mov_leap_day',
-      fecha: '2024-02-29',
-      seccion: 'sec_personal',
-      categoria: 'Comida',
-      tipo: 'gasto',
-      monto: 1000,
-      moneda: 'COP',
-      createdAt: TODAY.toISOString(),
-    }
-
-    const added = await repo.movimientos.add(valid)
-    expect(added.fecha).toBe('2024-02-29')
-  })
-
-  it('rejects a Movimiento with missing moneda', async () => {
-    const repo = createFakeRepo({ today: TODAY })
-    const invalid = {
-      id: 'mov_no_moneda',
-      fecha: '2026-08-18',
-      seccion: 'sec_personal',
-      categoria: 'Comida',
-      tipo: 'gasto' as const,
-      monto: 1000,
-      moneda: '' as Movimiento['moneda'],
-      createdAt: TODAY.toISOString(),
-    }
-
-    await expect(repo.movimientos.add(invalid)).rejects.toMatchObject({ code: 'invalid_input' })
-  })
-
-  it('rejects an invalid Activo (bad date, missing moneda, negative valorActual)', async () => {
-    const repo = createFakeRepo({ today: TODAY })
-
-    const badDate: Activo = {
-      id: 'act_bad_date',
-      nombre: 'Fondo X',
-      tipo: 'otro',
-      valorActual: 1000,
-      moneda: 'COP',
-      fechaActualizacion: 'not-a-date',
-    }
-    await expect(repo.activos.add(badDate)).rejects.toMatchObject({ code: 'invalid_input' })
-
-    const missingMoneda: Activo = {
-      id: 'act_bad_moneda',
-      nombre: 'Fondo Y',
-      tipo: 'otro',
-      valorActual: 1000,
-      moneda: '' as Activo['moneda'],
-      fechaActualizacion: '2026-08-18',
-    }
-    await expect(repo.activos.add(missingMoneda)).rejects.toMatchObject({ code: 'invalid_input' })
-
-    const negativeValor: Activo = {
-      id: 'act_bad_valor',
-      nombre: 'Fondo Z',
-      tipo: 'otro',
-      valorActual: -500,
-      moneda: 'COP',
-      fechaActualizacion: '2026-08-18',
-    }
-    await expect(repo.activos.add(negativeValor)).rejects.toMatchObject({ code: 'invalid_input' })
-  })
-
-  it('accepts an Activo with valorActual: 0 — zero is a legitimate value', async () => {
-    const repo = createFakeRepo({ today: TODAY })
-    const zeroValor: Activo = {
-      id: 'act_zero',
-      nombre: 'Cuenta agotada',
-      tipo: 'otro',
-      valorActual: 0,
-      moneda: 'COP',
-      fechaActualizacion: '2026-08-18',
-    }
-
-    const added = await repo.activos.add(zeroValor)
-    expect(added.valorActual).toBe(0)
-  })
-
-  it('breaks tied sort values via the tiebreak field then id, uniformly with sortDir', async () => {
-    const repo = createFakeRepo({ today: TODAY })
-    // mov_seed_1 and mov_seed_2 share the same fecha AND createdAt (same offsetDays) —
-    // the only thing left to order them is `id`, and it must flip with sortDir.
-    const asc = await repo.movimientos.list({ sortBy: 'fecha', sortDir: 'asc' })
-    const desc = await repo.movimientos.list({ sortBy: 'fecha', sortDir: 'desc' })
-
-    const ascTiedIds = asc.items
-      .filter((m) => m.id === 'mov_seed_1' || m.id === 'mov_seed_2')
-      .map((m) => m.id)
-    const descTiedIds = desc.items
-      .filter((m) => m.id === 'mov_seed_1' || m.id === 'mov_seed_2')
-      .map((m) => m.id)
-
-    expect(ascTiedIds).toEqual(['mov_seed_1', 'mov_seed_2'])
-    expect(descTiedIds).toEqual(['mov_seed_2', 'mov_seed_1'])
-  })
-
-  it('updateConfig() rejects a patch that sets schemaVersion', async () => {
-    const repo = createFakeRepo({ today: TODAY })
-    await expect(repo.updateConfig({ schemaVersion: 999 })).rejects.toMatchObject({
-      code: 'invalid_input',
-    })
-
-    // and it must not have poisoned ready()'s own version check
-    await expect(repo.ready()).resolves.toBeUndefined()
-  })
-
-  it('list() throws RepoError("invalid_input") on a malformed cursor', async () => {
-    const repo = createFakeRepo({ today: TODAY })
-    await expect(repo.movimientos.list({ cursor: 'not-a-number' })).rejects.toMatchObject({
-      code: 'invalid_input',
-    })
-  })
-
   it('list() throws RepoError("invalid_input") on a negative cursor', async () => {
     const repo = createFakeRepo({ today: TODAY })
     await expect(repo.movimientos.list({ cursor: '-1' })).rejects.toMatchObject({
       code: 'invalid_input',
     })
-  })
-
-  it('update() re-pins id even if the patch tries to change it', async () => {
-    const repo = createFakeRepo({ today: TODAY })
-    const [first] = (await repo.movimientos.list()).items
-    if (!first) throw new Error('expected at least one seeded movimiento')
-
-    const updated = await repo.movimientos.update(first.id, {
-      nota: 'Editado',
-      ...({ id: 'someone-elses-id' } as Partial<Movimiento>),
-    })
-
-    expect(updated.id).toBe(first.id)
   })
 
   it('add() rejects a duplicate id with RepoError("invalid_input"), no mutation', async () => {
@@ -371,74 +136,6 @@ describe('createFakeRepo — parity with the real (dexie) repo contract', () => 
     const after = await repo.movimientos.list()
     expect(after.items.length).toBe(before.items.length)
     expect(after.items.filter((m) => m.id === first.id).length).toBe(1)
-  })
-
-  it('addMany() rejects the whole batch when an id already exists in the store', async () => {
-    const repo = createFakeRepo({ today: TODAY })
-    const before = await repo.movimientos.list()
-    const [first] = before.items
-    if (!first) throw new Error('expected at least one seeded movimiento')
-
-    const dup: Movimiento = { ...first, nota: 'dup' }
-    const fresh: Movimiento = {
-      id: 'mov_batch_fresh',
-      fecha: '2026-08-18',
-      seccion: 'sec_personal',
-      categoria: 'Comida',
-      tipo: 'gasto',
-      monto: 500,
-      moneda: 'COP',
-      createdAt: TODAY.toISOString(),
-    }
-
-    await expect(repo.movimientos.addMany([fresh, dup])).rejects.toMatchObject({
-      code: 'invalid_input',
-    })
-
-    // all-or-nothing: `fresh` must NOT have landed even though it was valid on its own
-    const after = await repo.movimientos.list()
-    expect(after.items.length).toBe(before.items.length)
-    expect(after.items.some((m) => m.id === 'mov_batch_fresh')).toBe(false)
-  })
-
-  it('addMany() rejects the whole batch when the batch itself repeats an id', async () => {
-    const repo = createFakeRepo({ today: TODAY })
-    const before = await repo.movimientos.list()
-
-    const a: Movimiento = {
-      id: 'mov_batch_a',
-      fecha: '2026-08-18',
-      seccion: 'sec_personal',
-      categoria: 'Comida',
-      tipo: 'gasto',
-      monto: 500,
-      moneda: 'COP',
-      createdAt: TODAY.toISOString(),
-    }
-    const b: Movimiento = { ...a, nota: 'segundo con el mismo id' }
-
-    await expect(repo.movimientos.addMany([a, b])).rejects.toMatchObject({
-      code: 'invalid_input',
-    })
-
-    const after = await repo.movimientos.list()
-    expect(after.items.length).toBe(before.items.length)
-  })
-
-  it('removeMany() rejects the whole batch with RepoError("not_found") when any id is missing', async () => {
-    const repo = createFakeRepo({ today: TODAY })
-    const before = await repo.movimientos.list()
-    const [first] = before.items
-    if (!first) throw new Error('expected at least one seeded movimiento')
-
-    await expect(repo.movimientos.removeMany([first.id, 'does-not-exist'])).rejects.toMatchObject({
-      code: 'not_found',
-    })
-
-    // all-or-nothing: `first` must still be there even though its id was valid
-    const after = await repo.movimientos.list()
-    expect(after.items.some((m) => m.id === first.id)).toBe(true)
-    expect(after.items.length).toBe(before.items.length)
   })
 
   it('the shared singleton seeds from a pinned clock, reproducible across different boot days', async () => {

@@ -1,6 +1,7 @@
 import { Cloud, Coins, FileText, KeyRound, Loader2, ShieldCheck } from 'lucide-react'
 import { useAuthStore } from '@/lib/authStore'
 import { APP_NAME } from '@/lib/branding'
+import { driveErrorCopy } from '@/features/auth/errorCopy'
 
 export function DrivePermissionScreen() {
   const connecting = useAuthStore((s) => s.driveConnecting)
@@ -67,7 +68,7 @@ export function DrivePermissionScreen() {
       <div className="flex flex-col gap-2.5 px-7 pb-10">
         {error ? (
           <p role="alert" className="text-center text-sm font-medium text-destructive">
-            No se pudo conectar con Drive: {error}
+            {driveErrorCopy(error)}
           </p>
         ) : null}
         <button

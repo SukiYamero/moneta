@@ -13,8 +13,12 @@ Onboarding screens and the route guard that sits in front of the app.
 - `RequireAuth.tsx` — route guard: unauthenticated → `WelcomeScreen`;
   authenticated with `driveOptIn === 'pending'` → `DrivePermissionScreen`;
   otherwise renders `children`.
+- `errorCopy.ts` — maps a raw `AuthError`/`DriveError` message to the
+  Spanish, actionable copy `WelcomeScreen`/`DrivePermissionScreen` actually
+  render (`loginErrorCopy`, `driveErrorCopy`) — never the raw message
+  (`docs/error-handling.md` §7).
 
-All three read `useAuthStore` (`@/lib/authStore`) for state; none hold local
-auth state of their own. The Google account-chooser screen from the design
-canvas is intentionally not built here — GIS's `initTokenClient` shows
-Google's real chooser in its own popup.
+All three screens read `useAuthStore` (`@/lib/authStore`) for state; none
+hold local auth state of their own. The Google account-chooser screen from
+the design canvas is intentionally not built here — GIS's `initTokenClient`
+shows Google's real chooser in its own popup.
