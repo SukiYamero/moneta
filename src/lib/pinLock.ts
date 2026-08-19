@@ -1,7 +1,14 @@
 import { db, VAULT_ID, type LockVault } from '@/lib/db'
-import type { AuthSession } from '@/lib/auth'
+import type { AuthSession, GoogleUser } from '@/lib/auth'
 import { APP_NAME } from '@/lib/branding'
 import { clearDriveDecision, clearLoggedIn } from '@/lib/deviceStore'
+
+// What actually comes back out of the vault on a successful unlock — the
+// session alone used to be the whole plaintext; the cached profile is new
+// (specs.md §10.11/§2.1(1)): the vault decrypt already proves identity
+// locally, so a caller no longer needs a network round trip just to have a
+// name/avatar to render.
+export type VaultSession = { session: AuthSession; user: GoogleUser | null }
 
 const PIN_ITERATIONS = 310_000
 const MAX_ATTEMPTS = 5
@@ -153,21 +160,50 @@ export const biometricEnabled = async (): Promise<boolean> => {
   return vault?.biometric !== undefined
 }
 
+// The vault plaintext envelope — versioned so a vault written before the
+// cached-profile field existed still decrypts (specs.md §10.11/§2.1(1)).
+// v1 vaults (pre-2026-08-19) stored the bare AuthSession as the *entire*
+// plaintext, no envelope at all; v2 wraps it with a discriminant and the
+// optional cached profile. `db.ts` (Track V-owned, frozen for this track)
+// is untouched by this: the vault *row*'s shape (tokenCipher/tokenIv/etc)
+// never changes, only what's inside the encrypted bytes.
+type VaultPayloadV2 = { v: 2; session: AuthSession; user: GoogleUser | null }
+
+const encodeVaultPayload = (session: AuthSession, user: GoogleUser | null): Bytes => {
+  const payload: VaultPayloadV2 = { v: 2, session, user }
+  return enc.encode(JSON.stringify(payload))
+}
+
+const isVaultPayloadV2 = (v: unknown): v is VaultPayloadV2 => {
+  return typeof v === 'object' && v !== null && (v as { v?: unknown }).v === 2
+}
+
+// Structural sniff, not a trust in vault.schemaVersion: the actual bytes are
+// the ground truth for what shape they're in, and a v1 vault decrypts
+// correctly regardless of what its (also pre-existing) schemaVersion field
+// happens to say.
+const decodeVaultPayload = (json: string): VaultSession => {
+  const parsed: unknown = JSON.parse(json)
+  if (isVaultPayloadV2(parsed)) return { session: parsed.session, user: parsed.user }
+  return { session: parsed as AuthSession, user: null }
+}
+
 export const enableLock = async (opts: {
   pin: string
   session: AuthSession
+  user?: GoogleUser | null
   biometric?: boolean
 }): Promise<void> => {
   const dek = generateDek()
   const dekKey = await importAesKey(dek)
-  const token = await aesEncrypt(dekKey, enc.encode(JSON.stringify(opts.session)))
+  const token = await aesEncrypt(dekKey, encodeVaultPayload(opts.session, opts.user ?? null))
 
   const pinSalt = randomBytes(16)
   const pinKey = await derivePinKey(opts.pin, pinSalt, PIN_ITERATIONS)
   const pinWrap = await aesEncrypt(pinKey, dek)
 
   const vault: LockVault = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     tokenCipher: token.cipher,
     tokenIv: token.iv,
     pinSalt,
@@ -220,13 +256,13 @@ const readVault = async (): Promise<LockVault> => {
   return vault
 }
 
-const decryptSession = async (vault: LockVault, dek: Bytes): Promise<AuthSession> => {
+const decryptVaultPayload = async (vault: LockVault, dek: Bytes): Promise<VaultSession> => {
   const dekKey = await importAesKey(dek)
   const plain = await aesDecrypt(dekKey, asBytes(vault.tokenIv), asBytes(vault.tokenCipher))
-  return JSON.parse(dec.decode(plain)) as AuthSession
+  return decodeVaultPayload(dec.decode(plain))
 }
 
-export const unlockWithBiometric = async (): Promise<AuthSession> => {
+export const unlockWithBiometric = async (): Promise<VaultSession> => {
   const vault = await readVault()
   if (!vault.biometric) throw new BiometricUnavailableError()
   const secret = await evaluatePrf(
@@ -246,7 +282,7 @@ export const unlockWithBiometric = async (): Promise<AuthSession> => {
   // there is nothing to make atomic here (unlike the increment below).
   await db.vault.update(VAULT_ID, { failedAttempts: 0 })
   activeDek = dek
-  return decryptSession(vault, dek)
+  return decryptVaultPayload(vault, dek)
 }
 
 // The only place module-level key material is discarded. Exported so callers
@@ -270,7 +306,7 @@ export const resetVault = async (): Promise<void> => {
   await clearDriveDecision()
 }
 
-export const unlockWithPin = async (pin: string): Promise<AuthSession> => {
+export const unlockWithPin = async (pin: string): Promise<VaultSession> => {
   const vault = await readVault()
   if (vault.failedAttempts >= MAX_ATTEMPTS) throw new LockedOutError()
 
@@ -297,14 +333,29 @@ export const unlockWithPin = async (pin: string): Promise<AuthSession> => {
   // matching comment on unlockWithBiometric's reset above.
   await db.vault.update(VAULT_ID, { failedAttempts: 0 })
   activeDek = dek
-  return decryptSession(vault, dek)
+  return decryptVaultPayload(vault, dek)
 }
 
-export const updateSession = async (session: AuthSession): Promise<void> => {
+// `user` is required, not optional, so a caller must be explicit about
+// whether it has a fresher profile to cache or wants the existing cached
+// one left alone — passing `null` here would silently blow away a
+// previously-cached profile the next unlock would otherwise still have.
+export const updateSession = async (
+  session: AuthSession,
+  user: GoogleUser | null,
+): Promise<void> => {
   if (!activeDek) throw new Error('lock: not unlocked')
   const dekKey = await importAesKey(activeDek)
-  const token = await aesEncrypt(dekKey, enc.encode(JSON.stringify(session)))
-  await db.vault.update(VAULT_ID, { tokenCipher: token.cipher, tokenIv: token.iv })
+  const token = await aesEncrypt(dekKey, encodeVaultPayload(session, user))
+  // Opportunistic self-heal: a vault still carrying the pre-envelope v1
+  // marker upgrades to v2 the next time it's written, without a dedicated
+  // migration step — decodeVaultPayload never depended on this field being
+  // accurate, so there's nothing unsafe about updating it lazily here.
+  await db.vault.update(VAULT_ID, {
+    tokenCipher: token.cipher,
+    tokenIv: token.iv,
+    schemaVersion: 2,
+  })
 }
 
 export const markActive = async (now: number = Date.now()): Promise<void> => {

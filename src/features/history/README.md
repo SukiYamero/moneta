@@ -14,7 +14,9 @@ and the movements list for the currently viewed period.
   (defaulting to `CONFIG_SEMILLA.preferencias` before `config` loads, the
   same fallback Home/Search use) — only the breakdown card + movements list
   region switches between `HistoryLoadingState` (skeleton, gated behind
-  `usePendingDelay`), the inline error, the period-empty state, and the
+  `usePendingDelay`), the inline error (message from `dataStore.error`'s
+  `RepoErrorCode` via `@/lib/errorCopy`'s `repoErrorCopyKey`, same lookup
+  Home/Search use — `specs.md` §10.11), the period-empty state, and the
   real content. This replaced an earlier full-screen early-return that
   swapped out the header too. Enters with `animate-push-in` (a route push, not a fade — History is a
   sibling tab under the persistent `BottomNav`, not an overlay on Home,

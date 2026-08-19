@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { CONFIG_SEMILLA, type Periodo, type TipoMovimiento } from '@/lib/schema'
 import { breakdownBy, filterByRange, periodRange, totals } from '@/lib/movimientoStats'
 import { useDataStore } from '@/lib/dataStore'
+import { repoErrorCopyKey } from '@/lib/errorCopy'
 import { useLocaleFormatting } from '@/lib/i18n/localeFormatting'
 import {
   InlineErrorState,
@@ -34,7 +35,7 @@ const SCOPES: Periodo[] = ['dia', 'semana', 'mes', 'anio']
 // (AGENTS.md § UI, docs/wave-2/track-e4.md).
 export const HistoryScreen = () => {
   const { t } = useTranslation('history')
-  const { movimientos, config, status, load } = useDataStore()
+  const { movimientos, config, status, error, load } = useDataStore()
   const { scope, anchor, setScope, selectAnchor, step, selectYear } = useHistoryPeriod()
   const [bdType, setBdType] = useState<TipoMovimiento>('gasto')
   const { locale, dateFnsLocale } = useLocaleFormatting()
@@ -144,7 +145,7 @@ export const HistoryScreen = () => {
           <HistoryLoadingState />
         ) : status === 'error' ? (
           <InlineErrorState
-            message={t('error')}
+            message={t(repoErrorCopyKey(error ?? 'unknown'))}
             retryLabel={t('retry')}
             onRetry={() => void load()}
           />

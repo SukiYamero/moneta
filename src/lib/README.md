@@ -14,6 +14,11 @@ Shared stores, helpers, and the Drive/auth/lock logic layer. No UI here.
   triggers `bootstrap.ts` through `connectDrive`. Also owns
   `continueAsGuest()`, the guest entry path (`status: 'guest'`, distinct
   from `'authenticated'` — never a synthesized user, `specs.md` §10.10).
+  `restore()`/`hydrate()` no longer gate entry on a network call
+  (`specs.md` §10.11): a returning user reaches `authenticated` from local
+  evidence alone (the device's login marker, or the PIN-vault's cached
+  session/profile) when offline, with `fetchGoogleUser()` running as a
+  best-effort background refresh, never a blocking gate.
 - `drive.ts` — thin Drive REST client (find/create files & folders).
 - `bootstrap.ts` — idempotent provisioning of the `KuroBello` folder + the
   three JSON data files. Find-before-create: `config.json`'s seed is only
@@ -34,7 +39,10 @@ Shared stores, helpers, and the Drive/auth/lock logic layer. No UI here.
   first profile, and every additional profile calls the same factory
   against a suffixed name via `profiles/`.
 - `pinLock.ts` — WebCrypto envelope encryption for the cached token
-  (PIN + optional biometric via WebAuthn PRF).
+  (PIN + optional biometric via WebAuthn PRF). The vault's plaintext is a
+  versioned envelope (`{ v: 2, session, user }`, decoded backward-compatibly
+  from the pre-envelope v1 shape) so the cached Google profile survives a
+  re-lock/cold boot without a network call.
 - `lockStore.ts` — zustand store wrapping `pinLock.ts`: lock phase, throttle,
   biometric availability (`biometricAvailable` — platform capability — vs
   `biometricEnrolled` — this vault's own enrollment, see `specs.md` §11,
@@ -53,6 +61,20 @@ Shared stores, helpers, and the Drive/auth/lock logic layer. No UI here.
   renamed from `loginMarker.ts`. Every function self-catches and degrades
   to "no signal recorded" — storage trouble can suppress a convenience,
   never block boot.
+- `networkStore.ts` — a small, self-initialising zustand store (attaches
+  `online`/`offline` listeners at module scope, since `main.tsx` is another
+  track's file) owning the online/offline hint plus the 7-hour offline
+  write window. The window's anchor (last successful online validation) is
+  persisted in its own Dexie database, `kurobello-network`, deliberately
+  separate from `deviceStore.ts`'s `kurobello-device` (this track's file
+  ownership excluded that file — see `specs.md` §11, 2026-08-19).
+  `canWrite(kind, now?)` is the single "may this write proceed?" answer:
+  read/create always allowed, edit/delete/settings refused offline
+  regardless of the window, create additionally refused past the window.
+  Reads no other store.
+- `errorCopy.ts` — `RepoErrorCode` → translation key, shared by Home/
+  Search/History (moved from `src/features/home/errorCopy.ts`, which was
+  never Home-specific — `specs.md` §10.11).
 - `toastStore.ts` — the global notification store behind `Toaster`:
   `toast.success(message)` / `toast.error(message)`, callable from anywhere
   with no provider. Holds no domain state and reads no other store

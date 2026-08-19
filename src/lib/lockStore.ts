@@ -12,8 +12,8 @@ import {
   resetVault,
   unlockWithBiometric,
   unlockWithPin,
+  type VaultSession,
 } from '@/lib/pinLock'
-import type { AuthSession } from '@/lib/auth'
 
 // lockStore substitutes its own message strings instead of forwarding the
 // error classes' — exported so `features/lock/errorCopy` keys off these
@@ -54,18 +54,20 @@ type LockState = {
 
 const resume = async (
   set: (partial: Partial<LockState>) => void,
-  unlock: () => Promise<AuthSession>,
+  unlock: () => Promise<VaultSession>,
 ): Promise<void> => {
   try {
-    const session = await unlock()
-    await useAuthStore.getState().hydrate(session)
-    // hydrate() owns its own error handling and resolves into
-    // `status: 'error'` rather than throwing (docs/error-handling.md §2) —
-    // check the actual outcome instead of inferring success from "didn't
-    // throw". The PIN itself was correct, so there's no reason to re-lock;
-    // WelcomeScreen/RequireAuth already render authStore's own error once
-    // status leaves 'authenticated', but resume() must still admit it
-    // didn't get a clean success (docs/error-handling.md §4).
+    const { session, user } = await unlock()
+    await useAuthStore.getState().hydrate(session, user)
+    // hydrate() no longer gates on a network call (specs.md §10.11: the
+    // vault decrypt above already proved identity locally, fetchGoogleUser
+    // is a refresh, never a gate) — a correct PIN with no network now
+    // resolves `status: 'authenticated'` here, not SESSION_RESTORE_ERROR.
+    // This check stays as a defensive invariant, not a live path: check the
+    // actual outcome instead of inferring success from "didn't throw"
+    // (docs/error-handling.md §2/§4), in case hydrate() ever grows a real
+    // failure mode again. The PIN itself was correct, so there's no reason
+    // to re-lock either way.
     if (useAuthStore.getState().status !== 'authenticated') {
       set({ phase: 'unlocked', error: SESSION_RESTORE_ERROR })
       return
@@ -131,9 +133,9 @@ export const useLockStore = create<LockState>((set, get) => ({
     })
   },
   enable: async (pin, biometric) => {
-    const session = useAuthStore.getState().session
+    const { session, user } = useAuthStore.getState()
     if (!session) throw new Error(NO_SESSION_ERROR)
-    await enableLock({ pin, session, biometric })
+    await enableLock({ pin, session, user, biometric })
     set({ phase: 'unlocked', enabled: true })
   },
   unlockPin: (pin) => resume(set, () => unlockWithPin(pin)),
@@ -171,3 +173,24 @@ export const useLockStore = create<LockState>((set, get) => ({
   },
   clearError: () => set({ error: null }),
 }))
+
+// A same-tab logout() must re-lock the vault (specs.md §12 backlog,
+// 2026-08-19: "logging out" plainly implies the vault re-locks, and today
+// it doesn't — the DEK stays resident in memory). authStore.ts can't import
+// this module back to call lock() directly — lockStore.ts already imports
+// authStore.ts, and a reverse import would be a genuine circular
+// dependency (docs/wave-3-plan.md §2.1(2) forbids exactly this shape for
+// networkStore/main.tsx, same reasoning applies here) — so this module
+// listens for the one transition only an explicit logout() produces
+// instead: `status` settling on 'idle' with `session` newly cleared, where
+// it previously held a real session. Both of resume()'s own logout() calls
+// (the lockout branch, reset()) already set their own final phase
+// immediately after, so this fires harmlessly alongside them and converges
+// to the same state; the case it actually changes is a *future* caller
+// (e.g. a Settings "sign out" action) invoking authStore.logout() directly
+// while the lock is still enabled and unlocked.
+useAuthStore.subscribe((state, prevState) => {
+  if (state.status === 'idle' && state.session === null && prevState.session !== null) {
+    useLockStore.getState().lock()
+  }
+})

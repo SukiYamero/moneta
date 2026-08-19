@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { format, parseISO } from 'date-fns'
 import { ArrowUpDown, CalendarDays, Filter, Search as SearchIcon, X } from 'lucide-react'
 import { useDataStore } from '@/lib/dataStore'
+import { repoErrorCopyKey } from '@/lib/errorCopy'
 import { filterByRange } from '@/lib/movimientoStats'
 import { useLocaleFormatting } from '@/lib/i18n/localeFormatting'
 import { CONFIG_SEMILLA } from '@/lib/schema'
@@ -218,7 +219,7 @@ export const SearchScreen = () => {
 
         {status === 'error' && (
           <InlineErrorState
-            message={t('error')}
+            message={t(repoErrorCopyKey(error ?? 'unknown'))}
             retryLabel={t('retry')}
             onRetry={() => void load()}
           />

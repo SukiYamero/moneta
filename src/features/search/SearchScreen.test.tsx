@@ -7,7 +7,7 @@ import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { Config, Movimiento } from '@/lib/schema'
 import { CONFIG_SEMILLA } from '@/lib/schema'
-import type { Repo } from '@/lib/repo'
+import { RepoError, type Repo } from '@/lib/repo'
 import { useDataStore } from '@/lib/dataStore'
 import { getRepo } from '@/lib/repoProvider'
 import { i18next } from '@/lib/i18n'
@@ -128,14 +128,26 @@ describe('SearchScreen', () => {
     mGetRepo.mockReturnValue(makeRepo({ readyError: new Error('boom') }))
     render(<SearchScreen />)
 
+    // specs.md §10.11: Search now names the actual failure via the shared
+    // repoErrorCopyKey table — a plain (non-RepoError) failure lands as
+    // dataStore's 'unknown' code, not the old generic "couldn't load" string.
     await waitFor(() => {
-      expect(screen.getByRole('alert')).toHaveTextContent(/no pudimos cargar/i)
+      expect(screen.getByRole('alert')).toHaveTextContent(/error inesperado/i)
     })
 
     mGetRepo.mockReturnValue(makeRepo())
     await user.click(screen.getByRole('button', { name: /reintentar/i }))
 
     await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument())
+  })
+
+  it('names a network failure specifically, not the generic fallback', async () => {
+    mGetRepo.mockReturnValue(makeRepo({ readyError: new RepoError('offline', 'network') }))
+    render(<SearchScreen />)
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent(/no hay conexión/i)
+    })
   })
 
   it('shows the "no data at all" empty state for a brand-new user, not "no results"', () => {

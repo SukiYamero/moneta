@@ -9,7 +9,11 @@ client-side from the same `Movimiento[]` those screens read.
   contract `router.tsx` builds against). Debounced text search + active
   filter chips + results as `MovimientoRow` + the Filter sheet. Renders one
   of four states depending on `dataStore.status`/data: loading, inline
-  error with retry (`role="alert"`, per `docs/error-handling.md`), "no data
+  error with retry (`role="alert"`, per `docs/error-handling.md`) — the
+  message itself comes from `dataStore.error`'s `RepoErrorCode` via
+  `@/lib/errorCopy`'s `repoErrorCopyKey`, naming the actual failure (a
+  network-code failure reads differently from an unknown one) instead of
+  one generic string for every cause (`specs.md` §10.11) — "no data
   at all" (brand-new user, zero `movimientos`), or the normal list/"no
   results" pair. **"No data" and "no results" are deliberately two
   different empty states** — telling a new user their search matched

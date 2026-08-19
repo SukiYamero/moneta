@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import {
+  AuthError,
   requestAccessToken,
   fetchGoogleUser,
   DRIVE_SCOPES,
@@ -15,6 +16,7 @@ import {
   markLoggedIn,
   setDriveDecision,
 } from '@/lib/deviceStore'
+import { useNetworkStore } from '@/lib/networkStore'
 
 // 'guest' is a distinct status, not an 'authenticated' session with a
 // synthesized user (specs.md §10.10) — anything gating on
@@ -28,6 +30,15 @@ export type DriveOptIn = 'pending' | 'connected' | 'dismissed'
 type AuthState = {
   status: AuthStatus
   user: GoogleUser | null
+  // `status === 'authenticated'` with `session: null` is a real, distinct
+  // case (specs.md §10.11): a returning user (hasLoggedInBefore()) restored
+  // on a cold boot with no PIN lock enabled and no network to confirm a
+  // live Google session with. There is no vault to decrypt on that path —
+  // restore() is the no-lock boot path — so there is nothing to cache
+  // locally beyond the device's own "logged in before" marker. Every
+  // consumer that reads `session` already treats null as "nothing to
+  // refresh/cache," never as "not authenticated"; `status` alone is what
+  // gates screen access.
   session: AuthSession | null
   drive: DriveLayout | null
   error: string | null
@@ -38,30 +49,49 @@ type AuthState = {
   restore: () => Promise<void>
   logout: () => void
   continueAsGuest: () => void
-  hydrate: (session: AuthSession) => Promise<void>
+  hydrate: (session: AuthSession, cachedUser: GoogleUser | null) => Promise<void>
   connectDrive: () => Promise<void>
   dismissDrive: () => void
 }
 
-const authenticate = async (prompt: '' | 'consent') => {
-  const session = await requestAccessToken(prompt)
-  const user = await fetchGoogleUser(session.accessToken)
-  return { session, user }
+// Narrower than "any authenticate() failure": access_denied/popup_closed/
+// popup_failed_to_open/missing-client-id are all real, non-network outcomes
+// that must not downgrade the network hint. GIS failing to load its own
+// script, or anything that isn't even an AuthError (the shape a raw fetch()
+// TypeError takes when fetchGoogleUser's request can't reach the network at
+// all), is the actual network-shaped signal (docs/wave-3-audit-runtime.md
+// finding 1 / specs.md §10.11: "let a failed request downgrade the state").
+const isNetworkShapedAuthFailure = (e: unknown): boolean => {
+  if (e instanceof AuthError) return e.message === 'auth: GIS failed to load'
+  return true
 }
 
-// Keeps the PIN-lock vault's cached token fresh whenever a new AuthSession
-// lands, so an enabled lock stays convenient after the token first expires
-// (specs.md §12). Must never fail the auth flow it rides on: a no-op when no
-// vault exists, and best-effort if the vault exists but isn't unlocked in this
-// tab (a caching side effect, not the primary outcome of the call) — so the
-// whole body is one try, including the hasVault() read itself (an IndexedDB
-// call that can throw on its own: Safari private mode, storage-quota errors, a
-// blocking extension). Failures are logged, not swallowed silently, so a
-// genuine vault problem stays visible without breaking the auth flow.
-const syncLockedSession = async (session: AuthSession): Promise<void> => {
+const authenticate = async (prompt: '' | 'consent') => {
+  try {
+    const session = await requestAccessToken(prompt)
+    const user = await fetchGoogleUser(session.accessToken)
+    useNetworkStore.getState().reportOnlineSuccess()
+    return { session, user }
+  } catch (e) {
+    if (isNetworkShapedAuthFailure(e)) useNetworkStore.getState().reportOnlineFailure()
+    throw e
+  }
+}
+
+// Keeps the PIN-lock vault's cached token/profile fresh whenever a new
+// AuthSession lands, so an enabled lock stays convenient after the token
+// first expires (specs.md §12). Must never fail the auth flow it rides on: a
+// no-op when no vault exists, and best-effort if the vault exists but isn't
+// unlocked in this tab (a caching side effect, not the primary outcome of the
+// call) — so the whole body is one try, including the hasVault() read itself
+// (an IndexedDB call that can throw on its own: Safari private mode,
+// storage-quota errors, a blocking extension). Failures are logged, not
+// swallowed silently, so a genuine vault problem stays visible without
+// breaking the auth flow.
+const syncLockedSession = async (session: AuthSession, user: GoogleUser | null): Promise<void> => {
   try {
     if (!(await hasVault())) return
-    await updateSession(session)
+    await updateSession(session, user)
   } catch (e) {
     console.warn('lock: failed to sync the cached session', e)
   }
@@ -156,7 +186,40 @@ const reacquireDriveIfNeeded = async (
   const reacquired = await reacquireDrive()
   if (!reacquired || generation !== authGeneration) return
   set({ session: reacquired.session, drive: reacquired.drive })
-  await syncLockedSession(reacquired.session)
+  // Drive scope acquisition never touches the profile — cache whatever
+  // user is already known rather than passing null and blowing away a
+  // previously-cached one.
+  await syncLockedSession(reacquired.session, get().user)
+}
+
+// hydrate()'s fire-and-forget counterpart to reacquireDriveIfNeeded above:
+// fetchGoogleUser() is a refresh, never a gate (specs.md §10.11) — the vault
+// decrypt already proved identity locally, so this only ever makes an
+// already-authenticated `user` fresher, never blocks or undoes entry.
+const refreshProfile = async (
+  session: AuthSession,
+  generation: number,
+  set: (partial: Partial<AuthState>) => void,
+): Promise<void> => {
+  try {
+    const user = await fetchGoogleUser(session.accessToken)
+    useNetworkStore.getState().reportOnlineSuccess()
+    if (generation !== authGeneration) return
+    set({ user })
+    await syncLockedSession(session, user)
+  } catch (e) {
+    if (isNetworkShapedAuthFailure(e)) {
+      useNetworkStore.getState().reportOnlineFailure()
+      // Silent, same reasoning as restore()'s own catch (docs/error-
+      // handling.md §2's documented exception): failing to refresh the
+      // cached profile while offline is the routine, expected outcome for
+      // every biometric/PIN unlock in airplane mode, not a symptom of
+      // something broken. The cached profile from the vault decrypt is
+      // already on screen; this only ever makes it fresher.
+      return
+    }
+    console.warn('auth: could not refresh the cached profile', e)
+  }
 }
 
 // logout() bumps this so a connectDrive()/reacquireDriveIfNeeded() request
@@ -178,18 +241,21 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   driveConnecting: false,
   driveError: null,
   login: async () => {
+    const generation = authGeneration
     set({ status: 'authenticating', error: null })
     try {
       const { session, user } = await authenticate('consent')
       const driveOptIn = await resolveDriveOptIn(get().driveOptIn)
+      if (generation !== authGeneration) return
       set({ status: 'authenticated', session, user, driveOptIn })
-      await syncLockedSession(session)
+      await syncLockedSession(session, user)
       void reacquireDriveIfNeeded(driveOptIn, set, get)
       // Explicit, user-initiated success only — the signal restore() below
       // gates on (specs.md §11, 2026-08-19). markLoggedIn() self-catches, so
       // this can never fail the login it rides on.
       await markLoggedIn()
     } catch (e) {
+      if (generation !== authGeneration) return
       set({ status: 'error', session: null, user: null, drive: null, error: errorMessage(e) })
     }
   },
@@ -213,15 +279,40 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     // authenticate('') — the exact race this synchronous-check-then-set
     // pairing existed to prevent in the first place.
     set({ status: 'authenticating' })
+    const generation = authGeneration
     if (!(await hasLoggedInBefore())) {
+      if (generation !== authGeneration) return
       set({ status: 'idle' })
+      return
+    }
+    // Consulted before attempting the network call at all
+    // (docs/wave-3-audit-runtime.md finding 1's own recommendation), not
+    // just wrapped in a try: navigator.onLine is a hint that lies in one
+    // direction (true on a dead connection), so this only ever *skips* a
+    // doomed attempt — it never blocks a genuine one when the hint happens
+    // to be wrong (the residual gap: a captive portal that reports online
+    // while every real request fails still reaches the catch below and
+    // falls back to 'idle', same as before this fix).
+    if (!useNetworkStore.getState().online) {
+      // No vault exists on this path — restore() is the no-lock boot path,
+      // lockStore.resume()/hydrate() owns the vaulted one — so there is
+      // nothing locally encrypted to decrypt. The device's own "logged in
+      // before" marker, already checked above, is the only evidence
+      // available; session/user stay null (see the AuthState.session
+      // comment). The local repo's own data is readable regardless of
+      // session validity (specs.md §10.11's whole point) — a stale/absent
+      // Google session blocks nothing here.
+      const driveOptIn = await resolveDriveOptIn(get().driveOptIn)
+      if (generation !== authGeneration) return
+      set({ status: 'authenticated', session: null, user: null, driveOptIn, error: null })
       return
     }
     try {
       const { session, user } = await authenticate('')
       const driveOptIn = await resolveDriveOptIn(get().driveOptIn)
+      if (generation !== authGeneration) return
       set({ status: 'authenticated', session, user, driveOptIn })
-      await syncLockedSession(session)
+      await syncLockedSession(session, user)
       void reacquireDriveIfNeeded(driveOptIn, set, get)
     } catch {
       // Deliberately silent, unlike syncLockedSession's console.warn
@@ -233,6 +324,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // WelcomeScreen, and an explicit login() from there has its own
       // error-visible path (status: 'error', §7's error-copy mapping) if
       // the real problem persists.
+      if (generation !== authGeneration) return
       set({ status: 'idle' })
     }
   },
@@ -293,17 +385,26 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   // awaited here directly delays a correct-PIN unlock (see
   // reacquireDriveIfNeeded's own comment) — syncLockedSession(session) still
   // is awaited, but that's a fast local IndexedDB write, not a network call.
-  hydrate: async (session) => {
-    set({ status: 'authenticating', error: null })
-    try {
-      const user = await fetchGoogleUser(session.accessToken)
-      const driveOptIn = await resolveDriveOptIn(get().driveOptIn)
-      set({ status: 'authenticated', session, user, driveOptIn })
-      await syncLockedSession(session)
-      void reacquireDriveIfNeeded(driveOptIn, set, get)
-    } catch (e) {
-      set({ status: 'error', session: null, user: null, drive: null, error: errorMessage(e) })
-    }
+  // The vault decrypt that produced `session`/`cachedUser` already proved
+  // identity locally (specs.md §10.11) — this never gates on a network call
+  // the way it used to (fetchGoogleUser was the network call that stranded
+  // an offline correct-PIN unlock). Nothing left in the body below can
+  // throw (resolveDriveOptIn/syncLockedSession both self-catch), so there
+  // is deliberately no try/catch here anymore — see lockStore.resume()'s
+  // own comment for why it still checks the outcome instead of assuming it.
+  hydrate: async (session, cachedUser) => {
+    const generation = authGeneration
+    const driveOptIn = await resolveDriveOptIn(get().driveOptIn)
+    if (generation !== authGeneration) return
+    set({ status: 'authenticated', session, user: cachedUser, driveOptIn, error: null })
+    await syncLockedSession(session, cachedUser)
+    void reacquireDriveIfNeeded(driveOptIn, set, get)
+    // fetchGoogleUser() is a refresh, never a gate. Fire-and-forget, same
+    // reasoning as reacquireDriveIfNeeded just above: lockStore.resume()
+    // awaits this function's whole promise before leaving `phase: 'locked'`,
+    // so a network call directly in this body would delay a correct-PIN
+    // unlock with no busy state to explain it (LockScreen has none).
+    void refreshProfile(session, generation, set)
   },
   connectDrive: async () => {
     const generation = authGeneration
@@ -314,7 +415,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // a session/drive layout for an account the user already signed out of.
       if (generation !== authGeneration) return
       set({ session, drive, driveOptIn: 'connected', driveConnecting: false })
-      await syncLockedSession(session)
+      // Drive scope acquisition never touches the profile — cache whatever
+      // user is already known.
+      await syncLockedSession(session, get().user)
       // Recorded on success only: if requestDriveSession() above throws
       // (network, 401/403, popup closed), driveOptIn is never set to
       // 'connected' and nothing is persisted either — the recorded state

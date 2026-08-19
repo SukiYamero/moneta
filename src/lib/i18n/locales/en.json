@@ -112,7 +112,15 @@
     "resultsCount_one": "{{count}} result",
     "resultsCount_other": "{{count}} results",
     "loading": "Loading movements…",
-    "error": "We couldn't load your movements.",
+    "error": {
+      "codes": {
+        "notFound": "We couldn't find your movements.",
+        "schemaMismatch": "Your movements aren't compatible with this app version.",
+        "invalidInput": "There was a problem with your movements.",
+        "network": "No connection. Check your internet and try again.",
+        "unknown": "Something went wrong. Try again."
+      }
+    },
     "retry": "Retry",
     "emptyData": {
       "title": "You don't have any movements yet",
@@ -153,7 +161,15 @@
   "history": {
     "title": "History",
     "loading": "Loading your history…",
-    "error": "We couldn't load your history. Try again.",
+    "error": {
+      "codes": {
+        "notFound": "We couldn't find your history.",
+        "schemaMismatch": "Your history isn't compatible with this app version.",
+        "invalidInput": "There was a problem with your history.",
+        "network": "No connection. Check your internet and try again.",
+        "unknown": "Something went wrong. Try again."
+      }
+    },
     "retry": "Retry",
     "scope": {
       "ariaLabel": "Period scope",
@@ -192,5 +208,14 @@
   },
   "update": {
     "available": "A new version is available. Reload the page to update."
+  },
+  "errors": {
+    "offline": {
+      "windowExpired": {
+        "title": "Reconnect to keep adding",
+        "body": "You've been offline for more than 7 hours. What you've recorded is saved on this device; connect to the internet to sync it with your account."
+      },
+      "mutationRestricted": "You need a connection to edit, delete, or change settings. You can keep adding movements offline."
+    }
   }
 }
