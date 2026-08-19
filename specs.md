@@ -343,6 +343,56 @@ Full design: Claude Design canvas `Moneta.dc.html` ("AUTH: WELCOME" and
 - **Out of scope (deferred, see §12):** a persistent "don't ask again" for
   Drive sync and a way to re-enable it later — Profile sheet's Drive row,
   Wave 2.
+### 10.5 Shared UI kit + fake repo
+
+- **Goal:** the foundational, cross-feature component layer + a shared
+  in-memory `Repo` implementation every Wave 2 screen builds on, so
+  `BottomSheet`/`MovimientoRow`/etc. and their look-and-feel are defined
+  once instead of per-screen, and every screen reads/writes the same
+  fake data (a write from one screen must show up on another immediately).
+- **User story:** as a developer building a screen (Home, Search, Movement
+  sheet, Tags, Groups…), I compose it from `src/components/shared/**`
+  and read/write through the shared `fakeRepo` instance instead of
+  inventing my own mock data or re-deriving category → icon/color myself.
+- **UI:** `src/components/shared/**` — `BottomSheet`, `CenterModal`,
+  `IconAvatar`, `MovimientoRow` (+ `movimientoView.ts`, the one place
+  category → icon/tint/color and signed-amount formatting live), `TagChip`,
+  `DateChipPicker`, `SegmentedControl`, `Toggle`, `InfoButton`. Dev-only
+  gallery at `src/routes/Kit.tsx` (`/kit`, gated on `import.meta.env.DEV`)
+  renders every component/variant for visual verification.
+- **Data touched:** `src/lib/repo.fake.ts` — `createFakeRepo(options?)`
+  (fresh isolated instance, e.g. for tests) and a shared singleton
+  `fakeRepo` export (the one every screen should import). Implements
+  `Repo` from `src/lib/repo.ts` exactly as that interface exists today —
+  no changes to the port's shape. Seeded with several months of `Movimiento`
+  (extends `CONFIG_SEMILLA.categorias` with the design's demo categories —
+  Comida, Transporte, Compras, Ocio, Salud, Hogar, Regalo, Freelance — so
+  `movimientoView.ts` has real variety to map) and a handful of `Activo`.
+- **Edge cases:** empty store → `list()` returns `{ items: [] }`; `get()` on
+  a missing id → `undefined`; `update`/`remove` on a missing id →
+  `RepoError('not_found')`; `list()` honors `dateFrom`/`dateTo`/`seccion`/
+  `sortBy`/`sortDir`/`limit`/`cursor` together (index-encoded cursor,
+  fine for an in-memory store); an unknown/custom category in
+  `movimientoView.getMovimientoVisual` falls back to a `tipo`-based
+  icon/tint instead of throwing.
+- **Done when:** every component has a colocated `*.test.tsx`
+  (`user-event`, not `fireEvent`), is keyboard-reachable with ≥44px touch
+  targets and sensible `role`/`aria`; `repo.fake.ts` has `repo.fake.test.ts`
+  covering the edge cases above; `bun run check` is green; `/kit` renders
+  every component/variant, verified at a ~390×844 viewport.
+
+**Decisions made while building this (see §11 for the dated entries):**
+BottomSheet/CenterModal share one `useOverlay` hook (Escape, focus trap,
+body-scroll lock, focus restore — not in the public barrel, internal to the
+two shells); `IconAvatarTint` maps onto the existing `chart-1..5` +
+`success`/`danger`/`info`/`neutral` tokens instead of new hex values;
+`DateChipPicker` takes `firstDayOfWeek` as a prop rather than reading
+`Config.preferencias.primerDiaSemana` itself, keeping it repo-agnostic —
+the calling screen reads the preference and passes it down;
+`RepoErrorCode` gained an `invalid_input` case (coordinated with the
+operator, since `repo.ts` is Track A's file) so the fake repo can reject a
+non-positive `monto` the same way a real implementation should, instead of
+silently disagreeing with schema.ts's "monto always positive" invariant.
 
 ## 11. Decisions log
 
@@ -559,6 +609,52 @@ Full design: Claude Design canvas `Moneta.dc.html` ("AUTH: WELCOME" and
   on a mid-session re-lock/unlock (Page Visibility timeout, §10.2), where
   re-prompting Drive opt-in on every screen-unlock would be wrong; only an
   explicit `login()` resets it.
+
+- 2026-08-18 — **Shared UI kit + fake repo (Track D, §10.5).** Built
+  `src/components/shared/**` (`BottomSheet`, `CenterModal`, `IconAvatar`,
+  `MovimientoRow`, `TagChip`, `DateChipPicker`, `SegmentedControl`,
+  `Toggle`, `InfoButton`) and `src/lib/repo.fake.ts`. `RepoErrorCode`
+  (`src/lib/repo.ts`) gained an `invalid_input` case — approved by the
+  operator mid-track since `repo.ts` is Track A's owned file — so the fake
+  repo can reject a non-positive `monto` (schema.ts's mandatory "monto
+  always positive" convention) the same way any real implementation
+  should, instead of a fake that silently disagrees with the real repo.
+- 2026-08-18 — **`IconAvatarTint` reuses the existing chart/status tokens,
+  no new hex.** Category color is presentation (`movimientoView.ts`), not a
+  new brand color — `emerald/blue/purple/rose/amber` map onto
+  `--color-chart-1..5`, plus `success/danger/info/neutral` for status-driven
+  tints. Keeps every category color traceable to `src/styles/index.css`
+  instead of a parallel palette.
+- 2026-08-18 — **`DateChipPicker` takes `firstDayOfWeek` as a prop, not a
+  `Config` read.** Foundational `src/components/shared/**` components stay
+  pure/presentational with no repo/store dependency; the calling screen
+  reads `Config.preferencias.primerDiaSemana` (via the repo) and passes it
+  down. Keeps the component testable in isolation and reusable outside the
+  app's own data layer.
+- 2026-08-18 — **Fake-repo seed data uses deterministic string ids
+  (`mov_seed_0`, …), not `crypto.randomUUID()`.** Deviates from schema.ts's
+  "id = app-generated uuid" convention on purpose: the seed must be
+  reproducible across runs/tests (no `Math.random()`, no bare `new Date()`
+  — dates derive from an injectable `today`), and `randomUUID()` is
+  incompatible with that by definition. Only applies to the fixed seed rows;
+  anything added through the fake repo at runtime should still get a real
+  uuid from the caller.
+
+- 2026-08-18 — **`useOverlay` suppresses the panel's own focus ring
+  (`outline-hidden`).** Visual-pass finding (Track D, §10.5): the panel
+  container is `tabIndex={-1}` and only ever focused programmatically
+  (initially, and as the fallback when an overlay has no focusable
+  children at all) — never reached by keyboard Tab — but the global
+  `outline-ring/50` base style (`src/styles/index.css`) still painted its
+  `:focus-visible` ring on it once `.focus()` landed, drawing a ring
+  around the whole sheet/modal. Reads as a web modal, not the native-feel
+  transitions `AGENTS.md` § UI calls for. Fixed once at the shared
+  `useOverlay` seam (`OVERLAY_PANEL_CLASS = 'outline-hidden'`, applied by
+  both `BottomSheet` and `CenterModal`) rather than patching either
+  component individually; focusable children keep their own ring
+  untouched. Regression-tested with an overlay that has no focusable
+  content (the case that actually triggers the panel-as-`activeElement`
+  path).
 
 ## 12. Backlog (pending verification / deferred work)
 

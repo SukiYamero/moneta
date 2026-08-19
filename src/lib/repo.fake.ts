@@ -1,0 +1,507 @@
+import { format, subDays } from 'date-fns'
+import type { Activo, Categoria, Config, Movimiento } from '@/lib/schema'
+import { CONFIG_SEMILLA } from '@/lib/schema'
+import type { CrudRepo, EntityId, ListQuery, ListResult, Repo } from '@/lib/repo'
+import { RepoError } from '@/lib/repo'
+
+// Extends CONFIG_SEMILLA's categorias with the design's demo categories
+// (Comida, Transporte…) so screens built against either source render
+// consistent icon/tint via movimientoView.ts. Still the same 3 secciones.
+const FAKE_CATEGORIAS: Categoria[] = [
+  ...CONFIG_SEMILLA.categorias,
+  { id: 'cat_comida', nombre: 'Comida', seccionId: 'sec_personal', tipo: 'gasto' },
+  { id: 'cat_transporte', nombre: 'Transporte', seccionId: 'sec_personal', tipo: 'gasto' },
+  { id: 'cat_compras', nombre: 'Compras', seccionId: 'sec_personal', tipo: 'gasto' },
+  { id: 'cat_ocio', nombre: 'Ocio', seccionId: 'sec_personal', tipo: 'gasto' },
+  { id: 'cat_salud', nombre: 'Salud', seccionId: 'sec_personal', tipo: 'gasto' },
+  { id: 'cat_hogar', nombre: 'Hogar', seccionId: 'sec_personal', tipo: 'gasto' },
+  { id: 'cat_regalo', nombre: 'Regalo', seccionId: 'sec_personal', tipo: 'ingreso' },
+  { id: 'cat_freelance', nombre: 'Freelance', seccionId: 'sec_trabajo', tipo: 'ingreso' },
+]
+
+const FAKE_CONFIG: Config = {
+  ...CONFIG_SEMILLA,
+  categorias: FAKE_CATEGORIAS,
+}
+
+interface MovimientoTemplate {
+  offsetDays: number
+  seccion: string
+  categoria: string
+  tipo: Movimiento['tipo']
+  monto: number
+  metodo?: Movimiento['metodo']
+  nota?: string
+}
+
+// Several months of realistic Spanish sample data, offsets relative to the
+// injected "today" so the seed stays deterministic across runs/tests.
+const MOVIMIENTO_TEMPLATES: MovimientoTemplate[] = [
+  {
+    offsetDays: 0,
+    seccion: 'sec_personal',
+    categoria: 'Comida',
+    tipo: 'gasto',
+    monto: 18000,
+    metodo: 'debito',
+    nota: 'Café de la mañana',
+  },
+  {
+    offsetDays: 1,
+    seccion: 'sec_personal',
+    categoria: 'Compras',
+    tipo: 'gasto',
+    monto: 245000,
+    metodo: 'debito',
+    nota: 'Supermercado',
+  },
+  {
+    offsetDays: 1,
+    seccion: 'sec_personal',
+    categoria: 'Transporte',
+    tipo: 'gasto',
+    monto: 48000,
+    metodo: 'efectivo',
+    nota: 'Uber al trabajo',
+  },
+  {
+    offsetDays: 3,
+    seccion: 'sec_personal',
+    categoria: 'Ocio',
+    tipo: 'gasto',
+    monto: 63000,
+    metodo: 'credito',
+    nota: 'Netflix',
+  },
+  {
+    offsetDays: 5,
+    seccion: 'sec_emprendimiento',
+    categoria: 'Ventas',
+    tipo: 'ingreso',
+    monto: 1800000,
+    metodo: 'banco',
+    nota: 'Proyecto freelance',
+  },
+  {
+    offsetDays: 7,
+    seccion: 'sec_personal',
+    categoria: 'Transporte',
+    tipo: 'gasto',
+    monto: 180000,
+    metodo: 'efectivo',
+    nota: 'Gasolina',
+  },
+  {
+    offsetDays: 9,
+    seccion: 'sec_personal',
+    categoria: 'Comida',
+    tipo: 'gasto',
+    monto: 154000,
+    metodo: 'debito',
+    nota: 'Cena con amigos',
+  },
+  {
+    offsetDays: 11,
+    seccion: 'sec_personal',
+    categoria: 'Regalo',
+    tipo: 'ingreso',
+    monto: 400000,
+    metodo: 'efectivo',
+    nota: 'Regalo cumpleaños',
+  },
+  {
+    offsetDays: 14,
+    seccion: 'sec_personal',
+    categoria: 'Compras',
+    tipo: 'gasto',
+    monto: 356000,
+    metodo: 'credito',
+    nota: 'Ropa nueva',
+  },
+  {
+    offsetDays: 15,
+    seccion: 'sec_personal',
+    categoria: 'Sueldo',
+    tipo: 'ingreso',
+    monto: 4200000,
+    metodo: 'banco',
+    nota: 'Salario',
+  },
+  {
+    offsetDays: 18,
+    seccion: 'sec_personal',
+    categoria: 'Ocio',
+    tipo: 'gasto',
+    monto: 96000,
+    metodo: 'debito',
+    nota: 'Cine',
+  },
+  {
+    offsetDays: 21,
+    seccion: 'sec_personal',
+    categoria: 'Salud',
+    tipo: 'gasto',
+    monto: 75000,
+    metodo: 'efectivo',
+    nota: 'Farmacia',
+  },
+  {
+    offsetDays: 23,
+    seccion: 'sec_emprendimiento',
+    categoria: 'Ventas',
+    tipo: 'ingreso',
+    monto: 1280000,
+    metodo: 'banco',
+    nota: 'Anticipo proyecto',
+  },
+  {
+    offsetDays: 25,
+    seccion: 'sec_emprendimiento',
+    categoria: 'Impuestos',
+    tipo: 'gasto',
+    monto: 320000,
+    metodo: 'banco',
+    nota: 'Retención en la fuente',
+  },
+  {
+    offsetDays: 28,
+    seccion: 'sec_emprendimiento',
+    categoria: 'Caja menor',
+    tipo: 'gasto',
+    monto: 45000,
+    metodo: 'efectivo',
+    nota: 'Insumos oficina',
+  },
+  {
+    offsetDays: 30,
+    seccion: 'sec_personal',
+    categoria: 'Sueldo',
+    tipo: 'ingreso',
+    monto: 4200000,
+    metodo: 'banco',
+    nota: 'Salario',
+  },
+  {
+    offsetDays: 33,
+    seccion: 'sec_personal',
+    categoria: 'Hogar',
+    tipo: 'gasto',
+    monto: 850000,
+    metodo: 'banco',
+    nota: 'Renta',
+  },
+  {
+    offsetDays: 36,
+    seccion: 'sec_personal',
+    categoria: 'Compras',
+    tipo: 'gasto',
+    monto: 240600,
+    metodo: 'debito',
+    nota: 'Supermercado',
+  },
+  {
+    offsetDays: 42,
+    seccion: 'sec_personal',
+    categoria: 'Comida',
+    tipo: 'gasto',
+    monto: 58000,
+    metodo: 'debito',
+    nota: 'Restaurante',
+  },
+  {
+    offsetDays: 45,
+    seccion: 'sec_personal',
+    categoria: 'Ocio',
+    tipo: 'gasto',
+    monto: 43600,
+    metodo: 'credito',
+    nota: 'Spotify',
+  },
+  {
+    offsetDays: 48,
+    seccion: 'sec_trabajo',
+    categoria: 'Freelance',
+    tipo: 'ingreso',
+    monto: 780000,
+    metodo: 'banco',
+    nota: 'Freelance UI',
+  },
+  {
+    offsetDays: 51,
+    seccion: 'sec_personal',
+    categoria: 'Transporte',
+    tipo: 'gasto',
+    monto: 52000,
+    metodo: 'efectivo',
+    nota: 'Gasolina',
+  },
+  {
+    offsetDays: 54,
+    seccion: 'sec_personal',
+    categoria: 'Salud',
+    tipo: 'gasto',
+    monto: 31400,
+    metodo: 'efectivo',
+    nota: 'Farmacia',
+  },
+  {
+    offsetDays: 60,
+    seccion: 'sec_personal',
+    categoria: 'Sueldo',
+    tipo: 'ingreso',
+    monto: 4200000,
+    metodo: 'banco',
+    nota: 'Salario',
+  },
+  {
+    offsetDays: 68,
+    seccion: 'sec_personal',
+    categoria: 'Compras',
+    tipo: 'gasto',
+    monto: 540000,
+    metodo: 'credito',
+    nota: 'Black Friday',
+  },
+  {
+    offsetDays: 78,
+    seccion: 'sec_personal',
+    categoria: 'Transporte',
+    tipo: 'gasto',
+    monto: 180000,
+    metodo: 'banco',
+    nota: 'Seguro auto',
+  },
+  {
+    offsetDays: 90,
+    seccion: 'sec_personal',
+    categoria: 'Sueldo',
+    tipo: 'ingreso',
+    monto: 4200000,
+    metodo: 'banco',
+    nota: 'Salario',
+  },
+  {
+    offsetDays: 95,
+    seccion: 'sec_personal',
+    categoria: 'Comida',
+    tipo: 'gasto',
+    monto: 95000,
+    metodo: 'debito',
+    nota: 'Cena de fin de año',
+  },
+  {
+    offsetDays: 120,
+    seccion: 'sec_personal',
+    categoria: 'Sueldo',
+    tipo: 'ingreso',
+    monto: 1600000,
+    metodo: 'banco',
+    nota: 'Aguinaldo',
+  },
+]
+
+function seedMovimientos(today: Date): Movimiento[] {
+  return MOVIMIENTO_TEMPLATES.map((t, index) => {
+    const at = subDays(today, t.offsetDays)
+    return {
+      id: `mov_seed_${index}`,
+      fecha: format(at, 'yyyy-MM-dd'),
+      createdAt: at.toISOString(),
+      seccion: t.seccion,
+      categoria: t.categoria,
+      tipo: t.tipo,
+      monto: t.monto,
+      moneda: 'COP',
+      metodo: t.metodo,
+      nota: t.nota,
+    }
+  })
+}
+
+function seedActivos(today: Date): Activo[] {
+  const fechaActualizacion = (offsetDays: number) =>
+    format(subDays(today, offsetDays), 'yyyy-MM-dd')
+  return [
+    {
+      id: 'act_seed_0',
+      nombre: 'CDT Bancolombia',
+      tipo: 'CDT',
+      seccion: 'sec_personal',
+      capitalInvertido: 5000000,
+      valorActual: 5320000,
+      moneda: 'COP',
+      fechaActualizacion: fechaActualizacion(5),
+    },
+    {
+      id: 'act_seed_1',
+      nombre: 'Acciones Ecopetrol',
+      tipo: 'acciones',
+      seccion: 'sec_personal',
+      capitalInvertido: 2000000,
+      valorActual: 1840000,
+      moneda: 'COP',
+      fechaActualizacion: fechaActualizacion(2),
+    },
+    {
+      id: 'act_seed_2',
+      nombre: 'Cripto (BTC)',
+      tipo: 'cripto',
+      seccion: 'sec_emprendimiento',
+      capitalInvertido: 1200000,
+      valorActual: 1560000,
+      moneda: 'COP',
+      fechaActualizacion: fechaActualizacion(1),
+    },
+  ]
+}
+
+function validateMovimiento(m: Movimiento): void {
+  // `monto` always positive is a mandatory schema.ts convention — a fake that
+  // silently accepted a violation would disagree with the real repo.
+  if (m.monto <= 0) {
+    throw new RepoError('monto must be a positive number (schema.ts §4)', 'invalid_input')
+  }
+}
+
+function compareValues(a: unknown, b: unknown): number {
+  if (a === b) return 0
+  if (a === undefined) return 1
+  if (b === undefined) return -1
+  if (typeof a === 'number' && typeof b === 'number') return a - b
+  return String(a).localeCompare(String(b))
+}
+
+function paginate<T>(items: T[], limit?: number, cursor?: string): ListResult<T> {
+  const start = cursor ? Number(cursor) : 0
+  if (limit === undefined) return { items: items.slice(start) }
+  const pageItems = items.slice(start, start + limit)
+  const nextIndex = start + limit
+  return {
+    items: pageItems,
+    nextCursor: nextIndex < items.length ? String(nextIndex) : undefined,
+  }
+}
+
+interface CrudRepoConfig<T> {
+  getDate?: (item: T) => string | undefined
+  getSeccion?: (item: T) => string | undefined
+  validate?: (item: T) => void
+}
+
+function createCrudRepo<T extends { id: EntityId }>(
+  seed: T[],
+  config: CrudRepoConfig<T> = {},
+): CrudRepo<T> {
+  let store = [...seed]
+
+  function applyFilters(query: ListQuery<T> | undefined): T[] {
+    let result = store
+    const { getDate, getSeccion } = config
+
+    if (query?.dateFrom !== undefined || query?.dateTo !== undefined) {
+      result = result.filter((item) => {
+        const date = getDate?.(item)
+        if (date === undefined) return false
+        if (query?.dateFrom !== undefined && date < query.dateFrom) return false
+        if (query?.dateTo !== undefined && date > query.dateTo) return false
+        return true
+      })
+    }
+
+    if (query?.seccion !== undefined) {
+      result = result.filter((item) => getSeccion?.(item) === query.seccion)
+    }
+
+    return result
+  }
+
+  function sortItems(items: T[], query: ListQuery<T> | undefined): T[] {
+    const { sortBy, sortDir = 'asc' } = query ?? {}
+    if (!sortBy) return items
+    const dir = sortDir === 'desc' ? -1 : 1
+    return [...items].sort((a, b) => dir * compareValues(a[sortBy], b[sortBy]))
+  }
+
+  return {
+    async list(query) {
+      const filtered = applyFilters(query)
+      const sorted = sortItems(filtered, query)
+      return paginate(sorted, query?.limit, query?.cursor)
+    },
+    async get(id) {
+      return store.find((item) => item.id === id)
+    },
+    async add(item) {
+      config.validate?.(item)
+      store = [...store, item]
+      return item
+    },
+    async addMany(items) {
+      items.forEach((item) => config.validate?.(item))
+      store = [...store, ...items]
+      return items
+    },
+    async update(id, patch) {
+      const existing = store.find((item) => item.id === id)
+      if (!existing) throw new RepoError(`Not found: ${id}`, 'not_found')
+      const updated = { ...existing, ...patch } as T
+      config.validate?.(updated)
+      store = store.map((item) => (item.id === id ? updated : item))
+      return updated
+    },
+    async remove(id) {
+      if (!store.some((item) => item.id === id)) {
+        throw new RepoError(`Not found: ${id}`, 'not_found')
+      }
+      store = store.filter((item) => item.id !== id)
+    },
+    async removeMany(ids) {
+      const idsToRemove = new Set(ids)
+      store = store.filter((item) => !idsToRemove.has(item.id))
+    },
+  }
+}
+
+export interface CreateFakeRepoOptions {
+  /** Injectable clock so seed dates (and tests/screenshots) stay deterministic. */
+  today?: Date
+}
+
+/** In-memory `Repo` implementation, seeded with deterministic Spanish sample data. */
+export function createFakeRepo({ today = new Date() }: CreateFakeRepoOptions = {}): Repo {
+  let config: Config = { ...FAKE_CONFIG }
+
+  const movimientos = createCrudRepo<Movimiento>(seedMovimientos(today), {
+    getDate: (m) => m.fecha,
+    getSeccion: (m) => m.seccion,
+    validate: validateMovimiento,
+  })
+
+  const activos = createCrudRepo<Activo>(seedActivos(today), {
+    getDate: (a) => a.fechaActualizacion,
+    getSeccion: (a) => a.seccion,
+  })
+
+  return {
+    async ready() {
+      if (config.schemaVersion !== FAKE_CONFIG.schemaVersion) {
+        throw new RepoError('Unexpected fake config schemaVersion', 'schema_mismatch')
+      }
+    },
+    movimientos,
+    activos,
+    async getConfig() {
+      return { ...config }
+    },
+    async updateConfig(patch) {
+      config = { ...config, ...patch }
+      return { ...config }
+    },
+  }
+}
+
+// Every screen must read the SAME repo instance (docs/ui/implementation-plan.md)
+// so a write from the Add sheet shows up on Home immediately. This is the
+// default import for app code; tests should use `createFakeRepo()` directly
+// for an isolated instance instead of sharing this singleton.
+export const fakeRepo: Repo = createFakeRepo()

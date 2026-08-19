@@ -22,3 +22,6 @@ Shared stores, helpers, and the Drive/auth/lock logic layer. No UI here.
 - `repo.ts` — the storage-agnostic `Repo` port (**interface only for now** —
   see `specs.md` §10.3). Implementations (local dexie, Drive-backed) land
   per `specs.md` §12, Track A.
+- `repo.fake.ts` — in-memory `Repo` implementation, seeded with deterministic
+  Spanish sample data (`createFakeRepo()` for an isolated instance, the
+  `fakeRepo` singleton for app code — see `specs.md` §10.5).
