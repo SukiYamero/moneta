@@ -1,8 +1,10 @@
 import { useRef, useState, type ReactNode } from 'react'
 import { Gift, House, Search, Trash2, Utensils } from 'lucide-react'
 import {
+  AmountField,
   BottomSheet,
   CenterModal,
+  ConfirmDialog,
   DateChipPicker,
   IconAvatar,
   InfoButton,
@@ -12,6 +14,7 @@ import {
   Skeleton,
   SkeletonGroup,
   TagChip,
+  TextField,
   Toggle,
   type IconAvatarTint,
 } from '@/components/shared'
@@ -117,6 +120,9 @@ export const Kit = () => {
   // though it isn't the sheet's first focusable descendant.
   const [addSheetOpen, setAddSheetOpen] = useState(false)
   const amountInputRef = useRef<HTMLInputElement>(null)
+  const [addSheetAmount, setAddSheetAmount] = useState('')
+  const [textFieldValue, setTextFieldValue] = useState('')
+  const [amountFieldValue, setAmountFieldValue] = useState('')
 
   return (
     <main className="mx-auto flex max-w-md flex-col gap-8 p-5 pb-24">
@@ -246,6 +252,38 @@ export const Kit = () => {
         <ToastKitDemo />
       </Section>
 
+      <Section title="TextField">
+        <TextField
+          label="Descripción"
+          value={textFieldValue}
+          onChange={setTextFieldValue}
+          placeholder="Ej: Almuerzo con el equipo"
+        />
+        <TextField
+          label="Nombre de categoría"
+          value=""
+          onChange={() => {}}
+          error="Ya existe una categoría con ese nombre"
+        />
+      </Section>
+
+      <Section title="AmountField">
+        <AmountField
+          label="Monto"
+          value={amountFieldValue}
+          onChange={setAmountFieldValue}
+          locale={locale}
+          placeholder="0"
+        />
+        <AmountField
+          label="Monto (con error)"
+          value="12.34.56"
+          onChange={() => {}}
+          locale={locale}
+          error="El monto no es válido"
+        />
+      </Section>
+
       <Section title="InfoButton">
         <InfoButton onClick={() => setInfoOpen(true)} label="Sobre el balance" />
       </Section>
@@ -353,35 +391,18 @@ export const Kit = () => {
             <Trash2 className="size-4" aria-hidden="true" /> Eliminar
           </button>
 
-          <CenterModal
+          <ConfirmDialog
             open={deleteConfirmOpen}
             onClose={() => setDeleteConfirmOpen(false)}
-            ariaLabel="Confirmar eliminación"
-          >
-            <div className="flex flex-col items-center gap-3 text-center">
-              <div className="text-base font-extrabold">¿Eliminar este movimiento?</div>
-              <p className="text-sm text-fg-secondary">Esta acción no se puede deshacer.</p>
-              <div className="flex w-full gap-2">
-                <button
-                  type="button"
-                  onClick={() => setDeleteConfirmOpen(false)}
-                  className="min-h-11 flex-1 rounded-md bg-secondary text-sm font-bold text-secondary-foreground"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDeleteConfirmOpen(false)
-                    setMovementSheetOpen(false)
-                  }}
-                  className="min-h-11 flex-1 rounded-md bg-danger text-sm font-bold text-danger-foreground"
-                >
-                  Eliminar
-                </button>
-              </div>
-            </div>
-          </CenterModal>
+            onConfirm={() => {
+              setDeleteConfirmOpen(false)
+              setMovementSheetOpen(false)
+            }}
+            title="¿Eliminar este movimiento?"
+            description="Esta acción no se puede deshacer."
+            confirmLabel="Eliminar"
+            cancelLabel="Cancelar"
+          />
         </div>
       </BottomSheet>
 
@@ -400,15 +421,13 @@ export const Kit = () => {
             onChange={setType}
             aria-label="Tipo de movimiento"
           />
-          <label className="flex flex-col gap-1.5 text-sm font-semibold">
-            Monto
-            <input
-              ref={amountInputRef}
-              type="number"
-              inputMode="decimal"
-              className="min-h-11 rounded-md border border-border-subtle bg-surface-sunken px-3.5 text-base font-bold"
-            />
-          </label>
+          <AmountField
+            label="Monto"
+            value={addSheetAmount}
+            onChange={setAddSheetAmount}
+            locale={locale}
+            ref={amountInputRef}
+          />
         </div>
       </BottomSheet>
     </main>

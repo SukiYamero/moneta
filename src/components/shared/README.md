@@ -27,6 +27,14 @@ doesn't belong to any one `src/features/**` folder. See `specs.md` §10.5.
   outside the window). Highest-reuse shell (Filter/Movement/Profile/Add
   sheets, Tag picker). `BottomSheetProps` is `OverlayShellProps<HTMLDivElement>`
   (see `useOverlay.ts` above). Accepts `initialFocus`/`ref`.
+- `ConfirmDialog.tsx` — delete-style confirmation built on `CenterModal`;
+  generates its own `labelledBy` from `title` via `useId()`, so callers
+  pass no aria props. Confirm/Cancel use `Button`'s `destructive`/
+  `secondary` variants at `min-h-11` (button.tsx's own sizes don't reach
+  the 44px touch target — the same per-call-site override
+  `LockSettings.tsx` already uses). Takes all copy as props — adds no
+  locale keys of its own. Replaces the `/kit` gallery's former hand-rolled
+  delete-confirm demo. Accepts `ref`.
 - `CenterModal.tsx` — centered popup shell (Delete confirm, Info tooltip,
   Custom tag modal, Group editor). `CenterModalProps` is
   `OverlayShellProps<HTMLDivElement>` too. Accepts `initialFocus`/`ref`.
@@ -81,9 +89,28 @@ doesn't belong to any one `src/features/**` folder. See `specs.md` §10.5.
   `disabled` (arrow-key nav skips disabled options); keyboard focus moves
   via refs on each segment, not DOM traversal. Same invisible-padding
   touch-target treatment as `TagChip`.
+- `TextField.tsx` — labelled text input: `Label`/`Input` association via
+  `useId()` (or a caller-supplied `id`), `aria-invalid`/`aria-describedby`
+  wired to an optional `error` rendered as `role="alert"`, 44px touch
+  target. Forwards native `ComponentProps<'input'>` (minus `id`/`value`/
+  `onChange`) so `placeholder`/`maxLength`/`autoComplete`/etc. pass through
+  without being individually re-declared. Accepts `ref`.
 - `Toggle.tsx` — on/off switch (`role="switch"`). Accepts `ref`.
 - `InfoButton.tsx` — small "?" affordance that opens an info tooltip
   (the caller owns the `CenterModal` it opens). Accepts `ref`.
+- `AmountField.tsx` — locale-aware amount input for `Movimiento.monto`
+  (always positive; sign comes from `tipo`). `type="text"` +
+  `inputMode="decimal"`, never `type="number"` (native spinners, and
+  `valueAsNumber` ignores locale entirely). A controlled **string** field,
+  not a controlled number — `parseAmount(raw, locale)` and its inverse
+  `formatAmountForInput(value, locale)` are exported pure functions built
+  on `Intl.NumberFormat(locale).formatToParts` to read the locale's actual
+  decimal/group separators (`es-CO` groups `.`/decimals `,`; `en-US` the
+  reverse) — never a hand-rolled parser. `aria-invalid` is true both for a
+  caller-supplied `error` and for text `parseAmount` can't parse under the
+  given `locale`, so malformed input is flagged even with no `error` copy
+  passed. Required `locale` (BCP-47 from `useLocaleFormatting()`), same
+  no-default convention as `MovimientoRow`/`formatMonto`. Accepts `ref`.
 - `BottomNav.tsx` — the five-slot persistent tab bar (Home / History /
   centre Add / Search / Profile), mounted once by `src/routes/AppShell.tsx`.
   Home, History and Search are real `NavLink`s, so `aria-current="page"`
