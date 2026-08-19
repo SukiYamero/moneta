@@ -853,6 +853,117 @@ check` green.
   selected chips are tinted per category rather than uniformly green, an
   unknown category falls back to its type tint, and `bun run check` is green.
 
+### 10.9 Loading states — the three tiers (user request, 2026-08-19)
+
+- **Goal:** the app never looks frozen, and it never flashes a loader for
+  work that finished in 80ms. A no-backend, local-first app has little to
+  wait for; the loading system's job is mostly to **stay out of the way**.
+- **User story:** as a user, the app opens straight into content. When
+  something genuinely takes a moment, the screen keeps its shape and fills
+  in — it does not blank, jump, or spin at me.
+- **The constraint that shapes this:** `dataStore.load()` is
+  **once per session and shared by all three screens** (`src/lib/dataStore.ts`
+  short-circuits on `ready`). Home, Search and History read the same store,
+  so **switching tabs has no data wait at all**. A per-navigation loader
+  would therefore be a lie — it would only ever flash. The real waits are
+  (1) app boot and (2) a lazily-loaded route.
+
+**Tier 1 — screen (boot and lazy routes).** One `ScreenLoading` component:
+full-screen, brand-consistent, used while the app resolves auth on a cold
+start and as the `Suspense` fallback for any lazily-loaded route (`/kit`
+today, more in Wave 3). **Not** used on tab changes — there is nothing to
+wait for.
+
+- **Fixes a real bug:** `RequireAuth` renders `WelcomeScreen` whenever
+  `status !== 'authenticated'`, which includes the `authenticating` state
+  during `restore()`. A cold boot with a stored session therefore **flashes
+  the login screen before entering**. Boot must render `ScreenLoading`, not
+  the login screen, until `restore()` settles.
+
+**Tier 2 — section (in-screen).** Skeletons that match the loaded layout, so
+the screen fills in rather than reflowing. The chrome around them — header,
+tabs, bottom nav — **never** disappears. `HomeLoadingState` already does
+this correctly and is the model. Search renders a text label and History a
+bare `<p>`: three screens, three treatments. Unify them on one `Skeleton`
+primitive.
+
+**Tier 3 — action (a write in flight).** The busy state lives **on the
+control that was pressed** — never a full-screen overlay, never a blocking
+modal. The control stays in place, disabled, with its label swapped or a
+small inline spinner. `WelcomeScreen`'s Google button already does the label
+swap; that is the pattern. Wave 3's sheets are the main consumers; today's
+are the auth buttons.
+
+- **The anti-flash rule, which is the whole point.** A shared hook gates
+  every tier: **do not show a loader until the work has been pending for
+  ~150ms, and once shown keep it for ~350ms** so it cannot blink in and out.
+  Work that finishes fast shows nothing at all. Tune the exact numbers when
+  building; the two-sided rule (delay before showing, minimum once shown) is
+  what is binding.
+- **Never replace content that is already on screen.** A _refresh_ of data
+  already displayed shows the stale content, not a skeleton — only a first
+  load has nothing to show.
+- **Data touched:** none. Presentation only.
+- **Edge cases:**
+  - **Accessibility:** a skeleton is `aria-hidden` decoration plus one
+    `sr-only` `role="status"` announcement — not fifty announced boxes.
+    `HomeLoadingState` already has this shape. Loading is `role="status"`
+    (polite); errors stay `role="alert"` (`docs/error-handling.md` §7).
+  - **`prefers-reduced-motion`** is handled globally in
+    `src/styles/index.css`; the pulse must not bypass it.
+  - **A loader that outlives its cause** — if a load errors, the skeleton is
+    replaced by the error state, never left spinning forever.
+- **Done when:** boot no longer flashes the login screen; the three screens
+  share one skeleton primitive and one loading treatment; a fast load shows
+  no loader at all (tested with fake timers against the delay rule); `bun run
+check` green.
+- **Out of scope:** pull-to-refresh, optimistic write UI (no writes exist
+  yet), progress bars for determinate work (nothing is determinate here),
+  and any per-tab-navigation loader — see the constraint above.
+
+### 10.10 Guest entry (user request, 2026-08-19)
+
+- **Goal:** a person can use the app without handing over a Google account
+  first. Identity is a _sync_ feature here, not a gate — the app's data layer
+  is local anyway (`specs.md` §3).
+- **User story:** as someone trying the app, I tap "Continue as guest" on the
+  first screen and I am in — no account, no Drive dialog.
+- **UI:** on `WelcomeScreen`, below the Google button: an `or` divider, then
+  the guest button, with **generous separation** between the two zones so
+  they read as two distinct choices rather than one stack of buttons. The
+  Google button stays the primary, visually dominant action; guest is
+  secondary. Copy goes through the `auth` namespace like everything else.
+- **Behavior:** guest **skips both** the login and the Drive-permission
+  screen and enters the app. A guest has no Google session, so nothing is
+  cached to encrypt and no Drive folder is provisioned.
+- **The UI must say the data is local to this device** — a guest who assumes
+  they are synced and then loses the device is the failure mode worth
+  spending a line of copy on.
+- **Data touched:** none directly. Guest reads through the same
+  `repoProvider` stub every screen uses today, so it is not a second data
+  path — when the Drive-backed `Repo` lands, guest simply keeps using the
+  local one (§12).
+- **Edge cases:**
+  - **Guest is a distinct state, not a fake authenticated user.** Do not
+    synthesize a `user`/`session` to slip past the guard — anything reading
+    `user` must be able to tell there isn't one.
+  - **The PIN lock** exists to protect a cached Google token
+    (`specs.md` §10.2). A guest has no token; whatever the lock does for a
+    guest must be a decided answer, not an accident.
+  - **`driveOptIn`** must not sit `pending` for a guest, or the Drive screen
+    reappears on every boot.
+  - **Leaving guest** (signing in with Google afterwards) — what happens to
+    anything recorded as guest is **explicitly deferred to Wave 3**
+    (operator + user decision, 2026-08-19), when a Drive-backed `Repo` makes
+    the question real. Until then the UI's "local to this device" line is the
+    honest contract.
+- **Done when:** the first screen offers both paths with the divider and
+  spacing above; guest enters the app without seeing the Drive screen; a
+  guest is distinguishable from an authenticated user in the store; boot does
+  not flash the login screen for either path; `bun run check` green.
+- **Out of scope:** guest→Google migration, a "you are in guest mode" banner
+  inside the app, and any account-creation flow.
+
 ## 11. Decisions log
 
 - 2026-06-25 — Package manager: **bun**. Node: **24 LTS** (`.nvmrc`).
