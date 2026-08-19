@@ -307,7 +307,7 @@ missing/finished here).
 | Path                          | Branch              | Status |
 | ----------------------------- | ------------------- | ------ |
 | `../moneta-worktrees/wave3-r` | `wave3/r-offline`   | active |
-| `../moneta-worktrees/wave3-s` | `wave3/s-export`    | active |
+| `../moneta-worktrees/wave3-s` | `wave3/s-review`    | merged, in review |
 | `../moneta-worktrees/wave3-u` | `wave3/u-forms`     | active |
 | `../moneta-worktrees/wave3-v` | `wave3/v-profiles`  | active |
 | `../moneta-worktrees/wave3-w` | `wave3/w-sw-update` | active |
