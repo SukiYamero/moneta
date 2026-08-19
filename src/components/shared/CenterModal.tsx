@@ -47,7 +47,7 @@ export function CenterModal({
         aria-label={ariaLabel}
         tabIndex={-1}
         className={cn(
-          'absolute inset-x-[26px] top-1/2 -translate-y-1/2 rounded-3xl border border-border-subtle bg-card p-6 animate-pop-in',
+          'absolute inset-x-6.5 top-1/2 -translate-y-1/2 rounded-3xl border border-border-subtle bg-card p-6 animate-pop-in',
           OVERLAY_PANEL_CLASS,
           className,
         )}
