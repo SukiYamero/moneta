@@ -120,7 +120,7 @@ export function BottomSheet({
           transitionDuration: dragging ? '0ms' : undefined,
         }}
         className={cn(
-          'absolute inset-x-0 bottom-0 max-h-[88dvh] overflow-y-auto rounded-t-5xl border-t border-border-subtle bg-card px-[22px] pt-2.5 pb-7 animate-sheet-up transition-transform duration-200 ease-out',
+          'absolute inset-x-0 bottom-0 max-h-[88dvh] overflow-y-auto rounded-t-5xl border-t border-border-subtle bg-card px-5.5 pt-2.5 pb-7 animate-sheet-up transition-transform duration-200 ease-out',
           OVERLAY_PANEL_CLASS,
           className,
         )}
@@ -131,9 +131,9 @@ export function BottomSheet({
           onPointerUp={endDrag}
           onPointerCancel={cancelDrag}
           onLostPointerCapture={handleLostPointerCapture}
-          className="mx-auto mb-[18px] flex h-8 w-full touch-none cursor-grab items-center justify-center active:cursor-grabbing"
+          className="mx-auto mb-4.5 flex h-8 w-full touch-none cursor-grab items-center justify-center active:cursor-grabbing"
         >
-          <div className="h-[5px] w-[38px] rounded-full bg-border-strong" />
+          <div className="h-1.25 w-9.5 rounded-full bg-border-strong" />
         </div>
         {children}
       </div>

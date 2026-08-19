@@ -36,14 +36,14 @@ export function Toggle({
     >
       <span
         className={cn(
-          'relative h-[25px] w-[42px] rounded-3xl transition-colors',
+          'relative h-6.25 w-10.5 rounded-3xl transition-colors',
           checked ? 'bg-primary' : 'bg-muted',
         )}
       >
         <span
           className={cn(
-            'absolute top-0.5 size-[21px] rounded-full transition-[left]',
-            checked ? 'left-[19px] bg-primary-foreground' : 'left-0.5 bg-fg-faint',
+            'absolute top-0.5 size-5.25 rounded-full transition-[left]',
+            checked ? 'left-4.75 bg-primary-foreground' : 'left-0.5 bg-fg-faint',
           )}
         />
       </span>

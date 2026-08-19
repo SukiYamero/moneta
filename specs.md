@@ -1359,6 +1359,29 @@ type { ComponentProps } from 'react'`, matching the type-only-import
   reintroducing the namespace import and running `bun run lint` with the
   rule enabled (errored as expected), then reverting. `AGENTS.md` gets a
   rule requiring the import be normalized after every `shadcn add`.
+- 2026-08-18 — **Arbitrary px values in `BottomSheet`/`CenterModal`/`Toggle`
+  converted to the rem-based Tailwind spacing scale (`fix/px-units`).**
+  `--spacing` is unmodified at Tailwind v4's default `0.25rem`, so every
+  value converted cleanly to `px / 4`: `px-[22px]`→`px-5.5`,
+  `mb-[18px]`→`mb-4.5`, `h-[5px] w-[38px]`→`h-1.25 w-9.5` (`BottomSheet`
+  padding/handle); `inset-x-[26px]`→`inset-x-6.5` (`CenterModal`);
+  `h-[25px] w-[42px]`→`h-6.25 w-10.5`, `size-[21px]`→`size-5.25`,
+  `left-[19px]`→`left-4.75` (`Toggle` track/knob/checked-position — verified
+  the three numbers still interlock: 25px track height minus 21px knob
+  leaves the same 2px top/bottom gap as the existing `top-0.5`, and 42px
+  track width minus 21px knob leaves 2px on the resting side either way).
+  `inset-x-[26px]` happens to equal the `--radius-4xl` token (26px) but was
+  **not** switched to it — it's a horizontal inset, not a corner radius, and
+  the two scales only coincide by accident at that one number. `max-h-[88dvh]`
+  was left untouched — `dvh` is already the relative unit the rule asks for,
+  not a violation. Verified with Playwright at a 390×844 viewport: measured
+  `getBoundingClientRect()` on the toggle track/knob (both checked and
+  unchecked), the sheet's content inset and handle bar, and the modal's
+  left/right inset before and after the edit — every measurement was
+  pixel-identical (e.g. toggle knob offsets stayed 19px/2px checked,
+  2px/19px unchecked; modal inset stayed 26px/26px) confirming the
+  conversion is a no-op at the default root font size and now scales with
+  the user's font-size preference.
 
 ## 12. Backlog (pending verification / deferred work)
 
