@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { cn } from '@/lib/utils'
-import { useOverlay } from '@/components/shared/useOverlay'
+import { OVERLAY_PANEL_CLASS, useOverlay } from '@/components/shared/useOverlay'
 
 type CenterModalLabelProps =
   | { labelledBy: string; ariaLabel?: never }
@@ -43,6 +43,7 @@ export function CenterModal({
         tabIndex={-1}
         className={cn(
           'absolute inset-x-[26px] top-1/2 -translate-y-1/2 rounded-3xl border border-border-subtle bg-card p-6 animate-pop-in',
+          OVERLAY_PANEL_CLASS,
           className,
         )}
       >

@@ -1,7 +1,7 @@
 import { useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { cn } from '@/lib/utils'
-import { useOverlay } from '@/components/shared/useOverlay'
+import { OVERLAY_PANEL_CLASS, useOverlay } from '@/components/shared/useOverlay'
 
 type BottomSheetLabelProps =
   | { labelledBy: string; ariaLabel?: never }
@@ -74,6 +74,7 @@ export function BottomSheet({
         }}
         className={cn(
           'absolute inset-x-0 bottom-0 max-h-[88dvh] overflow-y-auto rounded-t-5xl border-t border-border-subtle bg-card px-[22px] pt-2.5 pb-7 animate-sheet-up transition-transform duration-200 ease-out',
+          OVERLAY_PANEL_CLASS,
           className,
         )}
       >

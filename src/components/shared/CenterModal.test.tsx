@@ -26,6 +26,24 @@ describe('CenterModal', () => {
     )
   })
 
+  it('never draws a focus ring on the panel itself, even when it has no focusable children', async () => {
+    // Same fix as BottomSheet, applied at the shared useOverlay seam: with no
+    // focusable content the fallback focuses the panel (tabIndex={-1})
+    // directly, and the global outline-ring/50 base style must not paint a
+    // ring on it.
+    render(
+      <CenterModal open onClose={() => {}} ariaLabel="Modal sin contenido enfocable">
+        <p>Solo texto, sin controles.</p>
+      </CenterModal>,
+    )
+    const dialog = screen.getByRole('dialog', { name: 'Modal sin contenido enfocable' })
+
+    await vi.waitFor(() => {
+      expect(dialog).toHaveFocus()
+    })
+    expect(dialog).toHaveClass('outline-hidden')
+  })
+
   it('calls onClose when the backdrop is clicked', async () => {
     const user = userEvent.setup()
     const onClose = vi.fn()

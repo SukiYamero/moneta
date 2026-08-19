@@ -9,6 +9,18 @@ const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])'
 
 /**
+ * The overlay container itself is only ever focused programmatically
+ * (`tabIndex={-1}`, never reached by Tab), but the global
+ * `outline-ring/50` base style (src/styles/index.css) still paints its
+ * `:focus-visible` ring on it once `useOverlay` calls `.focus()` — a
+ * bright ring around the whole panel reads as a web modal, not a native
+ * sheet (AGENTS.md § UI). Both BottomSheet and CenterModal apply this to
+ * their panel so the fix lives in one place; focusable children keep
+ * their own ring untouched.
+ */
+export const OVERLAY_PANEL_CLASS = 'outline-hidden'
+
+/**
  * Shared a11y/behavior plumbing for BottomSheet and CenterModal: Escape to
  * close, Tab-trapped focus inside the panel, body scroll lock while open,
  * and focus restored to whatever triggered the overlay once it closes.

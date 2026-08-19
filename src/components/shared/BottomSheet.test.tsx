@@ -24,6 +24,25 @@ describe('BottomSheet', () => {
     expect(dialog).toHaveAttribute('aria-modal', 'true')
   })
 
+  it('never draws a focus ring on the panel itself, even when it has no focusable children', async () => {
+    // With no focusable content, useOverlay's fallback focuses the panel
+    // (tabIndex={-1}) directly — that's the exact case that showed a bright
+    // ring around the whole sheet (the global outline-ring/50 base style
+    // painting :focus-visible on it), reading as a web modal instead of a
+    // native sheet.
+    render(
+      <BottomSheet open onClose={() => {}} ariaLabel="Sheet sin contenido enfocable">
+        <p>Solo texto, sin controles.</p>
+      </BottomSheet>,
+    )
+    const dialog = screen.getByRole('dialog', { name: 'Sheet sin contenido enfocable' })
+
+    await vi.waitFor(() => {
+      expect(dialog).toHaveFocus()
+    })
+    expect(dialog).toHaveClass('outline-hidden')
+  })
+
   it('calls onClose when the backdrop is clicked', async () => {
     const user = userEvent.setup()
     const onClose = vi.fn()

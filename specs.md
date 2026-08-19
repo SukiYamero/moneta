@@ -541,6 +541,22 @@ silently disagreeing with schema.ts's "monto always positive" invariant.
   anything added through the fake repo at runtime should still get a real
   uuid from the caller.
 
+- 2026-08-18 — **`useOverlay` suppresses the panel's own focus ring
+  (`outline-hidden`).** Visual-pass finding (Track D, §10.5): the panel
+  container is `tabIndex={-1}` and only ever focused programmatically
+  (initially, and as the fallback when an overlay has no focusable
+  children at all) — never reached by keyboard Tab — but the global
+  `outline-ring/50` base style (`src/styles/index.css`) still painted its
+  `:focus-visible` ring on it once `.focus()` landed, drawing a ring
+  around the whole sheet/modal. Reads as a web modal, not the native-feel
+  transitions `AGENTS.md` § UI calls for. Fixed once at the shared
+  `useOverlay` seam (`OVERLAY_PANEL_CLASS = 'outline-hidden'`, applied by
+  both `BottomSheet` and `CenterModal`) rather than patching either
+  component individually; focusable children keep their own ring
+  untouched. Regression-tested with an overlay that has no focusable
+  content (the case that actually triggers the panel-as-`activeElement`
+  path).
+
 ## 12. Backlog (pending verification / deferred work)
 
 - ✅ **Login verified end-to-end (§10.1)** — 2026-07-02. Real OAuth ran against Google
