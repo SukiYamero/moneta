@@ -57,6 +57,29 @@ describe('HistoryScreen', () => {
     expect(screen.getByText('No hay registros en este periodo')).toBeInTheDocument()
   })
 
+  // The seed's latest movement is 120 days out from "today" (repo.fake.ts);
+  // each scope steps far enough past that to guarantee a genuinely empty
+  // period — a day, a week, a month and a year are four distinct rendering
+  // paths (HistoryScreen.tsx's empty branch is scope-agnostic, but nothing
+  // upstream of it should be assumed to be without checking each one).
+  it.each([
+    ['Semana', 30],
+    ['Mes', 6],
+    ['Año', 1],
+  ] as const)('shows the empty state for a %s with no movements', async (scopeLabel, steps) => {
+    const user = userEvent.setup()
+    render(<HistoryScreen />)
+    await screen.findByText('Café de la mañana')
+    await user.click(screen.getByRole('radio', { name: scopeLabel }))
+
+    for (let i = 0; i < steps; i++) {
+      await user.click(screen.getByRole('button', { name: /periodo siguiente/i }))
+    }
+
+    expect(await screen.findByText('Sin movimientos')).toBeInTheDocument()
+    expect(screen.getByText('No hay registros en este periodo')).toBeInTheDocument()
+  })
+
   // The guarantee this track exists to produce: every figure on screen
   // traces to movimientoStats called with the screen's own scope/anchor —
   // never a second aggregation path living inside the component. Checked

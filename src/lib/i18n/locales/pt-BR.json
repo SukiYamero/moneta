@@ -148,6 +148,7 @@
     "title": "Histórico",
     "loading": "Carregando seu histórico…",
     "error": "Não conseguimos carregar seu histórico. Tente de novo.",
+    "retry": "Tentar de novo",
     "scope": {
       "ariaLabel": "Alcance do período",
       "dia": "Dia",
