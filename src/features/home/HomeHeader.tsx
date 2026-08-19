@@ -3,6 +3,11 @@ import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/lib/authStore'
 import { getGreetingKey, getInitials } from '@/features/home/homeView'
 
+// The greeting is the screen's <h1> — it's what the design actually
+// presents as Home's subject, not the app name (which appears nowhere on
+// this screen). Two visually-stacked lines, one accessible heading: a
+// screen-reader user hears "Buenos días Alex Rivera", not the app's own
+// name repeated on the one route where it's least informative.
 export const HomeHeader = () => {
   const { t } = useTranslation('home')
   // Real Google profile data (authStore.user), not the design's mock "Alex
@@ -20,10 +25,12 @@ export const HomeHeader = () => {
         >
           {getInitials(name)}
         </div>
-        <div>
-          <div className="text-ms font-medium text-fg-tertiary">{t(`greeting.${greetingKey}`)}</div>
-          <div className="mt-0.25 text-xl font-bold">{name}</div>
-        </div>
+        <h1 className="leading-snug">
+          <span className="block text-ms font-medium text-fg-tertiary">
+            {t(`greeting.${greetingKey}`)}
+          </span>
+          <span className="mt-0.25 block text-xl font-bold">{name}</span>
+        </h1>
       </div>
       <button
         type="button"

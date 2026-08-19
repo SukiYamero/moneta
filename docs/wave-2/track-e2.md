@@ -112,7 +112,10 @@ a new formatter (see "Spec deltas" on why this diverges from the brief's
 - Currency/date formatting is fixed to `es-CO`/`es` regardless of the
   active i18n locale (see "Spec deltas" below) — a real gap if/when the
   app ships a non-Spanish locale for real, not introduced by this track
-  but not fixed by it either.
+  but not fixed by it either. **Operator confirmed and is filing this as
+  a `specs.md` §12 backlog item** — a shared-component fix
+  (`movimientoView.ts`/`MovimientoRow.tsx`), out of this track's scope to
+  do mid-track.
 
 ## Doc lines to add (say exactly which file and where)
 
@@ -157,6 +160,23 @@ movimientoView.ts`'s existing `formatMonto` — which `AGENTS.md` and this
   padding in `Home.tsx` would double the gap under the nav. Left it out.
 
 ## Open questions for the operator
+
+**Resolved by the operator, post-review:**
+
+- The `AppShell.test.tsx` (Track L) heading assertion for Home was pinning
+  a placeholder's content (`name: APP_NAME`) forever. Fixed per the
+  operator's direction: Home's `<h1>` is now the greeting
+  (`HomeHeader.tsx` — two visually-stacked lines, one semantic heading, so
+  the accessible name reads "Buenos días Alex Rivera"), and
+  `AppShell.test.tsx`'s Home case now asserts _a_ level-1 heading exists
+  rather than one named `APP_NAME` — the invariant that survives any
+  future redesign. `Home.test.tsx` updated the same way. The
+  screen-reader-only `<h1>{APP_NAME}</h1>` is removed.
+- The E4 month-total cross-check was the operator's own shorthand error,
+  not a gap on this side — being corrected on E4's brief, not here. No
+  month-scoped figure added to Home.
+- All-time balance and the `disabled` "Áreas" banner were reviewed and
+  kept as built.
 
 - **Track E4's brief says "a test asserts History's month total equals
   Home's for the same month."** Home, both by design and by this track's

@@ -14,7 +14,6 @@ import { getRepo } from '@/lib/repoProvider'
 import { useDataStore } from '@/lib/dataStore'
 import { useAuthStore } from '@/lib/authStore'
 import { totals } from '@/lib/movimientoStats'
-import { APP_NAME } from '@/lib/branding'
 import { Home } from '@/routes/Home'
 
 const mGetRepo = vi.mocked(getRepo)
@@ -58,10 +57,10 @@ beforeEach(() => {
 })
 
 describe('Home', () => {
-  it('always renders a heading named APP_NAME (AppShell.test.tsx depends on this)', async () => {
+  it("renders the greeting as the screen's <h1>, naming the signed-in user", async () => {
     mGetRepo.mockReturnValue(makeRepo({}))
     renderHome()
-    expect(await screen.findByRole('heading', { name: APP_NAME })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('Alex Rivera')
   })
 
   it('shows a loading state while data is being fetched', () => {

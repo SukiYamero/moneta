@@ -1,7 +1,6 @@
 import { Search } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
-import { APP_NAME } from '@/lib/branding'
 import { AreasBanner } from '@/features/home/AreasBanner'
 import { BalanceCard } from '@/features/home/BalanceCard'
 import { HomeEmptyState } from '@/features/home/HomeEmptyState'
@@ -16,9 +15,8 @@ import { useHomeDashboard } from '@/features/home/useHomeDashboard'
 // The dashboard: greeting/bell chrome and search entry render regardless of
 // data status; the money-dependent content below switches on
 // loading/error/empty/ready (docs/wave-2-plan.md §4, Track E2 "Done when").
-// `<h1>` is screen-reader-only — the design has no literal app-name title on
-// this screen, but every route needs exactly one accessible heading, and
-// AppShell.test.tsx (Track L) already asserts Home renders one named APP_NAME.
+// The screen's <h1> lives inside HomeHeader (the greeting) — the design's
+// actual subject for this screen, not the app name.
 export const Home = () => {
   const { t } = useTranslation('home')
   const dashboard = useHomeDashboard()
@@ -26,7 +24,6 @@ export const Home = () => {
 
   return (
     <main className="min-h-full px-5 pt-2 pb-1">
-      <h1 className="sr-only">{APP_NAME}</h1>
       <HomeHeader />
       <Link
         to="/search"
