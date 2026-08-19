@@ -1,21 +1,157 @@
+import { useEffect, useState } from 'react'
+import { ChevronLeft, ChevronRight, Search as SearchIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import type { Periodo, TipoMovimiento } from '@/lib/schema'
+import { breakdownBy, filterByRange, periodRange, totals } from '@/lib/movimientoStats'
+import { useDataStore } from '@/lib/dataStore'
+import { MovimientoRow, SegmentedControl, type SegmentedControlOption } from '@/components/shared'
+import { useHistoryPeriod } from '@/features/history/useHistoryPeriod'
+import {
+  buildDayOptions,
+  buildMonthOptions,
+  buildWeekOptions,
+  buildYearOptions,
+  PICKER_FOR_SCOPE,
+} from '@/features/history/historyPeriodOptions'
+import { getPeriodLabel } from '@/features/history/historyPeriodLabel'
+import { PeriodPickerRow } from '@/features/history/PeriodPickerRow'
+import { YearMenu } from '@/features/history/YearMenu'
+import { BreakdownCard } from '@/features/history/BreakdownCard'
 
-// Minimal, honest placeholder — Track E4 (Wave 2 stage 3) replaces the body.
-// Named export `HistoryScreen`, no props: that is the stable contract E4
-// builds against (src/router.tsx only imports the name, never its
-// internals). Design source (line ~196): the history screen animates in
-// with `mnPushIn .28s cubic-bezier(.32,.72,0,1)`, matched here by the
-// existing `animate-push-in` token (AGENTS.md § UI). No back affordance:
-// BottomNav (rendered once by AppShell, persistent across all three tabs)
-// is how you return to Home, not a per-screen back link — History is a
-// sibling tab, not a modal pushed on top of it.
+const SCOPES: Periodo[] = ['dia', 'semana', 'mes', 'anio']
+
+// Named export `HistoryScreen`, no props: the stable contract this route
+// renders against (src/router.tsx). Enter animation kept from the L
+// placeholder — History is a push (a sibling tab), Search is a fade
+// (AGENTS.md § UI, docs/wave-2/track-e4.md).
 export const HistoryScreen = () => {
   const { t } = useTranslation('history')
+  const { movimientos, config, status, load } = useDataStore()
+  const { scope, anchor, setScope, selectAnchor, step, selectYear } = useHistoryPeriod()
+  const [bdType, setBdType] = useState<TipoMovimiento>('gasto')
+
+  useEffect(() => {
+    void load()
+  }, [load])
+
+  if (status !== 'ready' || !config) {
+    return (
+      <main className="flex min-h-full animate-push-in flex-col px-5 pt-14 pb-6">
+        <h1 className="sr-only">{t('title')}</h1>
+        <p className="pt-10 text-center text-sm font-semibold text-fg-tertiary" role="status">
+          {status === 'error' ? t('error') : t('loading')}
+        </p>
+      </main>
+    )
+  }
+
+  const { primerDiaSemana, monedaPrincipal } = config.preferencias
+  const range = periodRange(scope, anchor, primerDiaSemana)
+  const periodMovimientos = filterByRange(movimientos, range)
+  const periodTotals = totals(periodMovimientos)
+  const breakdown = breakdownBy(periodMovimientos, 'categoria', bdType)
+  const years = buildYearOptions(movimientos, new Date())
+  const label = getPeriodLabel(scope, range, new Date(), {
+    today: t('today'),
+    week: t('weekLabel'),
+    summary: t('summary'),
+  })
+
+  const scopeOptions: SegmentedControlOption<Periodo>[] = SCOPES.map((value) => ({
+    value,
+    label: t(`scope.${value}`),
+  }))
+
+  const pickerKind = PICKER_FOR_SCOPE[scope]
 
   return (
-    <main className="flex min-h-full animate-push-in flex-col px-5 pt-6">
-      <h1 className="text-5xl font-extrabold tracking-tight text-balance">{t('title')}</h1>
-      <p className="pt-6 text-sm text-muted-foreground">{t('placeholder')}</p>
+    <main className="flex min-h-full animate-push-in flex-col pt-14">
+      <h1 className="sr-only">{t('title')}</h1>
+
+      <div className="flex items-center gap-2.5 px-5 pb-3.5">
+        <button
+          type="button"
+          onClick={() => step(-1)}
+          aria-label={t('nav.previous')}
+          className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg bg-secondary text-foreground"
+        >
+          <ChevronLeft className="size-4" />
+        </button>
+        <div className="min-w-0 flex-1 text-center">
+          <div className="truncate text-xl font-extrabold tracking-tight capitalize">
+            {label.title}
+          </div>
+          <div className="truncate text-xs font-medium text-fg-tertiary capitalize">
+            {label.subtitle}
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => step(1)}
+          aria-label={t('nav.next')}
+          className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg bg-secondary text-foreground"
+        >
+          <ChevronRight className="size-4" />
+        </button>
+        <YearMenu
+          years={years}
+          selectedYear={Number(range.from.slice(0, 4))}
+          onSelect={selectYear}
+        />
+      </div>
+
+      <div className="px-5 pb-3">
+        <SegmentedControl
+          options={scopeOptions}
+          value={scope}
+          onChange={setScope}
+          aria-label={t('scope.ariaLabel')}
+        />
+      </div>
+
+      {pickerKind !== 'none' && (
+        <div className="px-5 pb-3">
+          <PeriodPickerRow
+            aria-label={t(`scope.${scope}`)}
+            onSelect={selectAnchor}
+            options={
+              pickerKind === 'day'
+                ? buildDayOptions(movimientos, anchor, range)
+                : pickerKind === 'week'
+                  ? buildWeekOptions(movimientos, anchor, range, primerDiaSemana)
+                  : buildMonthOptions(movimientos, anchor, range, primerDiaSemana)
+            }
+          />
+        </div>
+      )}
+
+      <div className="flex-1 px-5 pt-1">
+        {periodMovimientos.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
+            <SearchIcon className="size-9 text-fg-disabled" aria-hidden="true" />
+            <div>
+              <p className="text-sm font-bold text-fg-tertiary">{t('empty.title')}</p>
+              <p className="mt-1 text-xs font-medium text-fg-disabled">{t('empty.subtitle')}</p>
+            </div>
+          </div>
+        ) : (
+          <>
+            <BreakdownCard
+              scope={scope}
+              totals={periodTotals}
+              breakdown={breakdown}
+              bdType={bdType}
+              onBdTypeChange={setBdType}
+              moneda={monedaPrincipal}
+            />
+            <div className="flex flex-col gap-2.5">
+              {periodMovimientos.map((movimiento) => (
+                <MovimientoRow key={movimiento.id} movimiento={movimiento} />
+              ))}
+            </div>
+          </>
+        )}
+      </div>
     </main>
   )
 }
