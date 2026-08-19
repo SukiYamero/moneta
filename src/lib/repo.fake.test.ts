@@ -180,6 +180,11 @@ describe('seed dates are timezone-safe', () => {
   // local calendar day landed a day early for every targeted timezone.
   it('anchors the seed on its intended calendar day', async () => {
     const { items } = await fakeRepo.movimientos.list()
-    expect(items.map((m) => m.fecha).toSorted().at(-1)).toBe('2026-08-18')
+    expect(
+      items
+        .map((m) => m.fecha)
+        .toSorted()
+        .at(-1),
+    ).toBe('2026-08-18')
   })
 })

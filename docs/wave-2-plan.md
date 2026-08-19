@@ -751,7 +751,6 @@ than fixed by the operator** (so the reviewer verifies its own fix):
   component no Wave 2 track owned; it belongs to whoever reviews the shared
   tree, and needs one locale-aware formatter, not four call-site fixes.
 
-
 One review agent per merged track, dispatched after **all** build tracks are
 merged — deliberately at the end, not per-merge, so a reviewer never files
 findings against code a later stage rewrites.
@@ -779,16 +778,16 @@ live Google account (needs a human in the OAuth popup).
 
 ## 7. Live status
 
-| Track | Branch                     | Stage | Status      |
-| ----- | -------------------------- | ----- | ----------- |
-| I     | `feat/wave2-i18n`          | 1     | merged      |
-| E1    | `feat/wave2-stats`         | 1     | merged      |
-| K     | `feat/wave2-toast`         | 2     | merged      |
-| J     | `feat/wave2-drive-consent` | 2     | merged      |
-| L     | `feat/wave2-shell`         | 2     | merged      |
-| E2    | `feat/wave2-home`          | 3     | merged      |
-| E3    | `feat/wave2-search`        | 3     | merged      |
-| E4    | `feat/wave2-history`       | 3     | merged      |
+| Track | Branch                     | Stage | Status |
+| ----- | -------------------------- | ----- | ------ |
+| I     | `feat/wave2-i18n`          | 1     | merged |
+| E1    | `feat/wave2-stats`         | 1     | merged |
+| K     | `feat/wave2-toast`         | 2     | merged |
+| J     | `feat/wave2-drive-consent` | 2     | merged |
+| L     | `feat/wave2-shell`         | 2     | merged |
+| E2    | `feat/wave2-home`          | 3     | merged |
+| E3    | `feat/wave2-search`        | 3     | merged |
+| E4    | `feat/wave2-history`       | 3     | merged |
 
 Status values: `not started` → `dispatched` → `reported, verifying` →
 `merged` → `reviewed`.

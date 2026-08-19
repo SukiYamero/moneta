@@ -2066,7 +2066,146 @@ lint` clean bar the one pre-existing `components/ui` warning). `AGENTS.md`
   `// STUB(wave3)` marker is more honest than environment-branching a choice
   that has only one option. Recorded as the largest Wave 3 candidate in §12.
 
+- 2026-08-19 — **Wave 2 shipped: i18n, the aggregation layer, the toast, the
+  Drive-consent decision, the app shell, and the Home/Search/History
+  screens.** Per-track detail lives in `docs/wave-2/*.md`; the decisions that
+  outlive the wave are these.
+
+  **i18n (§10.7).** `react-i18next` + `i18next` with bundled JSON, four
+  locales (`es` base and fallback, `en`, `es-AR`, `pt-BR`). Chosen over a
+  hand-rolled `t()` for `fallbackLng`, `Trans` (the Welcome screen's
+  inline-styled legal line), and pluralisation — a close call, argued on
+  stated grounds, not reopened. Keys are compile-checked via module
+  augmentation off the `es` resource, so `t('nope')` is a type error. **A
+  test enforces that all four locale files carry identical key paths**: a key
+  present in `es` and silently missing elsewhere degrades to Spanish mid-screen
+  with no error anywhere, and five tracks added keys after the scaffolding
+  landed. `errorCopy.ts` returns a **translation key**, not copy — that keeps
+  it a pure, i18next-free lookup so `docs/error-handling.md` §7's drift-guard
+  tests keep protecting a deterministic string→string map, and moves
+  localisation to the render site. Locale detection walks
+  `navigator.languages` in preference order trying exact-then-subtag **per
+  candidate** (a two-pass scan let a lower-priority exact match beat a
+  higher-priority subtag one), and degrades `languages` → `language` → `en`
+  rather than jumping to `en`.
+
+  **Aggregation (§10.9).** `movimientoStats.ts` is pure and is the only place
+  a displayed number may come from; `dataStore.ts` holds raw entities and
+  caches nothing derived; `repoProvider.ts` is the single `// STUB(wave3)`
+  swap point. Money accumulates in **integer minor units**; dates are
+  compared as ISO strings or parsed local-time, never `new Date(isoDate)`
+  (UTC midnight, which shifts the day for every timezone this app targets).
+  `series()` buckets are **clamped to their period** — unclamped, the first
+  and last bucket of a month pulled in movements from the adjacent months, so
+  the chart's bars did not sum to the total printed beside them.
+
+  **Toast (§10.6, realised).** Stack capped at 3, one independent timer per
+  card, identical re-raises collapse and restart their own clock.
+  `toastStore` **reads no store**: `AppLock` drives a domain-free suppression
+  flag, rather than the toast importing `lockStore`. That keeps the primitive
+  every Wave 3 track imports from dragging pinLock/WebCrypto/Dexie behind it,
+  and points the dependency policy → surface. Suppression also clears what is
+  already on screen, so nothing raised (or visible) while locked can resurface
+  after unlock.
+
+  **Drive consent (§10.8) — supersedes the 2026-08-18 "in-memory,
+  per-session, never persisted" entry.** The decision now persists per device
+  in the `kurobello-device` IndexedDB store (`deviceStore.ts`, renamed from
+  `loginMarker.ts`; the **database name is frozen**). Not `localStorage`
+  (§7), not `Config` (a user who dismissed Drive has no Drive to store a
+  preference in), not `db.ts` (its v1 vault table is frozen). Cleared on
+  logout **and** on `pinLock.resetVault()` — a lockout-forced re-login must
+  not land a different account on the previous account's answer. Because the
+  screen was `connectDrive`'s only caller, persisting `'connected'` would
+  have left a returning device believing it was connected with no Drive token
+  and no UI to fix it; a **fire-and-forget silent re-acquire** closes that.
+  It is deliberately not awaited: `lockStore.resume()` awaits `hydrate()`, so
+  awaiting it made a correct PIN hang on an un-timed-out Drive round trip.
+
+  **App shell (§10.9).** The bottom nav is persistent across `/`, `/search`
+  and `/history` — the design layers it above both screen overlays — so it is
+  mounted once in a pathless layout route rather than remounted per tab.
+  `--bottom-nav-height` / `--bottom-nav-clearance` are layout constants in
+  `src/styles/index.css`: several components must agree on the nav's height,
+  which is a single-source-of-truth matter, not the per-component spacing
+  `docs/ui/design-tokens.md` deliberately leaves untokenised. The safe-area
+  inset adds to the bar's height rather than being eaten out of its padding.
+  `LockSettings` moved to the dev-only `/kit` route: it is the only UI that
+  can enable or disable the PIN vault, and rebuilding Home would otherwise
+  have deleted the feature with nothing failing.
+
+  **No notification badge dot on Home.** The design draws one; it is static
+  markup bound to no signal. Rendering it tells the user something is unread
+  when nothing can be. A disabled control is an honest placeholder; a fake
+  status indicator is a claim the user acts on. `docs/ui/implementation-plan.md`
+  was corrected to match.
+
+- 2026-08-19 — **Two defects that a fully green suite did not catch, both
+  worth remembering for their shape rather than their fix.**
+
+  1. **`repo.fake.ts` seeded every movement one calendar day early.**
+     `FAKE_REPO_SEED_DATE` was UTC midnight while `seedMovimientos` formats it
+     with date-fns' local-time `format()`. Under any negative-offset timezone —
+     every timezone this app targets, **including the machine this repo is
+     developed on** — the seeded `fecha` was a day early and disagreed with its
+     own `createdAt`. Found by Track E4, which worked around it in its own
+     tests rather than editing a file it did not own, and reported it. The
+     first regression test written for it **did not catch the bug**: it built
+     its own repo with an explicit date, bypassing the broken constant. The
+     assertion has to run against the exported singleton, because that is what
+     screens import and the constant is evaluated at import time.
+  2. **`detectLocale()` could blank the app.** Its default parameter read
+     `navigator.languages`, which is undefined on some browsers and webviews
+     where only the singular `navigator.language` is guaranteed — and it runs
+     at module-import time, so the failure was a blank page rather than a
+     degraded one.
+
+  The common shape: **a value evaluated at import time, from an environment
+  the test suite happens to make favourable.** Neither was reachable by any
+  test that constructs its own inputs.
+
+- 2026-08-19 — **Process: an operator brief is an argument, and the tracks
+  were right to attack it.** Recorded because the corrections were worth more
+  than the code in several cases. Track E1 rejected an API that returned a
+  meaningless `share` for a legal call; Track E3 argued URL-encoded filter
+  state was premature and gave the `replace`-vs-`push` reasoning that settled
+  it; Track E2 found that Track E4's brief demanded a cross-screen comparison
+  that could not exist, instead of inventing a figure to satisfy it; Track L
+  stopped rather than invent a bottom nav when it could not reach the design,
+  and later found a doc line still prescribing something a brief had
+  overridden. Two of the wave's own defects were caused by operator
+  instructions — pointing the Drive re-acquire at `syncLockedSession` (which
+  sets no state) instead of `connectDrive` (which does), and specifying that
+  impossible cross-screen test. Briefs should keep saying what to build and
+  why; they should not be trusted as descriptions of reality.
+
 ## 12. Backlog (pending verification / deferred work)
+
+- **The lock feature is not internationalised at all.** `LockScreen`,
+  `LockSettings` and `src/features/lock/errorCopy.ts` still hold hardcoded
+  Spanish, five Wave 2 tracks after `src/lib/i18n` landed. Whoever retrofits
+  it should route both the copy and the error table through the table in one
+  pass, and `errorCopy.ts` should return a translation key the way
+  `src/features/auth/errorCopy.ts` now does.
+
+- **`authGeneration` is checked in only one of five state-setting async auth
+  paths.** `connectDrive` and the silent Drive re-acquire check it; `login`,
+  `restore`, `hydrate` and `syncLockedSession` do not. Pre-existing and not
+  currently reachable in a harmful way, but a generation guard that one path
+  honours and four ignore is a latent inconsistency worth closing
+  deliberately rather than incidentally. Found during the Wave 2 review of
+  Track J.
+
+- **`MovimientoRow` has no amount-masking prop**, so History could not
+  implement the design's hide/show-amounts toggle (Track E4, deferred — it is
+  a shared component no Wave 2 track owned). Wave 3 should add it alongside
+  whichever track next opens that component.
+
+- **Search result rows do not open anything** (`// STUB(trackF)`): the
+  Movement view/edit sheet is Wave 3. Once it exists, revisit encoding the
+  Search filter state in the URL — deliberately skipped in Wave 2 because
+  there was nothing to link to and the `replace`-per-keystroke vs
+  `push`-per-filter-tap distinction is real complexity (Track E3).
 
 - **No Drive-backed `Repo` implementation exists — the largest structural gap
   (found while scoping Wave 2, 2026-08-19).** `bootstrap.ts` provisions
