@@ -511,13 +511,13 @@ Never R, T, U, V or Y.
 
 ## 5. Live status
 
-| Track | Branch              | Worktree                      | Status     |
-| ----- | ------------------- | ----------------------------- | ---------- |
-| R     | `wave3/r-offline`   | `../moneta-worktrees/wave3-r` | dispatched |
-| S     | `wave3/s-review`    | `../moneta-worktrees/wave3-s` | merged `823bf59`, in review |
-| U     | `wave3/u-forms`     | `../moneta-worktrees/wave3-u` | dispatched |
-| V     | `wave3/v-review`    | `../moneta-worktrees/wave3-v` | merged `f350705`, in review |
-| W     | `wave3/w-sw-update` | `../moneta-worktrees/wave3-w` | dispatched |
+| Track | Branch            | Worktree                      | Status                              |
+| ----- | ----------------- | ----------------------------- | ----------------------------------- |
+| R     | `wave3/r-offline` | `../moneta-worktrees/wave3-r` | in flight                           |
+| S     | —                 | removed                       | ✅ merged + reviewed (`823bf59` + review `1058b5c`) |
+| U     | `wave3/u-review`  | `../moneta-worktrees/wave3-u` | merged, review in flight            |
+| V     | —                 | removed                       | ✅ merged + reviewed (`f350705` + review `99f3dbf`) |
+| W     | `wave3/w-review`  | `../moneta-worktrees/wave3-w` | merged, review in flight            |
 
 The authoritative worktree log stays in `docs/waves.md`; this table is the
 per-track execution view.

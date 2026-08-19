@@ -304,13 +304,11 @@ Check this table against `git worktree list` at the start of any parallel
 session; prune anything stale (merged-but-not-removed, or on disk but
 missing/finished here).
 
-| Path                          | Branch              | Status |
-| ----------------------------- | ------------------- | ------ |
-| `../moneta-worktrees/wave3-r` | `wave3/r-offline`   | active |
-| `../moneta-worktrees/wave3-s` | `wave3/s-review`    | merged, in review |
-| `../moneta-worktrees/wave3-u` | `wave3/u-forms`     | active |
-| `../moneta-worktrees/wave3-v` | `wave3/v-review`    | merged, in review |
-| `../moneta-worktrees/wave3-w` | `wave3/w-sw-update` | active |
+| Path                          | Branch            | Status |
+| ----------------------------- | ----------------- | ------ |
+| `../moneta-worktrees/wave3-r` | `wave3/r-offline` | active |
+| `../moneta-worktrees/wave3-u` | `wave3/u-review`  | merged, in review |
+| `../moneta-worktrees/wave3-w` | `wave3/w-review`  | merged, in review |
 
 Paths are relative to the repo root (`web/moneta`), i.e. a sibling
 `web/moneta-worktrees/` directory outside the repo — deliberately not nested
