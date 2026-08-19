@@ -8,7 +8,13 @@ import {
 } from '@/lib/auth'
 import { bootstrap, type DriveLayout } from '@/lib/bootstrap'
 import { hasVault, updateSession } from '@/lib/pinLock'
-import { hasLoggedInBefore, markLoggedIn } from '@/lib/loginMarker'
+import {
+  clearDriveDecision,
+  getDriveDecision,
+  hasLoggedInBefore,
+  markLoggedIn,
+  setDriveDecision,
+} from '@/lib/deviceStore'
 
 export type AuthStatus = 'idle' | 'authenticating' | 'authenticated' | 'error'
 export type DriveOptIn = 'pending' | 'connected' | 'dismissed'
@@ -54,6 +60,22 @@ const syncLockedSession = async (session: AuthSession): Promise<void> => {
   }
 }
 
+// A device that already answered the Drive prompt — this session or a prior
+// one — must not be asked again (specs.md §11, 2026-08-18 driveOptIn entry,
+// superseded by the 2026-08-19 entry this track adds). Only consult storage
+// when the current session doesn't already have an answer: a mid-session
+// re-lock/unlock already knows it (driveOptIn is 'connected'/'dismissed' in
+// memory by then), so re-reading IndexedDB on every hydrate() would be a
+// redundant round trip, not a correctness fix — and it would also defeat the
+// "hydrate never re-prompts Drive mid-session" guarantee if storage and
+// memory were ever transiently out of sync. A storage read failure degrades
+// to 'pending' (same posture as hasLoggedInBefore) — show the screen rather
+// than silently assume an answer that isn't there.
+const resolveDriveOptIn = async (current: DriveOptIn): Promise<DriveOptIn> => {
+  if (current !== 'pending') return current
+  return (await getDriveDecision()) ?? 'pending'
+}
+
 // logout() bumps this so a connectDrive() request already in flight can tell,
 // on resolve, that it should discard its result instead of resurrecting state.
 let authGeneration = 0
@@ -75,7 +97,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ status: 'authenticating', error: null })
     try {
       const { session, user } = await authenticate('consent')
-      set({ status: 'authenticated', session, user, driveOptIn: 'pending' })
+      const driveOptIn = await resolveDriveOptIn(get().driveOptIn)
+      set({ status: 'authenticated', session, user, driveOptIn })
       await syncLockedSession(session)
       // Explicit, user-initiated success only — the signal restore() below
       // gates on (specs.md §11, 2026-08-19). markLoggedIn() self-catches, so
@@ -111,7 +134,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
     try {
       const { session, user } = await authenticate('')
-      set({ status: 'authenticated', session, user })
+      const driveOptIn = await resolveDriveOptIn(get().driveOptIn)
+      set({ status: 'authenticated', session, user, driveOptIn })
       await syncLockedSession(session)
     } catch {
       // Deliberately silent, unlike syncLockedSession's console.warn
@@ -138,15 +162,26 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       driveConnecting: false,
       driveError: null,
     })
+    // A different Google account can sign in on this same device next —
+    // the previous account's Drive decision must not carry over to it
+    // (specs.md §11, 2026-08-19). Fire-and-forget: clearDriveDecision()
+    // self-catches (docs/error-handling.md §7), and logout() itself is
+    // synchronous — nothing here can fail the state reset above.
+    void clearDriveDecision()
   },
   // Fires on a mid-session re-lock/unlock too (Page Visibility timeout,
-  // §10.2), not only on cold start — driveOptIn is deliberately left
-  // untouched so unlocking never re-triggers the Drive-permission screen.
+  // §10.2), not only on cold start — resolveDriveOptIn() only consults
+  // storage when driveOptIn is still 'pending', so a mid-session unlock
+  // (already resolved earlier this session) never re-triggers the
+  // Drive-permission screen. A PIN-lock cold start (vault already existed
+  // when this tab opened) is the one path where this *is* the first
+  // resolution this session, and must look the persisted decision up.
   hydrate: async (session) => {
     set({ status: 'authenticating', error: null })
     try {
       const user = await fetchGoogleUser(session.accessToken)
-      set({ status: 'authenticated', session, user })
+      const driveOptIn = await resolveDriveOptIn(get().driveOptIn)
+      set({ status: 'authenticated', session, user, driveOptIn })
       await syncLockedSession(session)
     } catch (e) {
       set({ status: 'error', session: null, user: null, drive: null, error: errorMessage(e) })
@@ -163,10 +198,23 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (generation !== authGeneration) return
       set({ session, drive, driveOptIn: 'connected', driveConnecting: false })
       await syncLockedSession(session)
+      // Recorded on success only: if bootstrap() above throws (network,
+      // 401/403, popup closed), driveOptIn is never set to 'connected' and
+      // nothing is persisted either — the recorded state must reflect what
+      // actually happened, not what was attempted (this track's brief,
+      // edge cases). setDriveDecision self-catches, so a storage write
+      // failure here can't undo the connection that already succeeded.
+      await setDriveDecision('connected')
     } catch (e) {
       if (generation !== authGeneration) return
       set({ driveConnecting: false, driveError: errorMessage(e) })
     }
   },
-  dismissDrive: () => set({ driveOptIn: 'dismissed' }),
+  dismissDrive: () => {
+    set({ driveOptIn: 'dismissed' })
+    // Fire-and-forget: setDriveDecision self-catches, and dismissDrive is
+    // synchronous UI state — a storage write failure here just means the
+    // device is asked again next time, not that "Ahora no" stops working.
+    void setDriveDecision('dismissed')
+  },
 }))

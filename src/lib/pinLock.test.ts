@@ -117,13 +117,27 @@ test('resetVault wipes the vault', async () => {
 })
 
 test("resetVault also clears this device's login marker, forcing a real re-login next time", async () => {
-  const { hasLoggedInBefore, markLoggedIn } = await import('@/lib/loginMarker')
+  const { hasLoggedInBefore, markLoggedIn } = await import('@/lib/deviceStore')
   await markLoggedIn()
   await enableLock({ pin: '1234', session })
 
   await resetVault()
 
   expect(await hasLoggedInBefore()).toBe(false)
+})
+
+// A lockout-forced or manual vault reset must not hand whoever unlocks next
+// (possibly a different Google account, same device) the previous account's
+// Drive decision (specs.md §11, 2026-08-19 — same finding as the marker
+// above, applied to the Drive opt-in's own persisted twin).
+test("resetVault also clears this device's persisted Drive decision", async () => {
+  const { getDriveDecision, setDriveDecision } = await import('@/lib/deviceStore')
+  await setDriveDecision('connected')
+  await enableLock({ pin: '1234', session })
+
+  await resetVault()
+
+  expect(await getDriveDecision()).toBeUndefined()
 })
 
 test('markActive is safe to fire-and-forget: a write failure is caught and logged, not thrown', async () => {

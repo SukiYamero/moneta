@@ -25,15 +25,12 @@
       "createFiles": {
         "title": "Create and edit its own files",
         "body": "{{appName}} will only see and modify the files it creates itself."
-      },
-      "noOtherAccess": {
-        "title": "No access to your other files",
-        "body": "Your photos, documents, and other content stay private."
       }
     },
     "revocable": "You can revoke access anytime",
     "allowCta": "Allow and continue",
     "dismissCta": "Not now",
+    "reassurance": "You can continue without connecting your Drive — you can do it later from your Profile.",
     "connecting": "Connecting to your Drive…"
   },
   "toast": {},
