@@ -242,6 +242,51 @@ function wrapUnknown(error: unknown): never {
   })
 }
 
+// A duplicate `id` on write is bad caller input (id must be unique), not a
+// storage-layer failure — must map to 'invalid_input', not the generic
+// 'unknown' catch-all. Matched purely by `.name`, deliberately not
+// `instanceof Error`/`instanceof Dexie.ConstraintError` or the message text:
+// a single `table.add()` rejects with a proper `DexieError` (which *is* an
+// `Error`), but the individual entries in a `Dexie.BulkError.failures` map
+// are raw `DOMException`s that are NOT `instanceof Error` in this project's
+// test environment (jsdom + fake-indexeddb) — an `instanceof Error` guard
+// would silently exclude exactly the batch case this exists for. `.name` is
+// the one property both shapes reliably carry, and message text is
+// locale-/version-fragile on top of that.
+function hasErrorName(error: unknown, name: string): boolean {
+  return typeof error === 'object' && error !== null && (error as { name?: unknown }).name === name
+}
+
+function isConstraintError(error: unknown): boolean {
+  return hasErrorName(error, 'ConstraintError')
+}
+
+function hasConstraintFailure(error: unknown): boolean {
+  if (!hasErrorName(error, 'BulkError')) return false
+  const failures = (error as { failures?: Record<string, unknown> }).failures
+  if (!failures) return false
+  return Object.values(failures).some(isConstraintError)
+}
+
+// Dexie's `BulkError.failures` is keyed by an internal operation index that
+// does not reliably map back to the input array's position (observed
+// empirically: a duplicate at input index 2 surfaced under failures key
+// "0"), so the offending id is determined independently instead of trusting
+// that index: first a duplicate within the batch itself, then — the
+// remaining case — one of the batch's ids already present in the table.
+async function findDuplicateId<T extends { id: EntityId }>(
+  table: Table<T, EntityId, T>,
+  items: T[],
+): Promise<EntityId | undefined> {
+  const seen = new Set<EntityId>()
+  for (const item of items) {
+    if (seen.has(item.id)) return item.id
+    seen.add(item.id)
+  }
+  const existing = await table.bulkGet(items.map((item) => item.id))
+  return existing.find((row): row is T => row !== undefined)?.id
+}
+
 function matchesFilters<T>(
   item: T,
   dateField: keyof T & string,
@@ -463,6 +508,9 @@ function createCrudRepo<T extends { id: EntityId }>(
       await table.add(fresh)
       return fresh
     } catch (error) {
+      if (isConstraintError(error)) {
+        throw new RepoError(`id "${item.id}" already exists`, 'invalid_input', { cause: error })
+      }
       wrapUnknown(error)
     }
   }
@@ -480,6 +528,16 @@ function createCrudRepo<T extends { id: EntityId }>(
       })
       return fresh
     } catch (error) {
+      if (hasConstraintFailure(error)) {
+        const duplicateId = await findDuplicateId(table, items)
+        throw new RepoError(
+          duplicateId
+            ? `id "${duplicateId}" already exists`
+            : 'one or more ids in this batch already exist',
+          'invalid_input',
+          { cause: error },
+        )
+      }
       wrapUnknown(error)
     }
   }

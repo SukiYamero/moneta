@@ -404,6 +404,27 @@ tiebreakValue }` bigger than the margin — e.g. a bulk import that
   committed, not 2-of-3). Rationale: a partially-committed financial import
   is worse than a fully-rejected one — the caller can't tell which half
   landed.
+- **Error-code mapping for a duplicate `id` on write** (2026-08-18 addition
+  — see §11): `add()`/`addMany()` catch Dexie's `ConstraintError` (single) /
+  `BulkError` with a `ConstraintError` among its `failures` (batch) and
+  surface `RepoError('invalid_input', …)` naming the offending id, instead
+  of falling through to `wrapUnknown`'s generic `'unknown'` — a duplicate id
+  is bad caller input (`id` must be unique), not a storage-layer failure.
+  Matched purely by `.name === 'ConstraintError'` / `'BulkError'`, never
+  `instanceof Error`/`instanceof Dexie.ConstraintError` or the message text:
+  the individual entries in `BulkError.failures` are raw `DOMException`s
+  that are NOT `instanceof Error` in this project's test environment (jsdom
+  - fake-indexeddb) — an `instanceof Error` guard silently excluded exactly
+    the batch case, caught by watching the discriminating test fail first.
+    `BulkError.failures` is keyed by an internal operation index that does
+    **not** reliably map back to the input array's position (verified
+    empirically: a duplicate at input index 2 surfaced under failures key
+    `"0"`), so the offending id for the error message is determined
+    independently — a duplicate within the batch itself first, else one of
+    the batch's ids already present in the table via `table.bulkGet` — rather
+    than trusted from that index. Everything else still falls through to
+    `'unknown'` unchanged; this is a narrow, name-matched carve-out, not a
+    broadened catch-all.
 - **Write validation** (`validateMovimiento`/`validateActivo`): `monto`
   finite and `> 0`; `fecha`/`fechaActualizacion` a real ISO `yyyy-mm-dd`
   (regex + round-trip through `Date`, rejects e.g. `2026-13-40`); `moneda`
@@ -942,6 +963,24 @@ once per call`) pins the run-once property so this can't silently regress
 "…"` — an internal field name (`dateField`) doing double duty as the
   entity noun. `EntityConfig` gained an explicit `entityLabel` (`"movimiento"`
   / `"activo"`) used by both `update()` and `remove()`'s not-found messages.
+- 2026-08-18 — **A duplicate `id` on `add()`/`addMany()` now maps to
+  `RepoError('invalid_input')`, not `'unknown'` (code-review fix, surfaced
+  while verifying the fake-repo track's matching fix for the fake
+  implementation).** Dexie's `ConstraintError` on a duplicate primary key
+  isn't a `RepoError`, so it used to fall through `wrapUnknown` unchanged —
+  a UI handing over a duplicate id got an error indistinguishable from a
+  genuine IndexedDB failure. `'invalid_input'` is the correct code for the
+  same reason it exists at all: bad caller input (`id` must be unique) is a
+  different failure mode than the storage layer breaking unexpectedly, and
+  callers need to tell them apart. Detected by matching `.name ===
+'ConstraintError'`/`'BulkError'` (never `instanceof` or the message
+  string — see §10.3.1 for why `instanceof Error` specifically doesn't
+  hold for a `BulkError`'s individual `failures`). `addMany`'s all-or-
+  nothing rollback is unaffected — the transaction still aborts the whole
+  batch; only the error's `code` and message changed. Alignment with the
+  parallel fake-repo track: `removeMany` with a missing id stays
+  `'not_found'` on both implementations (this one already did); a
+  duplicate `id` is `'invalid_input'` on both.
 
 ## 12. Backlog (pending verification / deferred work)
 

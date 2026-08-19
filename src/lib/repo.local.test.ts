@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { db } from '@/lib/db'
-import { RepoError } from '@/lib/repo'
 import {
   __resetReadyMemoForTests,
   createLocalRepo,
@@ -211,6 +210,16 @@ describe('movimientos CRUD', () => {
     await expect(repo.movimientos.remove('missing')).rejects.toMatchObject({ code: 'not_found' })
   })
 
+  it('add() with a duplicate id rejects as invalid_input, naming the id, not unknown', async () => {
+    const repo = createLocalRepo()
+    const m = await repo.movimientos.add(movimiento())
+    // A duplicate id is bad caller input (id must be unique), not a
+    // storage-layer failure — Dexie's ConstraintError must not fall through
+    // to the generic 'unknown' code.
+    await expect(repo.movimientos.add({ ...m })).rejects.toMatchObject({ code: 'invalid_input' })
+    await expect(repo.movimientos.add({ ...m })).rejects.toThrow(new RegExp(m.id))
+  })
+
   it('does not mutate the caller-supplied object on add()', async () => {
     const repo = createLocalRepo()
     const m = movimiento()
@@ -275,9 +284,33 @@ describe('movimientos bulk paths (addMany / removeMany)', () => {
     const dup = movimiento()
     await repo.movimientos.add(dup)
     const batch = [movimiento(), { ...dup }, movimiento()] // dup.id already exists -> ConstraintError
-    await expect(repo.movimientos.addMany(batch)).rejects.toBeInstanceOf(RepoError)
+    // Was `rejects.toBeInstanceOf(RepoError)` only — tightened to the
+    // specific code now that a duplicate id maps to 'invalid_input' (bad
+    // caller input) instead of the generic 'unknown' it fell through to
+    // before.
+    await expect(repo.movimientos.addMany(batch)).rejects.toMatchObject({
+      code: 'invalid_input',
+    })
     const { items } = await repo.movimientos.list()
     expect(items).toHaveLength(1) // only the original `dup`, batch fully rolled back
+  })
+
+  it('addMany with a duplicate id names the offending id in the error message', async () => {
+    const repo = createLocalRepo()
+    const dup = await repo.movimientos.add(movimiento())
+    await expect(repo.movimientos.addMany([movimiento(), { ...dup }])).rejects.toThrow(
+      new RegExp(dup.id),
+    )
+  })
+
+  it('addMany rejects a batch with a duplicate id among its own items (no pre-existing row)', async () => {
+    const repo = createLocalRepo()
+    const selfDup = movimiento()
+    await expect(
+      repo.movimientos.addMany([movimiento(), selfDup, { ...selfDup }]),
+    ).rejects.toMatchObject({ code: 'invalid_input' })
+    const { items } = await repo.movimientos.list()
+    expect(items).toHaveLength(0) // nothing committed, including the two non-conflicting rows
   })
 
   it('removeMany removes every id in one transaction', async () => {
