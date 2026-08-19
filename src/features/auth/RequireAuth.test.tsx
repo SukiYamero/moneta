@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { RequireAuth } from '@/features/auth/RequireAuth'
 import { useAuthStore } from '@/lib/authStore'
@@ -104,5 +104,42 @@ describe('RequireAuth', () => {
       </RequireAuth>,
     )
     expect(restore).not.toHaveBeenCalled()
+  })
+
+  // The persisted decision (specs.md §11, 2026-08-19) is resolved inside
+  // authStore's own async login/restore/hydrate — by the time `status`
+  // flips to 'authenticated', `driveOptIn` is already whatever storage said.
+  // This pins down the resulting contract from RequireAuth's side: as long
+  // as the store transitions both fields in the same `set()` call, a device
+  // that already answered must never render DrivePermissionScreen at all,
+  // not even for one intermediate render.
+  it('never flashes the Drive screen for a device that already answered', async () => {
+    let resolveRestore: () => void = () => {}
+    const restore = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveRestore = resolve
+        }),
+    )
+    useAuthStore.setState({ restore })
+    render(
+      <RequireAuth>
+        <div>secret</div>
+      </RequireAuth>,
+    )
+    // Still resolving — neither the app nor the Drive screen has any answer yet.
+    expect(screen.queryByText('secret')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /permitir y continuar/i })).not.toBeInTheDocument()
+
+    // authStore resolves status and the persisted driveOptIn together, in one
+    // set() call — never a separate render where status is 'authenticated'
+    // but driveOptIn hasn't caught up yet.
+    act(() => {
+      useAuthStore.setState({ status: 'authenticated', driveOptIn: 'connected' })
+      resolveRestore()
+    })
+
+    await waitFor(() => expect(screen.getByText('secret')).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: /permitir y continuar/i })).not.toBeInTheDocument()
   })
 })

@@ -1,4 +1,4 @@
-import { Cloud, Coins, FileText, KeyRound, Loader2, ShieldCheck } from 'lucide-react'
+import { Cloud, Coins, FileText, Loader2, ShieldCheck } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/lib/authStore'
 import { APP_NAME } from '@/lib/branding'
@@ -37,25 +37,14 @@ export const DrivePermissionScreen = () => {
         </p>
 
         <div className="mt-6 overflow-hidden rounded-3xl border border-border-subtle bg-card">
-          <div className="flex gap-3.5 border-b border-border-subtle p-4">
-            <div className="flex size-9.5 shrink-0 items-center justify-center rounded-md bg-success/15 text-success">
-              <FileText className="size-4.5" />
+          <div className="flex gap-3.5 p-4">
+            <div className="flex size-11 shrink-0 items-center justify-center rounded-md bg-success/15 text-success">
+              <FileText className="size-5" />
             </div>
             <div className="flex-1">
               <p className="text-sm font-bold">{t('permissions.createFiles.title')}</p>
-              <p className="mt-0.5 text-sm leading-snug font-medium text-muted-foreground">
+              <p className="mt-0.5 text-ms leading-snug font-medium text-muted-foreground">
                 {t('permissions.createFiles.body', { appName: APP_NAME })}
-              </p>
-            </div>
-          </div>
-          <div className="flex gap-3.5 p-4">
-            <div className="flex size-9.5 shrink-0 items-center justify-center rounded-md bg-info/15 text-info">
-              <KeyRound className="size-4.5" />
-            </div>
-            <div className="flex-1">
-              <p className="text-sm font-bold">{t('permissions.noOtherAccess.title')}</p>
-              <p className="mt-0.5 text-sm leading-snug font-medium text-muted-foreground">
-                {t('permissions.noOtherAccess.body')}
               </p>
             </div>
           </div>
@@ -89,6 +78,9 @@ export const DrivePermissionScreen = () => {
         >
           {t('dismissCta')}
         </button>
+        <p className="text-center text-xs leading-relaxed font-medium text-fg-disabled">
+          {t('reassurance')}
+        </p>
       </div>
 
       {connecting ? (

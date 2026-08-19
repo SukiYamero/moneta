@@ -1,7 +1,7 @@
 import { db, VAULT_ID, type LockVault } from '@/lib/db'
 import type { AuthSession } from '@/lib/auth'
 import { APP_NAME } from '@/lib/branding'
-import { clearLoggedIn } from '@/lib/loginMarker'
+import { clearDriveDecision, clearLoggedIn } from '@/lib/deviceStore'
 
 const PIN_ITERATIONS = 310_000
 const MAX_ATTEMPTS = 5
@@ -259,11 +259,15 @@ export const forgetDek = (): void => {
 export const resetVault = async (): Promise<void> => {
   await db.vault.delete(VAULT_ID)
   forgetDek()
-  // The vault and this device's "has logged in before" signal are wiped
-  // together: both lockStore.resume()'s lockout branch and lockStore.reset()
-  // funnel through here, and specs.md §11 (2026-08-19) requires both paths
-  // to force a genuine, non-silent Google re-login next time.
+  // The vault, this device's "has logged in before" signal, and its
+  // persisted Drive decision are wiped together: both lockStore.resume()'s
+  // lockout branch and lockStore.reset() funnel through here, and specs.md
+  // §11 (2026-08-19) requires all three cleared so a lockout-forced re-login
+  // both forces a genuine Google re-login and doesn't hand whoever logs in
+  // next (possibly a different Google account, same device) the previous
+  // account's Drive answer.
   await clearLoggedIn()
+  await clearDriveDecision()
 }
 
 export const unlockWithPin = async (pin: string): Promise<AuthSession> => {

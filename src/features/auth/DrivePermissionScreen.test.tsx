@@ -19,11 +19,16 @@ beforeEach(() => {
 })
 
 describe('DrivePermissionScreen', () => {
-  it('explains the two Drive permissions and shows the brand name', () => {
+  it('explains the one Drive permission and shows the brand name', () => {
     render(<DrivePermissionScreen />)
     expect(screen.getAllByText(new RegExp(APP_NAME)).length).toBeGreaterThan(0)
     expect(screen.getByText(/crear y editar sus propios archivos/i)).toBeInTheDocument()
-    expect(screen.getByText(/no accede a tus otros archivos/i)).toBeInTheDocument()
+    expect(screen.queryByText(/no accede a tus otros archivos/i)).not.toBeInTheDocument()
+  })
+
+  it('shows the reassurance line near "Ahora no"', () => {
+    render(<DrivePermissionScreen />)
+    expect(screen.getByText(/puedes continuar sin conectar tu drive/i)).toBeInTheDocument()
   })
 
   it('calls authStore.connectDrive when "Permitir y continuar" is pressed', async () => {

@@ -7,12 +7,24 @@ vi.mock('@/lib/auth', () => ({
 }))
 vi.mock('@/lib/bootstrap', () => ({ bootstrap: vi.fn() }))
 vi.mock('@/lib/pinLock', () => ({ hasVault: vi.fn(), updateSession: vi.fn() }))
-vi.mock('@/lib/loginMarker', () => ({ hasLoggedInBefore: vi.fn(), markLoggedIn: vi.fn() }))
+vi.mock('@/lib/deviceStore', () => ({
+  hasLoggedInBefore: vi.fn(),
+  markLoggedIn: vi.fn(),
+  getDriveDecision: vi.fn(),
+  setDriveDecision: vi.fn(),
+  clearDriveDecision: vi.fn(),
+}))
 
 import { requestAccessToken, fetchGoogleUser } from '@/lib/auth'
 import { bootstrap } from '@/lib/bootstrap'
 import { hasVault, updateSession } from '@/lib/pinLock'
-import { hasLoggedInBefore, markLoggedIn } from '@/lib/loginMarker'
+import {
+  clearDriveDecision,
+  getDriveDecision,
+  hasLoggedInBefore,
+  markLoggedIn,
+  setDriveDecision,
+} from '@/lib/deviceStore'
 import { useAuthStore } from '@/lib/authStore'
 
 const mToken = vi.mocked(requestAccessToken)
@@ -22,6 +34,9 @@ const mHasVault = vi.mocked(hasVault)
 const mUpdateSession = vi.mocked(updateSession)
 const mHasLoggedInBefore = vi.mocked(hasLoggedInBefore)
 const mMarkLoggedIn = vi.mocked(markLoggedIn)
+const mGetDriveDecision = vi.mocked(getDriveDecision)
+const mSetDriveDecision = vi.mocked(setDriveDecision)
+const mClearDriveDecision = vi.mocked(clearDriveDecision)
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -31,6 +46,10 @@ beforeEach(() => {
   // other behaviors (silent-auth success/failure) stay reachable; the
   // marker-gating tests below override this explicitly.
   mHasLoggedInBefore.mockResolvedValue(true)
+  // Default: no persisted Drive decision on this device — most tests exercise
+  // something other than the persistence itself, so they see the pre-existing
+  // 'pending' behavior unless they override this explicitly.
+  mGetDriveDecision.mockResolvedValue(undefined)
   useAuthStore.setState({
     status: 'idle',
     user: null,
@@ -155,6 +174,69 @@ describe('useAuthStore.login', () => {
 
     expect(mMarkLoggedIn).not.toHaveBeenCalled()
   })
+
+  // specs.md §11, 2026-08-19 (supersedes the 2026-08-18 in-memory-only
+  // decision): a device that already answered must not be asked again, even
+  // on a fresh explicit login() — e.g. after restore() fell back to idle
+  // without a logout() in between.
+  it('resolves a previously persisted "connected" decision and silently re-acquires Drive access', async () => {
+    mToken
+      .mockResolvedValueOnce({ accessToken: 'identity-tok', expiresAt: 1 })
+      .mockResolvedValueOnce({ accessToken: 'drive-tok', expiresAt: 2 })
+    mUser.mockResolvedValue({ email: 'a@b.com', name: 'Ana' })
+    mGetDriveDecision.mockResolvedValue('connected')
+    mBootstrap.mockResolvedValue({
+      folderId: 'F',
+      movimientosFileId: 'M',
+      activosFileId: 'A',
+      configFileId: 'C',
+    })
+
+    await useAuthStore.getState().login()
+
+    const s = useAuthStore.getState()
+    expect(s.driveOptIn).toBe('connected')
+    expect(s.drive?.folderId).toBe('F')
+    // The identity-only token from authenticate() never reaches the vault —
+    // it's upgraded to the Drive-scoped one before syncLockedSession runs.
+    expect(s.session?.accessToken).toBe('drive-tok')
+    expect(mToken).toHaveBeenNthCalledWith(1, 'consent')
+    expect(mToken).toHaveBeenNthCalledWith(2, '', 'drive-scopes')
+  })
+
+  // CONFIRMED gap caught in review: without this, a device that persisted
+  // 'connected' yesterday would land authenticated today holding an
+  // identity-only token and drive === null, with no UI left to fix it once
+  // DrivePermissionScreen stops reappearing (specs.md §12 "no Drive-backed
+  // Repo yet" means nothing notices until Wave 3 wires one).
+  it('does not fail login or surface driveError when the silent re-acquire fails', async () => {
+    mToken
+      .mockResolvedValueOnce({ accessToken: 'identity-tok', expiresAt: 1 })
+      .mockRejectedValueOnce(new Error('drive: 403'))
+    mUser.mockResolvedValue({ email: 'a@b.com', name: 'Ana' })
+    mGetDriveDecision.mockResolvedValue('connected')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    await useAuthStore.getState().login()
+
+    const s = useAuthStore.getState()
+    expect(s.status).toBe('authenticated')
+    expect(s.driveOptIn).toBe('connected')
+    expect(s.drive).toBeNull()
+    expect(s.driveError).toBeNull()
+    expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
+  it('resolves a previously persisted "dismissed" decision instead of asking again', async () => {
+    mToken.mockResolvedValue({ accessToken: 'tok', expiresAt: 1 })
+    mUser.mockResolvedValue({ email: 'a@b.com', name: 'Ana' })
+    mGetDriveDecision.mockResolvedValue('dismissed')
+
+    await useAuthStore.getState().login()
+
+    expect(useAuthStore.getState().driveOptIn).toBe('dismissed')
+  })
 })
 
 describe('useAuthStore.restore', () => {
@@ -207,6 +289,50 @@ describe('useAuthStore.restore', () => {
     expect(mToken).toHaveBeenCalledWith('')
     expect(useAuthStore.getState().status).toBe('authenticated')
   })
+
+  // Same cold-start persistence as login() above, exercised via the silent
+  // restore path instead of an explicit sign-in.
+  it('resolves a previously persisted Drive decision and silently re-acquires Drive access', async () => {
+    mHasLoggedInBefore.mockResolvedValue(true)
+    mToken
+      .mockResolvedValueOnce({ accessToken: 'identity-tok', expiresAt: 1 })
+      .mockResolvedValueOnce({ accessToken: 'drive-tok', expiresAt: 2 })
+    mUser.mockResolvedValue({ email: 'a@b.com', name: 'Ana' })
+    mGetDriveDecision.mockResolvedValue('connected')
+    mBootstrap.mockResolvedValue({
+      folderId: 'F',
+      movimientosFileId: 'M',
+      activosFileId: 'A',
+      configFileId: 'C',
+    })
+
+    await useAuthStore.getState().restore()
+
+    const s = useAuthStore.getState()
+    expect(s.driveOptIn).toBe('connected')
+    expect(s.drive?.folderId).toBe('F')
+    expect(s.session?.accessToken).toBe('drive-tok')
+  })
+
+  it('does not fail restore or surface driveError when the silent re-acquire fails', async () => {
+    mHasLoggedInBefore.mockResolvedValue(true)
+    mToken
+      .mockResolvedValueOnce({ accessToken: 'identity-tok', expiresAt: 1 })
+      .mockRejectedValueOnce(new Error('drive: 403'))
+    mUser.mockResolvedValue({ email: 'a@b.com', name: 'Ana' })
+    mGetDriveDecision.mockResolvedValue('connected')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    await useAuthStore.getState().restore()
+
+    const s = useAuthStore.getState()
+    expect(s.status).toBe('authenticated')
+    expect(s.driveOptIn).toBe('connected')
+    expect(s.drive).toBeNull()
+    expect(s.driveError).toBeNull()
+    expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
+  })
 })
 
 describe('useAuthStore.logout', () => {
@@ -232,6 +358,17 @@ describe('useAuthStore.logout', () => {
       driveConnecting: false,
       driveError: null,
     })
+  })
+
+  // A different Google account can sign in on this same device next — the
+  // previous account's persisted Drive decision must not carry over to it
+  // (specs.md §11, 2026-08-19).
+  it('clears the persisted Drive decision so a different account on this device is asked again', () => {
+    useAuthStore.setState({ driveOptIn: 'connected' })
+
+    useAuthStore.getState().logout()
+
+    expect(mClearDriveDecision).toHaveBeenCalledOnce()
   })
 })
 
@@ -262,6 +399,48 @@ describe('useAuthStore.connectDrive', () => {
     expect(s.driveOptIn).toBe('connected')
     expect(s.driveConnecting).toBe(false)
     expect(s.driveError).toBeNull()
+  })
+
+  it('persists the decision only once the connection actually succeeded', async () => {
+    mToken.mockResolvedValue({ accessToken: 'drive-tok', expiresAt: 2 })
+    mBootstrap.mockResolvedValue({
+      folderId: 'F',
+      movimientosFileId: 'M',
+      activosFileId: 'A',
+      configFileId: 'C',
+    })
+    useAuthStore.setState({
+      status: 'authenticated',
+      user: { email: 'a@b.com', name: 'Ana' },
+      session: { accessToken: 'identity-tok', expiresAt: 1 },
+      drive: null,
+      error: null,
+    })
+
+    await useAuthStore.getState().connectDrive()
+
+    expect(mSetDriveDecision).toHaveBeenCalledWith('connected')
+  })
+
+  // The recorded state must reflect what actually happened, not what was
+  // attempted (this track's brief, edge cases): the popup can succeed while
+  // Drive provisioning itself fails, and that must not be recorded as
+  // 'connected'.
+  it('does not persist a decision when bootstrap fails after a successful popup', async () => {
+    mToken.mockResolvedValue({ accessToken: 'drive-tok', expiresAt: 2 })
+    mBootstrap.mockRejectedValue(new Error('drive: bootstrap failed'))
+    useAuthStore.setState({
+      status: 'authenticated',
+      user: { email: 'a@b.com', name: 'Ana' },
+      session: { accessToken: 'identity-tok', expiresAt: 1 },
+      drive: null,
+      error: null,
+    })
+
+    await useAuthStore.getState().connectDrive()
+
+    expect(mSetDriveDecision).not.toHaveBeenCalled()
+    expect(useAuthStore.getState().driveOptIn).toBe('pending')
   })
 
   it('caches the upgraded session in the lock vault when one exists', async () => {
@@ -364,6 +543,11 @@ describe('useAuthStore.dismissDrive', () => {
     useAuthStore.getState().dismissDrive()
     expect(useAuthStore.getState().driveOptIn).toBe('dismissed')
   })
+
+  it('persists the dismissal so this device is not asked again', () => {
+    useAuthStore.getState().dismissDrive()
+    expect(mSetDriveDecision).toHaveBeenCalledWith('dismissed')
+  })
 })
 
 describe('useAuthStore.hydrate', () => {
@@ -398,11 +582,85 @@ describe('useAuthStore.hydrate', () => {
   it('does not reset driveOptIn — a re-lock/unlock mid-session must not re-prompt Drive', async () => {
     const session = { accessToken: 'tok', expiresAt: Date.now() + 3_600_000 }
     mUser.mockResolvedValue({ email: 'a@b.com', name: 'Ana' })
-    useAuthStore.setState({ driveOptIn: 'connected' })
+    // A realistic mid-session 'connected' state always has `drive` already
+    // populated too (from connectDrive() or an earlier hydrate() this
+    // session) — that's what the reacquire guard actually keys on.
+    useAuthStore.setState({
+      driveOptIn: 'connected',
+      drive: { folderId: 'F', movimientosFileId: 'M', activosFileId: 'A', configFileId: 'C' },
+    })
 
     await useAuthStore.getState().hydrate(session)
 
     expect(useAuthStore.getState().driveOptIn).toBe('connected')
+    // Already resolved this session — a mid-session re-lock/unlock must not
+    // even touch storage, let alone re-derive a different answer from it,
+    // and must not re-run the Drive re-acquire either (drive is already set).
+    expect(mGetDriveDecision).not.toHaveBeenCalled()
+    expect(mToken).not.toHaveBeenCalled()
+    expect(mBootstrap).not.toHaveBeenCalled()
+  })
+
+  // The PIN-lock cold-start path: a fresh page load with a vault already
+  // enrolled skips RequireAuth's own restore() entirely and lands directly
+  // on hydrate() via lockStore.resume() — this is the *first* time driveOptIn
+  // is resolved this session, so it must consult storage, unlike the
+  // mid-session case above.
+  it('resolves a previously persisted "dismissed" decision on a PIN-lock cold start', async () => {
+    const session = { accessToken: 'tok', expiresAt: Date.now() + 3_600_000 }
+    mUser.mockResolvedValue({ email: 'a@b.com', name: 'Ana' })
+    mGetDriveDecision.mockResolvedValue('dismissed')
+    useAuthStore.setState({ driveOptIn: 'pending' })
+
+    await useAuthStore.getState().hydrate(session)
+
+    expect(useAuthStore.getState().driveOptIn).toBe('dismissed')
+  })
+
+  // CONFIRMED gap caught in review: the vault's cached session is
+  // identity-only (specs.md §5) — a PIN-lock cold start for a device that
+  // connected Drive in a previous session must re-fetch `drive` itself, or
+  // driveOptIn === 'connected' would be a memory of a past connection, not
+  // an honest signal Drive is usable.
+  it('resolves a previously persisted "connected" decision and silently re-acquires Drive access', async () => {
+    const session = { accessToken: 'identity-tok', expiresAt: Date.now() + 3_600_000 }
+    mUser.mockResolvedValue({ email: 'a@b.com', name: 'Ana' })
+    mGetDriveDecision.mockResolvedValue('connected')
+    mToken.mockResolvedValue({ accessToken: 'drive-tok', expiresAt: 2 })
+    mBootstrap.mockResolvedValue({
+      folderId: 'F',
+      movimientosFileId: 'M',
+      activosFileId: 'A',
+      configFileId: 'C',
+    })
+    useAuthStore.setState({ driveOptIn: 'pending' })
+
+    await useAuthStore.getState().hydrate(session)
+
+    const s = useAuthStore.getState()
+    expect(s.driveOptIn).toBe('connected')
+    expect(s.drive?.folderId).toBe('F')
+    expect(s.session?.accessToken).toBe('drive-tok')
+    expect(mToken).toHaveBeenCalledWith('', 'drive-scopes')
+  })
+
+  it('does not fail hydrate or surface driveError when the silent re-acquire fails', async () => {
+    const session = { accessToken: 'identity-tok', expiresAt: Date.now() + 3_600_000 }
+    mUser.mockResolvedValue({ email: 'a@b.com', name: 'Ana' })
+    mGetDriveDecision.mockResolvedValue('connected')
+    mToken.mockRejectedValue(new Error('drive: 403'))
+    useAuthStore.setState({ driveOptIn: 'pending' })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    await useAuthStore.getState().hydrate(session)
+
+    const s = useAuthStore.getState()
+    expect(s.status).toBe('authenticated')
+    expect(s.driveOptIn).toBe('connected')
+    expect(s.drive).toBeNull()
+    expect(s.driveError).toBeNull()
+    expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
   })
 
   it('caches the fresh session in the lock vault when one exists', async () => {
