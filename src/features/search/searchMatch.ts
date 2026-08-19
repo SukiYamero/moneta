@@ -5,7 +5,14 @@
 // accents without touching the letters themselves — unlike `Intl.Collator`,
 // which compares two whole strings for equality/order, not substring
 // containment, so it doesn't fit a "does this text contain the query" check.
-const COMBINING_MARKS = /[̀-ͯ]/g
+//
+// Written as \uXXXX escapes, not literal combining characters, on purpose:
+// a literal U+0300..U+036F sitting in this file renders as nothing (or as
+// marks stacked on the neighboring bracket) in most editors, and — the real
+// risk — any tool that normalizes the source to NFC could silently
+// recombine or drop them, changing the class with nothing in the toolchain
+// (tsc/oxlint/lint:units) able to flag it. Escapes are immune to that.
+const COMBINING_MARKS = /[\u0300-\u036F]/gu
 
 export const normalizeForSearch = (value: string): string =>
   value.trim().toLowerCase().normalize('NFD').replaceAll(COMBINING_MARKS, '')

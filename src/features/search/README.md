@@ -40,7 +40,15 @@ client-side from the same `Movimiento[]` those screens read.
 - `searchMatch.ts` — accent- and case-insensitive substring match
   (`String.normalize('NFD')` stripping combining marks, not
   `Intl.Collator`, which compares whole-string equality/order rather than
-  containment). `matchesQuery('camion', 'Viaje en camión')` is `true`.
+  containment). `matchesQuery('camion', 'Viaje en camión')` is `true`. The
+  combining-marks range is written as `\uXXXX` escapes, never literal
+  combining characters, so the class stays legible and immune to the
+  source file ever getting normalized to NFC. **`ñ` also folds to `n`** —
+  `ñ` decomposes under NFD same as an accented letter, so technically this
+  over-folds (`ñ` is its own letter in Spanish, not accented `n`). Left as
+  is, deliberately: for search the direction is safe — the match set only
+  grows, so a user without an `ñ` key still finds the row, and it can
+  never cause a miss.
 - `useDebouncedQuery.ts` — debounces the search query, but commits an empty
   query immediately — clearing the input must never leave the previous,
   now-stale filtered list on screen for the rest of the debounce window.
