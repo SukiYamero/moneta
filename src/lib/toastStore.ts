@@ -1,5 +1,4 @@
 import { create } from 'zustand'
-import { useLockStore } from '@/lib/lockStore'
 
 export type ToastVariant = 'success' | 'error'
 
@@ -43,6 +42,11 @@ const clearTimer = (id: string): void => {
   timers.delete(id)
 }
 
+const clearAllTimers = (): void => {
+  for (const handle of timers.values()) clearTimeout(handle)
+  timers.clear()
+}
+
 /** Dismisses a toast immediately — called by its own timer, or by the card's swipe/close affordance. */
 export const dismissToast = (id: string): void => {
   clearTimer(id)
@@ -56,12 +60,31 @@ const scheduleDismiss = (id: string, variant: ToastVariant): void => {
   )
 }
 
+// This module holds no domain state and reads no store (specs.md §10.6) —
+// it doesn't know a lock exists. Suppression is a plain boolean flag driven
+// from outside (AppLock, today) rather than an import of lockStore, so the
+// dependency points policy → surface, not the other way round, and nothing
+// that merely raises a toast drags in WebCrypto/Dexie transitively.
+// Starts suppressed: before whatever owns the flag has run its first
+// effect, there's no reason to assume it's safe to show anything.
+let suppressed = true
+
+/**
+ * Turning suppression on drops whatever is currently in the stack, not just
+ * future arrivals — a toast already showing (or still timing out
+ * off-screen) when suppression engages must not resurface once it's lifted,
+ * the same "dropped, not queued" guarantee raiseToast enforces on the way
+ * in (specs.md §10.6).
+ */
+export const setToastsSuppressed = (value: boolean): void => {
+  suppressed = value
+  if (!value) return
+  clearAllTimers()
+  useToastStore.setState({ items: [] })
+}
+
 const raiseToast = (variant: ToastVariant, message: string): void => {
-  // The lock exists to hide content, and a notification about data is
-  // content — a toast raised while locked is dropped outright rather than
-  // queued to surface (stale) right after unlock (specs.md §10.6 edge
-  // cases; docs/wave-2-plan.md §3.6).
-  if (useLockStore.getState().phase === 'locked') return
+  if (suppressed) return
 
   const { items } = useToastStore.getState()
   const duplicate = items.find((item) => item.variant === variant && item.message === message)

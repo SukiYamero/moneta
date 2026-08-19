@@ -1,22 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-
-// Reassigned per test — this suite only cares about what toastStore does
-// with the lock phase, not lockStore's own behavior (which has its own
-// tests). Vitest hoists vi.mock above the imports below regardless of
-// source order, same pattern as AppLock.test.tsx.
-let lockPhase: 'unknown' | 'unlocked' | 'locked' = 'unlocked'
-
-vi.mock('@/lib/lockStore', () => ({
-  useLockStore: { getState: () => ({ phase: lockPhase }) },
-}))
-
-import { dismissToast, toast, useToastStore } from '@/lib/toastStore'
+import { dismissToast, setToastsSuppressed, toast, useToastStore } from '@/lib/toastStore'
 
 const items = () => useToastStore.getState().items
 
 beforeEach(() => {
-  lockPhase = 'unlocked'
   useToastStore.setState({ items: [] })
+  setToastsSuppressed(false)
   vi.useFakeTimers()
 })
 
@@ -94,17 +83,39 @@ describe('toast.success / toast.error', () => {
     toast.success('d')
     expect(items().map((item) => item.message)).toEqual(['b', 'c', 'd'])
   })
+})
 
-  it('is a no-op while the app is locked', () => {
-    lockPhase = 'locked'
+describe('setToastsSuppressed', () => {
+  it('is a no-op for new arrivals while suppressed', () => {
+    setToastsSuppressed(true)
     toast.success('Guardado en segundo plano')
     expect(items()).toHaveLength(0)
   })
 
-  it('does not surface after unlocking a toast that was raised while locked', () => {
-    lockPhase = 'locked'
-    toast.error('Falló mientras estaba bloqueado')
-    lockPhase = 'unlocked'
+  it('does not let a toast raised while suppressed surface once suppression lifts', () => {
+    setToastsSuppressed(true)
+    toast.error('Falló mientras estaba suprimido')
+    setToastsSuppressed(false)
+    expect(items()).toHaveLength(0)
+  })
+
+  it('clears an already-visible toast the instant suppression engages, not just future arrivals', () => {
+    toast.success('Ya visible')
+    expect(items()).toHaveLength(1)
+
+    setToastsSuppressed(true)
+    expect(items()).toHaveLength(0)
+  })
+
+  it('a toast visible when suppression engages does not reappear from its own leftover timer once suppression lifts', () => {
+    toast.success('Ya visible')
+    setToastsSuppressed(true)
+    setToastsSuppressed(false)
+
+    // If the original 4s timer had survived, it would still fire here and
+    // try to remove an id no longer in the (already-empty) stack — this
+    // just proves nothing resurrects in the meantime.
+    vi.advanceTimersByTime(4000)
     expect(items()).toHaveLength(0)
   })
 })

@@ -142,3 +142,58 @@ test('a toast raised while locked is dropped, not queued for after unlock', () =
 
   expect(screen.queryByText('Falló mientras estaba bloqueado')).not.toBeInTheDocument()
 })
+
+// The boot window: phase starts 'unknown' while lockStore.init() resolves,
+// and AppLock renders null for that whole stretch — no content is on
+// screen yet, so a toast raised then must be suppressed exactly like one
+// raised while locked, not just the two phases named in the spec prose.
+test('a toast raised during the "unknown" boot window is dropped, not shown once the phase resolves', () => {
+  state = { phase: 'unknown', error: null }
+  const { rerender } = render(
+    <AppLock>
+      <div>app</div>
+    </AppLock>,
+  )
+  act(() => toast.error('Falló durante el arranque'))
+
+  state = { phase: 'unlocked', error: null }
+  rerender(
+    <AppLock>
+      <div>app</div>
+    </AppLock>,
+  )
+
+  expect(screen.queryByText('Falló durante el arranque')).not.toBeInTheDocument()
+})
+
+// Symmetric case: a toast already showing when the phase drops back to
+// 'locked' (e.g. the app backgrounds mid-toast) must not survive to
+// reappear on the next unlock — suppression clears the live stack, not
+// just future arrivals (toastStore.test.ts covers the store-level guarantee
+// this integration relies on).
+test('a toast visible when the app re-locks does not resurface on the next unlock', () => {
+  state = { phase: 'unlocked', error: null }
+  const { rerender } = render(
+    <AppLock>
+      <div>app</div>
+    </AppLock>,
+  )
+  act(() => toast.success('Todavía visible'))
+  expect(screen.getByText('Todavía visible')).toBeInTheDocument()
+
+  state = { phase: 'locked', error: null, biometricEnrolled: false, unlockPin: vi.fn() }
+  rerender(
+    <AppLock>
+      <div>app</div>
+    </AppLock>,
+  )
+  expect(screen.queryByText('Todavía visible')).not.toBeInTheDocument()
+
+  state = { phase: 'unlocked', error: null }
+  rerender(
+    <AppLock>
+      <div>app</div>
+    </AppLock>,
+  )
+  expect(screen.queryByText('Todavía visible')).not.toBeInTheDocument()
+})

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { Toaster } from '@/components/shared/Toaster'
-import { toast, useToastStore } from '@/lib/toastStore'
+import { setToastsSuppressed, toast, useToastStore } from '@/lib/toastStore'
 
 // toast.success/error are plain functions called from outside React (a
 // store, an event handler) — wrapping them in act() here just mirrors what
@@ -12,6 +12,10 @@ const raise = (fn: () => void) => act(fn)
 
 beforeEach(() => {
   useToastStore.setState({ items: [] })
+  // Toaster is a leaf that doesn't know about suppression policy itself
+  // (AppLock drives it) — this suite exercises the stack in isolation, so
+  // it opts in directly rather than rendering AppLock.
+  setToastsSuppressed(false)
 })
 
 afterEach(() => {
