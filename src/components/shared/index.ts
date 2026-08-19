@@ -1,5 +1,6 @@
-export { AmountField, parseAmount, formatAmountForInput } from '@/components/shared/AmountField'
+export { AmountField } from '@/components/shared/AmountField'
 export type { AmountFieldProps } from '@/components/shared/AmountField'
+export { parseAmount, formatAmountForInput } from '@/components/shared/amountFormat'
 export { BottomNav } from '@/components/shared/BottomNav'
 export { BottomSheet, type BottomSheetProps } from '@/components/shared/BottomSheet'
 export { CenterModal, type CenterModalProps } from '@/components/shared/CenterModal'
