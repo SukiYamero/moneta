@@ -6,18 +6,32 @@ vi.mock('@/lib/auth', () => ({
   DRIVE_SCOPES: 'drive-scopes',
 }))
 vi.mock('@/lib/bootstrap', () => ({ bootstrap: vi.fn() }))
+vi.mock('@/lib/pinLock', () => ({ hasVault: vi.fn(), updateSession: vi.fn() }))
 
 import { requestAccessToken, fetchGoogleUser } from '@/lib/auth'
 import { bootstrap } from '@/lib/bootstrap'
+import { hasVault, updateSession } from '@/lib/pinLock'
 import { useAuthStore } from '@/lib/authStore'
 
 const mToken = vi.mocked(requestAccessToken)
 const mUser = vi.mocked(fetchGoogleUser)
 const mBootstrap = vi.mocked(bootstrap)
+const mHasVault = vi.mocked(hasVault)
+const mUpdateSession = vi.mocked(updateSession)
 
 beforeEach(() => {
   vi.clearAllMocks()
-  useAuthStore.setState({ status: 'idle', user: null, session: null, drive: null, error: null })
+  mHasVault.mockResolvedValue(false)
+  useAuthStore.setState({
+    status: 'idle',
+    user: null,
+    session: null,
+    drive: null,
+    error: null,
+    driveOptIn: 'pending',
+    driveConnecting: false,
+    driveError: null,
+  })
 })
 
 describe('useAuthStore.login', () => {
@@ -32,6 +46,7 @@ describe('useAuthStore.login', () => {
     expect(s.user).toEqual({ email: 'a@b.com', name: 'Ana' })
     expect(s.session?.accessToken).toBe('tok')
     expect(s.drive).toBeNull()
+    expect(s.driveOptIn).toBe('pending')
     expect(mBootstrap).not.toHaveBeenCalled()
     expect(mToken).toHaveBeenCalledWith('consent')
   })
@@ -46,6 +61,36 @@ describe('useAuthStore.login', () => {
     expect(s.error).toBe('access: access_denied')
     expect(s.session).toBeNull()
   })
+
+  it('caches the fresh session in the lock vault when one exists', async () => {
+    mToken.mockResolvedValue({ accessToken: 'tok', expiresAt: 1 })
+    mUser.mockResolvedValue({ email: 'a@b.com', name: 'Ana' })
+    mHasVault.mockResolvedValue(true)
+
+    await useAuthStore.getState().login()
+
+    expect(mUpdateSession).toHaveBeenCalledWith({ accessToken: 'tok', expiresAt: 1 })
+  })
+
+  it('never calls updateSession when no vault exists', async () => {
+    mToken.mockResolvedValue({ accessToken: 'tok', expiresAt: 1 })
+    mUser.mockResolvedValue({ email: 'a@b.com', name: 'Ana' })
+    mHasVault.mockResolvedValue(false)
+
+    await useAuthStore.getState().login()
+
+    expect(mUpdateSession).not.toHaveBeenCalled()
+  })
+
+  it('does not throw or block login when updateSession itself fails', async () => {
+    mToken.mockResolvedValue({ accessToken: 'tok', expiresAt: 1 })
+    mUser.mockResolvedValue({ email: 'a@b.com', name: 'Ana' })
+    mHasVault.mockResolvedValue(true)
+    mUpdateSession.mockRejectedValue(new Error('lock: not unlocked'))
+
+    await expect(useAuthStore.getState().login()).resolves.toBeUndefined()
+    expect(useAuthStore.getState().status).toBe('authenticated')
+  })
 })
 
 describe('useAuthStore.restore', () => {
@@ -55,20 +100,41 @@ describe('useAuthStore.restore', () => {
     expect(mToken).toHaveBeenCalledWith('')
     expect(useAuthStore.getState().status).toBe('idle')
   })
+
+  it('caches the fresh session in the lock vault when one exists', async () => {
+    mToken.mockResolvedValue({ accessToken: 'tok', expiresAt: 1 })
+    mUser.mockResolvedValue({ email: 'a@b.com', name: 'Ana' })
+    mHasVault.mockResolvedValue(true)
+
+    await useAuthStore.getState().restore()
+
+    expect(mUpdateSession).toHaveBeenCalledWith({ accessToken: 'tok', expiresAt: 1 })
+  })
 })
 
 describe('useAuthStore.logout', () => {
-  it('clears all session state', () => {
+  it('clears all session state, including Drive opt-in', () => {
     useAuthStore.setState({
       status: 'authenticated',
       user: { email: 'a@b.com', name: 'Ana' },
       session: { accessToken: 'tok', expiresAt: 1 },
       drive: { folderId: 'F', movimientosFileId: 'M', activosFileId: 'A', configFileId: 'C' },
       error: null,
+      driveOptIn: 'connected',
+      driveConnecting: true,
+      driveError: 'boom',
     })
     useAuthStore.getState().logout()
     const s = useAuthStore.getState()
-    expect(s).toMatchObject({ status: 'idle', user: null, session: null, drive: null })
+    expect(s).toMatchObject({
+      status: 'idle',
+      user: null,
+      session: null,
+      drive: null,
+      driveOptIn: 'pending',
+      driveConnecting: false,
+      driveError: null,
+    })
   })
 })
 
@@ -96,6 +162,75 @@ describe('useAuthStore.connectDrive', () => {
     const s = useAuthStore.getState()
     expect(s.drive?.folderId).toBe('F')
     expect(s.session?.accessToken).toBe('drive-tok')
+    expect(s.driveOptIn).toBe('connected')
+    expect(s.driveConnecting).toBe(false)
+    expect(s.driveError).toBeNull()
+  })
+
+  it('caches the upgraded session in the lock vault when one exists', async () => {
+    mToken.mockResolvedValue({ accessToken: 'drive-tok', expiresAt: 2 })
+    mBootstrap.mockResolvedValue({
+      folderId: 'F',
+      movimientosFileId: 'M',
+      activosFileId: 'A',
+      configFileId: 'C',
+    })
+    mHasVault.mockResolvedValue(true)
+
+    await useAuthStore.getState().connectDrive()
+
+    expect(mUpdateSession).toHaveBeenCalledWith({ accessToken: 'drive-tok', expiresAt: 2 })
+  })
+
+  it('surfaces a driveError and stays usable on failure, without touching identity status', async () => {
+    mToken.mockRejectedValue(new Error('drive: 403'))
+    useAuthStore.setState({
+      status: 'authenticated',
+      user: { email: 'a@b.com', name: 'Ana' },
+      session: { accessToken: 'identity-tok', expiresAt: 1 },
+      drive: null,
+      error: null,
+    })
+
+    await useAuthStore.getState().connectDrive()
+
+    const s = useAuthStore.getState()
+    expect(s.status).toBe('authenticated')
+    expect(s.session?.accessToken).toBe('identity-tok')
+    expect(s.drive).toBeNull()
+    expect(s.driveOptIn).toBe('pending')
+    expect(s.driveConnecting).toBe(false)
+    expect(s.driveError).toBe('drive: 403')
+  })
+
+  it('sets driveConnecting while the request is in flight', async () => {
+    let resolveToken: (v: { accessToken: string; expiresAt: number }) => void = () => {}
+    mToken.mockReturnValue(
+      new Promise((resolve) => {
+        resolveToken = resolve
+      }),
+    )
+
+    const pending = useAuthStore.getState().connectDrive()
+    await Promise.resolve()
+    expect(useAuthStore.getState().driveConnecting).toBe(true)
+
+    resolveToken({ accessToken: 'drive-tok', expiresAt: 2 })
+    mBootstrap.mockResolvedValue({
+      folderId: 'F',
+      movimientosFileId: 'M',
+      activosFileId: 'A',
+      configFileId: 'C',
+    })
+    await pending
+    expect(useAuthStore.getState().driveConnecting).toBe(false)
+  })
+})
+
+describe('useAuthStore.dismissDrive', () => {
+  it('marks the opt-in as dismissed for this session', () => {
+    useAuthStore.getState().dismissDrive()
+    expect(useAuthStore.getState().driveOptIn).toBe('dismissed')
   })
 })
 
@@ -126,5 +261,25 @@ describe('useAuthStore.hydrate', () => {
     expect(s.session).toBeNull()
     expect(s.user).toBeNull()
     expect(s.drive).toBeNull()
+  })
+
+  it('does not reset driveOptIn — a re-lock/unlock mid-session must not re-prompt Drive', async () => {
+    const session = { accessToken: 'tok', expiresAt: Date.now() + 3_600_000 }
+    mUser.mockResolvedValue({ email: 'a@b.com', name: 'Ana' })
+    useAuthStore.setState({ driveOptIn: 'connected' })
+
+    await useAuthStore.getState().hydrate(session)
+
+    expect(useAuthStore.getState().driveOptIn).toBe('connected')
+  })
+
+  it('caches the fresh session in the lock vault when one exists', async () => {
+    const session = { accessToken: 'tok', expiresAt: Date.now() + 3_600_000 }
+    mUser.mockResolvedValue({ email: 'a@b.com', name: 'Ana' })
+    mHasVault.mockResolvedValue(true)
+
+    await useAuthStore.getState().hydrate(session)
+
+    expect(mUpdateSession).toHaveBeenCalledWith(session)
   })
 })
