@@ -91,6 +91,29 @@ describe('ready() / schemaVersion gate', () => {
     expect(config).toEqual(CONFIG_SEMILLA)
   })
 
+  // specs.md §10.7: the initial monedaPrincipal derives from the device
+  // region, not from a static "COP" baked into CONFIG_SEMILLA.
+  it('derives monedaPrincipal from the device region on a fresh store', async () => {
+    vi.stubGlobal('navigator', { ...navigator, languages: ['es-MX'] })
+    const repo = createLocalRepo()
+    await repo.ready()
+    const config = await repo.getConfig()
+    expect(config.preferencias.monedaPrincipal).toBe('MXN')
+    vi.unstubAllGlobals()
+  })
+
+  // A stored Config always wins — this is a first-run default, never a
+  // reassignment of a currency the user already has (specs.md §10.7 edge case).
+  it('never re-derives monedaPrincipal for an already-seeded store, even if the device region changes', async () => {
+    await db.config.put({ ...CONFIG_SEMILLA, id: 1 })
+    vi.stubGlobal('navigator', { ...navigator, languages: ['es-MX'] })
+    const repo = createLocalRepo()
+    await repo.ready()
+    const config = await repo.getConfig()
+    expect(config.preferencias.monedaPrincipal).toBe('COP')
+    vi.unstubAllGlobals()
+  })
+
   it('leaves an already-current config untouched', async () => {
     await db.config.put({ ...CONFIG_SEMILLA, secciones: [], id: 1 })
     const repo = createLocalRepo()

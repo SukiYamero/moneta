@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from 'vitest'
-import { detectLocale } from '@/lib/i18n/detectLocale'
+import { detectLocale, detectRegion } from '@/lib/i18n/detectLocale'
 
 const stubLanguages = (languages: string[]): void => {
   vi.stubGlobal('navigator', { ...navigator, languages })
@@ -74,5 +74,60 @@ describe('detectLocale', () => {
   it('falls back to en only when neither navigator.languages nor navigator.language is available', () => {
     vi.stubGlobal('navigator', { ...navigator, languages: undefined, language: undefined })
     expect(detectLocale()).toBe('en')
+  })
+})
+
+// Region is an axis independent of the copy locale above (specs.md §10.7):
+// a device can run the app in neutral `es` copy while its region subtag is
+// `MX`, `AR`, `BR`... `detectRegion` must never change what `detectLocale`
+// resolves to — only tests a second, parallel extraction.
+describe('detectRegion', () => {
+  it('picks the region subtag off an exact tag', () => {
+    expect(detectRegion(['es-MX'])).toBe('MX')
+    expect(detectRegion(['es-AR'])).toBe('AR')
+    expect(detectRegion(['pt-BR'])).toBe('BR')
+  })
+
+  it('is case-insensitive and normalizes to uppercase', () => {
+    expect(detectRegion(['es-mx'])).toBe('MX')
+  })
+
+  it('honors preference order: the first candidate carrying a region subtag wins', () => {
+    // "es" alone has no subtag; the next preference does.
+    expect(detectRegion(['es', 'es-AR'])).toBe('AR')
+  })
+
+  it("falls back to the copy locale's canonical region when no candidate has a region subtag", () => {
+    expect(detectRegion(['es'])).toBe('CO')
+    expect(detectRegion(['en'])).toBe('US')
+    expect(detectRegion(['pt'])).toBe('BR')
+  })
+
+  it('ignores a non-alphabetic (UN M49) region subtag like es-419 and falls back to canonical', () => {
+    expect(detectRegion(['es-419'])).toBe('CO')
+  })
+
+  it('accepts an explicit copyLocale fallback instead of re-deriving it from languages', () => {
+    expect(detectRegion([], 'es-AR')).toBe('AR')
+  })
+
+  it('reads navigator.languages by default when stubbed', () => {
+    stubLanguages(['es-MX'])
+    expect(detectRegion()).toBe('MX')
+  })
+
+  it('degrades to navigator.language when navigator.languages is missing, same as detectLocale', () => {
+    vi.stubGlobal('navigator', { ...navigator, languages: undefined, language: 'es-MX' })
+    expect(detectRegion()).toBe('MX')
+  })
+
+  it('falls back to the en/US default when navigator has no language info at all, matching detectLocale', () => {
+    vi.stubGlobal('navigator', { ...navigator, languages: undefined, language: undefined })
+    expect(detectRegion()).toBe('US')
+  })
+
+  it('is unchanged from today (CO) for a bare "es" navigator language, the pre-region-axis baseline', () => {
+    vi.stubGlobal('navigator', { ...navigator, languages: undefined, language: 'es' })
+    expect(detectRegion()).toBe('CO')
   })
 })

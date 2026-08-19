@@ -8,7 +8,7 @@ export const SCHEMA_VERSION = 1
 
 // --- tipos base / enums ---
 
-export type Moneda = 'COP' | 'USD' // la UI fija "COP" por ahora; el campo ya soporta multimoneda
+export type Moneda = 'COP' | 'USD' | 'MXN' | 'ARS' | 'BRL' | 'PEN' // la moneda inicial se deriva de la región del dispositivo (src/lib/i18n/regionCurrency.ts); el campo ya soporta multimoneda
 export type TipoMovimiento = 'ingreso' | 'gasto'
 export type Metodo = 'efectivo' | 'debito' | 'credito' | 'banco'
 

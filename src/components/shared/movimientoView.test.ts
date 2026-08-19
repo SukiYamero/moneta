@@ -20,12 +20,16 @@ describe('getMovimientoVisual', () => {
 })
 
 describe('formatMonto', () => {
-  it('formats a positive amount as COP currency', () => {
-    expect(formatMonto(1200, 'COP', 'es-CO')).toContain('1.200')
+  it('formats a positive amount as COP currency, narrowSymbol only (never the ISO code)', () => {
+    const text = formatMonto(1200, 'COP', 'es-CO')
+    expect(text).toContain('1.200')
+    expect(text).not.toContain('COP')
   })
 
-  it('formats a positive amount as USD currency', () => {
-    expect(formatMonto(1200, 'USD', 'es-CO')).toMatch(/US\$|\$/)
+  it('formats a positive amount as USD currency, narrowSymbol only (never the ISO code)', () => {
+    const text = formatMonto(1200, 'USD', 'es-CO')
+    expect(text).toContain('$')
+    expect(text).not.toContain('USD')
   })
 
   it('reuses one Intl.NumberFormat per currency instead of constructing one per call', () => {
@@ -68,23 +72,82 @@ describe('formatMonto', () => {
     expect(constructorSpy).not.toHaveBeenCalled()
     constructorSpy.mockRestore()
   })
+
+  // specs.md §10.7: a negative amount (e.g. totals.balance) attaches its
+  // sign to the number, not to the currency — "$ -12.000,00", not
+  // "-$ 12.000,00" (Intl's own default). Checked via formatToParts-level
+  // reasoning (the sign must immediately precede the first digit) across
+  // several locales whose symbol placement differs (R$ leads in pt-BR,
+  // trails in es-CO/en-US) rather than a single hardcoded string.
+  it('attaches a negative sign to the number, not to the currency, across locales', () => {
+    const cases: Array<[locale: string, moneda: 'COP' | 'USD' | 'BRL']> = [
+      ['es-CO', 'COP'],
+      ['en-US', 'USD'],
+      ['pt-BR', 'BRL'],
+    ]
+    for (const [locale, moneda] of cases) {
+      const text = formatMonto(-12000, moneda, locale)
+      expect(text.startsWith('-')).toBe(false)
+      expect(text).toMatch(/-\d/)
+    }
+  })
+
+  it('shows no sign at all for a positive amount', () => {
+    expect(formatMonto(12000, 'COP', 'es-CO')).not.toContain('-')
+    expect(formatMonto(12000, 'COP', 'es-CO')).not.toContain('+')
+  })
 })
 
 describe('getMovimientoAmountView', () => {
-  it('prefixes income with + and colors it success', () => {
-    const view = getMovimientoAmountView({ monto: 50, moneda: 'COP', tipo: 'ingreso' }, 'es-CO')
-    expect(view.text.startsWith('+')).toBe(true)
-    expect(view.colorClass).toBe('text-success')
+  // Same formatToParts-attached-sign rule as formatMonto, but always shown
+  // (income always reads "+", expense always reads "-") — verified across
+  // locales with different symbol placement, not one hardcoded string.
+  it('attaches + to the number for income, across locales, and colors it success', () => {
+    const cases: Array<[locale: string, moneda: 'COP' | 'USD' | 'BRL']> = [
+      ['es-CO', 'COP'],
+      ['en-US', 'USD'],
+      ['pt-BR', 'BRL'],
+    ]
+    for (const [locale, moneda] of cases) {
+      const view = getMovimientoAmountView({ monto: 50, moneda, tipo: 'ingreso' }, locale)
+      expect(view.text.startsWith('+')).toBe(false)
+      expect(view.text).toMatch(/\+\d/)
+      expect(view.colorClass).toBe('text-success')
+    }
   })
 
-  it('prefixes expense with - and colors it foreground', () => {
-    const view = getMovimientoAmountView({ monto: 50, moneda: 'COP', tipo: 'gasto' }, 'es-CO')
-    expect(view.text.startsWith('-')).toBe(true)
-    expect(view.colorClass).toBe('text-foreground')
+  it('attaches - to the number for expense, across locales, and colors it foreground', () => {
+    const cases: Array<[locale: string, moneda: 'COP' | 'USD' | 'BRL']> = [
+      ['es-CO', 'COP'],
+      ['en-US', 'USD'],
+      ['pt-BR', 'BRL'],
+    ]
+    for (const [locale, moneda] of cases) {
+      const view = getMovimientoAmountView({ monto: 50, moneda, tipo: 'gasto' }, locale)
+      expect(view.text.startsWith('-')).toBe(false)
+      expect(view.text).toMatch(/-\d/)
+      expect(view.colorClass).toBe('text-foreground')
+    }
   })
 
   it('forwards an explicit locale through to formatMonto', () => {
     const view = getMovimientoAmountView({ monto: 1200, moneda: 'USD', tipo: 'ingreso' }, 'en-US')
     expect(view.text).toContain('1,200')
+  })
+
+  it('never renders the ISO currency code, only narrowSymbol', () => {
+    const view = getMovimientoAmountView({ monto: 1200, moneda: 'USD', tipo: 'ingreso' }, 'en-US')
+    expect(view.text).not.toContain('USD')
+  })
+
+  it('reuses one signed Intl.NumberFormat per (locale, currency) pair across repeat calls', () => {
+    getMovimientoAmountView({ monto: 500, moneda: 'PEN', tipo: 'ingreso' }, 'es-CO') // warm the cache
+    const constructorSpy = vi.spyOn(Intl, 'NumberFormat')
+
+    getMovimientoAmountView({ monto: 1000, moneda: 'PEN', tipo: 'ingreso' }, 'es-CO')
+    getMovimientoAmountView({ monto: 2000, moneda: 'PEN', tipo: 'gasto' }, 'es-CO')
+
+    expect(constructorSpy).not.toHaveBeenCalled()
+    constructorSpy.mockRestore()
   })
 })
