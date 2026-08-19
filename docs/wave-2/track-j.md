@@ -38,10 +38,50 @@
   existing in-memory behavior (`driveOptIn: 'connected'` was already set
   only after a successful `bootstrap()`); persistence just rides the same
   point.
+- **A persisted `'connected'` decision now silently re-acquires `drive` on a
+  fresh session, not just the decision.** Caught by the operator's review,
+  CONFIRMED by tracing the code: `drive` itself is never persisted
+  (`specs.md` §4 — derived/session state), and `authenticate()`'s token is
+  identity-only (`specs.md` §5, incremental authorization). Before this fix,
+  a device that connected yesterday would resolve `driveOptIn: 'connected'`
+  on today's cold start while `drive` stayed `null` and the session token
+  carried no Drive scope — and, because the whole point of this track is
+  that the permission screen stops reappearing, there was no longer any UI
+  path back to a working state. `reacquireDriveIfNeeded()` in `authStore.ts`
+  closes this: guarded on `drive === null` (not on the decision alone, so a
+  mid-session re-lock/unlock — `drive` already populated — never re-runs
+  `bootstrap()`), it silently repeats `connectDrive()`'s own
+  `requestAccessToken('', DRIVE_SCOPES)` + `bootstrap()` pair (factored out
+  as `requestDriveSession()`, shared by both). Same best-effort posture as
+  `syncLockedSession`: never throws, never sets `driveError` (that surface
+  is for `connectDrive()`'s own user-initiated screen,
+  `docs/error-handling.md` §7), and a revoked grant fails silently rather
+  than re-prompting (`prompt: ''`, `specs.md` §5) — recoverable later via
+  Track G's Profile row. Wired into all three session-landing paths
+  (`login`/`restore`/`hydrate`), matching where `resolveDriveOptIn()` already
+  runs; each path has a passing/failing test.
 - **Clearing: both `authStore.logout()` and `pinLock.resetVault()` clear the
   persisted Drive decision directly**, not just one of them relying on the
   other being called first. See "Spec deltas" for why this is a deliberate
   deviation from the brief's `pinLock.ts` "(import path only)" restriction.
+- **The decision is device-scoped, not account-scoped — deliberately, not by
+  omission.** It would be possible to key the stored decision by the
+  account's email/sub and preserve it across a same-account logout/login on
+  the same device, at the cost of also having to compare it against
+  whichever account signs in next. Considered and rejected: `logout()`
+  cannot know in advance which account (same or different) will sign in
+  after it, so an account-keyed store still has to answer "does the next
+  login's account match the one this decision was recorded for?" — the
+  exact comparison a device-scoped store avoids by clearing unconditionally
+  on logout. The cost of getting the comparison wrong is asymmetric: a false
+  match hands a different Google account someone else's Drive-connected
+  state (silently wrong, security-adjacent); a false non-match just re-asks
+  a returning same-account user once (annoying, self-correcting the moment
+  they answer). Given the asymmetry, unconditional clearing — the direction
+  that can only ever err towards "ask again," never towards "assume
+  connected for the wrong account" — is the safer default, and this app
+  has no multi-account-on-one-device use case that would justify the added
+  complexity of getting the comparison right.
 
 ## Backlog / deferred (for specs.md §12)
 
@@ -130,9 +170,56 @@ that already answered`) that proves this at the component boundary: a
    track doesn't own) — my read is that's worse, since it re-introduces the
    same reliance-on-pairing problem I just rejected, just one file over.
 
+## Sweep
+
+**Confirmed clearing sweep (original pass):** `resetVault()`'s only two call
+sites (`lockStore.ts`'s lockout branch, `reset()`) both already called
+`logout()` immediately after; both now also get direct clearing via
+`resetVault()` itself, per the "Spec deltas" §2 reasoning above. Nothing
+else in the codebase calls `resetVault()` or a logout-equivalent action.
+
+**Operator review round — additional sweep, "does anything else read
+`driveOptIn` as a proxy for Drive being usable":**
+
+```
+$ rg "driveOptIn" src --include='*.ts' --include='*.tsx' -l | grep -v '\.test\.'
+src/features/auth/RequireAuth.tsx
+src/lib/authStore.ts
+src/lib/deviceStore.ts
+```
+
+- `src/lib/authStore.ts`, `src/lib/deviceStore.ts` — the field's own owner;
+  not a "second consumer" in the sense being swept for.
+- `src/features/auth/RequireAuth.tsx` — the only outside consumer, and it
+  reads `driveOptIn` correctly: `driveOptIn === 'pending'` gates whether to
+  show `DrivePermissionScreen`, which is exactly what the field means (has
+  this device been asked). It never treats `driveOptIn === 'connected'` as
+  "Drive is usable now" — it just stops showing the prompt.
+
+Separately, `rg '\.drive\b' src --include='*.ts' --include='*.tsx' -l | grep -v '\.test\.'`
+returns only `src/lib/authStore.ts` itself (the `set({ drive: ... })` call
+inside `reacquireDriveIfNeeded`) — confirming `docs/wave-2-plan.md` §3.2:
+no Drive-backed `Repo` or any other consumer reads `drive` yet. **Nothing
+else found** in either direction. The risk the operator named — Wave 3's
+Drive repo reading `driveOptIn === 'connected'` and assuming it can write —
+is now closed by construction rather than by discipline: `reacquireDriveIfNeeded`
+means `driveOptIn === 'connected'` implies a _best-effort attempt_ to also
+have `drive` populated on every fresh session, and `drive !== null` (not
+`driveOptIn`) is the field Wave 3 must actually gate writes on. Said
+explicitly here so whoever builds `repo.drive.ts` cannot miss it, per the
+operator's instruction — this is now load-bearing guidance, not just a
+sweep result.
+
 ## Open questions for the operator
 
-None blocking. The two items above (RequireAuth's architecture, and the
-`pinLock.ts` scope deviation) are both implemented and tested as described,
-not left half-done — flagging them because they diverge from the literal
-brief, not because they're unresolved.
+None blocking. The three items above (RequireAuth's architecture, the
+`pinLock.ts` scope deviation, and the device- vs. account-scoping choice)
+are all implemented/argued and tested as described, not left half-done —
+flagging them because they diverge from the literal brief or because the
+reasoning is worth a second pair of eyes, not because they're unresolved.
+
+**Resolved from the operator's review round (2026-08-19):** the
+`driveOptIn === 'connected'` / `drive === null` divergence on a persisted
+decision was CONFIRMED and fixed via `reacquireDriveIfNeeded()` — see
+"Decisions made" above for the fix and "Sweep" above for the follow-up
+sweep the operator additionally requested.
