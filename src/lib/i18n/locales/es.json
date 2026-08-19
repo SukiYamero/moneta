@@ -40,8 +40,21 @@
     "dismiss": "Descartar",
     "repeatSuffix": "×{{count}}"
   },
-  "nav": {},
+  "nav": {
+    "label": "Navegación principal",
+    "home": "Inicio",
+    "history": "Historial",
+    "search": "Buscar",
+    "profile": "Perfil",
+    "add": "Agregar movimiento"
+  },
   "home": {},
-  "search": {},
-  "history": {}
+  "search": {
+    "title": "Buscar",
+    "placeholder": "Esta pantalla está en construcción."
+  },
+  "history": {
+    "title": "Historial",
+    "placeholder": "Esta pantalla está en construcción."
+  }
 }

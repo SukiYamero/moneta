@@ -40,8 +40,21 @@
     "dismiss": "Dismiss",
     "repeatSuffix": "×{{count}}"
   },
-  "nav": {},
+  "nav": {
+    "label": "Main navigation",
+    "home": "Home",
+    "history": "History",
+    "search": "Search",
+    "profile": "Profile",
+    "add": "Add movement"
+  },
   "home": {},
-  "search": {},
-  "history": {}
+  "search": {
+    "title": "Search",
+    "placeholder": "This screen is under construction."
+  },
+  "history": {
+    "title": "History",
+    "placeholder": "This screen is under construction."
+  }
 }

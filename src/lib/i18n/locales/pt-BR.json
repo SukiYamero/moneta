@@ -40,8 +40,21 @@
     "dismiss": "Dispensar",
     "repeatSuffix": "×{{count}}"
   },
-  "nav": {},
+  "nav": {
+    "label": "Navegação principal",
+    "home": "Início",
+    "history": "Histórico",
+    "search": "Pesquisar",
+    "profile": "Perfil",
+    "add": "Adicionar movimento"
+  },
   "home": {},
-  "search": {},
-  "history": {}
+  "search": {
+    "title": "Pesquisar",
+    "placeholder": "Esta tela está em construção."
+  },
+  "history": {
+    "title": "Histórico",
+    "placeholder": "Esta tela está em construção."
+  }
 }
