@@ -15,6 +15,7 @@ import {
   startOfWeek,
   startOfYear,
 } from 'date-fns'
+import type { Interval } from 'date-fns'
 import type { Movimiento, Periodo } from '@/lib/schema'
 
 export interface DateRange {
@@ -148,26 +149,36 @@ const GRANULARITY_FOR_PERIODO: Record<Periodo, BucketGranularity> = {
   anio: 'month',
 }
 
+// Value→value dispatch on granularity, as a Record rather than an if-chain —
+// same pattern as RANGE_FOR_PERIODO above (AGENTS.md: lookup table, never
+// switch/if-else, even when the branches' bodies take different shapes).
+const BUCKET_STARTS_FOR: Record<
+  BucketGranularity,
+  (interval: Interval, primerDiaSemana: 0 | 1) => Date[]
+> = {
+  month: (interval) => eachMonthOfInterval(interval),
+  week: (interval, primerDiaSemana) =>
+    eachWeekOfInterval(interval, { weekStartsOn: primerDiaSemana }),
+  day: (interval) => eachDayOfInterval(interval),
+}
+
 const bucketStartsFor = (
   granularity: BucketGranularity,
   range: DateRange,
   primerDiaSemana: 0 | 1,
 ): Date[] => {
   const interval = { start: toLocalDate(range.from), end: toLocalDate(range.to) }
-  if (granularity === 'month') return eachMonthOfInterval(interval)
-  if (granularity === 'week') return eachWeekOfInterval(interval, { weekStartsOn: primerDiaSemana })
-  return eachDayOfInterval(interval)
+  return BUCKET_STARTS_FOR[granularity](interval, primerDiaSemana)
 }
 
-const bucketEndFor = (
-  granularity: BucketGranularity,
-  start: Date,
-  primerDiaSemana: 0 | 1,
-): Date => {
-  if (granularity === 'month') return endOfMonth(start)
-  if (granularity === 'week') return endOfWeek(start, { weekStartsOn: primerDiaSemana })
-  return start
+const BUCKET_END_FOR: Record<BucketGranularity, (start: Date, primerDiaSemana: 0 | 1) => Date> = {
+  month: (start) => endOfMonth(start),
+  week: (start, primerDiaSemana) => endOfWeek(start, { weekStartsOn: primerDiaSemana }),
+  day: (start) => start,
 }
+
+const bucketEndFor = (granularity: BucketGranularity, start: Date, primerDiaSemana: 0 | 1): Date =>
+  BUCKET_END_FOR[granularity](start, primerDiaSemana)
 
 /**
  * One bucket per sub-period covering `range`, including empty buckets (a
@@ -180,13 +191,19 @@ const bucketEndFor = (
  * after `range.to` (e.g. August's first ISO week starts in late July). Every
  * bucket is clamped to `range` on both ends — both what it counts and its
  * `bucketStart` label — so `sum(series(...).ingresos) ===
- * totals(filterByRange(movimientos, range)).ingresos` always holds (and the
- * same for `gastos`). This is the guarantee Home's chart bars and Home's own
- * balance card (or History's total, for the same period) depend on to never
- * disagree. Clamping is applied unconditionally, not only for the `mes`/
- * `week` case that can currently overflow: 'day' and 'month' granularities
- * only stay aligned today because `periodRange` happens to hand them an
- * already-aligned range, which is an accident of the current
+ * totals(filterByRange(movimientos, range)).ingresos` holds to the cent (and
+ * the same for `gastos`). This is the guarantee Home's chart bars and Home's
+ * own balance card (or History's total, for the same period) depend on to
+ * never visibly disagree. "To the cent," not bit-for-bit: each bucket's own
+ * total is exact, but summing several already-divided bucket floats can
+ * differ from a single grand-total division by float-addition noise on the
+ * order of 1e-15 (e.g. `0.01 + 0.05 !== 0.06` in IEEE754) — invisible at the
+ * 2-decimal display precision every screen actually renders, but not bit-
+ * exact, so don't compare it with `toBe` in a test that sums multiple
+ * same-`tipo` buckets. Clamping is applied unconditionally, not only for the
+ * `mes`/`week` case that can currently overflow: 'day' and 'month'
+ * granularities only stay aligned today because `periodRange` happens to
+ * hand them an already-aligned range, which is an accident of the current
  * periodo↔granularity pairing, not a property the bucket math can rely on.
  */
 export const series = (
