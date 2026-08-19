@@ -25,10 +25,13 @@ const SUBTAG_LOCALE: Record<string, SupportedLocale> = {
 // subtag match at all is skipped in favor of the next preference; if none
 // of them match anything, default to `en`.
 export const detectLocale = (
-  // `navigator.languages` is undefined on some browsers/webviews (only the
-  // singular `navigator.language` is guaranteed) — default to `[]` so this
-  // still returns the `en` fallback instead of throwing on `for...of`.
-  languages: readonly string[] = navigator.languages ?? [],
+  // `navigator.languages` is undefined on some browsers/webviews — only the
+  // singular `navigator.language` is guaranteed there. Degrade one step at a
+  // time (languages -> single language -> []) rather than jumping straight
+  // to `en`: a webview whose `navigator.language` is `es-AR` should still
+  // resolve to `es-AR`, not lose that information to the `en` last resort.
+  languages: readonly string[] = navigator.languages ??
+    (navigator.language ? [navigator.language] : []),
 ): SupportedLocale => {
   for (const tag of languages) {
     const lower = tag.toLowerCase()

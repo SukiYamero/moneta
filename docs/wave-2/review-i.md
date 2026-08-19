@@ -27,18 +27,47 @@ initialization before any UI renders — not a degraded screen, a blank app.
 
 Reproduced with a scratch test (`vi.stubGlobal('navigator', { ...navigator,
 languages: undefined })`) before touching the fix — it threw exactly as
-predicted. Added the case permanently to `detectLocale.test.ts` ("falls
-back to en instead of throwing when navigator.languages is missing"),
-watched it fail with the same `TypeError`, then fixed `detectLocale.ts`:
+predicted.
 
-```ts
-languages: readonly string[] = navigator.languages ?? [],
+**First fix was wrong — operator caught it.** My first pass defaulted
+straight to `[]`, which silently sent every such user to `en` even when
+`navigator.language` (the singular, guaranteed field my own comment named)
+carried real information — e.g. a webview with `navigator.language ===
+'es-AR'` would get English, no crash but the wrong answer, silently. The
+operator required a one-step-at-a-time degradation instead. Added the two
+missing cases to `detectLocale.test.ts` first and watched the
+`navigator.language`-degradation one fail against my first fix:
+
+```
+× degrades to navigator.language, not straight to en, when navigator.languages is missing
+  AssertionError: expected 'en' to be 'es-AR'
 ```
 
-Re-ran: 11/11 pass. This is the only default-parameter read of a global in
+Then fixed `detectLocale.ts` to degrade in order — `navigator.languages` →
+`[navigator.language]` → `[]` — so `en` stays the true last resort:
+
+```ts
+languages: readonly string[] = navigator.languages ??
+  (navigator.language ? [navigator.language] : []),
+```
+
+Re-ran: 12/12 pass (`falls back to en for an empty languages list` still
+covers the fully-empty case; the two new tests cover
+`navigator.language`-only degrading correctly, and both being absent still
+landing on `en`). This is the only default-parameter read of a global in
 `src/lib/i18n/**`, and `detectLocale.ts` is the only place in `src/` that
-reads `navigator.languages` (confirmed via `rg`) — nothing else has the
-same shape.
+reads `navigator.languages`/`navigator.language` (confirmed via `rg`) —
+nothing else has the same shape.
+
+**Does `navigator` itself being absent matter here?** No — checked, not
+assumed. `vite.config.ts` runs tests under `environment: 'jsdom'`
+(`vite.config.ts:56`), which always provides a `navigator` global, and
+`src/lib/i18n/index.ts` is only ever imported from `src/main.tsx` — a
+browser entry point, no SSR/Node-only code path anywhere in this app
+(AGENTS.md: no own backend, offline-first PWA). So the bare identifier
+`navigator` is never undefined in any context this module actually runs
+in; only its `.languages`/`.language` properties can be missing, which is
+exactly what the fix above now handles.
 
 Every other edge case in the brief was already handled correctly and I
 could not break it: empty `navigator.languages` (falls back to `en`,
@@ -255,7 +284,7 @@ $ sh scripts/no-raw-px.sh
 $ vitest run
 
  Test Files  61 passed (61)
-      Tests  578 passed (578)
+      Tests  579 passed (579)
 ```
 
 (The `button.tsx` warning is pre-existing and unrelated to this track, per
