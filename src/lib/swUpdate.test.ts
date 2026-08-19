@@ -130,11 +130,13 @@ describe('createSwUpdateController', () => {
       expect(update).toHaveBeenCalledTimes(2)
     })
 
-    it('a failed periodic check is swallowed — offline is not an error (specs.md §10.16)', async () => {
+    it('a failed periodic check is swallowed from the user, but still logged (specs.md §10.16, docs/error-handling.md §2)', async () => {
       const { createSwUpdateController } = await import('@/lib/swUpdate')
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
       const fake = createFakeRegisterSW()
       createSwUpdateController(fake.registerSW)
-      const update = vi.fn(() => Promise.reject(new Error('offline')))
+      const offlineError = new Error('offline')
+      const update = vi.fn(() => Promise.reject(offlineError))
 
       fake.options().onRegisteredSW?.('sw.js', fakeRegistration(update))
 
@@ -142,6 +144,8 @@ describe('createSwUpdateController', () => {
 
       expect(update).toHaveBeenCalledOnce()
       expect(toast.error).not.toHaveBeenCalled()
+      expect(warnSpy).toHaveBeenCalledWith('sw update: periodic check failed', offlineError)
+      warnSpy.mockRestore()
     })
 
     it('does not schedule a check when no registration is handed back', async () => {
@@ -154,6 +158,36 @@ describe('createSwUpdateController', () => {
 
       expect(setIntervalSpy).not.toHaveBeenCalled()
     })
+
+    it('clears the periodic check on a genuine unload (pagehide, not persisted for bfcache)', async () => {
+      const { createSwUpdateController } = await import('@/lib/swUpdate')
+      const fake = createFakeRegisterSW()
+      createSwUpdateController(fake.registerSW)
+      const update = vi.fn(async () => {})
+
+      fake.options().onRegisteredSW?.('sw.js', fakeRegistration(update))
+      window.dispatchEvent(new Event('pagehide'))
+
+      await vi.advanceTimersByTimeAsync(60 * 60 * 1000)
+
+      expect(update).not.toHaveBeenCalled()
+    })
+
+    it('keeps the periodic check alive across a bfcache-eligible pagehide (event.persisted)', async () => {
+      const { createSwUpdateController } = await import('@/lib/swUpdate')
+      const fake = createFakeRegisterSW()
+      createSwUpdateController(fake.registerSW)
+      const update = vi.fn(async () => {})
+
+      fake.options().onRegisteredSW?.('sw.js', fakeRegistration(update))
+      const persistedPagehide = new Event('pagehide')
+      Object.defineProperty(persistedPagehide, 'persisted', { value: true })
+      window.dispatchEvent(persistedPagehide)
+
+      await vi.advanceTimersByTimeAsync(60 * 60 * 1000)
+
+      expect(update).toHaveBeenCalledOnce()
+    })
   })
 })
 
@@ -164,9 +198,11 @@ describe('initServiceWorkerUpdates / applyServiceWorkerUpdate (the real virtual 
     expect(() => initServiceWorkerUpdates()).not.toThrow()
   })
 
-  it('applying before (or without) a registered controller resolves rather than throwing', async () => {
+  it('applying before a registration exists rejects instead of resolving as if it had succeeded', async () => {
     vi.resetModules()
     const { applyServiceWorkerUpdate } = await import('@/lib/swUpdate')
-    await expect(applyServiceWorkerUpdate()).resolves.toBeUndefined()
+    await expect(applyServiceWorkerUpdate()).rejects.toThrow(
+      'applyServiceWorkerUpdate called before a service worker was registered',
+    )
   })
 })

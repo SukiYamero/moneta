@@ -60,17 +60,28 @@ export const createSwUpdateController = (registerSW: RegisterSWFn): SwUpdateCont
       if (!registration) return
       const intervalId = setInterval(() => {
         // A failed check is routine (offline, a captive portal, a transient
-        // fetch failure) and self-heals on the next interval — the "expected
-        // negative outcome with its own separate recovery path" exception
-        // docs/error-handling.md §2 carves out, same shape as
-        // authStore.restore()'s silent re-auth fallback. Not a user-facing
-        // error (specs.md §10.16: "an update that arrives while offline").
-        registration.update().catch(() => {})
+        // fetch failure) and self-heals on the next interval, so it isn't
+        // toasted — not a user-facing error (specs.md §10.16: "an update
+        // that arrives while offline"). It's still logged, not swallowed
+        // silently: unlike authStore.restore()'s bare-catch precedent, a
+        // background poll has no separate user-triggered action that would
+        // ever surface a *persistently* broken check, so docs/error-handling.md
+        // §2's swallow floor (never a silent empty catch) applies here.
+        registration.update().catch((error: unknown) => {
+          console.warn('sw update: periodic check failed', error)
+        })
       }, PERIODIC_UPDATE_CHECK_MS)
       // Never outlive the tab (tests, and a page that never unloads cleanly
-      // otherwise leaking a repeating timer) — `beforeunload` is enough here
-      // since there's nothing to persist first.
-      window.addEventListener('beforeunload', () => clearInterval(intervalId))
+      // otherwise leaking a repeating timer). `pagehide` over `beforeunload`:
+      // the latter is unreliable on mobile Safari and, on browsers that
+      // support bfcache, opting into it disqualifies the page from being
+      // cached. A bfcache-eligible pagehide (`event.persisted`) freezes this
+      // timer rather than destroying it — the browser resumes it on revival
+      // — so only a genuine unload should clear it.
+      window.addEventListener('pagehide', (event) => {
+        if (event.persisted) return
+        clearInterval(intervalId)
+      })
     },
     onRegisterError: (error) => {
       // Unlike the periodic check above, a registration failure isn't
@@ -108,6 +119,19 @@ export const initServiceWorkerUpdates = (): void => {
  * return value through — because nothing before this in the module graph
  * has a reference to the controller (see docs/wave-3/w.md for why no such
  * affordance is wired to it yet).
+ *
+ * Rejects rather than quietly resolving when no controller is registered.
+ * This is the exact action a user deliberately asked for; resolving as if
+ * it had succeeded would be an error disguised as a legitimate no-op result
+ * (docs/error-handling.md §4 — "never return a success-shaped value for a
+ * failure"). Reachable only by a caller bug (calling before
+ * `initServiceWorkerUpdates` ran), never by routine runtime state — by
+ * construction, the only trigger for this call is a tap on a toast action
+ * that itself only exists after `onNeedRefresh` fired, which cannot happen
+ * before `controller` is assigned.
  */
 export const applyServiceWorkerUpdate = (): Promise<void> =>
-  controller?.applyUpdate() ?? Promise.resolve()
+  controller?.applyUpdate() ??
+  Promise.reject(
+    new Error('sw update: applyServiceWorkerUpdate called before a service worker was registered'),
+  )
