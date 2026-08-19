@@ -277,6 +277,57 @@ Full design: `docs/superpowers/specs/2026-06-26-pin-lock-design.md`.
 - **Out of scope (own spec/track):** the local (dexie) implementation, the
   Drive-backed implementation, the movimientos UI.
 
+### 10.5 Shared UI kit + fake repo
+
+- **Goal:** the foundational, cross-feature component layer + a shared
+  in-memory `Repo` implementation every Wave 2 screen builds on, so
+  `BottomSheet`/`MovimientoRow`/etc. and their look-and-feel are defined
+  once instead of per-screen, and every screen reads/writes the same
+  fake data (a write from one screen must show up on another immediately).
+- **User story:** as a developer building a screen (Home, Search, Movement
+  sheet, Tags, Groups…), I compose it from `src/components/shared/**`
+  and read/write through the shared `fakeRepo` instance instead of
+  inventing my own mock data or re-deriving category → icon/color myself.
+- **UI:** `src/components/shared/**` — `BottomSheet`, `CenterModal`,
+  `IconAvatar`, `MovimientoRow` (+ `movimientoView.ts`, the one place
+  category → icon/tint/color and signed-amount formatting live), `TagChip`,
+  `DateChipPicker`, `SegmentedControl`, `Toggle`, `InfoButton`. Dev-only
+  gallery at `src/routes/Kit.tsx` (`/kit`, gated on `import.meta.env.DEV`)
+  renders every component/variant for visual verification.
+- **Data touched:** `src/lib/repo.fake.ts` — `createFakeRepo(options?)`
+  (fresh isolated instance, e.g. for tests) and a shared singleton
+  `fakeRepo` export (the one every screen should import). Implements
+  `Repo` from `src/lib/repo.ts` exactly as that interface exists today —
+  no changes to the port's shape. Seeded with several months of `Movimiento`
+  (extends `CONFIG_SEMILLA.categorias` with the design's demo categories —
+  Comida, Transporte, Compras, Ocio, Salud, Hogar, Regalo, Freelance — so
+  `movimientoView.ts` has real variety to map) and a handful of `Activo`.
+- **Edge cases:** empty store → `list()` returns `{ items: [] }`; `get()` on
+  a missing id → `undefined`; `update`/`remove` on a missing id →
+  `RepoError('not_found')`; `list()` honors `dateFrom`/`dateTo`/`seccion`/
+  `sortBy`/`sortDir`/`limit`/`cursor` together (index-encoded cursor,
+  fine for an in-memory store); an unknown/custom category in
+  `movimientoView.getMovimientoVisual` falls back to a `tipo`-based
+  icon/tint instead of throwing.
+- **Done when:** every component has a colocated `*.test.tsx`
+  (`user-event`, not `fireEvent`), is keyboard-reachable with ≥44px touch
+  targets and sensible `role`/`aria`; `repo.fake.ts` has `repo.fake.test.ts`
+  covering the edge cases above; `bun run check` is green; `/kit` renders
+  every component/variant, verified at a ~390×844 viewport.
+
+**Decisions made while building this (see §11 for the dated entries):**
+BottomSheet/CenterModal share one `useOverlay` hook (Escape, focus trap,
+body-scroll lock, focus restore — not in the public barrel, internal to the
+two shells); `IconAvatarTint` maps onto the existing `chart-1..5` +
+`success`/`danger`/`info`/`neutral` tokens instead of new hex values;
+`DateChipPicker` takes `firstDayOfWeek` as a prop rather than reading
+`Config.preferencias.primerDiaSemana` itself, keeping it repo-agnostic —
+the calling screen reads the preference and passes it down;
+`RepoErrorCode` gained an `invalid_input` case (coordinated with the
+operator, since `repo.ts` is Track A's file) so the fake repo can reject a
+non-positive `monto` the same way a real implementation should, instead of
+silently disagreeing with schema.ts's "monto always positive" invariant.
+
 ## 11. Decisions log
 
 - 2026-06-25 — Package manager: **bun**. Node: **24 LTS** (`.nvmrc`).
@@ -460,6 +511,36 @@ Full design: `docs/superpowers/specs/2026-06-26-pin-lock-design.md`.
   `#0c0d10`. Reading `Config.preferencias.tema` to switch themes at runtime
   stays deferred until a light design exists (Track G, settings).
 
+- 2026-08-18 — **Shared UI kit + fake repo (Track D, §10.5).** Built
+  `src/components/shared/**` (`BottomSheet`, `CenterModal`, `IconAvatar`,
+  `MovimientoRow`, `TagChip`, `DateChipPicker`, `SegmentedControl`,
+  `Toggle`, `InfoButton`) and `src/lib/repo.fake.ts`. `RepoErrorCode`
+  (`src/lib/repo.ts`) gained an `invalid_input` case — approved by the
+  operator mid-track since `repo.ts` is Track A's owned file — so the fake
+  repo can reject a non-positive `monto` (schema.ts's mandatory "monto
+  always positive" convention) the same way any real implementation
+  should, instead of a fake that silently disagrees with the real repo.
+- 2026-08-18 — **`IconAvatarTint` reuses the existing chart/status tokens,
+  no new hex.** Category color is presentation (`movimientoView.ts`), not a
+  new brand color — `emerald/blue/purple/rose/amber` map onto
+  `--color-chart-1..5`, plus `success/danger/info/neutral` for status-driven
+  tints. Keeps every category color traceable to `src/styles/index.css`
+  instead of a parallel palette.
+- 2026-08-18 — **`DateChipPicker` takes `firstDayOfWeek` as a prop, not a
+  `Config` read.** Foundational `src/components/shared/**` components stay
+  pure/presentational with no repo/store dependency; the calling screen
+  reads `Config.preferencias.primerDiaSemana` (via the repo) and passes it
+  down. Keeps the component testable in isolation and reusable outside the
+  app's own data layer.
+- 2026-08-18 — **Fake-repo seed data uses deterministic string ids
+  (`mov_seed_0`, …), not `crypto.randomUUID()`.** Deviates from schema.ts's
+  "id = app-generated uuid" convention on purpose: the seed must be
+  reproducible across runs/tests (no `Math.random()`, no bare `new Date()`
+  — dates derive from an injectable `today`), and `randomUUID()` is
+  incompatible with that by definition. Only applies to the fixed seed rows;
+  anything added through the fake repo at runtime should still get a real
+  uuid from the caller.
+
 ## 12. Backlog (pending verification / deferred work)
 
 - ✅ **Login verified end-to-end (§10.1)** — 2026-07-02. Real OAuth ran against Google
@@ -534,11 +615,11 @@ table against `git worktree list` at the start of any parallel session and
 remove anything marked done (or orphaned: on disk but not in this table, or in
 this table but the branch is already merged/gone).
 
-| Created    | Track / task    | Path | Branch | Status | Notes                                                                                 |
-| ---------- | --------------- | ---- | ------ | ------ | ------------------------------------------------------------------------------------- |
-| 2026-08-18 | Wave 1 · Track A | `../moneta-wt/a-repo-dexie`  | `track/a-repo-dexie`  | active | Dexie-backed `Repo` implementation (§10.3). No dev server.        |
+| Created    | Track / task     | Path                         | Branch                | Status | Notes                                                                      |
+| ---------- | ---------------- | ---------------------------- | --------------------- | ------ | -------------------------------------------------------------------------- |
+| 2026-08-18 | Wave 1 · Track A | `../moneta-wt/a-repo-dexie`  | `track/a-repo-dexie`  | active | Dexie-backed `Repo` implementation (§10.3). No dev server.                 |
 | 2026-08-18 | Wave 1 · Track B | `../moneta-wt/b-drive-optin` | `track/b-drive-optin` | active | Welcome + Drive-permission screens, `updateSession` wiring. Dev port 5175. |
-| 2026-08-18 | Wave 1 · Track D | `../moneta-wt/d-ui-kit`      | `track/d-ui-kit`      | active | Shared UI kit + `repo.fake.ts`. Dev port 5174.                     |
+| 2026-08-18 | Wave 1 · Track D | `../moneta-wt/d-ui-kit`      | `track/d-ui-kit`      | active | Shared UI kit + `repo.fake.ts`. Dev port 5174.                             |
 
 Status values: `active` (work in progress) → `merged, pending cleanup` (branch
 merged to `main`, worktree not yet removed) → row deleted once

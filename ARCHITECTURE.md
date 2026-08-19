@@ -13,6 +13,9 @@ file is just "where do I look", not "how does it work".
   [src/features/lock/README.md](src/features/lock/README.md).
 - `src/components/ui/` — shadcn/ui primitives. See
   [src/components/ui/README.md](src/components/ui/README.md).
+- `src/components/shared/` — cross-feature composed components
+  (`BottomSheet`, `MovimientoRow`, …) built on top of `ui/`. See
+  [src/components/shared/README.md](src/components/shared/README.md).
 - `src/routes/` — route-level page components wired in `src/router.tsx`. See
   [src/routes/README.md](src/routes/README.md).
 - `src/router.tsx` — the route table (React Router data router).

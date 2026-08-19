@@ -27,7 +27,12 @@ export interface CrudRepo<T extends { id: EntityId }> {
   removeMany(ids: EntityId[]): Promise<void>
 }
 
-export type RepoErrorCode = 'not_found' | 'schema_mismatch' | 'network' | 'unknown'
+export type RepoErrorCode =
+  | 'not_found'
+  | 'schema_mismatch'
+  | 'invalid_input'
+  | 'network'
+  | 'unknown'
 
 export class RepoError extends Error {
   readonly code: RepoErrorCode
