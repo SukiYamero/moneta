@@ -18,7 +18,13 @@ Onboarding screens and the route guard that sits in front of the app.
   fires when `authStore.restore()` finds the `deviceStore` set — never on a
   genuine first visit, and never right after a PIN lockout clears it
   (`pinLock.resetVault()` clears the marker and the persisted Drive decision too — `specs.md` §11,
-  2026-08-19). Guest entry: `WelcomeScreen`'s "Continuar como invitado"
+  2026-08-19). Offline (checked via `@/lib/networkStore`'s hint, no-lock
+  boot path only): `restore()` skips the network call entirely and lands on
+  `status: 'authenticated'` with `session`/`user` both `null` — nothing to
+  decrypt on this path (no PIN vault), so the device's own login marker is
+  the only evidence, and `RequireAuth`'s existing `status !== 'authenticated'`
+  gate already renders `children` for it with no code change needed here
+  (`specs.md` §10.11). Guest entry: `WelcomeScreen`'s "Continuar como invitado"
   button calls `authStore.continueAsGuest()`, landing on the distinct
   `status: 'guest'` (never `'authenticated'` with a synthesized user).
   `RequireAuth` checks `status === 'guest'` first and renders `children`

@@ -205,5 +205,14 @@
       "title": "Sin movimientos",
       "subtitle": "No hay registros en este periodo"
     }
+  },
+  "errors": {
+    "offline": {
+      "windowExpired": {
+        "title": "Reconectate para seguir agregando",
+        "body": "Llevás más de 7 horas sin conexión. Lo que registraste está guardado en este dispositivo; conectate a internet para sincronizarlo con tu cuenta."
+      },
+      "mutationRestricted": "Necesitás conexión para editar, borrar o cambiar la configuración. Podés seguir agregando movimientos sin conexión."
+    }
   }
 }

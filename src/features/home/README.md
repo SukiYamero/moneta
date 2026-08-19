@@ -16,9 +16,6 @@ Track L).
   `narrowDayLabel`/`monthYearLabel`/`buildWeekStripDays` take a required
   `Locale` parameter (no default) — `useHomeDashboard.ts` supplies it via
   `useLocaleFormatting()` (`docs/wave-2/track-m.md`).
-- `errorCopy.ts` — `RepoErrorCode` → translation key, exhaustive over the
-  closed union (a missing case is a compile error, no drift-guard test
-  needed, unlike the message-keyed auth/lock copy tables).
 - `usePrefersReducedMotion.ts` — `matchMedia` via `useSyncExternalStore`,
   degrading to `false` when `matchMedia` is unavailable (jsdom in tests).
   Gates the weekly chart's recharts animation; every CSS transition
@@ -45,7 +42,12 @@ Track L).
 - `HomeLoadingState.tsx` / `HomeEmptyState.tsx` / `HomeErrorState.tsx` —
   the three non-happy states `Home.tsx` switches on; the error state's
   retry button calls `useHomeDashboard`'s `retry` (re-invokes
-  `dataStore.load()`). `HomeLoadingState` is built on the shared
+  `dataStore.load()`). `HomeErrorState` maps its `RepoErrorCode` to copy via
+  `@/lib/errorCopy`'s `repoErrorCopyKey` — moved there from this directory
+  (`specs.md` §10.11) since the mapping was never Home-specific: Search and
+  History now use the same lookup, exhaustive over the closed union (a
+  missing case is a compile error, no drift-guard test needed, unlike the
+  message-keyed auth/lock copy tables). `HomeLoadingState` is built on the shared
   `Skeleton`/`SkeletonGroup` primitives (`src/components/shared/Skeleton.tsx`)
   rather than hand-rolled markup; `Home.tsx` gates it behind
   `usePendingDelay` so a fast load shows nothing at all.

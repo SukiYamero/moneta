@@ -205,5 +205,14 @@
       "title": "No movements",
       "subtitle": "There are no records in this period"
     }
+  },
+  "errors": {
+    "offline": {
+      "windowExpired": {
+        "title": "Reconnect to keep adding",
+        "body": "You've been offline for more than 7 hours. What you've recorded is saved on this device; connect to the internet to sync it with your account."
+      },
+      "mutationRestricted": "You need a connection to edit, delete, or change settings. You can keep adding movements offline."
+    }
   }
 }

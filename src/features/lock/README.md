@@ -11,13 +11,24 @@ PIN/biometric lock UI, layered on top of auth.
 - `LockScreen.tsx` — the unlock UI (PIN keypad + biometric button). The
   biometric button is gated on `lockStore.biometricEnrolled` (this vault's
   own enrollment), not `biometricAvailable` (platform capability) —
-  offering it to a PIN-only user always fails.
+  offering it to a PIN-only user always fails. A correct PIN/biometric with
+  no network now unlocks cleanly (`specs.md` §10.11): `authStore.hydrate()`
+  no longer gates entry on `fetchGoogleUser`, so `lockStore.resume()`'s own
+  `SESSION_RESTORE_ERROR` check is a defensive invariant rather than a live
+  path for the offline case — see `@/lib/lockStore`'s own comment on that
+  check.
 - `LockSettings.tsx` — enable/disable/re-lock controls. This is a **dev/test
   harness**, not the polished settings UI (`specs.md` §12) — the visual
   design is a separate, not-yet-written spec.
 - `errorCopy.ts` — maps a raw `pinLock.ts`/`lockStore.ts` error message to
   the Spanish, actionable copy `LockScreen`/`LockSettings`/`AppLock` actually
   render (`unlockErrorCopy`, `enableLockErrorCopy`) — never the raw message
-  (`docs/error-handling.md` §7).
+  (`docs/error-handling.md` §7). Still a hardcoded Spanish `Record`, not
+  routed through `@/lib/i18n` — the lock's full i18n retrofit stays out of
+  scope this track (`specs.md` §12).
 
-All screens read `useLockStore` (`@/lib/lockStore`) for state.
+All screens read `useLockStore` (`@/lib/lockStore`) for state. `useLockStore`
+also listens for `useAuthStore`'s logout transition (a module-scope
+`useAuthStore.subscribe` in `@/lib/lockStore`, not an import back into
+`authStore.ts`) and re-locks the vault when a same-tab `logout()` fires
+while the lock is enabled (`specs.md` §12 backlog).

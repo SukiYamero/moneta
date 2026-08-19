@@ -39,6 +39,11 @@ const writeAnchor = async (at: number): Promise<void> => {
 }
 
 export type MutationKind = 'create' | 'edit' | 'delete' | 'settings'
+// Copy for both reasons lives in the i18n table's top-level `errors.offline`
+// namespace (`mutationRestricted` / `windowExpired.{title,body}`, all four
+// locales) — written this track, not consumed yet: there is no write path
+// to surface it from until Track T (stage 2) builds one. Never implies data
+// loss (specs.md §10.11): what's on this device stays here either way.
 export type WriteRefusalReason = 'offline_mutation_restricted' | 'offline_window_expired'
 export type WriteDecision = { allowed: true } | { allowed: false; reason: WriteRefusalReason }
 
