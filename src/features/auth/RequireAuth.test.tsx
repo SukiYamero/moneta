@@ -14,6 +14,9 @@ beforeEach(() => {
     driveOptIn: 'pending',
     driveConnecting: false,
     driveError: null,
+    // RequireAuth attempts a silent restore on mount when idle (see below) —
+    // stub it out by default so the other tests aren't exercising real auth.ts.
+    restore: vi.fn().mockResolvedValue(undefined),
   })
 })
 
@@ -79,5 +82,27 @@ describe('RequireAuth', () => {
       </RequireAuth>,
     )
     expect(screen.getByText('secret')).toBeInTheDocument()
+  })
+
+  it('attempts a silent restore once on mount while status is idle', () => {
+    const restore = vi.fn().mockResolvedValue(undefined)
+    useAuthStore.setState({ restore })
+    render(
+      <RequireAuth>
+        <div>secret</div>
+      </RequireAuth>,
+    )
+    expect(restore).toHaveBeenCalledOnce()
+  })
+
+  it('does not attempt a silent restore when a lock-screen unlock already settled status', () => {
+    const restore = vi.fn()
+    useAuthStore.setState({ status: 'authenticated', driveOptIn: 'connected', restore })
+    render(
+      <RequireAuth>
+        <div>secret</div>
+      </RequireAuth>,
+    )
+    expect(restore).not.toHaveBeenCalled()
   })
 })

@@ -91,6 +91,41 @@ describe('useAuthStore.login', () => {
     await expect(useAuthStore.getState().login()).resolves.toBeUndefined()
     expect(useAuthStore.getState().status).toBe('authenticated')
   })
+
+  it('does not throw or block login when hasVault itself fails', async () => {
+    mToken.mockResolvedValue({ accessToken: 'tok', expiresAt: 1 })
+    mUser.mockResolvedValue({ email: 'a@b.com', name: 'Ana' })
+    mHasVault.mockRejectedValue(new Error('IDB blocked'))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    await expect(useAuthStore.getState().login()).resolves.toBeUndefined()
+
+    expect(useAuthStore.getState().status).toBe('authenticated')
+    expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
+  // specs.md §7: the access token must never reach a log. syncLockedSession's
+  // catch only ever logs the caught error, never the session it was given —
+  // this pins that down explicitly instead of leaving it an assumption.
+  it('never logs the access token when the vault sync fails', async () => {
+    const secretToken = 'ya29.super-secret-access-token'
+    mToken.mockResolvedValue({ accessToken: secretToken, expiresAt: 1 })
+    mUser.mockResolvedValue({ email: 'a@b.com', name: 'Ana' })
+    mHasVault.mockResolvedValue(true)
+    mUpdateSession.mockRejectedValue(new Error('lock: not unlocked'))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    await useAuthStore.getState().login()
+
+    expect(warn).toHaveBeenCalled()
+    const loggedText = warn.mock.calls
+      .flat()
+      .map((arg) => JSON.stringify(arg))
+      .join(' ')
+    expect(loggedText).not.toContain(secretToken)
+    warn.mockRestore()
+  })
 })
 
 describe('useAuthStore.restore', () => {
@@ -109,6 +144,14 @@ describe('useAuthStore.restore', () => {
     await useAuthStore.getState().restore()
 
     expect(mUpdateSession).toHaveBeenCalledWith({ accessToken: 'tok', expiresAt: 1 })
+  })
+
+  it('is a no-op when status is not idle, so it can only run once on boot', async () => {
+    useAuthStore.setState({ status: 'authenticating' })
+
+    await useAuthStore.getState().restore()
+
+    expect(mToken).not.toHaveBeenCalled()
   })
 })
 
@@ -224,6 +267,41 @@ describe('useAuthStore.connectDrive', () => {
     })
     await pending
     expect(useAuthStore.getState().driveConnecting).toBe(false)
+  })
+
+  it('does not resurrect a logged-out session with a stale in-flight resolve', async () => {
+    let resolveToken: (v: { accessToken: string; expiresAt: number }) => void = () => {}
+    mToken.mockReturnValue(
+      new Promise((resolve) => {
+        resolveToken = resolve
+      }),
+    )
+    useAuthStore.setState({
+      status: 'authenticated',
+      user: { email: 'a@b.com', name: 'Ana' },
+      session: { accessToken: 'identity-tok', expiresAt: 1 },
+      drive: null,
+    })
+
+    const pending = useAuthStore.getState().connectDrive()
+    await Promise.resolve()
+    useAuthStore.getState().logout()
+
+    resolveToken({ accessToken: 'drive-tok', expiresAt: 2 })
+    mBootstrap.mockResolvedValue({
+      folderId: 'F',
+      movimientosFileId: 'M',
+      activosFileId: 'A',
+      configFileId: 'C',
+    })
+    await pending
+
+    const s = useAuthStore.getState()
+    expect(s.status).toBe('idle')
+    expect(s.session).toBeNull()
+    expect(s.drive).toBeNull()
+    expect(s.driveOptIn).toBe('pending')
+    expect(mUpdateSession).not.toHaveBeenCalled()
   })
 })
 

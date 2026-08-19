@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { useAuthStore } from '@/lib/authStore'
 import {
   enableLock,
+  forgetDek,
   hasVault,
   isBackgroundExpired,
   isBiometricAvailable,
@@ -56,6 +57,10 @@ export const useLockStore = create<LockState>((set, get) => ({
   error: null,
   init: async () => {
     const [locked, biometricAvailable] = await Promise.all([hasVault(), isBiometricAvailable()])
+    // Guards the invariant "phase locked ⇒ no DEK resident" even on cold start,
+    // where activeDek is normally already null — cheap, and keeps every route
+    // into 'locked' provably equivalent rather than relying on module-load order.
+    if (locked) forgetDek()
     set({ phase: locked ? 'locked' : 'unlocked', enabled: locked, biometricAvailable })
   },
   enable: async (pin, biometric) => {
@@ -67,13 +72,17 @@ export const useLockStore = create<LockState>((set, get) => ({
   unlockPin: (pin) => resume(set, () => unlockWithPin(pin)),
   unlockBiometric: () => resume(set, () => unlockWithBiometric()),
   lock: () => {
-    if (get().enabled) set({ phase: 'locked' })
+    if (!get().enabled) return
+    forgetDek()
+    set({ phase: 'locked' })
   },
   onHidden: () => {
     if (get().phase === 'unlocked') void markActive()
   },
   onVisible: async () => {
-    if (get().phase === 'unlocked' && (await isBackgroundExpired())) set({ phase: 'locked' })
+    if (get().phase !== 'unlocked' || !(await isBackgroundExpired())) return
+    forgetDek()
+    set({ phase: 'locked' })
   },
   reset: async () => {
     await resetVault()
