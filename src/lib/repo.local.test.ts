@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { db } from '@/lib/db'
-import { RepoError } from '@/lib/repo'
-import { createLocalRepo, migrateSchema, type Migration } from '@/lib/repo.local'
+import {
+  __resetReadyMemoForTests,
+  createLocalRepo,
+  migrateSchema,
+  type Migration,
+} from '@/lib/repo.local'
 import {
   CONFIG_SEMILLA,
   SCHEMA_VERSION,
@@ -15,6 +19,11 @@ afterEach(async () => {
   await db.movimientos.clear()
   await db.activos.clear()
   await db.config.clear()
+  // `ready()`'s memo now runs once per database connection (not once per
+  // call) — `db` is a singleton reused across this whole file, so without
+  // this reset a resolved memo from an earlier test would leak into the
+  // next one and skip performReady() against config just cleared above.
+  __resetReadyMemoForTests()
 })
 
 function movimiento(overrides: Partial<Movimiento> = {}): Movimiento {
@@ -108,6 +117,42 @@ describe('ready() / schemaVersion gate', () => {
     expect(putSpy).toHaveBeenCalledTimes(1)
     putSpy.mockRestore()
   })
+
+  it('memoizes the in-flight ready() across different repo instances backed by the same database', async () => {
+    // Two separate createLocalRepo() calls share the same underlying `db`
+    // singleton — the memo must dedupe across them too, not just within one
+    // instance, or two concurrent instances could double-run a migration.
+    const repoA = createLocalRepo()
+    const repoB = createLocalRepo()
+    const putSpy = vi.spyOn(db.config, 'put')
+    await Promise.all([repoA.ready(), repoB.ready()])
+    expect(putSpy).toHaveBeenCalledTimes(1)
+    putSpy.mockRestore()
+  })
+
+  it('ready() runs performReady() exactly once per database connection, not once per call', async () => {
+    // Regression pin for the run-once guarantee: performReady() must not
+    // re-run on every subsequent repo operation just because the in-flight
+    // memo was cleared once the first call settled successfully.
+    const repo = createLocalRepo()
+    const getSpy = vi.spyOn(db.config, 'get')
+    await repo.ready()
+    expect(getSpy).toHaveBeenCalledTimes(1)
+    await repo.movimientos.list()
+    await repo.movimientos.get('missing')
+    await repo.movimientos.add(movimiento())
+    expect(getSpy).toHaveBeenCalledTimes(1)
+    getSpy.mockRestore()
+  })
+
+  it('a failed ready() attempt clears the memo so a later call retries against fresh state', async () => {
+    await db.config.put({ ...CONFIG_SEMILLA, schemaVersion: SCHEMA_VERSION + 1, id: 1 })
+    const repo = createLocalRepo()
+    await expect(repo.ready()).rejects.toMatchObject({ code: 'schema_mismatch' })
+    // Fix the stored data out-of-band, as a migration landing later would.
+    await db.config.put({ ...CONFIG_SEMILLA, id: 1 })
+    await expect(repo.ready()).resolves.toBeUndefined()
+  })
 })
 
 describe('movimientos CRUD', () => {
@@ -141,6 +186,18 @@ describe('movimientos CRUD', () => {
     })
   })
 
+  it('update() not_found error names the entity, not the date field it happens to sort by', async () => {
+    const repo = createLocalRepo()
+    // Regression for a message bug: it used to render "no fecha entity..."
+    // (the internal date-field name) instead of naming the actual entity.
+    await expect(repo.movimientos.update('missing', { monto: 1 })).rejects.toThrow(
+      /movimiento with id/i,
+    )
+    await expect(repo.activos.update('missing', { valorActual: 1 })).rejects.toThrow(
+      /activo with id/i,
+    )
+  })
+
   it('removes an existing movimiento', async () => {
     const repo = createLocalRepo()
     const m = await repo.movimientos.add(movimiento())
@@ -151,6 +208,16 @@ describe('movimientos CRUD', () => {
   it('remove() on a missing id throws RepoError(not_found)', async () => {
     const repo = createLocalRepo()
     await expect(repo.movimientos.remove('missing')).rejects.toMatchObject({ code: 'not_found' })
+  })
+
+  it('add() with a duplicate id rejects as invalid_input, naming the id, not unknown', async () => {
+    const repo = createLocalRepo()
+    const m = await repo.movimientos.add(movimiento())
+    // A duplicate id is bad caller input (id must be unique), not a
+    // storage-layer failure — Dexie's ConstraintError must not fall through
+    // to the generic 'unknown' code.
+    await expect(repo.movimientos.add({ ...m })).rejects.toMatchObject({ code: 'invalid_input' })
+    await expect(repo.movimientos.add({ ...m })).rejects.toThrow(new RegExp(m.id))
   })
 
   it('does not mutate the caller-supplied object on add()', async () => {
@@ -172,6 +239,36 @@ describe('movimientos CRUD', () => {
   })
 })
 
+describe('movimientos CRUD — update()/remove() atomicity', () => {
+  it('update() is atomic: two concurrent patches on the same id never lose a write', async () => {
+    const repo = createLocalRepo()
+    const m = await repo.movimientos.add(movimiento({ monto: 100, categoria: 'cat_sueldo' }))
+    // Both read-merge-write cycles must be serialized against each other, or
+    // the second `put` silently clobbers the first's patch with no error.
+    await Promise.all([
+      repo.movimientos.update(m.id, { monto: 200 }),
+      repo.movimientos.update(m.id, { categoria: 'cat_otro' }),
+    ])
+    const final = await repo.movimientos.get(m.id)
+    expect(final?.monto).toBe(200)
+    expect(final?.categoria).toBe('cat_otro')
+  })
+
+  it('remove() is atomic: concurrent calls on the same id resolve exactly one and reject the other with not_found', async () => {
+    const repo = createLocalRepo()
+    const m = await repo.movimientos.add(movimiento())
+    const results = await Promise.allSettled([
+      repo.movimientos.remove(m.id),
+      repo.movimientos.remove(m.id),
+    ])
+    const fulfilled = results.filter((r) => r.status === 'fulfilled')
+    const rejected = results.filter((r) => r.status === 'rejected')
+    expect(fulfilled).toHaveLength(1)
+    expect(rejected).toHaveLength(1)
+    expect((rejected[0] as PromiseRejectedResult).reason).toMatchObject({ code: 'not_found' })
+  })
+})
+
 describe('movimientos bulk paths (addMany / removeMany)', () => {
   it('addMany adds every item in one transaction', async () => {
     const repo = createLocalRepo()
@@ -187,9 +284,33 @@ describe('movimientos bulk paths (addMany / removeMany)', () => {
     const dup = movimiento()
     await repo.movimientos.add(dup)
     const batch = [movimiento(), { ...dup }, movimiento()] // dup.id already exists -> ConstraintError
-    await expect(repo.movimientos.addMany(batch)).rejects.toBeInstanceOf(RepoError)
+    // Was `rejects.toBeInstanceOf(RepoError)` only — tightened to the
+    // specific code now that a duplicate id maps to 'invalid_input' (bad
+    // caller input) instead of the generic 'unknown' it fell through to
+    // before.
+    await expect(repo.movimientos.addMany(batch)).rejects.toMatchObject({
+      code: 'invalid_input',
+    })
     const { items } = await repo.movimientos.list()
     expect(items).toHaveLength(1) // only the original `dup`, batch fully rolled back
+  })
+
+  it('addMany with a duplicate id names the offending id in the error message', async () => {
+    const repo = createLocalRepo()
+    const dup = await repo.movimientos.add(movimiento())
+    await expect(repo.movimientos.addMany([movimiento(), { ...dup }])).rejects.toThrow(
+      new RegExp(dup.id),
+    )
+  })
+
+  it('addMany rejects a batch with a duplicate id among its own items (no pre-existing row)', async () => {
+    const repo = createLocalRepo()
+    const selfDup = movimiento()
+    await expect(
+      repo.movimientos.addMany([movimiento(), selfDup, { ...selfDup }]),
+    ).rejects.toMatchObject({ code: 'invalid_input' })
+    const { items } = await repo.movimientos.list()
+    expect(items).toHaveLength(0) // nothing committed, including the two non-conflicting rows
   })
 
   it('removeMany removes every id in one transaction', async () => {
@@ -490,6 +611,62 @@ describe('list() — keyset pagination', () => {
     await expect(repo.movimientos.list({ cursor: 'not-a-real-cursor' })).rejects.toMatchObject({
       code: 'invalid_input',
     })
+  })
+
+  it('rejects a cursor minted under a different sortBy/sortDir instead of silently returning nothing', async () => {
+    const repo = createLocalRepo()
+    await repo.movimientos.addMany([
+      movimiento({ monto: 100, fecha: '2026-01-01' }),
+      movimiento({ monto: 200, fecha: '2026-01-02' }),
+      movimiento({ monto: 300, fecha: '2026-01-03' }),
+    ])
+    const mintedUnderMontoAsc = await repo.movimientos.list({
+      sortBy: 'monto',
+      sortDir: 'asc',
+      limit: 2,
+    })
+    expect(mintedUnderMontoAsc.nextCursor).toBeDefined()
+    // Default sortBy/sortDir (fecha desc) differs from what minted the cursor.
+    await expect(
+      repo.movimientos.list({ limit: 2, cursor: mintedUnderMontoAsc.nextCursor }),
+    ).rejects.toMatchObject({ code: 'invalid_input' })
+  })
+
+  it('accepts a cursor replayed with the exact sortBy/sortDir it was minted under', async () => {
+    const repo = createLocalRepo()
+    await repo.movimientos.addMany([
+      movimiento({ monto: 100 }),
+      movimiento({ monto: 200 }),
+      movimiento({ monto: 300 }),
+    ])
+    const page1 = await repo.movimientos.list({ sortBy: 'monto', sortDir: 'asc', limit: 2 })
+    const page2 = await repo.movimientos.list({
+      sortBy: 'monto',
+      sortDir: 'asc',
+      limit: 2,
+      cursor: page1.nextCursor,
+    })
+    expect(page2.items.map((m) => m.monto)).toEqual([300])
+  })
+})
+
+describe('list() — limit validation', () => {
+  it.each([0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY])(
+    'rejects limit=%p as invalid_input rather than an ambiguous empty page',
+    async (limit) => {
+      const repo = createLocalRepo()
+      await repo.movimientos.add(movimiento())
+      await expect(repo.movimientos.list({ limit })).rejects.toMatchObject({
+        code: 'invalid_input',
+      })
+    },
+  )
+
+  it('accepts a positive integer limit', async () => {
+    const repo = createLocalRepo()
+    await repo.movimientos.add(movimiento())
+    const { items } = await repo.movimientos.list({ limit: 1 })
+    expect(items).toHaveLength(1)
   })
 })
 

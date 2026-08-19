@@ -285,25 +285,49 @@ Shipped `createLocalRepo(): Repo` in `src/lib/repo.local.ts`, backed by
 `db.test.ts`), `bun run check` green. Implementation notes not obvious from
 the port spec alone:
 
-- **`ready()`** memoizes its in-flight promise per repo instance (closure
-  state, not module-global) so concurrent callers on the same `Repo` never
-  seed/migrate twice; a failed attempt clears the memo so a later call can
-  retry. Fresh install → seeds `CONFIG_SEMILLA`. `Config.schemaVersion` <
-  `SCHEMA_VERSION` → dispatches through a `Record<number, Migration>`
-  registry (`migrateSchema(from, to, registry)`, exported for unit testing
+- **`ready()`** memoizes its in-flight/resolved promise in a module-level
+  `WeakMap` keyed by the `db` connection (2026-08-18 revision — see §11; the
+  first cut keyed it per repo instance, so two `createLocalRepo()` instances
+  over the same `db` didn't dedupe a concurrent `ready()`), so `performReady()`
+  runs **exactly once per database connection**, matching §10.3's "before
+  first use" — not once per call, even though every `CrudRepo` method awaits
+  `ensureReady()`. A resolved promise stays cached (a second, brief revision
+  the same day briefly cleared on success too — see §11 — which reintroduced
+  a schemaVersion round-trip on every single repo operation; reverted). Only
+  a **rejected** attempt clears the entry, so a later call can retry instead
+  of replaying the same failure forever. Tests reset this memo in `afterEach`
+  via the test-only `__resetReadyMemoForTests()` export, since the test
+  suite reuses one `db` singleton across files/tests while production
+  expects it to live for the database connection's whole lifetime. Fresh
+  install → seeds `CONFIG_SEMILLA`. `Config.schemaVersion` < `SCHEMA_VERSION`
+  → dispatches through a `Record<number, Migration>` registry
+  (`migrateSchema(from, to, registry)`, exported for unit testing
   independently of the real registry, which is empty at v1). `>
 SCHEMA_VERSION` → `RepoError('schema_mismatch')`, no downgrade.
 - **`CrudRepo<T>` is one generic factory** parameterized per entity by
-  `{ table, dateField, seccionField, tiebreakField, compoundIndex, validate
-}` — `movimientos` uses `fecha`/`seccion`/`createdAt`, `activos` uses
-  `fechaActualizacion`/`seccion`/no tiebreak field. This is how
-  `dateFrom`/`dateTo`/`seccion` in the generic `ListQuery<T>` resolve to a
-  concrete field per entity without one-off methods.
+  `{ table, dateField, seccionField, tiebreakField, compoundIndex, validate,
+entityLabel }` — `movimientos` uses `fecha`/`seccion`/`createdAt`/
+  `"movimiento"`, `activos` uses `fechaActualizacion`/`seccion`/no tiebreak
+  field/`"activo"`. This is how `dateFrom`/`dateTo`/`seccion` in the generic
+  `ListQuery<T>` resolve to a concrete field per entity without one-off
+  methods; `entityLabel` names the entity in `update()`/`remove()`'s
+  not-found error message instead of leaking the internal `dateField` name.
+- **`update()`/`remove()` run their read-check-write as one atomic
+  `db.transaction('rw', table, …)`** (2026-08-18 revision — see §11; the
+  first cut did an unsynchronized `table.get` then a separate `table.put`/
+  `table.delete`, which let two concurrent `update()` calls on the same id
+  silently lose one's write). Validation still runs against the merged
+  result inside the transaction.
 - **Keyset pagination, with a real fast path — not just a safe API shape.**
-  The opaque `cursor` is a base64 JSON envelope of the last-returned row's
-  `{ sortValue, tiebreakValue, id }`. `list()` has two implementations
-  behind it now (2026-08-18 revision, see §11 — the first cut only had the
-  slow one):
+  The opaque `cursor` is a base64 JSON envelope of `{ sortBy, sortDir,
+sortValue, tiebreakValue, id }` — `sortBy`/`sortDir` record which query
+  minted the cursor (2026-08-18 addition — see §11; the first cut omitted
+  them, so replaying a cursor under a different `sortBy`/`sortDir` silently
+  misinterpreted `sortValue` against the wrong field/order instead of
+  erroring). `decodeCursor` takes the current call's `sortBy`/`sortDir` and
+  throws `RepoError('invalid_input')` on any mismatch. `list()` has two
+  implementations behind it now (2026-08-18 revision, see §11 — the first
+  cut only had the slow one):
   - **Fast path** (`tryFastPath`), used whenever `sortBy` is the entity's
     own indexed date field (the default) and a `limit` is given — the
     common case, and the one §10.3's "years of `Movimiento` rows" rationale
@@ -380,6 +404,27 @@ tiebreakValue }` bigger than the margin — e.g. a bulk import that
   committed, not 2-of-3). Rationale: a partially-committed financial import
   is worse than a fully-rejected one — the caller can't tell which half
   landed.
+- **Error-code mapping for a duplicate `id` on write** (2026-08-18 addition
+  — see §11): `add()`/`addMany()` catch Dexie's `ConstraintError` (single) /
+  `BulkError` with a `ConstraintError` among its `failures` (batch) and
+  surface `RepoError('invalid_input', …)` naming the offending id, instead
+  of falling through to `wrapUnknown`'s generic `'unknown'` — a duplicate id
+  is bad caller input (`id` must be unique), not a storage-layer failure.
+  Matched purely by `.name === 'ConstraintError'` / `'BulkError'`, never
+  `instanceof Error`/`instanceof Dexie.ConstraintError` or the message text:
+  the individual entries in `BulkError.failures` are raw `DOMException`s
+  that are NOT `instanceof Error` in this project's test environment (jsdom
+  - fake-indexeddb) — an `instanceof Error` guard silently excluded exactly
+    the batch case, caught by watching the discriminating test fail first.
+    `BulkError.failures` is keyed by an internal operation index that does
+    **not** reliably map back to the input array's position (verified
+    empirically: a duplicate at input index 2 surfaced under failures key
+    `"0"`), so the offending id for the error message is determined
+    independently — a duplicate within the batch itself first, else one of
+    the batch's ids already present in the table via `table.bulkGet` — rather
+    than trusted from that index. Everything else still falls through to
+    `'unknown'` unchanged; this is a narrow, name-matched carve-out, not a
+    broadened catch-all.
 - **Write validation** (`validateMovimiento`/`validateActivo`): `monto`
   finite and `> 0`; `fecha`/`fechaActualizacion` a real ISO `yyyy-mm-dd`
   (regex + round-trip through `Date`, rejects e.g. `2026-13-40`); `moneda`
@@ -389,6 +434,14 @@ tiebreakValue }` bigger than the margin — e.g. a bulk import that
   malformed number could reach storage). All failures are
   `RepoError('invalid_input', …)` — see the new `RepoErrorCode` member
   below — and the row is never written.
+- **`limit` is validated** (2026-08-18 addition — see §11): `list()`
+  rejects `0`, negatives, non-integers, `NaN`, and `Infinity` with
+  `RepoError('invalid_input')` before either `list()` implementation runs.
+  The first cut let `limit: 0` through, which always produced an empty
+  `page`, making `lastItem` `undefined` and silently dropping `nextCursor`
+  even when more rows existed — "give me zero rows" isn't a meaningful
+  pagination request, so it errors instead of returning an ambiguous
+  `{ items: [] }`.
 - **`updateConfig`** rejects a patch that sets `schemaVersion` explicitly
   (`RepoError('invalid_input')`) rather than silently dropping it — the
   field is structurally reachable through `Partial<Config>`, so a silent
@@ -1089,6 +1142,86 @@ m.monto <= 0` (was `m.monto <= 0` alone, which lets `NaN` through since
   `getConfig`/`updateConfig` against §10.3's bullets and edge cases after
   this fix; nothing else stood out as disagreeing with the documented
   contract.
+- 2026-08-18 — **`update()`/`remove()` made atomic (code-review fix, HIGH).**
+  Both used to do `table.get(id)` then a second, unsynchronized `table.put`/
+  `table.delete` call — two concurrent `update()` calls on the same id could
+  both read the same stale row, each merge its own patch, and the later
+  `put` would silently overwrite the earlier one's write with no error
+  surfaced (reproduced: seed `monto: 100`, run
+  `Promise.all([update(id,{monto:200}), update(id,{categoria:'cat_otro'})])`
+  → `monto: 200` vanished). Fixed by wrapping the whole read-merge-write (and
+  read-then-delete) in `db.transaction('rw', table, …)`, matching the
+  atomicity `addMany`/`removeMany` already had. `remove()`'s equivalent bug
+  was latent (harmless double-delete today, no data loss) but got the same
+  treatment for consistency — same shape, same fix. Validation still runs
+  against the **merged** result inside the transaction, unchanged.
+- 2026-08-18 — **Cursor payload now carries `sortBy`/`sortDir`; a replay
+  under a different one is rejected (code-review fix, MEDIUM).** `list()`'s
+  cursor used to encode only `{ sortValue, tiebreakValue, id }`, with no
+  record of which query minted it — replaying a cursor from
+  `list({ sortBy: 'monto', sortDir: 'asc' })` against a call defaulting to
+  `sortBy: 'fecha', sortDir: 'desc'` silently misinterpreted `sortValue` as
+  a `fecha` bound, excluding every row and returning `{ items: [] }` —
+  indistinguishable from "no data". `CursorPayload` now includes `sortBy`/
+  `sortDir`; `decodeCursor` takes the current call's `sortBy`/`sortDir` and
+  throws `RepoError('invalid_input')` on any mismatch. A loud error beats a
+  silently-wrong empty page.
+- 2026-08-18 — **`limit` is validated; `0`/negative/non-integer/`NaN`/
+  `Infinity` now reject instead of silently dropping `nextCursor` (code-review
+  fix, LOW).** With `limit: 0`, `page` was always `[]`, so `lastItem` was
+  `undefined` and `nextCursor` got dropped even when more rows existed,
+  leaving the caller stuck on `{ items: [] }` with no way to page forward.
+  "Give me zero rows" isn't a meaningful pagination request, so `list()` now
+  validates `limit` as a positive integer up front and throws
+  `RepoError('invalid_input')` otherwise — an honest error over an ambiguous
+  empty page.
+- 2026-08-18 — **`ready()`'s in-flight memo moved from per-repo-instance
+  closure state to a module-level `WeakMap` keyed by the `db` connection
+  (code-review fix, LOW, latent).** Two `createLocalRepo()` instances over
+  the same `db` used to have separate closures, so concurrent `ready()`
+  calls across instances didn't dedupe — harmless while the migration
+  registry is empty, but a real migration could then run twice against the
+  same IndexedDB store. The memo now lives keyed by `db` itself; a resolved
+  promise stays cached (`performReady()` runs once per database connection,
+  per §10.3's "before first use"), and only a **rejected** attempt clears
+  the entry so a later call can still retry. **Correction, same day:** an
+  intermediate version of this fix cleared the memo on success too (`.finally()`
+  instead of `.catch()`), reasoning it "only dedupes concurrent callers, a
+  later call just re-verifies cheaply" — that traded the run-once guarantee
+  away: every `list()`/`get()`/`add()`/etc. awaits `ensureReady()`, so a
+  cleared-on-success memo made every single repo operation pay a fresh
+  `db.config.get` round-trip, caught by operator review
+  (`db.config.get` called on 3 of 3 ops after `ready()` had already
+  resolved). Reverted to clear-on-rejection-only; a new regression test
+  (`ready() runs performReady() exactly once per database connection, not
+once per call`) pins the run-once property so this can't silently regress
+  again. The test suite itself now needs `__resetReadyMemoForTests()`
+  (test-only export) in `afterEach`, since its tests share one `db`
+  singleton across the whole file while production expects the memo to live
+  for the connection's entire lifetime.
+- 2026-08-18 — **`update()`'s not-found message no longer names the date
+  field (trivial code-review fix).** It rendered `no fecha entity with id
+"…"` — an internal field name (`dateField`) doing double duty as the
+  entity noun. `EntityConfig` gained an explicit `entityLabel` (`"movimiento"`
+  / `"activo"`) used by both `update()` and `remove()`'s not-found messages.
+- 2026-08-18 — **A duplicate `id` on `add()`/`addMany()` now maps to
+  `RepoError('invalid_input')`, not `'unknown'` (code-review fix, surfaced
+  while verifying the fake-repo track's matching fix for the fake
+  implementation).** Dexie's `ConstraintError` on a duplicate primary key
+  isn't a `RepoError`, so it used to fall through `wrapUnknown` unchanged —
+  a UI handing over a duplicate id got an error indistinguishable from a
+  genuine IndexedDB failure. `'invalid_input'` is the correct code for the
+  same reason it exists at all: bad caller input (`id` must be unique) is a
+  different failure mode than the storage layer breaking unexpectedly, and
+  callers need to tell them apart. Detected by matching `.name ===
+'ConstraintError'`/`'BulkError'` (never `instanceof` or the message
+  string — see §10.3.1 for why `instanceof Error` specifically doesn't
+  hold for a `BulkError`'s individual `failures`). `addMany`'s all-or-
+  nothing rollback is unaffected — the transaction still aborts the whole
+  batch; only the error's `code` and message changed. Alignment with the
+  parallel fake-repo track: `removeMany` with a missing id stays
+  `'not_found'` on both implementations (this one already did); a
+  duplicate `id` is `'invalid_input'` on both.
 
 ## 12. Backlog (pending verification / deferred work)
 
