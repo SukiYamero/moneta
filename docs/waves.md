@@ -309,7 +309,7 @@ missing/finished here).
 | `../moneta-worktrees/wave3-r` | `wave3/r-offline`   | active |
 | `../moneta-worktrees/wave3-s` | `wave3/s-review`    | merged, in review |
 | `../moneta-worktrees/wave3-u` | `wave3/u-forms`     | active |
-| `../moneta-worktrees/wave3-v` | `wave3/v-profiles`  | active |
+| `../moneta-worktrees/wave3-v` | `wave3/v-review`    | merged, in review |
 | `../moneta-worktrees/wave3-w` | `wave3/w-sw-update` | active |
 
 Paths are relative to the repo root (`web/moneta`), i.e. a sibling

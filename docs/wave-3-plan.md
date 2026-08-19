@@ -516,7 +516,7 @@ Never R, T, U, V or Y.
 | R     | `wave3/r-offline`   | `../moneta-worktrees/wave3-r` | dispatched |
 | S     | `wave3/s-review`    | `../moneta-worktrees/wave3-s` | merged `823bf59`, in review |
 | U     | `wave3/u-forms`     | `../moneta-worktrees/wave3-u` | dispatched |
-| V     | `wave3/v-profiles`  | `../moneta-worktrees/wave3-v` | dispatched |
+| V     | `wave3/v-review`    | `../moneta-worktrees/wave3-v` | merged `f350705`, in review |
 | W     | `wave3/w-sw-update` | `../moneta-worktrees/wave3-w` | dispatched |
 
 The authoritative worktree log stays in `docs/waves.md`; this table is the
