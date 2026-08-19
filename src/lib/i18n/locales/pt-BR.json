@@ -137,6 +137,41 @@
   },
   "history": {
     "title": "Histórico",
-    "placeholder": "Esta tela está em construção."
+    "loading": "Carregando seu histórico…",
+    "error": "Não conseguimos carregar seu histórico. Tente de novo.",
+    "scope": {
+      "ariaLabel": "Alcance do período",
+      "dia": "Dia",
+      "semana": "Semana",
+      "mes": "Mês",
+      "anio": "Ano"
+    },
+    "nav": {
+      "previous": "Período anterior",
+      "next": "Próximo período"
+    },
+    "year": {
+      "ariaLabel": "Escolher ano"
+    },
+    "today": "Hoje",
+    "weekLabel": "Semana",
+    "summary": "Resumo",
+    "balance": {
+      "dia": "Saldo do dia",
+      "semana": "Saldo da semana",
+      "mes": "Saldo do mês",
+      "anio": "Saldo do ano"
+    },
+    "breakdown": {
+      "title": "Por etiqueta",
+      "gasto": "Gastos",
+      "ingreso": "Receitas",
+      "emptyGasto": "Sem gastos neste período",
+      "emptyIngreso": "Sem receitas neste período"
+    },
+    "empty": {
+      "title": "Sem movimentos",
+      "subtitle": "Não há registros neste período"
+    }
   }
 }

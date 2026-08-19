@@ -137,6 +137,41 @@
   },
   "history": {
     "title": "History",
-    "placeholder": "This screen is under construction."
+    "loading": "Loading your history…",
+    "error": "We couldn't load your history. Try again.",
+    "scope": {
+      "ariaLabel": "Period scope",
+      "dia": "Day",
+      "semana": "Week",
+      "mes": "Month",
+      "anio": "Year"
+    },
+    "nav": {
+      "previous": "Previous period",
+      "next": "Next period"
+    },
+    "year": {
+      "ariaLabel": "Choose year"
+    },
+    "today": "Today",
+    "weekLabel": "Week",
+    "summary": "Summary",
+    "balance": {
+      "dia": "Balance for the day",
+      "semana": "Balance for the week",
+      "mes": "Balance for the month",
+      "anio": "Balance for the year"
+    },
+    "breakdown": {
+      "title": "By tag",
+      "gasto": "Expenses",
+      "ingreso": "Income",
+      "emptyGasto": "No expenses in this period",
+      "emptyIngreso": "No income in this period"
+    },
+    "empty": {
+      "title": "No movements",
+      "subtitle": "There are no records in this period"
+    }
   }
 }
