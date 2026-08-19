@@ -214,10 +214,20 @@ should eventually use. The operator swaps one for the other after both merge.
 
 ---
 
-## Wave 3 — planned (deferred from Wave 2 on 2026-08-19)
+## Wave 3 — foundations (planned, 2026-08-19)
 
-These three were originally Wave 2. They move out so Wave 2 can land the
-i18n/Toast/shell foundations first; all three consume the Toast (Track K) and
+The feature tracks that used to be Wave 3 moved to Wave 4 (user decision,
+2026-08-19) so a wave of **foundations** can land first: the plumbing every
+later feature assumes exists. Scope is being decided from two audits —
+`docs/wave-3-audit-runtime.md` and `docs/wave-3-audit-surface.md`. Neither is
+a plan; they are the evidence the plan is built from.
+
+---
+
+## Wave 4 — planned (feature tracks, moved here from Wave 3 on 2026-08-19)
+
+These three were originally Wave 2, then Wave 3. They move again so a
+foundations wave can land first; all three consume the Toast (Track K) and
 the i18n table, which is exactly why those were built a wave early.
 
 ### Track F — Movement/Add sheet + Voice
