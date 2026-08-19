@@ -20,7 +20,11 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // 'prompt': a new deploy no longer takes over a tab silently — the
+      // page must call the update itself (src/lib/swUpdate.ts), which is
+      // what lets a user be asked instead of a lazily-loaded chunk 404ing
+      // mid-session against a stale manifest (specs.md §10.16).
+      registerType: 'prompt',
       includeAssets: ['favicon.svg'],
       manifest: {
         name: APP_NAME,

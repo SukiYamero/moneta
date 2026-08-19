@@ -4,11 +4,14 @@ import { RouterProvider } from 'react-router/dom'
 import { router } from '@/router'
 import { AppLock } from '@/features/lock/AppLock'
 import { AppErrorBoundary } from '@/AppErrorBoundary'
+import { initServiceWorkerUpdates } from '@/lib/swUpdate'
 import '@/lib/i18n'
 import '@/styles/index.css'
 
 const rootEl = document.getElementById('root')
 if (!rootEl) throw new Error('Root element #root not found')
+
+initServiceWorkerUpdates()
 
 createRoot(rootEl).render(
   <StrictMode>
