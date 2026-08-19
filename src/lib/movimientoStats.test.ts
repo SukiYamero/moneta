@@ -215,11 +215,18 @@ describe('series()', () => {
   // `range` and silently pull in movements from the adjacent period.
   describe('bucket-range invariant: sum(series) === totals(filterByRange)', () => {
     const periods: Periodo[] = ['dia', 'semana', 'mes', 'anio']
+    const primerDiaSemanaValues: (0 | 1)[] = [0, 1]
+    // Cross product: the clamp bug this invariant guards against is rooted in
+    // eachWeekOfInterval's grid snap, which is keyed off weekStartsOn — a fix
+    // proven only under primerDiaSemana=1 says nothing about primerDiaSemana=0
+    // (AGENTS.md/wave-2-plan.md's week rule: "tested both ways").
+    const cases = periods.flatMap((periodo) =>
+      primerDiaSemanaValues.map((primerDiaSemana) => [periodo, primerDiaSemana] as const),
+    )
 
-    it.each(periods)(
-      'holds for periodo=%s even with movements just outside the range',
-      (periodo) => {
-        const primerDiaSemana = 1
+    it.each(cases)(
+      'holds for periodo=%s, primerDiaSemana=%s even with movements just outside the range',
+      (periodo, primerDiaSemana) => {
         const range = periodRange(periodo, '2026-08-19', primerDiaSemana)
         const movimientos = [
           movimiento({ id: 'before', fecha: dayBefore(range.from), tipo: 'ingreso', monto: 111 }),
@@ -239,5 +246,28 @@ describe('series()', () => {
         expect((result.at(0)?.bucketStart ?? '') >= range.from).toBe(true)
       },
     )
+
+    // A single nonzero value per tipo (the cases above) can never expose
+    // float-addition drift, since there is nothing to add. Two movements of
+    // the same tipo landing in two different buckets can: `0.01 + 0.05` (each
+    // already an exact per-bucket cent conversion) sums to
+    // 0.060000000000000005, not 0.06, because JS float addition isn't
+    // associative with a single `(a + b) / 100` division. This never survives
+    // 2-decimal display formatting, so it rounds to the cent, which is the
+    // guarantee that actually matters for the UI — but it does mean the
+    // invariant only holds bit-exactly when compared with that rounding, not
+    // with raw `toBe`.
+    it('holds to the cent (not necessarily bit-exact) with multiple same-tipo fractional buckets', () => {
+      const primerDiaSemana = 1
+      const range = periodRange('semana', '2026-08-19', primerDiaSemana)
+      const movimientos = [
+        movimiento({ fecha: '2026-08-17', tipo: 'ingreso', monto: 0.01 }),
+        movimiento({ fecha: '2026-08-18', tipo: 'ingreso', monto: 0.05 }),
+      ]
+      const result = series(movimientos, 'semana', range, primerDiaSemana)
+      const seriesIngresos = result.reduce((sum, b) => sum + b.ingresos, 0)
+      const expected = totals(filterByRange(movimientos, range))
+      expect(seriesIngresos).toBeCloseTo(expected.ingresos, 2)
+    })
   })
 })
