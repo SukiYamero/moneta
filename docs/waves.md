@@ -242,6 +242,10 @@ plus a staging table and a trim order at the end of that block.
 | X     | §10.17 | Local diagnostics log (cuttable)                                                |
 | Y     | §10.18 | Profile / account screen — the access point (lock + guest exit live here)       |
 
+**Stage 1 is ✅ complete (merged to `main`, 2026-08-19):** R, S, U, V and W,
+each with its own code review, plus a cross-track pass over the seams. Stage 2
+(T, X) is unblocked.
+
 Tracks run in **three stages, not all in parallel** — see "Wave 3 — staging
 and dependencies" in `specs.md`. A later stage is blocked until every track
 in the previous one has merged **and passed its code review**. The

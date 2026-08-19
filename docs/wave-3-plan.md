@@ -511,13 +511,21 @@ Never R, T, U, V or Y.
 
 ## 5. Live status
 
-| Track | Status                                                   |
-| ----- | -------------------------------------------------------- |
-| R     | ✅ merged `1aea99e` + review (clean, no code changes)    |
-| S     | ✅ merged `823bf59` + review `1058b5c`, worktree removed |
-| U     | ✅ merged `32d71d0` + review `3b98736`, worktree removed |
-| V     | ✅ merged `f350705` + review `99f3dbf`, worktree removed |
-| W     | ✅ merged `3138af7` + review `b44b643`, worktree removed |
+| Track | Status                                                |
+| ----- | ----------------------------------------------------- |
+| R     | ✅ merged `1aea99e` + review (clean, no code changes) |
+| S     | ✅ merged `823bf59` + review `1058b5c`                |
+| U     | ✅ merged `32d71d0` + review `3b98736`                |
+| V     | ✅ merged `f350705` + review `99f3dbf`                |
+| W     | ✅ merged `3138af7` + review `b44b643`                |
+| —     | ✅ cross-track review `610b554`                       |
+
+**Stage 1 is complete**: five tracks merged, each reviewed by its own scoped
+reviewer, then one cross-track pass over the seams. All worktrees removed,
+all decisions folded into `specs.md` §11/§12 as each track closed.
+
+**Stage 2 is unblocked** — Track T (§10.13, the write path, blocked on R) and
+Track X (§10.17, diagnostics, blocked on S; cuttable).
 
 Stage-1 decisions and backlog are folded into `specs.md` §11/§12 as each
 track closed, per §1.2 — not batched at the end.
