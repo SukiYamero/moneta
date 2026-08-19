@@ -89,7 +89,12 @@ Shared stores, helpers, and the Drive/auth/lock logic layer. No UI here.
   Callers pass a **translation key** (`ToastMessageKey`) plus optional
   interpolation values and the store resolves the copy itself, so a raw
   `error.message` is a compile error rather than a convention
-  (`docs/error-handling.md` §5/§7).
+  (`docs/error-handling.md` §5/§7). An optional third argument,
+  `ToastAction` (`{ labelKey, onAction }`), gives a card a one-tap
+  affordance next to dismiss — `swUpdate.ts`'s update prompt is the first
+  caller. `onAction` is `() => void`, not `() => Promise<void>`: an async
+  action self-catches before it's handed here, the same "a store action
+  fully owns its own error handling" rule every other store follows.
 - `swUpdate.ts` — service-worker update lifecycle (`specs.md` §10.16). A pure
   `createSwUpdateController(registerSW)` factory around `virtual:pwa-register`
   (`vite.config.ts`'s `registerType: 'prompt'`), injectable so tests never
@@ -100,8 +105,12 @@ Shared stores, helpers, and the Drive/auth/lock logic layer. No UI here.
   a deliberate call to `applyServiceWorkerUpdate()` ever applies the update
   and reloads, so nothing here can interrupt a user mid-session on its own.
   `initServiceWorkerUpdates()` (called once from `main.tsx`) is the real
-  entry point. **Not yet wired to a UI control** — `Toast`/`toastStore` have
-  no action-button capability today.
+  entry point. The `onNeedRefresh` toast carries a `ToastAction` ("Recargar")
+  that applies _this controller's own_ injected `updateServiceWorker`
+  directly, not the module-level `applyServiceWorkerUpdate` singleton below —
+  routing the toast action through the singleton would make this factory's
+  own tests depend on state outside what they inject. `applyServiceWorkerUpdate`
+  remains exported for any future non-toast caller.
 - `utils.ts` — `cn()`, the Tailwind class-merge helper.
 - `repo.ts` — the storage-agnostic `Repo` port contract (`Repo`, `CrudRepo`,
   `ListQuery`, `ListResult`, `RepoError`). Frozen shape — additive changes

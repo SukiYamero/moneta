@@ -110,7 +110,7 @@ doesn't belong to any one `src/features/**` folder. See `specs.md` §10.5.
   no-default convention as `MovimientoRow`/`formatMonto`. Accepts `ref`.
 - `amountFormat.ts` — the pure locale money helpers behind `AmountField`:
   `parseAmount(raw, locale)` and its inverse `formatAmountForInput(value,
-  locale)`, built on `Intl.NumberFormat(locale).formatToParts` to read the
+locale)`, built on `Intl.NumberFormat(locale).formatToParts` to read the
   locale's actual decimal/group separators (`es-CO` groups `.`/decimals
   `,`; `en-US` the reverse). Its own module, not exported from the
   component file, because a pure helper shipped alongside a component
@@ -132,7 +132,12 @@ doesn't belong to any one `src/features/**` folder. See `specs.md` §10.5.
   `role="status"` (confirmations), swipe-to-dismiss via Pointer Events
   (`touch-pan-y`, mirroring `BottomSheet`'s drag handling), plus a
   keyboard-reachable close button — a timed message must stay dismissible
-  without the gesture (WCAG 2.2.1).
+  without the gesture (WCAG 2.2.1). An optional `item.action`
+  (`src/lib/toastStore.ts`'s `ToastAction`) renders a second, `min-h-11`
+  button before dismiss — taking it calls `onAction()` then dismisses.
+  Resolves the action's label via the shared `i18next` instance directly
+  (its `labelKey` is namespace-prefixed, e.g. `update:reload`, not scoped to
+  this card's own `toast` namespace).
 - `Toaster.tsx` — the stack: subscribes to `src/lib/toastStore.ts`, portals
   to `document.body`, sits at `z-[60]` (above `BottomSheet`/`CenterModal`'s
   `z-50`, so a sheet can never cover it). Mounted once, inside `AppLock`,

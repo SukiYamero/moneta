@@ -54,7 +54,24 @@ const PERIODIC_UPDATE_CHECK_MS = 60 * 60 * 1000
 export const createSwUpdateController = (registerSW: RegisterSWFn): SwUpdateController => {
   const updateServiceWorker = registerSW({
     onNeedRefresh: () => {
-      toast.success('update:available')
+      // Calls this controller's own `updateServiceWorker` closure directly,
+      // not the module-level `applyServiceWorkerUpdate` singleton below —
+      // that singleton is `initServiceWorkerUpdates`'s real production
+      // wiring, but routing the action through it here would make this
+      // factory's own tests depend on that separate module-level state
+      // instead of the `registerSW` they inject, defeating the point of an
+      // injectable factory. Self-catching per ToastAction's own contract
+      // (toastStore.ts): Toast.tsx's onAction is () => void, not
+      // () => Promise<void>, so any rejection must be handled here, not
+      // left to float unhandled in the click handler.
+      toast.success('update:available', undefined, {
+        labelKey: 'update:reload',
+        onAction: () => {
+          updateServiceWorker().catch((error: unknown) => {
+            console.warn('sw update: failed to apply the waiting update', error)
+          })
+        },
+      })
     },
     onRegisteredSW: (_swScriptUrl, registration) => {
       if (!registration) return

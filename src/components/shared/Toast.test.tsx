@@ -107,4 +107,43 @@ describe('Toast', () => {
     render(<Toast item={item()} onDismiss={() => {}} />)
     expect(screen.getByRole('status')).toHaveClass('touch-pan-y')
   })
+
+  describe('action', () => {
+    it('renders no action button when the item carries none', () => {
+      render(<Toast item={item()} onDismiss={() => {}} />)
+      // Only the dismiss button exists — this asserts there is exactly one
+      // button, not merely that some particular label is absent.
+      expect(screen.getAllByRole('button')).toHaveLength(1)
+    })
+
+    it("renders the action's own label, resolved via its namespace-prefixed key", () => {
+      render(
+        <Toast
+          item={item({ action: { labelKey: 'update:reload', onAction: () => {} } })}
+          onDismiss={() => {}}
+        />,
+      )
+      expect(screen.getByRole('button', { name: 'Recargar' })).toBeInTheDocument()
+    })
+
+    it('taking the action calls onAction and then dismisses the toast', async () => {
+      const user = userEvent.setup()
+      const onAction = vi.fn()
+      const onDismiss = vi.fn()
+      render(
+        <Toast
+          item={item({ action: { labelKey: 'update:reload', onAction } })}
+          onDismiss={onDismiss}
+        />,
+      )
+
+      await user.click(screen.getByRole('button', { name: 'Recargar' }))
+
+      expect(onAction).toHaveBeenCalledOnce()
+      expect(onDismiss).toHaveBeenCalledOnce()
+      expect(onAction.mock.invocationCallOrder[0]).toBeLessThan(
+        onDismiss.mock.invocationCallOrder[0]!,
+      )
+    })
+  })
 })

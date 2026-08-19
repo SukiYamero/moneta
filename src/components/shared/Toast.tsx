@@ -2,6 +2,7 @@ import { CircleAlert, CircleCheck, X } from 'lucide-react'
 import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { IconAvatar, type IconAvatarTint } from '@/components/shared/IconAvatar'
+import { i18next } from '@/lib/i18n'
 import type { ToastItem, ToastVariant } from '@/lib/toastStore'
 
 export interface ToastProps {
@@ -103,6 +104,23 @@ export const Toast = ({ item, onDismiss }: ToastProps) => {
           </span>
         )}
       </p>
+      {item.action && (
+        // item.action.labelKey is a namespace-prefixed ToastMessageKey
+        // (e.g. 'update:reload'), the same cross-namespace addressing
+        // toastStore.ts itself resolves the toast's own message with — not
+        // this card's own 'toast' namespace, so it goes through the shared
+        // i18next instance directly rather than this component's scoped `t`.
+        <button
+          type="button"
+          onClick={() => {
+            item.action?.onAction()
+            onDismiss()
+          }}
+          className="min-h-11 shrink-0 rounded-full px-3 text-sm font-semibold text-primary"
+        >
+          {i18next.t(item.action.labelKey)}
+        </button>
+      )}
       <button
         type="button"
         onClick={onDismiss}

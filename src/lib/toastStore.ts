@@ -21,12 +21,27 @@ export type ToastMessageKey = {
   [NS in keyof typeof es]: `${NS}:${LeafPath<(typeof es)[NS]>}`
 }[keyof typeof es]
 
+/**
+ * An optional second affordance next to dismiss — for a notification the
+ * user can act on in one tap (specs.md §10.16's update prompt is the first
+ * caller). `onAction` is `() => void`, not `() => Promise<void>`: a caller
+ * whose action is actually async must self-catch before handing it here
+ * (docs/error-handling.md §7 — "an async store/hook method fully owns its
+ * own error handling"), the same way every other store action already does,
+ * rather than `Toast.tsx` having to know about promises at all.
+ */
+export interface ToastAction {
+  labelKey: ToastMessageKey
+  onAction: () => void
+}
+
 export interface ToastItem {
   id: string
   variant: ToastVariant
   message: string
   /** How many times this exact (variant, message) pair has been re-raised while still on screen. */
   count: number
+  action?: ToastAction
 }
 
 interface ToastStoreState {
@@ -106,6 +121,7 @@ const raiseToast = (
   variant: ToastVariant,
   key: ToastMessageKey,
   values: Record<string, unknown> | undefined,
+  action: ToastAction | undefined,
 ): void => {
   if (suppressed) return
 
@@ -123,7 +139,10 @@ const raiseToast = (
     // notification happening again, not a distinct later arrival — the
     // "a later arrival never resets an earlier one" rule protects
     // *distinct* toasts from each other, so restarting this one card's own
-    // clock is the intended reading, not a violation of it.
+    // clock is the intended reading, not a violation of it. The action
+    // (if any) is left as first raised: a duplicate re-raise of the same
+    // (variant, message) is expected to carry the same action, not a
+    // reason to churn state over an unchanged callback.
     clearTimer(duplicate.id)
     scheduleDismiss(duplicate.id, variant)
     useToastStore.setState((state) => ({
@@ -136,7 +155,7 @@ const raiseToast = (
 
   const id = crypto.randomUUID()
   useToastStore.setState((state) => {
-    const nextItems = [...state.items, { id, variant, message, count: 1 }]
+    const nextItems = [...state.items, { id, variant, message, count: 1, action }]
     if (nextItems.length <= STACK_CAP) return { items: nextItems }
     const oldest = nextItems[0]
     if (oldest) clearTimer(oldest.id)
@@ -149,8 +168,9 @@ const raiseToast = (
  * The whole public surface: plain functions, callable from anywhere (a
  * store, an event handler, a component) with no provider and no React
  * context. Callers pass a translation key (`ToastMessageKey`, e.g.
- * `'home:error.codes.network'`) plus optional interpolation values — this
- * module resolves the copy itself via the shared `i18next` instance, so a
+ * `'home:error.codes.network'`) plus optional interpolation values, plus an
+ * optional `ToastAction` (label key + a self-catching callback) for a
+ * notification the user can act on in one tap — this
  * caller cannot hand it a raw `error.message` or any other arbitrary
  * string: that is a compile error, not a convention (docs/error-handling.md
  * §5/§7). `i18next` is a leaf translation library, not a domain store —
@@ -159,8 +179,8 @@ const raiseToast = (
  * decisions) for why the two aren't the same shape of coupling.
  */
 export const toast = {
-  success: (key: ToastMessageKey, values?: Record<string, unknown>): void =>
-    raiseToast('success', key, values),
-  error: (key: ToastMessageKey, values?: Record<string, unknown>): void =>
-    raiseToast('error', key, values),
+  success: (key: ToastMessageKey, values?: Record<string, unknown>, action?: ToastAction): void =>
+    raiseToast('success', key, values, action),
+  error: (key: ToastMessageKey, values?: Record<string, unknown>, action?: ToastAction): void =>
+    raiseToast('error', key, values, action),
 }
