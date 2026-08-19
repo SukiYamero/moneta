@@ -1,5 +1,7 @@
 {
-  "common": {},
+  "common": {
+    "loading": "Cargando…"
+  },
   "auth": {
     "welcome": {
       "subtitleLine1": "Tus finanzas, claras y privadas.",

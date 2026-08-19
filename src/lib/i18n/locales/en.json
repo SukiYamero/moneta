@@ -1,5 +1,7 @@
 {
-  "common": {},
+  "common": {
+    "loading": "Loading…"
+  },
   "auth": {
     "welcome": {
       "subtitleLine1": "Your finances, clear and private.",

@@ -1,6 +1,7 @@
 import { Search } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
+import { usePendingDelay } from '@/components/shared'
 import { AreasBanner } from '@/features/home/AreasBanner'
 import { BalanceCard } from '@/features/home/BalanceCard'
 import { HomeEmptyState } from '@/features/home/HomeEmptyState'
@@ -20,7 +21,11 @@ import { useHomeDashboard } from '@/features/home/useHomeDashboard'
 export const Home = () => {
   const { t } = useTranslation('home')
   const dashboard = useHomeDashboard()
-  const isLoading = dashboard.status === 'idle' || dashboard.status === 'loading'
+  const isPending = dashboard.status === 'idle' || dashboard.status === 'loading'
+  // Anti-flash gate (specs.md §10.9): a first load fast enough to beat the
+  // delay shows nothing at all, and a skeleton that did appear never blinks
+  // back out before its minimum-visible time.
+  const showLoading = usePendingDelay(isPending)
 
   return (
     <main className="min-h-full px-5 pt-2 pb-1">
@@ -33,11 +38,11 @@ export const Home = () => {
         <span className="text-sm font-medium">{t('searchPlaceholder')}</span>
       </Link>
 
-      {isLoading ? (
+      {showLoading ? (
         <HomeLoadingState />
       ) : dashboard.status === 'error' && dashboard.error ? (
         <HomeErrorState code={dashboard.error} onRetry={dashboard.retry} />
-      ) : dashboard.isEmpty ? (
+      ) : isPending ? null : dashboard.isEmpty ? (
         <HomeEmptyState />
       ) : (
         <div className="flex flex-col gap-4.5">

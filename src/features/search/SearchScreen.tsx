@@ -7,9 +7,11 @@ import { filterByRange } from '@/lib/movimientoStats'
 import { useLocaleFormatting } from '@/lib/i18n/localeFormatting'
 import { CONFIG_SEMILLA } from '@/lib/schema'
 import { cn } from '@/lib/utils'
+import { usePendingDelay } from '@/components/shared'
 import { MovimientoRow } from '@/components/shared/MovimientoRow'
 import { getMovimientoVisual } from '@/components/shared/movimientoView'
 import { FilterSheet } from '@/features/search/FilterSheet'
+import { SearchLoadingState } from '@/features/search/SearchLoadingState'
 import { DATE_RANGE_LABEL_KEY } from '@/features/search/searchCopy'
 import { matchesQuery } from '@/features/search/searchMatch'
 import { useSearchFilters } from '@/features/search/useSearchFilters'
@@ -20,10 +22,6 @@ interface ActiveChip {
   icon: typeof CalendarDays
   onRemove: () => void
 }
-
-const LoadingState = ({ label }: { label: string }) => (
-  <p className="pt-16 text-center text-sm font-medium text-fg-tertiary">{label}</p>
-)
 
 const ErrorState = ({
   message,
@@ -83,6 +81,9 @@ export const SearchScreen = () => {
 
   const filters = useSearchFilters()
   const ready = status === 'ready'
+  const isPending = status === 'idle' || status === 'loading'
+  // Anti-flash gate (specs.md §10.9) — same rule as Home, shared via usePendingDelay.
+  const showLoading = usePendingDelay(isPending)
   const categories = config?.categorias ?? CONFIG_SEMILLA.categorias
 
   const categoryTipoByName = useMemo(
@@ -236,7 +237,7 @@ export const SearchScreen = () => {
       )}
 
       <div className="mt-4 flex-1">
-        {(status === 'idle' || status === 'loading') && <LoadingState label={t('loading')} />}
+        {showLoading && <SearchLoadingState />}
 
         {status === 'error' && (
           <ErrorState message={t('error')} retryLabel={t('retry')} onRetry={() => void load()} />

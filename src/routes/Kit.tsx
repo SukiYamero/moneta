@@ -7,7 +7,10 @@ import {
   IconAvatar,
   InfoButton,
   MovimientoRow,
+  ScreenLoading,
   SegmentedControl,
+  Skeleton,
+  SkeletonGroup,
   TagChip,
   Toggle,
   type IconAvatarTint,
@@ -123,6 +126,20 @@ export const Kit = () => {
           Home when the app shell was rebuilt (docs/wave-2/track-l.md). */}
       <Section title="Lock (PIN vault — dev harness, moved from Home)">
         <LockSettings />
+      </Section>
+
+      <Section title="Skeleton / SkeletonGroup">
+        <SkeletonGroup label="Cargando…" className="flex flex-col gap-2.5">
+          <Skeleton className="h-17 rounded-3xl" />
+          <Skeleton className="h-16.5 rounded-xl" />
+          <Skeleton className="h-16.5 rounded-xl" />
+        </SkeletonGroup>
+      </Section>
+
+      <Section title="ScreenLoading">
+        <div className="overflow-hidden rounded-3xl border border-border-subtle">
+          <ScreenLoading className="min-h-72" />
+        </div>
       </Section>
 
       <Section title="IconAvatar — sizes">
