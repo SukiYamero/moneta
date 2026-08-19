@@ -7,7 +7,7 @@ import { filterByRange } from '@/lib/movimientoStats'
 import { useLocaleFormatting } from '@/lib/i18n/localeFormatting'
 import { CONFIG_SEMILLA } from '@/lib/schema'
 import { cn } from '@/lib/utils'
-import { usePendingDelay } from '@/components/shared'
+import { InlineErrorState, usePendingDelay } from '@/components/shared'
 import { MovimientoRow } from '@/components/shared/MovimientoRow'
 import { getMovimientoVisual } from '@/components/shared/movimientoView'
 import { FilterSheet } from '@/features/search/FilterSheet'
@@ -22,29 +22,6 @@ interface ActiveChip {
   icon: typeof CalendarDays
   onRemove: () => void
 }
-
-const ErrorState = ({
-  message,
-  retryLabel,
-  onRetry,
-}: {
-  message: string
-  retryLabel: string
-  onRetry: () => void
-}) => (
-  <div className="flex flex-col items-center gap-3 pt-16 text-center">
-    <p role="alert" className="text-sm font-medium text-destructive">
-      {message}
-    </p>
-    <button
-      type="button"
-      onClick={onRetry}
-      className="min-h-11 rounded-lg border border-border-subtle px-4 text-sm font-bold text-fg-secondary"
-    >
-      {retryLabel}
-    </button>
-  </div>
-)
 
 const EmptyState = ({ title, subtitle }: { title: string; subtitle: string }) => (
   <div className="flex flex-col items-center gap-1 px-5 pt-16 text-center">
@@ -240,7 +217,11 @@ export const SearchScreen = () => {
         {showLoading && <SearchLoadingState />}
 
         {status === 'error' && (
-          <ErrorState message={t('error')} retryLabel={t('retry')} onRetry={() => void load()} />
+          <InlineErrorState
+            message={t('error')}
+            retryLabel={t('retry')}
+            onRetry={() => void load()}
+          />
         )}
 
         {hasNoDataAtAll && (
