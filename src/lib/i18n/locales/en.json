@@ -45,7 +45,50 @@
     "profile": "Profile",
     "add": "Add movement"
   },
-  "home": {},
+  "home": {
+    "greeting": {
+      "morning": "Good morning",
+      "afternoon": "Good afternoon",
+      "evening": "Good evening"
+    },
+    "notifications": "Notifications",
+    "searchPlaceholder": "Search movements",
+    "balance": {
+      "title": "Total balance",
+      "show": "Show amounts",
+      "hide": "Hide amounts",
+      "income": "Income",
+      "expense": "Expenses"
+    },
+    "chart": {
+      "title": "This week's expenses",
+      "subtitle": "This week"
+    },
+    "areas": {
+      "title": "Areas",
+      "meta": "Coming soon"
+    },
+    "recent": {
+      "title": "Movements",
+      "viewAll": "View all"
+    },
+    "empty": {
+      "title": "No movements yet",
+      "body": "Add your first income or expense to see your summary here."
+    },
+    "loading": "Loading your summary…",
+    "error": {
+      "title": "We couldn't load your data",
+      "retry": "Retry",
+      "codes": {
+        "notFound": "We couldn't find your data.",
+        "schemaMismatch": "Your data isn't compatible with this app version.",
+        "invalidInput": "There was a problem with your data.",
+        "network": "No connection. Check your internet and try again.",
+        "unknown": "Something went wrong. Try again."
+      }
+    }
+  },
   "search": {
     "title": "Search movements",
     "searchInputLabel": "Description or tag",

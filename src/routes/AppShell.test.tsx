@@ -5,7 +5,6 @@ import { AppShell } from '@/routes/AppShell'
 import { Home } from '@/routes/Home'
 import { SearchScreen } from '@/features/search/SearchScreen'
 import { HistoryScreen } from '@/features/history/HistoryScreen'
-import { APP_NAME } from '@/lib/branding'
 
 // Mirrors src/router.tsx's shape — a pathless layout route (AppShell) with
 // absolute-path children — without RequireAuth or browser history. That
@@ -33,7 +32,13 @@ const renderAt = (initialPath: string) => {
 describe('AppShell routing', () => {
   it('resolves / to Home with BottomNav mounted', async () => {
     renderAt('/')
-    expect(await screen.findByRole('heading', { name: APP_NAME })).toBeInTheDocument()
+    // Every route needs exactly one accessible heading — asserting *that*
+    // is the invariant worth protecting, not any specific text: Home's <h1>
+    // is its greeting (the design's actual subject for this screen), which
+    // is real content, not a placeholder, and will keep changing with it
+    // (e.g. by time of day, by user). Pinning specific text here would tie
+    // this shell-routing test to a content decision Track E2 owns.
+    expect(await screen.findByRole('heading', { level: 1 })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /inicio/i })).toHaveAttribute('aria-current', 'page')
   })
 

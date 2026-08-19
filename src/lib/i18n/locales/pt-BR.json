@@ -45,7 +45,50 @@
     "profile": "Perfil",
     "add": "Adicionar movimento"
   },
-  "home": {},
+  "home": {
+    "greeting": {
+      "morning": "Bom dia",
+      "afternoon": "Boa tarde",
+      "evening": "Boa noite"
+    },
+    "notifications": "Notificações",
+    "searchPlaceholder": "Buscar movimentos",
+    "balance": {
+      "title": "Saldo total",
+      "show": "Mostrar valores",
+      "hide": "Ocultar valores",
+      "income": "Receitas",
+      "expense": "Despesas"
+    },
+    "chart": {
+      "title": "Despesas da semana",
+      "subtitle": "Esta semana"
+    },
+    "areas": {
+      "title": "Áreas",
+      "meta": "Em breve"
+    },
+    "recent": {
+      "title": "Movimentos",
+      "viewAll": "Ver tudo"
+    },
+    "empty": {
+      "title": "Você ainda não tem movimentos",
+      "body": "Registre sua primeira receita ou despesa para ver seu resumo aqui."
+    },
+    "loading": "Carregando seu resumo…",
+    "error": {
+      "title": "Não foi possível carregar seus dados",
+      "retry": "Tentar novamente",
+      "codes": {
+        "notFound": "Não encontramos seus dados.",
+        "schemaMismatch": "Seus dados não são compatíveis com esta versão do app.",
+        "invalidInput": "Houve um problema com seus dados.",
+        "network": "Sem conexão. Verifique sua internet e tente novamente.",
+        "unknown": "Ocorreu um erro inesperado. Tente novamente."
+      }
+    }
+  },
   "search": {
     "title": "Pesquisar movimentos",
     "searchInputLabel": "Descrição ou etiqueta",

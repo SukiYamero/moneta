@@ -1,14 +1,60 @@
-import { APP_NAME } from '@/lib/branding'
+import { Search } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
+import { Link } from 'react-router'
+import { AreasBanner } from '@/features/home/AreasBanner'
+import { BalanceCard } from '@/features/home/BalanceCard'
+import { HomeEmptyState } from '@/features/home/HomeEmptyState'
+import { HomeErrorState } from '@/features/home/HomeErrorState'
+import { HomeHeader } from '@/features/home/HomeHeader'
+import { HomeLoadingState } from '@/features/home/HomeLoadingState'
+import { RecentMovimientos } from '@/features/home/RecentMovimientos'
+import { WeekStrip } from '@/features/home/WeekStrip'
+import { WeeklyChart } from '@/features/home/WeeklyChart'
+import { useHomeDashboard } from '@/features/home/useHomeDashboard'
 
-// Placeholder body only: the dashboard content is Track E2's (docs/
-// wave-2-plan.md §4). The shell around it — persistent bottom nav, layout
-// route — is already live via AppShell. LockSettings moved to the dev-only
-// /kit route so rebuilding this file cannot delete the PIN lock's only UI.
+// The dashboard: greeting/bell chrome and search entry render regardless of
+// data status; the money-dependent content below switches on
+// loading/error/empty/ready (docs/wave-2-plan.md §4, Track E2 "Done when").
+// The screen's <h1> lives inside HomeHeader (the greeting) — the design's
+// actual subject for this screen, not the app name.
 export const Home = () => {
+  const { t } = useTranslation('home')
+  const dashboard = useHomeDashboard()
+  const isLoading = dashboard.status === 'idle' || dashboard.status === 'loading'
+
   return (
-    <main className="flex min-h-full flex-col items-center justify-center gap-6 p-6 text-center">
-      <h1 className="text-3xl font-bold">{APP_NAME}</h1>
-      <p className="text-muted-foreground">Personal finance, local-first.</p>
+    <main className="min-h-full px-5 pt-2 pb-1">
+      <HomeHeader />
+      <Link
+        to="/search"
+        className="mb-4.5 flex h-11.5 items-center gap-2.5 rounded-2xl border border-border bg-card px-3.5 text-fg-tertiary"
+      >
+        <Search className="size-4.5" aria-hidden="true" />
+        <span className="text-sm font-medium">{t('searchPlaceholder')}</span>
+      </Link>
+
+      {isLoading ? (
+        <HomeLoadingState />
+      ) : dashboard.status === 'error' && dashboard.error ? (
+        <HomeErrorState code={dashboard.error} onRetry={dashboard.retry} />
+      ) : dashboard.isEmpty ? (
+        <HomeEmptyState />
+      ) : (
+        <div className="flex flex-col gap-4.5">
+          <div className="rounded-4xl border border-border-subtle bg-card p-3.5">
+            <WeekStrip monthLabel={dashboard.monthLabel} days={dashboard.weekStripDays} />
+            <BalanceCard totals={dashboard.totals} moneda={dashboard.moneda} />
+          </div>
+          <WeeklyChart
+            chart={dashboard.week.chart}
+            totalGastos={dashboard.week.totalGastos}
+            moneda={dashboard.moneda}
+            todayIso={dashboard.todayIso}
+          />
+          <AreasBanner />
+          <RecentMovimientos movimientos={dashboard.recent} />
+        </div>
+      )}
     </main>
   )
 }
