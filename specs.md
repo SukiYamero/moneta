@@ -400,6 +400,7 @@ tiebreakValue }` bigger than the margin — e.g. a bulk import that
   IndexedDB's structured-clone semantics mean this is also true "for free"
   across separate reads, but the explicit spreads make the guarantee hold
   even within one synchronous call.
+
 ### 10.4 Drive-sync opt-in + Welcome screen
 
 Full design: Claude Design canvas `Moneta.dc.html` ("AUTH: WELCOME" and
@@ -854,41 +855,33 @@ b DESC`, not a mix) and made the fast path's range-bound construction
   with a Testing-mode client (`http://localhost:5173` origin, dev Gmail as test user):
   identity-only consent (name + email, **no Drive**), reached `authenticated`, no Drive
   writes. Production domain / app verification remains a later, production-only concern.
-- **Drive-sync opt-in UI (§10.1).** `authStore.connectDrive` provisions the `KuroBello`
-  folder + 3 files but has no caller yet (bootstrap decoupled from login, 2026-07-02).
-  A user-facing "enable Drive sync" entry point must call it; until then the app runs
-  local-first with no Drive writes. The Claude Design canvas's "Drive permission"
-  screen is this entry point (see `docs/ui/implementation-plan.md`, "Auth" unit) —
-  implement it from there rather than designing a new one. Verify then: first call → folder + 3 files; second
-  call reuses them (no dupes).
-- **Wire the PIN-lock activation (§10.2).** The lock's crypto/store core is merged
-  and green; activation now has a minimal harness, one piece still pending:
+- ✅ **Drive-sync opt-in UI (§10.1) closed** — 2026-08-18 (Track B, Wave 1).
+  `DrivePermissionScreen` is the real caller for `authStore.connectDrive`, wired
+  through `RequireAuth` right after login; `WelcomeScreen` replaces the bare
+  `LoginScreen`. Both built from the Claude Design canvas's own screens. See §10.4.
+- **Verify `connectDrive` against real Drive (§10.1 "Done when — connectDrive").**
+  Still unverified at runtime: the screen that calls it now exists, but nobody has
+  run it against a live Google account. Needs a human in the OAuth popup, so it
+  can't be agent-verified. Check: first call → `KuroBello` folder + 3 files;
+  second call reuses them (no dupes, find-before-create).
+- ✅ **PIN-lock activation (§10.2) fully wired** — both sub-items below are done, so
+  §10.2's "Done when — Activation" is met:
   1. ✅ **Enable-lock UI (minimal)** — 2026-07-02. `LockSettings` on `Home` collects a
      4-digit PIN + optional biometric → `lockStore.enable`, plus "Lock now" (`lockStore.lock`,
      new manual re-lock action) and "Desactivar" (`reset`). `lockStore` gained an `enabled`
      flag so the UI knows the vault state. This is a **dev/test harness**, not the polished
      settings UI — that still rides with the polished-UI spec.
-  2. **`updateSession` wiring** — `pinLock.updateSession` (re-encrypt a rotated
-     token under the same DEK) exists and is tested but has no caller. Wire it into
-     the token-refresh / `authStore` success path so the vault's token stays fresh;
-     otherwise, once enabled, the cached token goes stale after first expiry and
-     every cold start forces a Google re-login (lock gives no convenience).
-     Both were flagged by the final whole-branch review (2026-06-26) as the gap
-     between the §10.2 "Done when" and what shipped; tracked here so code and spec
-     don't silently drift.
+  2. ✅ **`updateSession` wiring** — 2026-08-18 (Track B, Wave 1). Wired into
+     `login`/`restore`/`hydrate`/`connectDrive` in `authStore` via a
+     `syncLockedSession` helper that no-ops when no vault exists and never fails the
+     auth flow it rides on. Without it the cached token went stale after first expiry
+     and every cold start forced a Google re-login, so the lock gave no convenience.
 - **Rename the OAuth consent screen to the current brand** (user, in Google Cloud
   Console → Google Auth Platform → Branding → App name → "KuroBello"). Client ID
   and origins are untouched — no code change. In Testing mode the change is
   instant, no re-verification.
 - **App icon for the brand.** The PWA still ships the scaffold `favicon.svg`;
   a KuroBello icon (maskable + favicon) is pending. Cosmetic, not blocking.
-- ✅ **Drive-sync opt-in UI (§10.1/§10.4) closed** — 2026-08-18 (Track B).
-  `DrivePermissionScreen` is the real caller for `authStore.connectDrive`,
-  wired through `RequireAuth` right after login. `WelcomeScreen` replaces
-  `LoginScreen`. See §10.4 and the §11 decisions above.
-- ✅ **`updateSession` wiring (§10.2 item 2) closed** — 2026-08-18 (Track B).
-  Wired into `login`/`restore`/`hydrate`/`connectDrive` in `authStore`; see
-  the §11 decision above. §10.2's "Done when — Activation" is now fully met.
 - **Persistent Drive-sync toggle (follow-up from §10.4/§11 2026-08-18,
   Track G, Wave 2).** The "Ahora no" dismissal deliberately doesn't persist
   (per-session only, see §11). Once the Profile sheet exists, add a Drive
@@ -905,7 +898,10 @@ cross-feature composed components from `docs/ui/implementation-plan.md`
 don't belong to any one feature folder. Same barrel/naming rule applies
 (each component named after itself, never `index.tsx`).
 
-**Wave 1 — 3 tracks, zero shared files, zero cross-dependency. Launchable now:**
+**Wave 1 — ✅ COMPLETE (merged to `main` 2026-08-18).** All three tracks shipped:
+`repo.local.ts` (A), Welcome + Drive-permission screens and `updateSession`
+wiring (B), and `src/components/shared/**` + `repo.fake.ts` (D). Kept below as
+the record of what each track owned.
 
 | Track                                   | Scope                                                                                                                                                                                                                                                                                                                  | Owns                                                                 |
 | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
@@ -913,8 +909,8 @@ don't belong to any one feature folder. Same barrel/naming rule applies
 | **B — Drive opt-in + token refresh**    | Implements the real "Drive permission" screen (`docs/ui/implementation-plan.md`, Auth unit) — the entry point that finally calls `authStore.connectDrive`, closing the standing §12 backlog item. Also the Welcome screen (replaces `LoginScreen.tsx`), and wiring `pinLock.updateSession` into token refresh.         | `src/features/auth/**` (extend), `src/lib/authStore.ts`, specs §10.4 |
 | **D — Foundational UI kit + fake repo** | Build, in this order: `BottomSheet`, `CenterModal`, `IconAvatar`, `MovimientoRow`, `TagChip`, `DateChipPicker`, `SegmentedControl`, `Toggle`, `InfoButton` (`docs/ui/implementation-plan.md`). Plus `repo.fake.ts` — one shared in-memory `Repo` impl, seeded Spanish sample data. **Blocker for every Wave 2 track.** | `src/components/shared/**` (new), `src/lib/repo.fake.ts`             |
 
-**Wave 2 — unlocked once D merges (every screen needs the shared kit + fake
-repo). Pick tracks per natural grouping, not necessarily all at once:**
+**Wave 2 — ▶️ UNBLOCKED (D merged 2026-08-18: `src/components/shared/**`+`repo.fake.ts`are on`main`). Pick tracks per natural grouping, not
+necessarily all at once:\*\*
 
 | Track                              | Scope                                                                                                                                                                                                                         | Owns                                                                                                     |
 | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
@@ -935,11 +931,9 @@ table against `git worktree list` at the start of any parallel session and
 remove anything marked done (or orphaned: on disk but not in this table, or in
 this table but the branch is already merged/gone).
 
-| Created    | Track / task     | Path                         | Branch                | Status                  | Notes                                                                      |
-| ---------- | ---------------- | ---------------------------- | --------------------- | ----------------------- | -------------------------------------------------------------------------- |
-| 2026-08-18 | Wave 1 · Track A | `../moneta-wt/a-repo-dexie`  | `track/a-repo-dexie`  | active                  | Dexie-backed `Repo` implementation (§10.3). No dev server.                 |
-| 2026-08-18 | Wave 1 · Track B | `../moneta-wt/b-drive-optin` | `track/b-drive-optin` | merged, pending cleanup | Welcome + Drive-permission screens, `updateSession` wiring. Dev port 5175. |
-| 2026-08-18 | Wave 1 · Track D | `../moneta-wt/d-ui-kit`      | `track/d-ui-kit`      | merged, pending cleanup | Shared UI kit + `repo.fake.ts`. Dev port 5174.                             |
+| Created    | Track / task    | Path | Branch | Status | Notes                                                                  |
+| ---------- | --------------- | ---- | ------ | ------ | ---------------------------------------------------------------------- |
+| 2026-08-18 | _(none active)_ | —    | —      | —      | Wave 1 (tracks A, B, D) merged to `main`; all three worktrees removed. |
 
 Status values: `active` (work in progress) → `merged, pending cleanup` (branch
 merged to `main`, worktree not yet removed) → row deleted once
