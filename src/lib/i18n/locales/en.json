@@ -6,7 +6,13 @@
       "subtitleLine2": "You own your data.",
       "googleCta": "Continue with Google",
       "connecting": "Connecting…",
-      "legal": "By continuing you accept the <terms>Terms</terms> and the <privacy>Privacy Policy</privacy>"
+      "legal": "By continuing you accept the <terms>Terms</terms> and the <privacy>Privacy Policy</privacy>",
+      "orDivider": "or",
+      "guestCta": "Continue as guest",
+      "guestReassurance": "As a guest, your data stays only on this device. It isn't synced — if you lose the device, you lose the data too."
+    },
+    "boot": {
+      "loading": "Loading…"
     },
     "errors": {
       "missingClientId": "Configuration error. Please try again later.",
