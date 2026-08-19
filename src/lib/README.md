@@ -31,6 +31,17 @@ Shared stores, helpers, and the Drive/auth/lock logic layer. No UI here.
   `authStore.restore()`'s silent re-auth so it can tell a returning user
   apart from a first-ever visit or a just-locked-out device (`specs.md` §11,
   2026-08-19).
+- `toastStore.ts` — the global notification store behind `Toaster`:
+  `toast.success(message)` / `toast.error(message)`, callable from anywhere
+  with no provider. Holds no domain state and reads no other store
+  (`specs.md` §10.6) — `setToastsSuppressed(boolean)` is a domain-free flag
+  `AppLock` drives from the lock phase, so the dependency points policy →
+  surface and nothing that merely raises a toast pulls in WebCrypto/Dexie.
+  Stack capped at 3, one independent timer per card (4s success / 7s error),
+  identical re-raises collapse instead of stacking. Suppressing also clears
+  what is already on screen, so nothing can resurface after an unlock.
+  Callers pass already-localized copy; it never renders a raw
+  `error.message` (`docs/error-handling.md` §5/§7).
 - `utils.ts` — `cn()`, the Tailwind class-merge helper.
 - `repo.ts` — the storage-agnostic `Repo` port contract (`Repo`, `CrudRepo`,
   `ListQuery`, `ListResult`, `RepoError`). Frozen shape — additive changes

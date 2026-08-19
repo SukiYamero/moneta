@@ -58,6 +58,18 @@ doesn't belong to any one `src/features/**` folder. See `specs.md` §10.5.
 - `Toggle.tsx` — on/off switch (`role="switch"`). Accepts `ref`.
 - `InfoButton.tsx` — small "?" affordance that opens an info tooltip
   (the caller owns the `CenterModal` it opens). Accepts `ref`.
+- `Toast.tsx` — a single toast card: `role="alert"` (errors) /
+  `role="status"` (confirmations), swipe-to-dismiss via Pointer Events
+  (`touch-pan-y`, mirroring `BottomSheet`'s drag handling), plus a
+  keyboard-reachable close button — a timed message must stay dismissible
+  without the gesture (WCAG 2.2.1).
+- `Toaster.tsx` — the stack: subscribes to `src/lib/toastStore.ts`, portals
+  to `document.body`, sits at `z-[60]` (above `BottomSheet`/`CenterModal`'s
+  `z-50`, so a sheet can never cover it). Mounted once, inside `AppLock`,
+  only while the app is unlocked. The store itself lives in `src/lib/` and
+  is documented there — it holds no domain state and reads no other store
+  (`specs.md` §10.6); `AppLock` drives its suppression flag rather than the
+  store importing `lockStore`.
 - `index.ts` — the public barrel. Component files are never `index.tsx`
   themselves (see `AGENTS.md` § Architecture & file naming).
 
