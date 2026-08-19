@@ -529,14 +529,23 @@ function createCrudRepo<T extends { id: EntityId }>(
       return fresh
     } catch (error) {
       if (hasConstraintFailure(error)) {
-        const duplicateId = await findDuplicateId(table, items)
-        throw new RepoError(
-          duplicateId
-            ? `id "${duplicateId}" already exists`
-            : 'one or more ids in this batch already exist',
-          'invalid_input',
-          { cause: error },
-        )
+        // findDuplicateId() is itself a second storage call (table.bulkGet) —
+        // a failure in *it* must funnel through the same wrapUnknown()
+        // normalization as the bulkAdd failure that triggered this branch,
+        // or a second, unrelated storage fault racing the first would escape
+        // addMany() as a bare Error instead of a RepoError.
+        try {
+          const duplicateId = await findDuplicateId(table, items)
+          throw new RepoError(
+            duplicateId
+              ? `id "${duplicateId}" already exists`
+              : 'one or more ids in this batch already exist',
+            'invalid_input',
+            { cause: error },
+          )
+        } catch (lookupError) {
+          wrapUnknown(lookupError)
+        }
       }
       wrapUnknown(error)
     }
@@ -702,12 +711,16 @@ export function createLocalRepo(): Repo {
 
   async function getConfig(): Promise<Config> {
     await ready()
-    const row = await db.config.get(CONFIG_ID)
-    if (!row) {
-      throw new RepoError('config missing after ready()', 'unknown')
+    try {
+      const row = await db.config.get(CONFIG_ID)
+      if (!row) {
+        throw new RepoError('config missing after ready()', 'unknown')
+      }
+      const { id: _id, ...config } = row
+      return config
+    } catch (error) {
+      wrapUnknown(error)
     }
-    const { id: _id, ...config } = row
-    return config
   }
 
   async function updateConfig(patch: Partial<Config>): Promise<Config> {
@@ -715,18 +728,24 @@ export function createLocalRepo(): Repo {
     // schemaVersion is owned by ready()/migrations, never by callers — the
     // `Partial<Config>` patch type structurally allows it, but honoring it
     // (even silently dropping it) would let a caller believe a schema-version
-    // write succeeded. Reject it explicitly instead.
+    // write succeeded. Reject it explicitly instead. Kept outside the
+    // try/catch below, same as `add()`'s pre-storage `validate(item)` call —
+    // this is a caller-input rejection, not a storage failure to normalize.
     if (patch.schemaVersion !== undefined) {
       throw new RepoError('schemaVersion is not caller-writable via updateConfig', 'invalid_input')
     }
-    const existing = await db.config.get(CONFIG_ID)
-    if (!existing) {
-      throw new RepoError('config missing after ready()', 'unknown')
+    try {
+      const existing = await db.config.get(CONFIG_ID)
+      if (!existing) {
+        throw new RepoError('config missing after ready()', 'unknown')
+      }
+      const merged: ConfigRow = { ...existing, ...patch, id: CONFIG_ID }
+      await db.config.put(merged)
+      const { id: _mergedId, ...config } = merged
+      return config
+    } catch (error) {
+      wrapUnknown(error)
     }
-    const merged: ConfigRow = { ...existing, ...patch, id: CONFIG_ID }
-    await db.config.put(merged)
-    const { id: _mergedId, ...config } = merged
-    return config
   }
 
   return { ready, movimientos, activos, getConfig, updateConfig }
