@@ -45,7 +45,50 @@
     "profile": "Perfil",
     "add": "Agregar movimiento"
   },
-  "home": {},
+  "home": {
+    "greeting": {
+      "morning": "Buen día",
+      "afternoon": "Buenas tardes",
+      "evening": "Buenas noches"
+    },
+    "notifications": "Notificaciones",
+    "searchPlaceholder": "Buscar movimientos",
+    "balance": {
+      "title": "Balance total",
+      "show": "Mostrar montos",
+      "hide": "Ocultar montos",
+      "income": "Ingresos",
+      "expense": "Gastos"
+    },
+    "chart": {
+      "title": "Gastos de la semana",
+      "subtitle": "Esta semana"
+    },
+    "areas": {
+      "title": "Áreas",
+      "meta": "Próximamente"
+    },
+    "recent": {
+      "title": "Movimientos",
+      "viewAll": "Ver todo"
+    },
+    "empty": {
+      "title": "Todavía no tenés movimientos",
+      "body": "Registrá tu primer ingreso o gasto para ver tu resumen acá."
+    },
+    "loading": "Cargando tu resumen…",
+    "error": {
+      "title": "No pudimos cargar tus datos",
+      "retry": "Reintentar",
+      "codes": {
+        "notFound": "No encontramos tus datos.",
+        "schemaMismatch": "Tus datos no son compatibles con esta versión de la app.",
+        "invalidInput": "Hubo un problema con tus datos.",
+        "network": "No hay conexión. Revisá tu internet e intentá de nuevo.",
+        "unknown": "Ocurrió un error inesperado. Intentá de nuevo."
+      }
+    }
+  },
   "search": {
     "title": "Buscar",
     "placeholder": "Esta pantalla está en construcción."
