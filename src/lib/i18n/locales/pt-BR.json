@@ -112,7 +112,15 @@
     "resultsCount_one": "{{count}} resultado",
     "resultsCount_other": "{{count}} resultados",
     "loading": "Carregando movimentos…",
-    "error": "Não conseguimos carregar seus movimentos.",
+    "error": {
+      "codes": {
+        "notFound": "Não encontramos seus movimentos.",
+        "schemaMismatch": "Seus movimentos não são compatíveis com esta versão do app.",
+        "invalidInput": "Houve um problema com seus movimentos.",
+        "network": "Sem conexão. Verifique sua internet e tente novamente.",
+        "unknown": "Ocorreu um erro inesperado. Tente novamente."
+      }
+    },
     "retry": "Tentar de novo",
     "emptyData": {
       "title": "Você ainda não tem movimentos",
@@ -153,7 +161,15 @@
   "history": {
     "title": "Histórico",
     "loading": "Carregando seu histórico…",
-    "error": "Não conseguimos carregar seu histórico. Tente de novo.",
+    "error": {
+      "codes": {
+        "notFound": "Não encontramos seu histórico.",
+        "schemaMismatch": "Seu histórico não é compatível com esta versão do app.",
+        "invalidInput": "Houve um problema com seu histórico.",
+        "network": "Sem conexão. Verifique sua internet e tente novamente.",
+        "unknown": "Ocorreu um erro inesperado. Tente novamente."
+      }
+    },
     "retry": "Tentar de novo",
     "scope": {
       "ariaLabel": "Alcance do período",

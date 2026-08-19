@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { RepoErrorCode } from '@/lib/repo'
-import { homeErrorCopy } from '@/features/home/errorCopy'
+import { repoErrorCopyKey } from '@/lib/errorCopy'
 
-describe('homeErrorCopy', () => {
+describe('repoErrorCopyKey', () => {
   const cases: [RepoErrorCode, string][] = [
     ['not_found', 'error.codes.notFound'],
     ['schema_mismatch', 'error.codes.schemaMismatch'],
@@ -12,6 +12,6 @@ describe('homeErrorCopy', () => {
   ]
 
   it.each(cases)('maps %s to its translation key', (code, key) => {
-    expect(homeErrorCopy(code)).toBe(key)
+    expect(repoErrorCopyKey(code)).toBe(key)
   })
 })

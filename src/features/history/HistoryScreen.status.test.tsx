@@ -47,11 +47,22 @@ describe('HistoryScreen status handling', () => {
   it('shows an error message with role="alert" when status is error, per docs/error-handling.md §7', () => {
     mockStore({ status: 'error', error: 'unknown' })
     render(<HistoryScreen />)
-    expect(screen.getByRole('alert')).toHaveTextContent('No pudimos cargar')
+    // specs.md §10.11: History now names the actual failure via the shared
+    // repoErrorCopyKey table, not a generic per-screen string.
+    expect(screen.getByRole('alert')).toHaveTextContent('Ocurrió un error inesperado')
     // A polite `role="status"` node must not exist alongside — Home/Search
     // don't render one for the error path either, and having both would
     // announce the same failure twice.
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
+  })
+
+  // The actual point of the move to a shared errorCopy table (specs.md
+  // §10.11): a user with no connection is told that specifically, not the
+  // same generic line every other failure shows.
+  it('names a network failure specifically, not the generic fallback', () => {
+    mockStore({ status: 'error', error: 'network' })
+    render(<HistoryScreen />)
+    expect(screen.getByRole('alert')).toHaveTextContent('No hay conexión')
   })
 
   it('offers a retry action on the error state that calls load() again', async () => {

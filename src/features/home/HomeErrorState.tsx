@@ -1,7 +1,7 @@
 import { CircleAlert } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { RepoErrorCode } from '@/lib/repo'
-import { homeErrorCopy } from '@/features/home/errorCopy'
+import { repoErrorCopyKey } from '@/lib/errorCopy'
 
 export interface HomeErrorStateProps {
   code: RepoErrorCode
@@ -24,7 +24,7 @@ export const HomeErrorState = ({ code, onRetry }: HomeErrorStateProps) => {
       <div>
         <p className="text-base font-bold">{t('error.title')}</p>
         <p className="mt-1.5 text-ms leading-relaxed font-medium text-muted-foreground">
-          {t(homeErrorCopy(code))}
+          {t(repoErrorCopyKey(code))}
         </p>
       </div>
       <button
