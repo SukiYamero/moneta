@@ -17,9 +17,10 @@ import {
   isBackgroundExpired,
   forgetDek,
 } from '@/lib/pinLock'
-import type { AuthSession } from '@/lib/auth'
+import type { AuthSession, GoogleUser } from '@/lib/auth'
 
 const session: AuthSession = { accessToken: 'tok-abc', expiresAt: 9_999_999_999_000 }
+const user: GoogleUser = { email: 'a@b.com', name: 'Ana' }
 
 afterEach(async () => {
   await db.vault.clear()
@@ -31,7 +32,68 @@ test('enable then unlock with the correct PIN returns the session', async () => 
   expect(await hasVault()).toBe(true)
 
   const unlocked = await unlockWithPin('1234')
-  expect(unlocked).toEqual(session)
+  expect(unlocked).toEqual({ session, user: null })
+})
+
+test('enable caches the profile alongside the session, and unlock returns both', async () => {
+  await enableLock({ pin: '1234', session, user })
+
+  const unlocked = await unlockWithPin('1234')
+  expect(unlocked).toEqual({ session, user })
+})
+
+// specs.md §10.11 / docs/wave-3-plan.md §2.1(1): a vault written before the
+// cached-profile envelope existed stored the bare AuthSession as its *whole*
+// plaintext, no { v: 2, session, user } wrapper at all. Built here with the
+// real WebCrypto primitives directly (not through enableLock, which only
+// ever writes the new v2 shape now) so this is a genuine legacy fixture, not
+// a restatement of the current encoder.
+test('unlockWithPin decodes a legacy v1 vault (bare AuthSession, no envelope) backward-compatibly', async () => {
+  await resetVault()
+  const enc = new TextEncoder()
+  const pinSalt = crypto.getRandomValues(new Uint8Array(16))
+  const pinIterations = 1000
+  const dek = crypto.getRandomValues(new Uint8Array(32))
+
+  const pinBase = await crypto.subtle.importKey('raw', enc.encode('1234'), 'PBKDF2', false, [
+    'deriveKey',
+  ])
+  const pinKey = await crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt: pinSalt, iterations: pinIterations, hash: 'SHA-256' },
+    pinBase,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt'],
+  )
+  const pinWrapIv = crypto.getRandomValues(new Uint8Array(12))
+  const dekWrappedByPin = new Uint8Array(
+    await crypto.subtle.encrypt({ name: 'AES-GCM', iv: pinWrapIv }, pinKey, dek),
+  )
+
+  const dekKey = await crypto.subtle.importKey('raw', dek, 'AES-GCM', false, ['encrypt', 'decrypt'])
+  const tokenIv = crypto.getRandomValues(new Uint8Array(12))
+  const tokenCipher = new Uint8Array(
+    await crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv: tokenIv },
+      dekKey,
+      enc.encode(JSON.stringify(session)),
+    ),
+  )
+
+  await db.vault.put({
+    id: 1,
+    schemaVersion: 1,
+    tokenCipher,
+    tokenIv,
+    pinSalt,
+    pinIterations,
+    dekWrappedByPin,
+    pinWrapIv,
+    failedAttempts: 0,
+    lastActiveAt: Date.now(),
+  })
+
+  expect(await unlockWithPin('1234')).toEqual({ session, user: null })
 })
 
 test('wrong PIN throws WrongPinError', async () => {
@@ -74,7 +136,7 @@ test('four wrong PINs then a correct PIN still unlocks and resets the counter', 
   for (let i = 0; i < 4; i++) {
     await expect(unlockWithPin('0000')).rejects.toBeInstanceOf(WrongPinError)
   }
-  expect(await unlockWithPin('1234')).toEqual(session)
+  expect(await unlockWithPin('1234')).toEqual({ session, user: null })
   await expect(unlockWithPin('0000')).rejects.toBeInstanceOf(WrongPinError)
   const after = await db.vault.get(1)
   expect(after?.failedAttempts).toBe(1)
@@ -87,15 +149,25 @@ test('enableLock leaves the vault unlocked in this tab, no separate unlock neede
   await enableLock({ pin: '1234', session })
 
   const refreshed: AuthSession = { accessToken: 'tok-fresh', expiresAt: 1_234_567_890_000 }
-  await updateSession(refreshed)
+  await updateSession(refreshed, null)
 
-  expect(await unlockWithPin('1234')).toEqual(refreshed)
+  expect(await unlockWithPin('1234')).toEqual({ session: refreshed, user: null })
+})
+
+test('updateSession also refreshes the cached profile', async () => {
+  await resetVault()
+  await enableLock({ pin: '1234', session })
+
+  const refreshedUser: GoogleUser = { email: 'fresh@b.com', name: 'Fresh Ana' }
+  await updateSession(session, refreshedUser)
+
+  expect(await unlockWithPin('1234')).toEqual({ session, user: refreshedUser })
 })
 
 test('forgetDek discards the in-memory key so updateSession requires a fresh unlock', async () => {
   await enableLock({ pin: '1234', session })
   forgetDek()
-  await expect(updateSession(session)).rejects.toThrow('lock: not unlocked')
+  await expect(updateSession(session, null)).rejects.toThrow('lock: not unlocked')
 })
 
 test('unlocking again after forgetDek restores a usable, refreshable session', async () => {
@@ -103,11 +175,11 @@ test('unlocking again after forgetDek restores a usable, refreshable session', a
   forgetDek()
 
   const unlocked = await unlockWithPin('1234')
-  expect(unlocked).toEqual(session)
+  expect(unlocked).toEqual({ session, user: null })
 
   const refreshed: AuthSession = { accessToken: 'tok-after-relock', expiresAt: 1_222_333_444_000 }
-  await updateSession(refreshed)
-  expect(await unlockWithPin('1234')).toEqual(refreshed)
+  await updateSession(refreshed, null)
+  expect(await unlockWithPin('1234')).toEqual({ session: refreshed, user: null })
 })
 
 test('resetVault wipes the vault', async () => {
@@ -174,12 +246,12 @@ test('updateSession re-encrypts a refreshed token under the same DEK', async () 
   // numeric-keyed objects, so compare byte content, not the representation.
   const bytes = (v: unknown) => Uint8Array.from(Object.values(v as Record<string, number>))
   const dekBefore = bytes((await db.vault.get(1))!.dekWrappedByPin)
-  await updateSession(refreshed)
+  await updateSession(refreshed, null)
   const dekAfter = bytes((await db.vault.get(1))!.dekWrappedByPin)
 
   const unlocked = await unlockWithPin('1234')
 
-  expect(unlocked).toEqual(refreshed)
+  expect(unlocked).toEqual({ session: refreshed, user: null })
   expect(dekAfter).toEqual(dekBefore)
 })
 
@@ -220,7 +292,7 @@ test('enable with biometric then unlock via PRF returns the session', async () =
   expect(await biometricEnabled()).toBe(true)
 
   const unlocked = await unlockWithBiometric()
-  expect(unlocked).toEqual(session)
+  expect(unlocked).toEqual({ session, user: null })
 
   const getSpy = navigator.credentials.get as ReturnType<typeof vi.fn>
   // enableLock's registration also calls get; the LAST call is the unlock ceremony.
@@ -235,7 +307,7 @@ test('enable with biometric then unlock via PRF returns the session', async () =
 test('PIN still unlocks when biometric is enabled', async () => {
   mockWebAuthn(PRF_SECRET)
   await enableLock({ pin: '1234', session, biometric: true })
-  expect(await unlockWithPin('1234')).toEqual(session)
+  expect(await unlockWithPin('1234')).toEqual({ session, user: null })
 })
 
 test('biometric unlock clears the PIN throttle', async () => {

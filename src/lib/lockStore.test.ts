@@ -15,7 +15,9 @@ const pinLock = {
 }
 const hydrate = vi.fn()
 const logout = vi.fn()
+const authStoreSubscribe = vi.fn()
 let authSession: unknown = null
+let authUser: unknown = null
 // hydrate() (a real authStore action) resolves into `status: 'error'` on
 // failure instead of throwing — this mock lets tests drive that outcome so
 // resume() can be tested against the actual contract, not an assumption.
@@ -23,14 +25,23 @@ let authStatus = 'authenticated'
 
 vi.mock('@/lib/pinLock', () => pinLock)
 vi.mock('@/lib/authStore', () => ({
-  useAuthStore: { getState: () => ({ hydrate, logout, session: authSession, status: authStatus }) },
+  useAuthStore: {
+    getState: () => ({ hydrate, logout, session: authSession, user: authUser, status: authStatus }),
+    // lockStore.ts subscribes at module scope (the logout-relock fix,
+    // specs.md §12) — a bare vi.fn() here just needs to exist so that call
+    // doesn't throw; the subscription tests below capture the registered
+    // listener directly instead of exercising a real zustand store.
+    subscribe: authStoreSubscribe,
+  },
 }))
 
 const session = { accessToken: 'tok', expiresAt: 9_999_999_999_000 }
+const user = { email: 'a@b.com', name: 'Ana' }
 
 beforeEach(() => {
   vi.clearAllMocks()
   authSession = null
+  authUser = null
   authStatus = 'authenticated'
 })
 
@@ -158,10 +169,16 @@ describe('useLockStore', () => {
 
   test('enable creates the vault and marks the lock enabled', async () => {
     authSession = session
+    authUser = user
     pinLock.enableLock.mockResolvedValue(undefined)
     const { useLockStore } = await import('@/lib/lockStore')
     await useLockStore.getState().enable('1234', false)
-    expect(pinLock.enableLock).toHaveBeenCalledWith({ pin: '1234', session, biometric: false })
+    expect(pinLock.enableLock).toHaveBeenCalledWith({
+      pin: '1234',
+      session,
+      user,
+      biometric: false,
+    })
     expect(useLockStore.getState().enabled).toBe(true)
     expect(useLockStore.getState().phase).toBe('unlocked')
   })
@@ -186,18 +203,18 @@ describe('useLockStore', () => {
   })
 
   test('unlockPin hydrates auth and unlocks', async () => {
-    pinLock.unlockWithPin.mockResolvedValue(session)
+    pinLock.unlockWithPin.mockResolvedValue({ session, user })
     const { useLockStore } = await import('@/lib/lockStore')
     await useLockStore.getState().unlockPin('1234')
-    expect(hydrate).toHaveBeenCalledWith(session)
+    expect(hydrate).toHaveBeenCalledWith(session, user)
     expect(useLockStore.getState().phase).toBe('unlocked')
   })
 
   test('unlockBiometric hydrates auth and unlocks', async () => {
-    pinLock.unlockWithBiometric.mockResolvedValue(session)
+    pinLock.unlockWithBiometric.mockResolvedValue({ session, user })
     const { useLockStore } = await import('@/lib/lockStore')
     await useLockStore.getState().unlockBiometric()
-    expect(hydrate).toHaveBeenCalledWith(session)
+    expect(hydrate).toHaveBeenCalledWith(session, user)
     expect(useLockStore.getState().phase).toBe('unlocked')
   })
 
@@ -207,7 +224,7 @@ describe('useLockStore', () => {
   // A correct PIN unlocking a vault whose cached token has since expired
   // must not be reported as a clean success.
   test('resume checks hydrate’s actual outcome instead of assuming success', async () => {
-    pinLock.unlockWithPin.mockResolvedValue(session)
+    pinLock.unlockWithPin.mockResolvedValue({ session, user })
     hydrate.mockImplementation(async () => {
       authStatus = 'error'
     })
@@ -223,7 +240,7 @@ describe('useLockStore', () => {
   })
 
   test('resume reports a clean success when hydrate genuinely succeeded', async () => {
-    pinLock.unlockWithPin.mockResolvedValue(session)
+    pinLock.unlockWithPin.mockResolvedValue({ session, user })
     hydrate.mockImplementation(async () => {
       authStatus = 'authenticated'
     })
@@ -234,6 +251,20 @@ describe('useLockStore', () => {
 
     expect(useLockStore.getState().phase).toBe('unlocked')
     expect(useLockStore.getState().error).toBeNull()
+  })
+
+  // specs.md §10.11: a correct PIN with no network must reach 'authenticated'
+  // via hydrate()'s own redesign — resume() no longer manufactures
+  // SESSION_RESTORE_ERROR for that case since hydrate() (real implementation)
+  // doesn't fail for it anymore. This mock still proves resume() passes the
+  // cached profile through, which is what makes that redesign possible.
+  test('unlockPin passes the vault-cached profile through to hydrate, even when null', async () => {
+    pinLock.unlockWithPin.mockResolvedValue({ session, user: null })
+    const { useLockStore } = await import('@/lib/lockStore')
+
+    await useLockStore.getState().unlockPin('1234')
+
+    expect(hydrate).toHaveBeenCalledWith(session, null)
   })
 
   test('wrong pin sets error without changing phase', async () => {
@@ -339,5 +370,71 @@ describe('useLockStore', () => {
 
     expect(useLockStore.getState().error).toBeNull()
     expect(useLockStore.getState().phase).toBe('unlocked')
+  })
+
+  // specs.md §12 backlog: a same-tab logout() must re-lock the vault, or the
+  // DEK stays resident in memory. lockStore.ts can't import authStore.ts's
+  // logout() to call lock() (that would be a real circular import, since
+  // authStore.ts is already imported by this module) — it listens for the
+  // one transition an explicit logout() produces via useAuthStore.subscribe
+  // instead. vi.resetModules() forces the module body (and its one-time
+  // subscribe() registration) to run again, since a later test's dynamic
+  // import would otherwise hit the ESM cache and register nothing new.
+  describe('logout-relock subscription (specs.md §12)', () => {
+    test('re-locks when status settles on idle with a newly-cleared session', async () => {
+      vi.resetModules()
+      const { useLockStore } = await import('@/lib/lockStore')
+      useLockStore.setState({ phase: 'unlocked', enabled: true })
+
+      const listener = authStoreSubscribe.mock.calls.at(-1)![0] as (
+        state: { status: string; session: unknown },
+        prevState: { status: string; session: unknown },
+      ) => void
+      listener(
+        { status: 'idle', session: null },
+        { status: 'authenticated', session: { accessToken: 'tok', expiresAt: 1 } },
+      )
+
+      expect(useLockStore.getState().phase).toBe('locked')
+      expect(pinLock.forgetDek).toHaveBeenCalled()
+    })
+
+    test('does not re-lock when the lock was never enabled', async () => {
+      vi.resetModules()
+      const { useLockStore } = await import('@/lib/lockStore')
+      useLockStore.setState({ phase: 'unlocked', enabled: false })
+
+      const listener = authStoreSubscribe.mock.calls.at(-1)![0] as (
+        state: { status: string; session: unknown },
+        prevState: { status: string; session: unknown },
+      ) => void
+      listener(
+        { status: 'idle', session: null },
+        { status: 'authenticated', session: { accessToken: 'tok', expiresAt: 1 } },
+      )
+
+      expect(useLockStore.getState().phase).toBe('unlocked')
+      expect(pinLock.forgetDek).not.toHaveBeenCalled()
+    })
+
+    // restore()'s own silent-auth-failure fallback also lands on status
+    // 'idle' (no PIN lock enabled, so this transition never applies to that
+    // caller anyway — enabled is false — but the listener itself must not
+    // key on 'idle' alone) — a session that was already null stays null,
+    // there's no real logout transition here to react to.
+    test('does not fire on an idle-to-idle transition with no session change', async () => {
+      vi.resetModules()
+      const { useLockStore } = await import('@/lib/lockStore')
+      useLockStore.setState({ phase: 'unlocked', enabled: true })
+
+      const listener = authStoreSubscribe.mock.calls.at(-1)![0] as (
+        state: { status: string; session: unknown },
+        prevState: { status: string; session: unknown },
+      ) => void
+      listener({ status: 'idle', session: null }, { status: 'idle', session: null })
+
+      expect(useLockStore.getState().phase).toBe('unlocked')
+      expect(pinLock.forgetDek).not.toHaveBeenCalled()
+    })
   })
 })

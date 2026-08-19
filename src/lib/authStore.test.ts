@@ -1,10 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-vi.mock('@/lib/auth', () => ({
-  requestAccessToken: vi.fn(),
-  fetchGoogleUser: vi.fn(),
-  DRIVE_SCOPES: 'drive-scopes',
-}))
+vi.mock('@/lib/auth', () => {
+  class AuthError extends Error {
+    constructor(reason: string) {
+      super(`auth: ${reason}`)
+      this.name = 'AuthError'
+    }
+  }
+  return {
+    AuthError,
+    requestAccessToken: vi.fn(),
+    fetchGoogleUser: vi.fn(),
+    DRIVE_SCOPES: 'drive-scopes',
+  }
+})
 vi.mock('@/lib/bootstrap', () => ({ bootstrap: vi.fn() }))
 vi.mock('@/lib/pinLock', () => ({ hasVault: vi.fn(), updateSession: vi.fn() }))
 vi.mock('@/lib/deviceStore', () => ({
@@ -15,7 +24,20 @@ vi.mock('@/lib/deviceStore', () => ({
   clearDriveDecision: vi.fn(),
 }))
 
-import { requestAccessToken, fetchGoogleUser } from '@/lib/auth'
+let networkOnline = true
+const mReportOnlineSuccess = vi.fn()
+const mReportOnlineFailure = vi.fn()
+vi.mock('@/lib/networkStore', () => ({
+  useNetworkStore: {
+    getState: () => ({
+      online: networkOnline,
+      reportOnlineSuccess: mReportOnlineSuccess,
+      reportOnlineFailure: mReportOnlineFailure,
+    }),
+  },
+}))
+
+import { AuthError, requestAccessToken, fetchGoogleUser } from '@/lib/auth'
 import { bootstrap } from '@/lib/bootstrap'
 import { hasVault, updateSession } from '@/lib/pinLock'
 import {
@@ -40,6 +62,7 @@ const mClearDriveDecision = vi.mocked(clearDriveDecision)
 
 beforeEach(() => {
   vi.clearAllMocks()
+  networkOnline = true
   mHasVault.mockResolvedValue(false)
   // Most tests exercise something other than the login-marker gate itself —
   // default it to "already seen a login on this device" so restore()'s
@@ -97,7 +120,10 @@ describe('useAuthStore.login', () => {
 
     await useAuthStore.getState().login()
 
-    expect(mUpdateSession).toHaveBeenCalledWith({ accessToken: 'tok', expiresAt: 1 })
+    expect(mUpdateSession).toHaveBeenCalledWith(
+      { accessToken: 'tok', expiresAt: 1 },
+      { email: 'a@b.com', name: 'Ana' },
+    )
   })
 
   it('never calls updateSession when no vault exists', async () => {
@@ -173,6 +199,64 @@ describe('useAuthStore.login', () => {
     await useAuthStore.getState().login()
 
     expect(mMarkLoggedIn).not.toHaveBeenCalled()
+  })
+
+  it('reports a successful login to the network store', async () => {
+    mToken.mockResolvedValue({ accessToken: 'tok', expiresAt: 1 })
+    mUser.mockResolvedValue({ email: 'a@b.com', name: 'Ana' })
+
+    await useAuthStore.getState().login()
+
+    expect(mReportOnlineSuccess).toHaveBeenCalled()
+    expect(mReportOnlineFailure).not.toHaveBeenCalled()
+  })
+
+  // access_denied/popup_closed are real, non-network outcomes — the user
+  // declined or dismissed the Google popup while genuinely online, so this
+  // must not downgrade the network hint (docs/wave-3-audit-runtime.md
+  // finding 1's "let a failed request downgrade the state" is about real
+  // connectivity failures, not every possible auth outcome).
+  it('does not report a network failure for a real, non-network auth error', async () => {
+    mToken.mockRejectedValue(new AuthError('access_denied'))
+
+    await useAuthStore.getState().login()
+
+    expect(mReportOnlineFailure).not.toHaveBeenCalled()
+  })
+
+  it('reports a network failure when GIS itself could not load', async () => {
+    mToken.mockRejectedValue(new AuthError('GIS failed to load'))
+
+    await useAuthStore.getState().login()
+
+    expect(mReportOnlineFailure).toHaveBeenCalled()
+  })
+
+  // authGeneration backlog item (specs.md §12): login/restore/hydrate were
+  // the three paths that didn't check it, unlike connectDrive. A logout()
+  // firing while a login() is still in flight must not have the late
+  // resolve land status/session for an account the user already signed out
+  // of — same shape as connectDrive's own guard, now closed here too.
+  it('does not resurrect state when a logout() fires during an in-flight login()', async () => {
+    let resolveToken!: (v: { accessToken: string; expiresAt: number }) => void
+    mToken.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveToken = resolve
+        }),
+    )
+
+    const pending = useAuthStore.getState().login()
+    await vi.waitFor(() => expect(mToken).toHaveBeenCalled())
+
+    useAuthStore.getState().logout()
+    resolveToken({ accessToken: 'tok', expiresAt: 1 })
+    mUser.mockResolvedValue({ email: 'a@b.com', name: 'Ana' })
+    await pending
+
+    const s = useAuthStore.getState()
+    expect(s.status).toBe('idle')
+    expect(s.session).toBeNull()
   })
 
   // specs.md §11, 2026-08-19 (supersedes the 2026-08-18 in-memory-only
@@ -260,7 +344,10 @@ describe('useAuthStore.restore', () => {
 
     await useAuthStore.getState().restore()
 
-    expect(mUpdateSession).toHaveBeenCalledWith({ accessToken: 'tok', expiresAt: 1 })
+    expect(mUpdateSession).toHaveBeenCalledWith(
+      { accessToken: 'tok', expiresAt: 1 },
+      { email: 'a@b.com', name: 'Ana' },
+    )
   })
 
   it('is a no-op when status is not idle, so it can only run once on boot', async () => {
@@ -340,6 +427,43 @@ describe('useAuthStore.restore', () => {
     expect(s.drive).toBeNull()
     expect(s.driveError).toBeNull()
     warn.mockRestore()
+  })
+
+  // docs/wave-3-audit-runtime.md finding 1 / specs.md §10.11: the actual
+  // defect being fixed — a returning user, offline, with no PIN lock
+  // enabled (so no vault to decrypt) must not be stranded on WelcomeScreen.
+  describe('offline (docs/wave-3-audit-runtime.md finding 1)', () => {
+    it('skips the network call entirely and authenticates from the login marker alone', async () => {
+      networkOnline = false
+
+      await useAuthStore.getState().restore()
+
+      expect(mToken).not.toHaveBeenCalled()
+      const s = useAuthStore.getState()
+      expect(s.status).toBe('authenticated')
+      expect(s.session).toBeNull()
+      expect(s.user).toBeNull()
+      expect(s.error).toBeNull()
+    })
+
+    it('still resolves a previously persisted Drive decision without any network call', async () => {
+      networkOnline = false
+      mGetDriveDecision.mockResolvedValue('dismissed')
+
+      await useAuthStore.getState().restore()
+
+      expect(useAuthStore.getState().driveOptIn).toBe('dismissed')
+      expect(mToken).not.toHaveBeenCalled()
+    })
+
+    it('does not offline-authenticate a device that has never logged in before', async () => {
+      networkOnline = false
+      mHasLoggedInBefore.mockResolvedValue(false)
+
+      await useAuthStore.getState().restore()
+
+      expect(useAuthStore.getState().status).toBe('idle')
+    })
   })
 })
 
@@ -463,7 +587,7 @@ describe('useAuthStore.connectDrive', () => {
 
     await useAuthStore.getState().connectDrive()
 
-    expect(mUpdateSession).toHaveBeenCalledWith({ accessToken: 'drive-tok', expiresAt: 2 })
+    expect(mUpdateSession).toHaveBeenCalledWith({ accessToken: 'drive-tok', expiresAt: 2 }, null)
   })
 
   it('surfaces a driveError and stays usable on failure, without touching identity status', async () => {
@@ -559,37 +683,88 @@ describe('useAuthStore.dismissDrive', () => {
 })
 
 describe('useAuthStore.hydrate', () => {
-  it('populates user from an existing session without touching Drive', async () => {
-    const session = { accessToken: 'tok', expiresAt: Date.now() + 3_600_000 }
-    mUser.mockResolvedValue({ email: 'a@b.com', name: 'Ana' })
+  const cachedUser = { email: 'a@b.com', name: 'Ana' }
 
-    await useAuthStore.getState().hydrate(session)
+  // The vault decrypt that produced session/cachedUser already proved
+  // identity locally (specs.md §10.11) — hydrate() must land on
+  // 'authenticated' from that alone, with no network call awaited at all.
+  it('authenticates synchronously from the cached session and profile, without touching Drive or the network', async () => {
+    const session = { accessToken: 'tok', expiresAt: Date.now() + 3_600_000 }
+    // A hung fetchGoogleUser would prove hydrate() is still gating on it if
+    // this resolved without ever settling.
+    mUser.mockImplementation(() => new Promise(() => {}))
+
+    await useAuthStore.getState().hydrate(session, cachedUser)
 
     const s = useAuthStore.getState()
     expect(s.status).toBe('authenticated')
     expect(s.session).toEqual(session)
-    expect(s.user).not.toBeNull()
+    expect(s.user).toEqual(cachedUser)
     expect(s.drive).toBeNull()
     expect(mBootstrap).not.toHaveBeenCalled()
   })
 
-  it('transitions to error on failure', async () => {
-    const session = { accessToken: 'bad', expiresAt: Date.now() + 3_600_000 }
-    mUser.mockRejectedValue(new Error('network error'))
+  // The whole point of the fix (docs/wave-3-audit-runtime.md finding 1):
+  // a correct PIN with no network must reach 'authenticated', not 'error'.
+  it('stays authenticated on the cached profile when the network refresh fails (offline)', async () => {
+    const session = { accessToken: 'tok', expiresAt: Date.now() + 3_600_000 }
+    mUser.mockRejectedValue(new AuthError('GIS failed to load'))
 
-    await useAuthStore.getState().hydrate(session)
+    await useAuthStore.getState().hydrate(session, cachedUser)
+    await vi.waitFor(() => expect(mReportOnlineFailure).toHaveBeenCalled())
 
     const s = useAuthStore.getState()
-    expect(s.status).toBe('error')
-    expect(s.error).toBe('network error')
-    expect(s.session).toBeNull()
-    expect(s.user).toBeNull()
-    expect(s.drive).toBeNull()
+    expect(s.status).toBe('authenticated')
+    expect(s.session).toEqual(session)
+    expect(s.user).toEqual(cachedUser)
+    expect(s.error).toBeNull()
+  })
+
+  it('reports a network-shaped refresh failure to the network store, silently', async () => {
+    const session = { accessToken: 'tok', expiresAt: Date.now() + 3_600_000 }
+    mUser.mockRejectedValue(new AuthError('GIS failed to load'))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    await useAuthStore.getState().hydrate(session, cachedUser)
+    await vi.waitFor(() => expect(mReportOnlineFailure).toHaveBeenCalled())
+
+    // Silent, same reasoning as restore()'s own catch (docs/error-handling.md
+    // §2): failing to refresh while offline is the routine outcome for every
+    // biometric/PIN unlock in airplane mode, not a symptom of something broken.
+    expect(warn).not.toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
+  it('logs (but does not silently drop) a non-network-shaped refresh failure', async () => {
+    const session = { accessToken: 'tok', expiresAt: Date.now() + 3_600_000 }
+    mUser.mockRejectedValue(new AuthError('userinfo 401'))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    await useAuthStore.getState().hydrate(session, cachedUser)
+    await vi.waitFor(() => expect(warn).toHaveBeenCalled())
+
+    expect(mReportOnlineFailure).not.toHaveBeenCalled()
+    const s = useAuthStore.getState()
+    expect(s.status).toBe('authenticated')
+    expect(s.user).toEqual(cachedUser)
+    warn.mockRestore()
+  })
+
+  it('refreshes user and re-caches the session once fetchGoogleUser succeeds', async () => {
+    const session = { accessToken: 'tok', expiresAt: Date.now() + 3_600_000 }
+    const freshUser = { email: 'a@b.com', name: 'Ana Fresh' }
+    mUser.mockResolvedValue(freshUser)
+    mHasVault.mockResolvedValue(true)
+
+    await useAuthStore.getState().hydrate(session, cachedUser)
+    await vi.waitFor(() => expect(useAuthStore.getState().user).toEqual(freshUser))
+
+    expect(mReportOnlineSuccess).toHaveBeenCalled()
+    expect(mUpdateSession).toHaveBeenLastCalledWith(session, freshUser)
   })
 
   it('does not reset driveOptIn — a re-lock/unlock mid-session must not re-prompt Drive', async () => {
     const session = { accessToken: 'tok', expiresAt: Date.now() + 3_600_000 }
-    mUser.mockResolvedValue({ email: 'a@b.com', name: 'Ana' })
     // A realistic mid-session 'connected' state always has `drive` already
     // populated too (from connectDrive() or an earlier hydrate() this
     // session) — that's what the reacquire guard actually keys on.
@@ -598,7 +773,7 @@ describe('useAuthStore.hydrate', () => {
       drive: { folderId: 'F', movimientosFileId: 'M', activosFileId: 'A', configFileId: 'C' },
     })
 
-    await useAuthStore.getState().hydrate(session)
+    await useAuthStore.getState().hydrate(session, cachedUser)
 
     expect(useAuthStore.getState().driveOptIn).toBe('connected')
     // Already resolved this session — a mid-session re-lock/unlock must not
@@ -616,11 +791,10 @@ describe('useAuthStore.hydrate', () => {
   // mid-session case above.
   it('resolves a previously persisted "dismissed" decision on a PIN-lock cold start', async () => {
     const session = { accessToken: 'tok', expiresAt: Date.now() + 3_600_000 }
-    mUser.mockResolvedValue({ email: 'a@b.com', name: 'Ana' })
     mGetDriveDecision.mockResolvedValue('dismissed')
     useAuthStore.setState({ driveOptIn: 'pending' })
 
-    await useAuthStore.getState().hydrate(session)
+    await useAuthStore.getState().hydrate(session, cachedUser)
 
     expect(useAuthStore.getState().driveOptIn).toBe('dismissed')
   })
@@ -632,7 +806,6 @@ describe('useAuthStore.hydrate', () => {
   // an honest signal Drive is usable.
   it('resolves a previously persisted "connected" decision and silently re-acquires Drive access', async () => {
     const session = { accessToken: 'identity-tok', expiresAt: Date.now() + 3_600_000 }
-    mUser.mockResolvedValue({ email: 'a@b.com', name: 'Ana' })
     mGetDriveDecision.mockResolvedValue('connected')
     mToken.mockResolvedValue({ accessToken: 'drive-tok', expiresAt: 2 })
     mBootstrap.mockResolvedValue({
@@ -643,7 +816,7 @@ describe('useAuthStore.hydrate', () => {
     })
     useAuthStore.setState({ driveOptIn: 'pending' })
 
-    await useAuthStore.getState().hydrate(session)
+    await useAuthStore.getState().hydrate(session, cachedUser)
     // Fire-and-forget, same as login()/restore() above — wait for it separately.
     await vi.waitFor(() => expect(useAuthStore.getState().drive).not.toBeNull())
 
@@ -656,13 +829,12 @@ describe('useAuthStore.hydrate', () => {
 
   it('does not fail hydrate or surface driveError when the silent re-acquire fails', async () => {
     const session = { accessToken: 'identity-tok', expiresAt: Date.now() + 3_600_000 }
-    mUser.mockResolvedValue({ email: 'a@b.com', name: 'Ana' })
     mGetDriveDecision.mockResolvedValue('connected')
     mToken.mockRejectedValue(new Error('drive: 403'))
     useAuthStore.setState({ driveOptIn: 'pending' })
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
-    await useAuthStore.getState().hydrate(session)
+    await useAuthStore.getState().hydrate(session, cachedUser)
     await vi.waitFor(() => expect(warn).toHaveBeenCalled())
 
     const s = useAuthStore.getState()
@@ -683,7 +855,6 @@ describe('useAuthStore.hydrate', () => {
   // untested; this is the closest exercisable proxy for it.
   it('settles without waiting on the silent re-acquire, even if it never resolves', async () => {
     const session = { accessToken: 'identity-tok', expiresAt: Date.now() + 3_600_000 }
-    mUser.mockResolvedValue({ email: 'a@b.com', name: 'Ana' })
     mGetDriveDecision.mockResolvedValue('connected')
     // A token request that never settles simulates a stalled network call —
     // bootstrap() has no timeout (src/lib/bootstrap.ts), so this is the
@@ -691,7 +862,7 @@ describe('useAuthStore.hydrate', () => {
     mToken.mockImplementation(() => new Promise(() => {}))
     useAuthStore.setState({ driveOptIn: 'pending' })
 
-    await expect(useAuthStore.getState().hydrate(session)).resolves.toBeUndefined()
+    await expect(useAuthStore.getState().hydrate(session, cachedUser)).resolves.toBeUndefined()
 
     const s = useAuthStore.getState()
     expect(s.status).toBe('authenticated')
@@ -699,14 +870,16 @@ describe('useAuthStore.hydrate', () => {
     expect(s.drive).toBeNull()
   })
 
-  it('caches the fresh session in the lock vault when one exists', async () => {
+  it('caches the session and cached profile in the lock vault synchronously, when a vault exists', async () => {
     const session = { accessToken: 'tok', expiresAt: Date.now() + 3_600_000 }
-    mUser.mockResolvedValue({ email: 'a@b.com', name: 'Ana' })
     mHasVault.mockResolvedValue(true)
+    // A hung refresh proves this assertion is about the *synchronous* cache
+    // write, not the fire-and-forget refresh's own (later) re-cache.
+    mUser.mockImplementation(() => new Promise(() => {}))
 
-    await useAuthStore.getState().hydrate(session)
+    await useAuthStore.getState().hydrate(session, cachedUser)
 
-    expect(mUpdateSession).toHaveBeenCalledWith(session)
+    expect(mUpdateSession).toHaveBeenCalledWith(session, cachedUser)
   })
 
   // Same shape as connectDrive()'s own authGeneration guard below: a logout()
@@ -716,7 +889,6 @@ describe('useAuthStore.hydrate', () => {
   // resurrect session/drive for an account the user already signed out of.
   it('a logout() during an in-flight silent re-acquire does not resurrect session/drive', async () => {
     const session = { accessToken: 'identity-tok', expiresAt: Date.now() + 3_600_000 }
-    mUser.mockResolvedValue({ email: 'a@b.com', name: 'Ana' })
     mGetDriveDecision.mockResolvedValue('connected')
     useAuthStore.setState({ driveOptIn: 'pending' })
 
@@ -728,7 +900,7 @@ describe('useAuthStore.hydrate', () => {
         }),
     )
 
-    const hydratePromise = useAuthStore.getState().hydrate(session)
+    const hydratePromise = useAuthStore.getState().hydrate(session, cachedUser)
     await vi.waitFor(() => expect(mToken).toHaveBeenCalled())
 
     useAuthStore.getState().logout()
@@ -747,6 +919,32 @@ describe('useAuthStore.hydrate', () => {
     const s = useAuthStore.getState()
     expect(s.session).toBeNull()
     expect(s.drive).toBeNull()
+  })
+
+  // The redesigned refreshProfile() is one of the paths the authGeneration
+  // backlog item (specs.md §12) names — a logout() firing while the
+  // fire-and-forget profile refresh is still in flight must not resurrect
+  // `user` for an account the user already signed out of.
+  it('a logout() during an in-flight profile refresh does not resurrect user', async () => {
+    const session = { accessToken: 'tok', expiresAt: Date.now() + 3_600_000 }
+    let resolveUser!: (v: { email: string; name: string }) => void
+    mUser.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveUser = resolve
+        }),
+    )
+
+    const hydratePromise = useAuthStore.getState().hydrate(session, cachedUser)
+    await vi.waitFor(() => expect(mUser).toHaveBeenCalled())
+
+    useAuthStore.getState().logout()
+    expect(useAuthStore.getState().user).toBeNull()
+
+    resolveUser({ email: 'a@b.com', name: 'Ana Fresh' })
+    await hydratePromise
+
+    expect(useAuthStore.getState().user).toBeNull()
   })
 })
 
