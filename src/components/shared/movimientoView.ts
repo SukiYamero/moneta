@@ -148,11 +148,20 @@ const getSignedCurrencyFormatter = (moneda: Moneda, locale: string): Intl.Number
 // via formatToParts instead of string-prepending a character — the
 // symbol's own position is locale data ("R$" leads in pt-BR, trails in
 // es-CO/en-US) a hand-built string can't safely assume.
+// The types that actually render the numeric value, as opposed to currency
+// symbol/literal decoration around it. `integer` covers every finite
+// amount; `nan`/`infinity` are formatToParts' only other numeric part
+// types (no non-finite `monto` should ever reach this — validated at
+// write time, schema.ts — but a non-finite derived total, e.g. an
+// arithmetic overflow, must still land the sign next to the value instead
+// of silently reproducing the sign-before-currency bug this closes).
+const NUMERIC_PART_TYPES = new Set<Intl.NumberFormatPartTypes>(['integer', 'nan', 'infinity'])
+
 const attachSignToNumber = (parts: Intl.NumberFormatPart[]): string => {
   const sign = parts.find((p) => p.type === 'minusSign' || p.type === 'plusSign')
   const rest = parts.filter((p) => p.type !== 'minusSign' && p.type !== 'plusSign')
   if (!sign) return rest.map((p) => p.value).join('')
-  const numberStart = rest.findIndex((p) => p.type === 'integer')
+  const numberStart = rest.findIndex((p) => NUMERIC_PART_TYPES.has(p.type))
   const insertAt = numberStart === -1 ? 0 : numberStart
   return [...rest.slice(0, insertAt), sign, ...rest.slice(insertAt)].map((p) => p.value).join('')
 }
