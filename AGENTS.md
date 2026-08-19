@@ -17,6 +17,30 @@ We follow **spec-driven development**. `specs.md` is the source of truth.
 5. The work queue lives in `specs.md` §12 (Backlog) — pick up from there and
    keep it updated when you finish or defer something.
 
+## Directory docs (agent-readable maps)
+
+- **Start here: `ARCHITECTURE.md`.** A lightweight index — one line per
+  top-level folder, linking to that folder's `README.md` for detail. Read it
+  before exploring the tree cold.
+- **End of task, update docs.** Besides `specs.md` (decisions/backlog — see
+  above), if the task changed what lives in a directory or how it's
+  organized, update that directory's `README.md` before calling the task
+  done. If the task added/removed a top-level folder, update
+  `ARCHITECTURE.md` too.
+- **Scoped `README.md`, not one giant architecture doc.** When you do
+  meaningful work in a directory that doesn't have a short `README.md` yet
+  (what lives here, how the pieces fit together, key entry points — a few
+  lines, not an essay), add one. Keep it scoped to that directory only —
+  don't try to map the whole project in one file, and don't write one for a
+  directory you aren't actually touching. `specs.md` stays the source of
+  truth for behavior/decisions; these READMEs are just a structural map, so
+  they're small and cheap to keep accurate.
+- **Read before you explore.** Before grepping/reading broadly through a
+  directory you haven't worked in yet, check for its `README.md` first — it
+  should orient you fast enough that you skip rediscovering the area from
+  scratch. This is what makes the codebase agentic: a fresh agent (or you,
+  in a fresh context) reads the scoped doc instead of the whole tree.
+
 ## Branding vs storage identifiers
 
 - The user-facing app name lives in **`src/lib/branding.ts` (`APP_NAME`)** and is
@@ -50,6 +74,15 @@ We follow **spec-driven development**. `specs.md` is the source of truth.
 - **Idiomatic, current code.** Modern standard APIs; avoid deprecated/legacy.
   Prefer native platform APIs (e.g. `crypto.randomUUID`, `Intl.NumberFormat`)
   over extra dependencies.
+- **Prefer immutable data patterns.** Don't mutate objects/arrays in place —
+  produce new ones (spread, `map`/`filter`/`toSorted`/`with`). Zustand
+  updates replace state, they don't mutate it. Predictable state changes are
+  easier to reason about and to test.
+- **Single source of truth.** Don't store the same value in two places —
+  derive it instead of caching a copy that can drift out of sync (this is
+  already the rule for the data model: `specs.md` §4 derives totals/history
+  from `Movimiento[]`, never stores them; apply the same instinct to
+  component/store state).
 - **Comments only when truly necessary** — explain the _why_ (tradeoff, workaround),
   never the _what_. No conversational/changelog/restating comments.
 - Use the `@/` alias for imports from `src`.
@@ -89,6 +122,31 @@ We follow **spec-driven development**. `specs.md` is the source of truth.
 
 Shared/global state goes in zustand stores under `src/lib` or the owning feature.
 Local-only state stays in React hooks. No Redux.
+
+## Architecture & file naming
+
+- **Barrels for public surface, never for the component itself.** A folder that
+  exposes multiple things to the outside (e.g. a feature's components/hooks)
+  may have an `index.ts` barrel re-exporting them. But a component/view file
+  is **never** named `index.tsx` — name it after the component
+  (`MovimientosList.tsx`, `LockScreen.tsx`, not `index.tsx`). Multiple
+  `index.tsx` tabs open at once are indistinguishable; a named file isn't.
+- **Search before you write.** Before adding a function, constant, or
+  component, grep for one that already does it (`rg <term> src`) — don't
+  duplicate logic that exists under a different name. If a related helper
+  file already exists for that domain, add the new helper there; only create
+  a new file when nothing fits. Shared helpers live in `src/lib/`;
+  feature-only helpers are colocated inside that feature's folder.
+- **Keep components small and single-purpose.** A component mixing data
+  fetching, business logic, and layout gets split: extract a custom hook for
+  state/logic, keep the component focused on markup. Favor composition
+  (small components assembled together) over one large component with deep
+  conditional branching. This isn't a mandate to pre-split trivial
+  components — split when a component actually grows unfocused, not
+  preemptively.
+- Modern, current APIs and syntax everywhere — this is the same "Idiomatic,
+  current code" rule from Coding rules above, applied to architecture-level
+  choices too (data fetching, derived state, etc.), not just individual lines.
 
 ## Testing
 
