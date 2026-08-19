@@ -116,12 +116,42 @@ information. If a track finds the scoping wrong, an assumption false, or a
 better/simpler/more idiomatic approach, it says so **before** implementing —
 with reasoning. `AGENTS.md` § How every agent works is binding here.
 
-### 1.6 Locale keys
+### 1.6 The design is operator-pulled — subagents cannot call `DesignSync`
+
+Found the hard way in stage 2: `DesignSync` is not in a subagent's tool set,
+so a screen track told to "pull the design fresh" simply cannot. It must stop
+and report rather than invent a screen — Track L did exactly that, correctly.
+
+The operator pulls `Moneta.dc.html` (project
+`18d93152-c2e6-4bde-8eff-f944b1537ad8`) once and hands every screen track the
+absolute path to the saved copy. For this session that is:
+
+```
+/private/tmp/claude-501/-Users-sukiyamero-Desktop-programacion-web-moneta/e80eb815-8d42-446c-88a6-f24def8e13d0/scratchpad/Moneta.dc.html
+```
+
+A worktree can read an absolute path outside itself, so one copy serves every
+track. Two cautions when reading it:
+
+- **`moneta-movil.html` in the same project is 256 KB+ and `get_file` silently
+  truncates at that cap** — the copy you get back is incomplete and its
+  bundled asset manifest is cut off. `Moneta.dc.html` (198 KB) is the readable
+  one; use it.
+- It is a **prototype**: a fixed `430×844` frame, absolute positioning, inline
+  styles, Phosphor from a CDN, `100vh`. `AGENTS.md` bans all five. Take the
+  structure, the icon set and the intent; rebuild fluid, with our tokens.
+
+### 1.7 Locale keys
 
 Track I pre-creates the namespace skeleton for the whole wave, so later tracks
 add keys **inside an existing namespace object** rather than all appending to
 the end of the same file. Namespaces reserved up front:
 `common`, `auth`, `driveConsent`, `toast`, `nav`, `home`, `search`, `history`.
+
+Since Track I merged, **a test enforces that all four locale files have
+identical key paths** (`src/lib/i18n/resources.test.ts`). A key added to
+`es.json` alone fails `bun run check`. Every track translates its own keys
+into `en`, `es-AR` and `pt-BR` — copy-pasted Spanish is not a translation.
 
 ---
 
@@ -148,7 +178,7 @@ Known conflicts and how they are handled:
   `BottomNav`. Same stage, both single-line appends at the end of a barrel.
   Operator merges K first and resolves L's one-line conflict. **Accepted.**
 - `src/lib/i18n/locales/*.json` — J and K and L all add keys in stage 2.
-  Mitigated by §1.6's pre-created namespaces (edits land in different objects).
+  Mitigated by §1.7's pre-created namespaces (edits land in different objects).
   Operator resolves any residual. **Accepted.**
 - `src/lib/README.md`, `docs/waves.md`, `specs.md` — operator-owned per §1.2.
   **Eliminated.**
