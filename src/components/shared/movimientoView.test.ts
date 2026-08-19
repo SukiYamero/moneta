@@ -96,6 +96,15 @@ describe('formatMonto', () => {
     expect(formatMonto(12000, 'COP', 'es-CO')).not.toContain('-')
     expect(formatMonto(12000, 'COP', 'es-CO')).not.toContain('+')
   })
+
+  // formatToParts has no "integer" part for a non-finite value (only a
+  // "nan"/"infinity" part) — attachSignToNumber's no-integer fallback must
+  // still land the sign next to the number, not reproduce the
+  // sign-before-currency bug this whole rework closes.
+  it('attaches the sign to the number even when there is no integer part (Infinity)', () => {
+    expect(formatMonto(-Infinity, 'COP', 'es-CO')).not.toMatch(/^-/)
+    expect(formatMonto(-Infinity, 'COP', 'es-CO')).toMatch(/\$\s*-/)
+  })
 })
 
 describe('getMovimientoAmountView', () => {
