@@ -3006,6 +3006,35 @@ lint` clean bar the one pre-existing `components/ui` warning). `AGENTS.md`
   "it only fails when agents run in parallel" describes the common case, not
   an edge one.
 
+- 2026-08-19 — **A stage's file-ownership table must be checked for the
+  _unowned_ file two tracks will both want.** Wave 3 stage 1 assigned every
+  file a track would edit, and left `deviceStore.ts` assigned to nobody.
+  Track V needed a device-scoped registry and Track R needed a device-scoped
+  timestamp; both correctly refused to edit a file they did not own, and both
+  built their own Dexie database instead. The result was three device
+  databases where one would do — a defect produced by the **plan**, not by
+  either track's judgment, and invisible to both per-track reviewers by
+  construction. The cross-track pass found and fixed it. The cheap rule that
+  prevents it: when drafting an ownership table, explicitly ask which
+  unassigned file two or more tracks in the same stage will each want **for
+  different reasons**, and assign it (or split it) at planning time. This is
+  the second time the same shape appeared in one wave, so it is a process
+  finding, not an incident.
+
+- 2026-08-19 — **Rejected: a discriminated union on `AuthState` to separate
+  identity from Drive-token capability.** `status === 'authenticated'` with
+  `session: null` is a real state (§10.11, offline entry). Track R's review
+  swept every reader of `session`/`user` and found three, all already
+  null-safe — so this is safe today by evidence, not by convention. A union
+  would touch ~15 `set()` call sites for no real narrowing gain, since a
+  zustand selector reading `session` and one reading `status` do not narrow
+  together anyway. The compiler already cannot be fooled without a visible
+  `!`/`as`. The real risk is a future engineer _assuming_ authenticated
+  implies a token, so the answer is a named selector
+  (`selectDriveSession`) whose name carries the warning a bare
+  `state.session` read does not — additive, no migration, added when Track T
+  first needs it rather than speculatively now.
+
 ## 12. Backlog (pending verification / deferred work)
 
 - **The lock feature is not internationalised at all.** `LockScreen`,
@@ -3217,30 +3246,26 @@ lint` clean bar the one pre-existing `components/ui` warning). `AGENTS.md`
   screen has asked for a bounded date range yet, so adding the prop now
   would be speculative. Revisit once a Wave 2 screen actually needs it.
 
-- **The Toast has no action-button capability, so the service-worker update
-  prompt is a notification the user cannot act on in one tap.** `ToastItem`
-  carries a message and a dismiss affordance, nothing else. §10.16's copy is
-  honest ("reload the page to update") but weakly actionable in an installed
-  PWA, which has no browser reload chrome. `applyServiceWorkerUpdate()` is
-  built and tested and waiting for the surface; the missing half is an
-  additive `ToastItem.action` on `toastStore.ts` + `Toast.tsx` (a concrete
-  proposed shape is in `docs/wave-3/w.md`). Whoever next touches the Toast
-  should fold it in — it closes the last gap in §10.16's "done when".
+- ✅ **The Toast now has an action affordance and the update prompt uses it**
+  — closed 2026-08-19 by the Wave 3 cross-track review. `ToastItem` gained an
+  optional `{ labelKey, onAction }`, and §10.16's "a new version is
+  available" notification is takeable in one tap, which closes that spec's
+  last "done when". `onAction` is `() => void`, not async: a caller whose
+  action is asynchronous self-catches first, so `Toast.tsx` never has to know
+  about promises (`docs/error-handling.md` §7).
 
-- **`button.tsx`'s entire size scale is under the 44px touch-target rule**
-  (`default` h-8/32px, `lg` h-9/36px — nothing reaches `h-11`). Every caller
-  works around it with a per-call-site `className="min-h-11"` override:
-  `LockSettings.tsx` first, now `ConfirmDialog` too. `AGENTS.md` mandates
-  ≥44px, so the component is currently the thing making its callers break
-  the rule. Whoever next touches `button.tsx` should add a compliant size
-  variant before Wave 4 copy-pastes the override a fourth and fifth time.
+- ✅ **`button.tsx` has 44px-compliant sizes** (`touch` / `icon-touch`) —
+  closed 2026-08-19 by the Wave 3 cross-track review, additively, with the
+  existing variants unchanged. The per-call-site `min-h-11` workaround is
+  gone from both `Button` call sites that carried it (`ConfirmDialog`,
+  `LockSettings`); the remaining `min-h-11`s in the tree are on raw elements,
+  not the component, and are correct where they are.
 
-- **`parseAmount`/`formatAmountForInput` may belong in `src/lib/i18n/`, not
-  `src/components/shared/`.** They are pure locale logic with no React in
-  them — conceptually siblings of `localeFormatting.ts`'s BCP-47 resolution
-  — and they live under `components/` only because that is the directory the
-  track that wrote them owned. Not urgent; worth folding in whenever a track
-  legitimately owns both directories.
+- ✅ **`parseAmount`/`formatAmountForInput` live in `src/lib/i18n/`** —
+  closed 2026-08-19 by the Wave 3 cross-track review. They are pure locale
+  logic with no React in them, so they now sit next to `localeFormatting.ts`
+  rather than under `components/`, where they had landed only because that
+  was the directory one track happened to own.
 
 - **CSV export has no caller-visible error surface yet.**
   `exportMovimientosToCsv()` can reject (a failing `repo.ready()`/`list()`),
@@ -3257,18 +3282,12 @@ lint` clean bar the one pre-existing `components/ui` warning). `AGENTS.md`
   ties (found and fixed by TDD in Track V). Real clock skew between devices
   is a different problem, and the current fix does not address it.
 
-- **Three device-scoped Dexie databases now exist where one would do:**
-  `kurobello-device` (`deviceStore.ts`), `kurobello-profiles` (§10.15's
-  registry), and `kurobello-network` (§10.11's offline-window anchor). Each
-  track created its own **correctly** — the Wave 3 stage-1 ownership table
-  left `deviceStore.ts` unassigned, and `AGENTS.md` says to stop rather than
-  edit a file you do not own. So this is an artifact of the operator's plan,
-  not of any track's judgment, and it is the exact class of seam a per-track
-  reviewer cannot see by construction. Consolidating into `kurobello-device`
-  as the canonical device-signals database is cheap now (each new database
-  holds essentially one table with one row) and gets steadily more expensive
-  as Wave 4 adds signals. Needs its own small task touching both tracks'
-  storage — not a unilateral edit by either.
+- ✅ **The device-scoped databases are consolidated into `kurobello-device`**
+  (v3, additive) — closed 2026-08-19 by the Wave 3 cross-track review, which
+  verified the "never shipped, so no migration is owed" premise itself rather
+  than taking it on trust. `networkStore` and the profile registry keep their
+  public APIs and their degrade-to-no-signal posture; only the storage
+  backing moved. See the process lesson in §11.
 
 - **Accepted limitation: the 7-hour offline window compares wall-clock
   time.** `canWrite()` measures `Date.now() - lastOnlineAt`, so a device

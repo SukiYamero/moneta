@@ -347,6 +347,15 @@ session, and the operator/orchestrator owns running it.
   At the start of any parallel session, check the log against
   `git worktree list` and prune anything stale (merged-but-not-removed, or
   present on disk but missing/finished in the log).
+- **When drafting a wave's file-ownership table, hunt for the _unowned_ file
+  two tracks will both want.** Assigning every file a track will edit is not
+  enough: the expensive case is a shared file assigned to nobody, which each
+  track then correctly routes around by building its own copy of the thing.
+  Wave 3 stage 1 left `deviceStore.ts` unassigned and got three
+  device-scoped Dexie databases where one would do — no track was wrong, the
+  plan was. Ask explicitly which unassigned file two tracks in the same stage
+  will each want for different reasons, and resolve it at planning time
+  (`specs.md` §11, 2026-08-19).
 - **Subagent model/effort:** always Sonnet 5, never downgrade to another
   model. Only two effort tiers — pick per task, don't default to `high` out
   of habit:
