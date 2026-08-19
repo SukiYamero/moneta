@@ -1,5 +1,7 @@
 {
-  "common": {},
+  "common": {
+    "back": "Back"
+  },
   "auth": {
     "welcome": {
       "subtitleLine1": "Your finances, clear and private.",
@@ -39,6 +41,12 @@
   "toast": {},
   "nav": {},
   "home": {},
-  "search": {},
-  "history": {}
+  "search": {
+    "title": "Search",
+    "placeholder": "This screen is under construction."
+  },
+  "history": {
+    "title": "History",
+    "placeholder": "This screen is under construction."
+  }
 }

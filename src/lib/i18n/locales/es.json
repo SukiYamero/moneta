@@ -1,5 +1,7 @@
 {
-  "common": {},
+  "common": {
+    "back": "Volver"
+  },
   "auth": {
     "welcome": {
       "subtitleLine1": "Tus finanzas, claras y privadas.",
@@ -39,6 +41,12 @@
   "toast": {},
   "nav": {},
   "home": {},
-  "search": {},
-  "history": {}
+  "search": {
+    "title": "Buscar",
+    "placeholder": "Esta pantalla está en construcción."
+  },
+  "history": {
+    "title": "Historial",
+    "placeholder": "Esta pantalla está en construcción."
+  }
 }

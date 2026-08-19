@@ -12,6 +12,7 @@ import {
   Toggle,
   type IconAvatarTint,
 } from '@/components/shared'
+import { LockSettings } from '@/features/lock/LockSettings'
 import type { Movimiento } from '@/lib/schema'
 
 const TINTS: IconAvatarTint[] = [
@@ -114,6 +115,12 @@ export const Kit = () => {
   return (
     <main className="mx-auto flex max-w-md flex-col gap-8 p-5 pb-24">
       <h1 className="text-lg font-extrabold">Shared UI kit</h1>
+
+      {/* The only way to enable/disable the PIN lock — moved here from
+          Home when the app shell was rebuilt (docs/wave-2/track-l.md). */}
+      <Section title="Lock (PIN vault — dev harness, moved from Home)">
+        <LockSettings />
+      </Section>
 
       <Section title="IconAvatar — sizes">
         <div className="flex items-center gap-3">

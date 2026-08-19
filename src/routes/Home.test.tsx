@@ -4,9 +4,8 @@ import { Home } from '@/routes/Home'
 import { APP_NAME } from '@/lib/branding'
 
 describe('Home', () => {
-  it('renders the app name and the lock settings', () => {
+  it('renders the app name', () => {
     render(<Home />)
     expect(screen.getByRole('heading', { name: APP_NAME })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /activar lock/i })).toBeInTheDocument()
   })
 })
