@@ -223,18 +223,18 @@ later feature assumes exists. Built from two audits — `docs/wave-3-audit-runti
 
 **The specs are written and the wave is not started:** `specs.md`
 §10.11–§10.18, each with a _Blast radius_ line saying how much it may touch,
-plus a suggested order at the end of that block.
+plus a staging table and a trim order at the end of that block.
 
-| Track | Spec   | What it is                                                                |
-| ----- | ------ | ------------------------------------------------------------------------- |
-| R     | §10.11 | Offline entry, network state, the 7-hour window, unified error copy       |
-| S     | §10.12 | Export / backup (import deliberately excluded)                            |
-| T     | §10.13 | The write path — `dataStore` mutations + one convention                   |
-| U     | §10.14 | Form primitives + `ConfirmDialog`                                         |
-| V     | §10.15 | Profiles: per-profile dexie database — **gates the `repoProvider` swap**  |
-| W     | §10.16 | Service-worker update lifecycle                                           |
-| X     | §10.17 | Local diagnostics log (cuttable)                                          |
-| Y     | §10.18 | Profile / account screen — the access point (lock + guest exit live here) |
+| Track | Spec   | What it is                                                                      |
+| ----- | ------ | ------------------------------------------------------------------------------- |
+| R     | §10.11 | Offline entry, network state, the 7-hour window, unified error copy             |
+| S     | §10.12 | Export / backup (import deliberately excluded)                                  |
+| T     | §10.13 | The write path — `dataStore` mutations + one convention                         |
+| U     | §10.14 | Form primitives + `ConfirmDialog`                                               |
+| V     | §10.15 | Profiles: per-profile dexie database — **gates the future `repoProvider` swap** |
+| W     | §10.16 | Service-worker update lifecycle                                                 |
+| X     | §10.17 | Local diagnostics log (cuttable)                                                |
+| Y     | §10.18 | Profile / account screen — the access point (lock + guest exit live here)       |
 
 Tracks run in **three stages, not all in parallel** — see "Wave 3 — staging
 and dependencies" in `specs.md`. A later stage is blocked until every track
