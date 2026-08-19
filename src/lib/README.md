@@ -41,6 +41,26 @@ Shared stores, helpers, and the Drive/auth/lock logic layer. No UI here.
 - `repo.fake.ts` — in-memory `Repo` implementation, seeded with deterministic
   Spanish sample data (`createFakeRepo()` for an isolated instance, the
   `fakeRepo` singleton for app code — see `specs.md` §10.5).
+- `movimientoStats.ts` — pure derivation of every number the Home/History/
+  Search screens show, from `Movimiento[]` (`specs.md` §4: views are derived,
+  never stored). `periodRange()`, `filterByRange()`, `totals()`,
+  `breakdownBy()`, `series()`. No imports from stores/UI/repo — trivially
+  testable, reusable by all three screens so their numbers cannot disagree.
+  Sums in integer minor units (never a naive float `+=`); dates compared as
+  ISO strings or parsed with `date-fns`'s `parseISO` (never `new Date(iso)`,
+  which shifts a date-only string by a day under a negative-offset TZ);
+  `series()` buckets are clamped to their period, so the bars always sum to
+  the total printed beside them.
+- `dataStore.ts` — zustand store holding the raw `movimientos`/`activos`/
+  `config` the Wave 2 screens read, plus `status`/`error`. No derived totals
+  cached here — screens compute those from `movimientoStats` at the call
+  site. `load()` is idempotent and race-safe (mirrors `authStore.restore()`'s
+  synchronous check-then-set guard) and owns its own error handling end to
+  end: a failure lands in `error` as a `RepoErrorCode`, never thrown past
+  `load()`.
+- `repoProvider.ts` — the single swap point: `getRepo()` returns the shared
+  fake `Repo` today. `// STUB(wave3)` marks the one line to change once a
+  Drive-backed `Repo` exists (`specs.md` §12).
 - `repo.contract.ts` — shared `Repo` behavior every implementation must
   agree on (`testRepoContract()`), invoked from both `repo.local.test.ts`
   and `repo.fake.test.ts` (`docs/error-handling.md` §6). A plain module, not
