@@ -1044,27 +1044,66 @@ blast radius says has misunderstood the job.
   a shared `errorCopy`, and the three screens' error rendering. **No screen
   layout changes, no schema change.**
 
-### 10.12 Export / backup
+### 10.12 CSV export — "download your movements"
 
-- **Goal:** the user can get their data out. Today there is no path at all,
-  and because `repoProvider` still returns the fake repo, **every user is
-  effectively local-only** — an IndexedDB eviction, Safari private mode, or a
-  lost phone is unrecoverable, silently.
-- **User story:** before wiping my phone, I export a file I can keep.
-- **UI:** one action (Settings, later; a `/kit`-reachable action until then)
-  that reads through the existing `Repo` port and downloads a single JSON
-  file — movimientos, activos, config, plus a `schemaVersion` and an export
-  timestamp.
-- **Import is deliberately NOT in this spec.** Export is safe and one-way;
-  import is a merge with all the conflict questions §10.15 exists to answer.
-  Ship export first — it is the half that prevents loss.
-- **Edge cases:** a large dataset (stream or chunk rather than building one
-  giant string); an export must never contain the OAuth token or vault
-  material; the file name should carry a date.
-- **Done when:** the file round-trips through `JSON.parse`, contains every
-  entity the repo holds, contains no secret, and works offline.
-- **Blast radius:** one new module + one call site. Reads through `Repo`, so
-  it works against fake, local, or Drive implementations unchanged.
+- **Goal:** the user can pull their movements into a spreadsheet. That is the
+  whole feature. It is **not** a backup, **not** a restore path, and there is
+  **no import** — see the rejections below, which are decisions, not gaps.
+- **User story:** I want to cross my expenses with something else, or hand
+  them to my accountant, so I download a file and open it in Excel.
+- **Explicitly rejected (user decision, 2026-08-19) — do not "complete" this
+  later:**
+  - **No JSON backup file.** Manual backup-and-restore has poor real-world
+    use, and it is the expensive half.
+  - **No import.** Validating a file, handling schema versions, deciding what
+    happens when data already exists, and handling a tampered file is a large
+    surface for a flow almost nobody walks.
+  - **The data-safety answer is Google, not a file.** Data lives locally on
+    the device; a user who wants it kept links their Google account. That is
+    simpler for both sides than a file the user has to remember to make.
+- **The consequence, stated plainly rather than left implicit:** until Drive
+  sync exists, **local data can be lost with no recovery path** — a browser
+  evicting IndexedDB, private mode, or a lost device. We are accepting that
+  window knowingly. A guest is permanently in it by design, which is exactly
+  what `auth.welcome.guestReassurance` already tells them ("si lo perdés, se
+  pierde con él"). CSV export happens to give both a manual out, but that is
+  a side effect, not its purpose. See §12.
+- **UI:** one action in the profile sheet (§10.18) that produces a CSV of the
+  user's movements.
+- **CSV correctness — the hazards to build against.** Every one of these
+  produces a corrupt or dangerous file in Excel and all are cheap to handle
+  **if known before writing the code**, which is why they are recorded here:
+  1. **UTF-8 BOM is required.** Without it Excel renders `Café` as `CafÃ©`.
+     Every Spanish category and free-text note is affected.
+  2. **Separator: `;`, with a leading `sep=;` line.** Excel under a Spanish
+     regional configuration expects `;`, not `,`. Excel honours the `sep=`
+     hint; most other tools ignore the line harmlessly.
+  3. **Decimal comma, paired with the `;` separator.** These two go together:
+     writing `12000,50` with a comma separator breaks every row. Use the
+     active locale's formatting (§10.7) rather than a hand-rolled number
+     string.
+  4. **CSV injection — a security issue, not a formatting one.** A field
+     whose value starts with `=`, `+`, `-` or `@` is executed as a **formula**
+     by Excel and Sheets. `Movimiento.nota` and category names are free text
+     written by the user, so this is reachable. Escape by prefixing such
+     values (e.g. with `'`) or quoting them; do not skip this because "our
+     own users write the notes" — a shared or imported file makes it
+     someone else's problem.
+     Dates go out as ISO `yyyy-mm-dd`.
+- **Mobile matters here.** This is a mobile-first app: on iOS a plain
+  `<a download>` typically opens a tab instead of saving. Use
+  `navigator.share({ files })` where available — it is also the native-feeling
+  path — and fall back to a download link elsewhere.
+- **Edge cases:** an empty dataset (a header-only file, not an error); a very
+  large dataset (build the file in chunks rather than one giant string); the
+  file must never contain the OAuth token, vault material, or anything from
+  the lock; the filename should carry a date.
+- **Done when:** the file opens in Excel under a Spanish locale with correct
+  accents, columns and decimals; a note beginning with `=` is inert when
+  opened; sharing works on iOS; it works offline.
+- **Blast radius:** one new module + its tests, plus the button in §10.18.
+  Reads through the existing `Repo` port, so it is unaffected by which
+  implementation is active.
 
 ### 10.13 The write path
 
@@ -1295,13 +1334,15 @@ here would produce a technically-correct, unusable app.
 ### Wave 3 — what to cut if the wave is too big
 
 The staging above is the plan; this is the trim order. Cut **§10.17
-diagnostics** first (it is the only track with no dependent and no promise
-behind it), then **§10.16 SW update** (cheap, but nothing breaks until a
-deploy lands on an open tab). Everything else is either closing a gap between
-what `specs.md` already promises and what the code does (§10.11 offline,
-§10.12 export), or is the "build once so three Wave 4 tracks share it" move
-that already paid off with the Toast (§10.13 write path, §10.14 form
-primitives). §10.15 and §10.18 are what make local data correct and reachable.
+diagnostics** first (no dependent, no promise behind it), then **§10.16 SW
+update** (cheap, but nothing breaks until a deploy lands on an open tab), then
+**§10.12 CSV export** — it moved down once it stopped being the data-safety
+answer (see §11, 2026-08-19); it is now a genuinely useful convenience rather
+than a gap between promise and code. What should not be cut: **§10.11
+offline**, which closes a claim `specs.md` §3 has made since the beginning;
+**§10.13 write path** and **§10.14 form primitives**, the "build once so three
+Wave 4 tracks share it" move that already paid off with the Toast; and
+**§10.15 / §10.18**, which make local data correct and reachable.
 
 ## 11. Decisions log
 
@@ -2885,6 +2926,16 @@ lint` clean bar the one pre-existing `components/ui` warning). `AGENTS.md`
   in. This is why `crypto.randomUUID()` (2026-06-25) turned out to matter far
   beyond ID generation. User + operator decision; spec in §10.15.
 
+- 2026-08-19 — **No backup file and no import; data safety is Google, not a
+  file.** Data lives locally on the device, and a user who wants it kept links
+  their Google account. Manual backup-and-restore has poor real-world use and
+  import is the expensive half (schema versions, existing-data conflicts,
+  tampered files) for a flow almost nobody walks. What ships instead is a
+  **CSV export for reading the data elsewhere** — a spreadsheet, an
+  accountant — which is the use that actually recurs. Its purpose is
+  portability, not recovery. Recorded so a later agent does not "finish" the
+  missing import half: it is absent by decision. Spec in §10.12.
+
 ## 12. Backlog (pending verification / deferred work)
 
 - **The lock feature is not internationalised at all.** `LockScreen`,
@@ -3009,6 +3060,17 @@ lint` clean bar the one pre-existing `components/ui` warning). `AGENTS.md`
   available fix (gating the week chrome behind the load, or deriving the
   default from locale week-info) adds real UX or a second source of "what's
   the default" for a bug that cannot currently occur.
+
+- **Accepted risk: until Drive sync ships, local data can be lost with no
+  recovery path.** A browser evicting IndexedDB, Safari private mode, or a
+  lost device destroys everything, and — following the 2026-08-19 decision
+  above — there is deliberately no backup file to restore from. This is a
+  **known, accepted window**, not an oversight, and the way to close it is
+  Drive sync (Wave 4), not an export. Two things follow: the window's length
+  is ours to control, so Drive should not drift late; and a **guest is
+  permanently inside it by design**, which is why the guest reassurance copy
+  says so out loud. Revisit only if Drive slips far enough that the window
+  stops being temporary.
 
 - **The light theme has no category colors at all — the `chart-*` tokens are
   still the scaffold's zero-chroma greys.** `src/styles/index.css` defines
