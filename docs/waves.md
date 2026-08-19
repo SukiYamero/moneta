@@ -205,9 +205,9 @@ Check this table against `git worktree list` at the start of any parallel
 session; prune anything stale (merged-but-not-removed, or on disk but
 missing/finished here).
 
-| Created    | Track / task                      | Path                  | Branch       | Status | Notes                                                            |
-| ---------- | --------------------------------- | --------------------- | ------------ | ------ | ---------------------------------------------------------------- |
-| 2026-08-18 | Error-handling standard (phase 2) | `../moneta-wt/errors` | `fix/errors` | active | Contract test suite, React error boundaries, Spanish error copy. |
+| Created    | Track / task    | Path | Branch | Status | Notes                                                                                                |
+| ---------- | --------------- | ---- | ------ | ------ | ---------------------------------------------------------------------------------------------------- |
+| 2026-08-18 | _(none active)_ | —    | —      | —      | Wave 1, the code-review fixes, and the error-handling standard are all merged; no worktrees on disk. |
 
 Status values: `active` → `merged, pending cleanup` → row deleted once
 `git worktree remove <path>` runs.
