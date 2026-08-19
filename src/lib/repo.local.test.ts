@@ -368,23 +368,29 @@ describe('list() — sorting', () => {
     expect(items.map((m) => m.fecha)).toEqual(['2026-01-03', '2026-01-02', '2026-01-01'])
   })
 
-  it('breaks ties on the same fecha by createdAt, then falls back to id', async () => {
+  it('breaks ties on the same fecha by createdAt, following sortDir uniformly', async () => {
     const repo = createLocalRepo()
     const older = movimiento({ fecha: '2026-01-01', createdAt: '2026-01-01T08:00:00.000Z' })
     const newer = movimiento({ fecha: '2026-01-01', createdAt: '2026-01-01T09:00:00.000Z' })
     await repo.movimientos.addMany([newer, older])
-    const { items } = await repo.movimientos.list()
-    expect(items.map((m) => m.id)).toEqual([older.id, newer.id])
+    // sortDir applies to the whole key tuple, not just fecha: desc means the
+    // tiebreak is desc too, so the more-recently-created row sorts first —
+    // this is what lets the fast path express the order as one lexicographic
+    // range scan over `[fecha+createdAt]` with `.reverse()`.
+    const desc = await repo.movimientos.list()
+    expect(desc.items.map((m) => m.id)).toEqual([newer.id, older.id])
+    const asc = await repo.movimientos.list({ sortDir: 'asc' })
+    expect(asc.items.map((m) => m.id)).toEqual([older.id, newer.id])
   })
 
-  it('breaks a full tie (same fecha AND createdAt) deterministically by id', async () => {
+  it('breaks a full tie (same fecha AND createdAt) deterministically by id, following sortDir', async () => {
     const repo = createLocalRepo()
     const a = movimiento({ fecha: '2026-01-01', createdAt: '2026-01-01T08:00:00.000Z', id: 'aaa' })
     const b = movimiento({ fecha: '2026-01-01', createdAt: '2026-01-01T08:00:00.000Z', id: 'bbb' })
     await repo.movimientos.addMany([b, a])
-    const first = await repo.movimientos.list()
+    const first = await repo.movimientos.list() // desc: id desc too -> 'bbb' first
     const second = await repo.movimientos.list()
-    expect(first.items.map((m) => m.id)).toEqual(['aaa', 'bbb'])
+    expect(first.items.map((m) => m.id)).toEqual(['bbb', 'aaa'])
     expect(second.items.map((m) => m.id)).toEqual(first.items.map((m) => m.id))
   })
 
@@ -446,9 +452,11 @@ describe('list() — keyset pagination', () => {
     expect(page1.items.map((m) => m.fecha)).toEqual(['2026-01-04', '2026-01-03'])
     expect(page1.nextCursor).toBeDefined()
 
-    // Inserted between page fetches, sorting strictly after the page1 cursor.
+    // Inserted between page fetches, tied on fecha with the page1 cursor but
+    // with an earlier createdAt — under desc (tiebreak desc too), an earlier
+    // createdAt sorts strictly after the cursor, i.e. lands on the next page.
     const inserted = await repo.movimientos.add(
-      movimiento({ fecha: '2026-01-03', createdAt: '2099-01-01T00:00:00.000Z' }),
+      movimiento({ fecha: '2026-01-03', createdAt: '2020-01-01T00:00:00.000Z' }),
     )
 
     const page2 = await repo.movimientos.list({ limit: 2, cursor: page1.nextCursor })
@@ -519,5 +527,165 @@ describe('Config', () => {
     ;(config as Config).secciones.push({ id: 'hack', nombre: 'x', orden: 99 })
     const again = await repo.getConfig()
     expect(again.secciones).toEqual(CONFIG_SEMILLA.secciones)
+  })
+})
+
+describe('list() — fast path is a bounded read, not a full scan', () => {
+  async function seedManyMovimientos(count: number, distinctDates: number): Promise<Movimiento[]> {
+    const rows: Movimiento[] = []
+    for (let i = 0; i < count; i++) {
+      const day = i % distinctDates
+      const fecha = `2020-${String(1 + (day % 12)).padStart(2, '0')}-${String(1 + (day % 28)).padStart(2, '0')}`
+      rows.push(
+        movimiento({
+          fecha,
+          // Distinct createdAt per row (millisecond-unique), matching real
+          // writes — keeps ties on the fast-path compound index rare, as documented.
+          createdAt: new Date(Date.UTC(2020, 0, 1, 0, 0, 0, i)).toISOString(),
+        }),
+      )
+    }
+    const repo = createLocalRepo()
+    for (let i = 0; i < rows.length; i += 500) {
+      await repo.movimientos.addMany(rows.slice(i, i + 500))
+    }
+    return rows
+  }
+
+  it('reads on the order of `limit` rows from a table of a few thousand, not the whole table', async () => {
+    const seeded = await seedManyMovimientos(3000, 200)
+    const repo = createLocalRepo()
+
+    // `Table.prototype.toArray()` is the unbounded, whole-store read the bug
+    // report was about — the fast path must never call it directly.
+    const tableToArraySpy = vi.spyOn(db.movimientos, 'toArray')
+    // `Table.toArray()` itself delegates to `Collection.prototype.toArray()`
+    // internally, so spying at this shared layer measures exactly how many
+    // rows any underlying read actually materialized, regardless of which
+    // call issued it.
+    const collectionToArraySpy = vi.spyOn(db.Collection.prototype, 'toArray')
+
+    const page = await repo.movimientos.list({ limit: 20 })
+
+    expect(page.items).toHaveLength(20)
+    expect(page.nextCursor).toBeDefined()
+    // Sanity: it's really the top 20 by fecha desc, not an arbitrary slice.
+    const expectedTopFecha = seeded.toSorted((a, b) => (a.fecha < b.fecha ? 1 : -1))[0]?.fecha
+    expect(page.items[0]?.fecha).toBe(expectedTopFecha)
+
+    expect(tableToArraySpy).not.toHaveBeenCalled()
+
+    const resolvedLengths = await Promise.all(
+      collectionToArraySpy.mock.results.map(async (result) => {
+        if (result.type !== 'return') return 0
+        const value: unknown = await result.value
+        return Array.isArray(value) ? value.length : 0
+      }),
+    )
+    const maxMaterialized = resolvedLengths.length ? Math.max(...resolvedLengths) : 0
+
+    // Bounded by limit + TIE_SAFETY_MARGIN (20 + 1 + 32 = 53), nowhere near
+    // the 3000 seeded rows — this is the actual proof, not just "same page".
+    expect(maxMaterialized).toBeGreaterThan(0)
+    expect(maxMaterialized).toBeLessThan(100)
+
+    tableToArraySpy.mockRestore()
+    collectionToArraySpy.mockRestore()
+  })
+
+  it('keeps each page of a multi-page walk bounded, and still visits every row exactly once', async () => {
+    const seeded = await seedManyMovimientos(2000, 150)
+    const repo = createLocalRepo()
+
+    const collectionToArraySpy = vi.spyOn(db.Collection.prototype, 'toArray')
+    const perPageMax: number[] = []
+    const seenIds = new Set<string>()
+    let cursor: string | undefined
+    for (let guard = 0; guard < 120; guard++) {
+      collectionToArraySpy.mockClear()
+      const page = await repo.movimientos.list({ limit: 25, cursor })
+      const resolvedLengths = await Promise.all(
+        collectionToArraySpy.mock.results.map(async (result) => {
+          if (result.type !== 'return') return 0
+          const value: unknown = await result.value
+          return Array.isArray(value) ? value.length : 0
+        }),
+      )
+      perPageMax.push(resolvedLengths.length ? Math.max(...resolvedLengths) : 0)
+      for (const item of page.items) seenIds.add(item.id)
+      if (!page.nextCursor) break
+      cursor = page.nextCursor
+    }
+
+    expect(seenIds.size).toBe(seeded.length)
+    // No page's underlying read scaled anywhere near the 2000-row table.
+    expect(Math.max(...perPageMax)).toBeLessThan(100)
+
+    collectionToArraySpy.mockRestore()
+  })
+})
+
+describe('list() — fast path correctness at the exact-tie boundary', () => {
+  async function walkAllPages(
+    repo: ReturnType<typeof createLocalRepo>,
+    limit: number,
+  ): Promise<string[]> {
+    const seen: string[] = []
+    let cursor: string | undefined
+    for (let guard = 0; guard < 200; guard++) {
+      const page = await repo.movimientos.list({ limit, cursor })
+      seen.push(...page.items.map((m) => m.id))
+      if (!page.nextCursor) break
+      cursor = page.nextCursor
+    }
+    return seen
+  }
+
+  it('walks a tie cluster smaller than TIE_SAFETY_MARGIN with no skips or duplicates', async () => {
+    const repo = createLocalRepo()
+    const tied = Array.from({ length: 10 }, () =>
+      movimiento({ fecha: '2026-01-01', createdAt: '2026-01-01T00:00:00.000Z' }),
+    )
+    await repo.movimientos.addMany(tied)
+
+    const seen = await walkAllPages(repo, 3)
+    expect(seen).toHaveLength(10)
+    expect(new Set(seen).size).toBe(10)
+    expect(new Set(seen)).toEqual(new Set(tied.map((m) => m.id)))
+  })
+
+  it('walks a tie cluster larger than TIE_SAFETY_MARGIN correctly via the slow-path bail-out', async () => {
+    const repo = createLocalRepo()
+    // TIE_SAFETY_MARGIN is 32; a 50-row exact tie forces `tryFastPath` to
+    // bail (it can't prove it's seen everything within its bounded window),
+    // exercising the fallback to `listSlow` rather than just the common case.
+    const tied = Array.from({ length: 50 }, () =>
+      movimiento({ fecha: '2026-01-01', createdAt: '2026-01-01T00:00:00.000Z' }),
+    )
+    await repo.movimientos.addMany(tied)
+
+    const seen = await walkAllPages(repo, 3)
+    expect(seen).toHaveLength(50)
+    expect(new Set(seen).size).toBe(50)
+    expect(new Set(seen)).toEqual(new Set(tied.map((m) => m.id)))
+  })
+
+  it('activos: the fast path (no separate tiebreak field, id-only) walks correctly too', async () => {
+    const repo = createLocalRepo()
+    const seeded = Array.from({ length: 120 }, (_, i) =>
+      activo({ fechaActualizacion: `2026-01-${String(1 + (i % 20)).padStart(2, '0')}` }),
+    )
+    await repo.activos.addMany(seeded)
+
+    const seen: string[] = []
+    let cursor: string | undefined
+    for (let guard = 0; guard < 20; guard++) {
+      const page = await repo.activos.list({ limit: 10, cursor })
+      seen.push(...page.items.map((a) => a.id))
+      if (!page.nextCursor) break
+      cursor = page.nextCursor
+    }
+    expect(seen).toHaveLength(120)
+    expect(new Set(seen).size).toBe(120)
   })
 })

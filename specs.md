@@ -281,7 +281,7 @@ Full design: `docs/superpowers/specs/2026-06-26-pin-lock-design.md`.
 
 Shipped `createLocalRepo(): Repo` in `src/lib/repo.local.ts`, backed by
 `src/lib/db.ts` `v2` (additive: `vault` unchanged, `+movimientos +activos
-+config`). TDD, 114 tests total (`repo.local.test.ts` + extended
++config`). TDD, 119 tests total (`repo.local.test.ts` + extended
 `db.test.ts`), `bun run check` green. Implementation notes not obvious from
 the port spec alone:
 
@@ -299,24 +299,79 @@ SCHEMA_VERSION` → `RepoError('schema_mismatch')`, no downgrade.
   `fechaActualizacion`/`seccion`/no tiebreak field. This is how
   `dateFrom`/`dateTo`/`seccion` in the generic `ListQuery<T>` resolve to a
   concrete field per entity without one-off methods.
-- **Keyset pagination**: each `list()` call re-sorts the full filtered set
-  in memory (stable comparator: `sortBy` per `sortDir`, then `tiebreakField`
-  ascending, then `id` ascending as the final deterministic fallback — this
-  is why an entity without a natural tiebreak field, like `Activo`, still
-  gets a total order). The opaque `cursor` is a base64 JSON envelope of the
-  last-returned row's `{ sortValue, tiebreakValue, id }`; the next page
-  filters the freshly re-sorted set to rows that compare strictly after
-  that tuple. Because the comparison is against a value tuple, not an
-  array offset, a row inserted between two page fetches never causes a
-  skip or a duplicate — verified with a dedicated test that inserts a row
-  between `list()` calls on both sides of the cursor.
-- **Dexie query narrowing**: `seccion`+date-range together use the
-  `[seccion+fecha]` (or `[seccion+fechaActualizacion]`) compound index as a
-  `.between()` range scan; `seccion` alone uses its single-field index;
-  date-range alone uses the date field's index; no filter falls back to
-  `.toArray()`. The in-memory filter pass still re-checks every condition
-  afterward as a correctness safety net — the index narrowing is purely an
-  optimization, never the source of truth.
+- **Keyset pagination, with a real fast path — not just a safe API shape.**
+  The opaque `cursor` is a base64 JSON envelope of the last-returned row's
+  `{ sortValue, tiebreakValue, id }`. `list()` has two implementations
+  behind it now (2026-08-18 revision, see §11 — the first cut only had the
+  slow one):
+  - **Fast path** (`tryFastPath`), used whenever `sortBy` is the entity's
+    own indexed date field (the default) and a `limit` is given — the
+    common case, and the one §10.3's "years of `Movimiento` rows" rationale
+    is actually about. It reads a _bounded_ window directly off a compound
+    dexie index via `.where(index).between(lower, upper, true,
+true).reverse()?.limit(limit + 1 + TIE_SAFETY_MARGIN).toArray()` — the
+    query itself returns only that window, not the table. Bounding the
+    upper (desc) or lower (asc) edge of the range at the cursor's own
+    `{ sortValue, tiebreakValue }` tuple, inclusive, means each subsequent
+    page's read starts exactly where the last one stopped instead of
+    re-walking from the original `dateFrom`/`dateTo` edge every time.
+  - **Slow path** (`listSlow`), the original in-memory implementation
+    (index-narrows-then-materializes-then-sorts), used for the documented
+    exception: an arbitrary non-indexed `sortBy`, `limit` omitted (the
+    caller explicitly wants everything), or the fast path's own bail-out
+    below.
+  - **Why the fast path needs the date field compounded with the tiebreak
+    field in the index** (`[fecha+createdAt]` / `[fechaActualizacion+id]`,
+    plus `seccion`-prefixed variants — see the `db.ts` v2 entry below): a
+    single dexie/IndexedDB range query only has one contiguous
+    lexicographic order to walk. If the index were just the date field,
+    same-day rows would come back in whatever order IndexedDB happens to
+    tie-break the raw index by, which has no reason to agree with the
+    cursor's `{ tiebreakValue, id }`-based "already returned" cut — a real
+    bug that surfaced during a review pass (see §11): an inserted row tied
+    on `fecha` with an already-returned row was silently dropped because
+    the index's native tie order didn't match the comparator's. Compounding
+    the tiebreak field into the index makes the index's own order **be**
+    the full deterministic sort order, so there's nothing left to
+    reconcile — the same fix that made this provably correct is also what
+    makes it fast.
+  - **`TIE_SAFETY_MARGIN` (32) and the bail-out**: the fast path fetches
+    `limit + 1 + 32` rows and discards any that are `<=` the cursor. If
+    that discard still leaves fewer than `limit + 1` usable rows _and_ the
+    fetch hit its cap, it can't prove whether more data exists (an
+    adversarial cluster of rows sharing the exact same `{ sortValue,
+tiebreakValue }` bigger than the margin — e.g. a bulk import that
+    stamped many rows with one identical `createdAt`) — it returns `null`
+    and `list()` falls back to `listSlow`, which is always correct
+    regardless of cluster size. Tested at both sides of that boundary: a
+    10-row exact tie (within the margin, fast path only) and a 50-row exact
+    tie (forces the bail, fallback exercised) both walk to completion with
+    no skips or duplicates.
+  - Because the comparison is against a value tuple, not an array offset,
+    a row inserted between two page fetches never causes a skip or a
+    duplicate in either path — verified with dedicated tests that insert a
+    row between `list()` calls on both sides of the cursor.
+- **Dexie query narrowing (slow path only).** `seccion`+date-range together
+  use the `[seccion+fecha]` (or `[seccion+fechaActualizacion]`) compound
+  index as a `.between()` range scan; `seccion` alone uses its single-field
+  index; date-range alone uses the date field's index; no filter falls back
+  to `.toArray()`. The in-memory filter pass still re-checks every
+  condition afterward as a correctness safety net — the index narrowing is
+  purely an optimization, never the source of truth. (The fast path has its
+  own, separate narrowing — see above.)
+- **Performance is asserted, not just implied.** A dedicated test seeds
+  3,000 `Movimiento` rows across 200 distinct dates, spies on
+  `db.movimientos.toArray` (must never be called — that's the literal bug
+  being fixed) and on the shared `db.Collection.prototype.toArray` (every
+  dexie read ultimately funnels through it, `Table.toArray` included, so
+  spying there measures the true materialized-row count regardless of call
+  path), and asserts a `list({ limit: 20 })` call materializes well under
+  100 rows — nowhere near the 3,000-row table. A second test walks a
+  2,000-row table page by page (25 rows/page) asserting every page stays
+  bounded and every row is visited exactly once. Both were verified to
+  actually fail against the old always-in-memory implementation (max
+  materialized = the full table size) before being accepted, per the
+  "prove it, don't just check output" bar.
 - **Bulk ops are all-or-nothing.** `addMany`/`removeMany` run inside a
   single `db.transaction('rw', table, …)`; a bad row (failed validation,
   duplicate id) or a missing id in `removeMany` throws inside the
@@ -751,10 +806,47 @@ silently disagreeing with schema.ts's "monto always positive" invariant.
 seccion, [seccion+fecha|fechaActualizacion]` and `config` gets `id`
   (single-row, same fixed-id pattern as `vault`). Indexes were chosen to
   serve `ListQuery`'s actual filter shapes (`seccion` exact match, date
-  range, and the two combined via the compound index) — `createdAt` is
-  deliberately NOT indexed since it's only ever used as an in-memory sort
-  tiebreak, never queried via `.where()`. Full rationale in the code
-  comment above `db.version(2)`.
+  range, and the two combined via the compound index). **Superseded same
+  day** (see the fast-path entry below): `createdAt` ended up indexed after
+  all, compounded with the date field (`[fecha+createdAt]` /
+  `[seccion+fecha+createdAt]`), once the first cut's always-in-memory
+  `list()` turned out not to deliver the bounded-read scalability §10.3
+  asked for. Full rationale in the code comment above `db.version(2)`.
+
+- 2026-08-18 — **`list()` gained a real bounded-read fast path** — the
+  original implementation always materialized the whole matching set in
+  memory before slicing, which defeated §10.3's own stated reason for
+  building filtering/pagination into the port ("avoids a breaking change
+  once 'load everything into memory' stops being viable" — the
+  implementation was still doing exactly that). Fixed by adding a
+  compound-index-driven fast path (`tryFastPath` in `repo.local.ts`) for
+  the common case — `sortBy` is the entity's own date field, `limit`
+  given — that reads a bounded window directly off the index; the
+  original in-memory implementation (`listSlow`) stays as the documented
+  fallback for an arbitrary `sortBy` or an omitted `limit`. `db.ts` v2's
+  `movimientos`/`activos` stores gained `[fecha+createdAt]` /
+  `[fechaActualizacion+id]` and their `seccion`-prefixed variants to make
+  this possible (v2 amended in place, not bumped to v3 — nothing had
+  shipped/merged against it yet). Full mechanism, the `TIE_SAFETY_MARGIN`
+  bail-out, and how it was proven (not just asserted) are in §10.3.1.
+- 2026-08-18 — **`sortDir` now applies uniformly across the whole sort key
+  (primary field, tiebreak field, final `id` fallback), not just the
+  primary field.** The original design ("primary field respects `sortDir`;
+  tiebreak and `id` are always ascending") was a real, reproduced bug once
+  the fast path shipped: a dexie compound-index range query with
+  `.reverse()` for `desc` reverses the _entire_ lexicographic key — primary
+  field and tiebreak component together — so a mixed-direction convention
+  can't be expressed as a single contiguous index range scan, and the two
+  disagreed on which side of a keyset cursor a tied row fell on. Concretely:
+  a row inserted with an earlier `createdAt` than an already-returned,
+  same-`fecha` row was dropped from the following page under the old
+  convention. Switching to "reverse means the whole order reverses" is also
+  the more conventional multi-key-sort semantics (matches `ORDER BY a DESC,
+b DESC`, not a mix) and made the fast path's range-bound construction
+  provably correct instead of relying on it. The three `repo.local.test.ts`
+  cases whose expectations depended on the old convention were updated to
+  match (documented in their own test descriptions/comments, not just the
+  diff).
 
 ## 12. Backlog (pending verification / deferred work)
 

@@ -102,6 +102,14 @@ function compareValues(a: unknown, b: unknown): number {
   return 0
 }
 
+// `sortDir` applies uniformly across the whole key tuple (primary field,
+// tiebreak field, final id fallback) — a full reversal, not just the primary
+// field. This is what lets the fast path express the order as a single
+// lexicographic range scan over a compound index with `.reverse()`: a
+// compound key's tie order flips *entirely* when the traversal direction
+// flips, so the comparator has to agree with that or the two disagree on
+// which side of a cursor a tied row falls (a real bug this fixed — see
+// specs.md §11, 2026-08-18).
 function makeComparator<T extends { id: EntityId }>(
   sortBy: keyof T,
   sortDir: 'asc' | 'desc',
@@ -112,10 +120,10 @@ function makeComparator<T extends { id: EntityId }>(
     const primary = compareValues(a[sortBy], b[sortBy]) * dirMul
     if (primary !== 0) return primary
     if (tiebreakField) {
-      const secondary = compareValues(a[tiebreakField], b[tiebreakField])
+      const secondary = compareValues(a[tiebreakField], b[tiebreakField]) * dirMul
       if (secondary !== 0) return secondary
     }
-    return compareValues(a.id, b.id)
+    return compareValues(a.id, b.id) * dirMul
   }
 }
 
@@ -161,9 +169,27 @@ interface EntityConfig<T extends { id: EntityId }> {
   dateField: keyof T & string
   seccionField: (keyof T & string) | undefined
   tiebreakField: (keyof T & string) | undefined
+  // Narrowing index for the in-memory fallback path (`seccion` + date range together).
   compoundIndex: string | undefined
+  // Ordering indexes for the fast path: `[dateField+tiebreakField]` (or
+  // `[dateField+id]` when there's no separate tiebreak field, since `id` IS
+  // the final tiebreak there) and its `seccion`-prefixed counterpart.
+  // Compounding the tiebreak into the index means the index's own order
+  // already IS the full deterministic sort order `list()` needs — a page
+  // reads directly off a bounded cursor instead of sorting the whole
+  // matching set in memory.
+  fastIndex: string
+  fastSeccionIndex: string
   validate: (item: T) => void
 }
+
+// A cluster of rows tied on the full (date, tiebreak) key bigger than this
+// makes the fast path's bounded read unable to prove it has seen enough
+// rows — see the bail-out in `tryFastPath`. Sized generously above any
+// realistic same-instant write cluster (e.g. a bulk import sharing one
+// `createdAt`); a real table scales in the thousands, so 32 stays a small,
+// bounded read even when it fires.
+const TIE_SAFETY_MARGIN = 32
 
 function wrapUnknown(error: unknown): never {
   if (error instanceof RepoError) throw error
@@ -172,11 +198,46 @@ function wrapUnknown(error: unknown): never {
   })
 }
 
+function matchesFilters<T>(
+  item: T,
+  dateField: keyof T & string,
+  seccionField: (keyof T & string) | undefined,
+  dateFrom: string | undefined,
+  dateTo: string | undefined,
+  seccion: string | undefined,
+): boolean {
+  if (dateFrom !== undefined && String(item[dateField]) < dateFrom) return false
+  if (dateTo !== undefined && String(item[dateField]) > dateTo) return false
+  if (seccionField && seccion !== undefined && item[seccionField] !== seccion) return false
+  return true
+}
+
+function buildCursorItem<T extends { id: EntityId }>(
+  payload: CursorPayload,
+  sortBy: keyof T,
+  tiebreakField: (keyof T & string) | undefined,
+): T {
+  return {
+    [sortBy]: payload.sortValue,
+    ...(tiebreakField ? { [tiebreakField]: payload.tiebreakValue } : {}),
+    id: payload.id,
+  } as T
+}
+
 function createCrudRepo<T extends { id: EntityId }>(
   config: EntityConfig<T>,
   ensureReady: () => Promise<void>,
 ): CrudRepo<T> {
-  const { table, dateField, seccionField, tiebreakField, compoundIndex, validate } = config
+  const {
+    table,
+    dateField,
+    seccionField,
+    tiebreakField,
+    compoundIndex,
+    fastIndex,
+    fastSeccionIndex,
+    validate,
+  } = config
 
   async function fetchCandidates(
     dateFrom: string | undefined,
@@ -202,44 +263,135 @@ function createCrudRepo<T extends { id: EntityId }>(
     return table.toArray()
   }
 
+  // In-memory fallback: materializes every row matching the (index-narrowed)
+  // filters, sorts the full set, then slices. Correct for any `sortBy`, but
+  // its cost scales with the size of the matching set — the documented
+  // exception, used whenever the fast path below doesn't apply.
+  async function listSlow(
+    dateFrom: string | undefined,
+    dateTo: string | undefined,
+    seccion: string | undefined,
+    sortBy: keyof T,
+    sortDir: 'asc' | 'desc',
+    limit: number | undefined,
+    cursor: string | undefined,
+  ): Promise<ListResult<T>> {
+    const candidates = await fetchCandidates(dateFrom, dateTo, seccion)
+    const filtered = candidates.filter((item) =>
+      matchesFilters(item, dateField, seccionField, dateFrom, dateTo, seccion),
+    )
+
+    const comparator = makeComparator<T>(sortBy, sortDir, tiebreakField)
+    const sorted = filtered.toSorted(comparator)
+
+    let afterCursor = sorted
+    if (cursor !== undefined) {
+      const cursorItem = buildCursorItem<T>(decodeCursor(cursor), sortBy, tiebreakField)
+      afterCursor = sorted.filter((item) => comparator(item, cursorItem) > 0)
+    }
+
+    const page = limit !== undefined ? afterCursor.slice(0, limit) : afterCursor
+    const hasMore = limit !== undefined && afterCursor.length > page.length
+    const lastItem = page[page.length - 1]
+
+    return {
+      items: page,
+      ...(hasMore && lastItem ? { nextCursor: encodeCursor(lastItem, sortBy, tiebreakField) } : {}),
+    }
+  }
+
+  // Fast path: only reachable when `sortBy` is the entity's own indexed
+  // date field (the default), so `[dateField+tiebreak]` already encodes the
+  // exact order `list()` needs. Reads a bounded window straight off that
+  // index via `.limit()` instead of materializing the whole matching set —
+  // this is what makes `list({ limit: 20 })` on a years-old table cheap.
+  //
+  // Returns `null` when it can't safely answer (see `TIE_SAFETY_MARGIN`) —
+  // the caller falls back to `listSlow`, which is always correct.
+  async function tryFastPath(
+    dateFrom: string | undefined,
+    dateTo: string | undefined,
+    seccion: string | undefined,
+    sortDir: 'asc' | 'desc',
+    limit: number,
+    cursor: string | undefined,
+  ): Promise<ListResult<T> | null> {
+    const useSeccion = seccionField !== undefined && seccion !== undefined
+    const indexName = useSeccion ? fastSeccionIndex : fastIndex
+
+    let dateLower = dateFrom ?? ''
+    let dateUpper = dateTo ?? '￿'
+    let tieLower = ''
+    let tieUpper = '￿'
+
+    let cursorItem: T | undefined
+    if (cursor !== undefined) {
+      const payload = decodeCursor(cursor)
+      cursorItem = buildCursorItem<T>(payload, dateField, tiebreakField)
+      // Start the range at the cursor's own position, inclusive — narrows
+      // the query to exactly what hasn't been returned yet instead of
+      // re-walking from the original dateFrom/dateTo edge on every page.
+      const tieValue = String(tiebreakField ? payload.tiebreakValue : payload.id)
+      if (sortDir === 'desc') {
+        dateUpper = String(payload.sortValue)
+        tieUpper = tieValue
+      } else {
+        dateLower = String(payload.sortValue)
+        tieLower = tieValue
+      }
+    }
+
+    const lower = useSeccion ? [seccion, dateLower, tieLower] : [dateLower, tieLower]
+    const upper = useSeccion ? [seccion, dateUpper, tieUpper] : [dateUpper, tieUpper]
+
+    const fetchSize = limit + 1 + TIE_SAFETY_MARGIN
+    let collection = table.where(indexName).between(lower, upper, true, true)
+    if (sortDir === 'desc') collection = collection.reverse()
+    const window = await collection.limit(fetchSize).toArray()
+
+    const comparator = makeComparator<T>(dateField, sortDir, tiebreakField)
+    const usable = cursorItem
+      ? window.filter((item) => comparator(item, cursorItem as T) > 0)
+      : window
+
+    if (usable.length < limit + 1 && window.length === fetchSize) {
+      // The window was entirely consumed by rows tied with (or before) the
+      // cursor and we still can't tell whether more data exists beyond it —
+      // an adversarial cluster of same-instant writes bigger than our
+      // margin. Bail to the always-correct slow path rather than guess.
+      return null
+    }
+
+    // Defense in depth, same as `listSlow`: the index bound already
+    // enforces this exactly, but re-checking a (small, bounded) window is
+    // cheap and keeps the guarantee independent of the bound construction.
+    const filtered = usable.filter((item) =>
+      matchesFilters(item, dateField, seccionField, dateFrom, dateTo, seccion),
+    )
+    const page = filtered.slice(0, limit)
+    const hasMore = filtered.length > page.length
+    const lastItem = page[page.length - 1]
+
+    return {
+      items: page,
+      ...(hasMore && lastItem
+        ? { nextCursor: encodeCursor(lastItem, dateField, tiebreakField) }
+        : {}),
+    }
+  }
+
   async function list(query: ListQuery<T> = {}): Promise<ListResult<T>> {
     await ensureReady()
     try {
       const { dateFrom, dateTo, seccion, sortDir = 'desc', limit, cursor } = query
       const sortBy = query.sortBy ?? dateField
 
-      const candidates = await fetchCandidates(dateFrom, dateTo, seccion)
-      const filtered = candidates.filter((item) => {
-        if (dateFrom !== undefined && String(item[dateField]) < dateFrom) return false
-        if (dateTo !== undefined && String(item[dateField]) > dateTo) return false
-        if (seccionField && seccion !== undefined && item[seccionField] !== seccion) return false
-        return true
-      })
-
-      const comparator = makeComparator<T>(sortBy, sortDir, tiebreakField)
-      const sorted = filtered.toSorted(comparator)
-
-      let afterCursor = sorted
-      if (cursor !== undefined) {
-        const payload = decodeCursor(cursor)
-        const cursorItem = {
-          [sortBy]: payload.sortValue,
-          ...(tiebreakField ? { [tiebreakField]: payload.tiebreakValue } : {}),
-          id: payload.id,
-        } as T
-        afterCursor = sorted.filter((item) => comparator(item, cursorItem) > 0)
+      if (sortBy === dateField && limit !== undefined) {
+        const fast = await tryFastPath(dateFrom, dateTo, seccion, sortDir, limit, cursor)
+        if (fast) return fast
       }
 
-      const page = limit !== undefined ? afterCursor.slice(0, limit) : afterCursor
-      const hasMore = limit !== undefined && afterCursor.length > page.length
-      const lastItem = page[page.length - 1]
-
-      return {
-        items: page,
-        ...(hasMore && lastItem
-          ? { nextCursor: encodeCursor(lastItem, sortBy, tiebreakField) }
-          : {}),
-      }
+      return await listSlow(dateFrom, dateTo, seccion, sortBy, sortDir, limit, cursor)
     } catch (error) {
       wrapUnknown(error)
     }
@@ -388,6 +540,8 @@ export function createLocalRepo(): Repo {
       seccionField: 'seccion',
       tiebreakField: 'createdAt',
       compoundIndex: '[seccion+fecha]',
+      fastIndex: '[fecha+createdAt]',
+      fastSeccionIndex: '[seccion+fecha+createdAt]',
       validate: validateMovimiento,
     },
     ready,
@@ -400,6 +554,8 @@ export function createLocalRepo(): Repo {
       seccionField: 'seccion',
       tiebreakField: undefined,
       compoundIndex: '[seccion+fechaActualizacion]',
+      fastIndex: '[fechaActualizacion+id]',
+      fastSeccionIndex: '[seccion+fechaActualizacion+id]',
       validate: validateActivo,
     },
     ready,

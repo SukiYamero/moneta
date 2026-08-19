@@ -40,19 +40,26 @@ export const db = new Dexie('kurobello') as Dexie & {
 db.version(1).stores({ vault: 'id' })
 
 // Additive: `vault` keeps its v1 definition unchanged (frozen, per AGENTS.md).
-// Indexes are chosen to serve `ListQuery` (repo.ts §10.3):
-//  - `fecha` / `fechaActualizacion`: single-field range scans for
-//    dateFrom/dateTo and the default sort when no `seccion` filter is given.
-//  - `seccion`: exact-match scans when no date range is given.
-//  - `[seccion+fecha]` / `[seccion+fechaActualizacion]`: compound range scan
-//    for the common case of filtering by section AND a date range together —
-//    avoids a full-table scan + in-memory filter for that combination.
-// `createdAt` is NOT indexed: it's only ever used as an in-memory sort
-// tiebreak, never queried via `.where()`, so an index on it would serve
-// nothing.
+// Indexes are chosen to serve `ListQuery` (repo.ts §10.3), with a fast,
+// bounded-read keyset-pagination path in mind (see repo.local.ts §10.3.1):
+//  - `fecha` / `fechaActualizacion`, `seccion`, `[seccion+fecha]` /
+//    `[seccion+fechaActualizacion]`: narrowing indexes for the general
+//    in-memory fallback path (arbitrary `sortBy`, or `limit` omitted).
+//  - `[fecha+createdAt]` / `[fechaActualizacion+id]` and
+//    `[seccion+fecha+createdAt]` / `[seccion+fechaActualizacion+id]`: the
+//    *ordering* indexes for the fast path. Compounding the date field with
+//    the entity's own tiebreak field (`createdAt` for movimientos; `id`
+//    itself for activos, which has no separate tiebreak field) means the
+//    index's native lexicographic order already IS the full deterministic
+//    sort order `list()` needs — a keyset page can be read directly off a
+//    bounded `.limit()` cursor instead of materializing and sorting the
+//    whole matching set in memory. `createdAt` alone is NOT indexed: it's
+//    only ever consulted as part of that compound tiebreak, never queried
+//    on its own.
 db.version(2).stores({
   vault: 'id',
-  movimientos: 'id, fecha, seccion, [seccion+fecha]',
-  activos: 'id, fechaActualizacion, seccion, [seccion+fechaActualizacion]',
+  movimientos: 'id, fecha, seccion, [seccion+fecha], [fecha+createdAt], [seccion+fecha+createdAt]',
+  activos:
+    'id, fechaActualizacion, seccion, [seccion+fechaActualizacion], [fechaActualizacion+id], [seccion+fechaActualizacion+id]',
   config: 'id',
 })
