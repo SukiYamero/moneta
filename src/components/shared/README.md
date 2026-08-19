@@ -58,6 +58,17 @@ doesn't belong to any one `src/features/**` folder. See `specs.md` §10.5.
 - `Toggle.tsx` — on/off switch (`role="switch"`). Accepts `ref`.
 - `InfoButton.tsx` — small "?" affordance that opens an info tooltip
   (the caller owns the `CenterModal` it opens). Accepts `ref`.
+- `BottomNav.tsx` — the five-slot persistent tab bar (Home / History /
+  centre Add / Search / Profile), mounted once by `src/routes/AppShell.tsx`.
+  Home, History and Search are real `NavLink`s, so `aria-current="page"`
+  comes from the router rather than hand-rolled state; the active slot is
+  `text-primary` plus a heavier `strokeWidth`, since Lucide has no filled
+  variant to switch to. Add and Profile have no destination until Wave 3 —
+  rendered `disabled` with an `aria-label` and a `// STUB(trackF|trackG)`
+  marker, per the stub convention, rather than as dead enabled buttons.
+  Its height is `--bottom-nav-clearance` (`src/styles/index.css`); any
+  screen or overlay that must sit clear of the bar pads by the same token
+  instead of repeating the number.
 - `Toast.tsx` — a single toast card: `role="alert"` (errors) /
   `role="status"` (confirmations), swipe-to-dismiss via Pointer Events
   (`touch-pan-y`, mirroring `BottomSheet`'s drag handling), plus a

@@ -13,6 +13,7 @@ import {
   type IconAvatarTint,
 } from '@/components/shared'
 import { LockSettings } from '@/features/lock/LockSettings'
+import { ToastKitDemo } from '@/components/shared/ToastKitDemo'
 import type { Movimiento } from '@/lib/schema'
 
 const TINTS: IconAvatarTint[] = [
@@ -206,6 +207,10 @@ export const Kit = () => {
             Deshabilitado
           </label>
         </div>
+      </Section>
+
+      <Section title="Toast (no screen raises one until Wave 3)">
+        <ToastKitDemo />
       </Section>
 
       <Section title="InfoButton">

@@ -25,12 +25,20 @@ Shared stores, helpers, and the Drive/auth/lock logic layer. No UI here.
   biometric availability (`biometricAvailable` — platform capability — vs
   `biometricEnrolled` — this vault's own enrollment, see `specs.md` §11,
   2026-08-19).
-- `loginMarker.ts` — a separate, tiny Dexie database (`kurobello-device`,
-  distinct from `db.ts`'s `kurobello`) holding one non-secret, per-device
-  signal: "has a Google login ever succeeded here." Gates
+- `deviceStore.ts` — a separate, tiny Dexie database (`kurobello-device`,
+  distinct from `db.ts`'s `kurobello`) holding the non-secret, per-device
+  signals. Two live here: the login marker
+  (`hasLoggedInBefore`/`markLoggedIn`/`clearLoggedIn`), which gates
   `authStore.restore()`'s silent re-auth so it can tell a returning user
-  apart from a first-ever visit or a just-locked-out device (`specs.md` §11,
-  2026-08-19).
+  apart from a first-ever visit or a just-locked-out device; and the
+  Drive-sync decision
+  (`getDriveDecision`/`setDriveDecision`/`clearDriveDecision`), so a device
+  that already answered the permission prompt is not asked again on every
+  cold start (`specs.md` §11, 2026-08-19 — supersedes the 2026-08-18
+  in-memory entry). The database name is frozen; only the module was
+  renamed from `loginMarker.ts`. Every function self-catches and degrades
+  to "no signal recorded" — storage trouble can suppress a convenience,
+  never block boot.
 - `toastStore.ts` — the global notification store behind `Toaster`:
   `toast.success(message)` / `toast.error(message)`, callable from anywhere
   with no provider. Holds no domain state and reads no other store
