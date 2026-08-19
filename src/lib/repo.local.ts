@@ -1,5 +1,5 @@
 import type { Table } from 'dexie'
-import { CONFIG_ID, db, type ConfigRow } from '@/lib/db'
+import { CONFIG_ID, db, type ConfigRow, type ProfileDb } from '@/lib/db'
 import { buildSeedConfig } from '@/lib/seedConfig'
 import { SCHEMA_VERSION, type Activo, type Config, type Movimiento } from '@/lib/schema'
 import {
@@ -311,6 +311,7 @@ const buildCursorItem = <T extends { id: EntityId }>(
 const createCrudRepo = <T extends { id: EntityId }>(
   config: EntityConfig<T>,
   ensureReady: () => Promise<void>,
+  database: ProfileDb,
 ): CrudRepo<T> => {
   const {
     table,
@@ -521,7 +522,7 @@ const createCrudRepo = <T extends { id: EntityId }>(
       // All-or-nothing: a dexie transaction throwing inside aborts every
       // write in it, so a bad row in a bulk import never leaves a partial
       // batch committed with no record of which half landed.
-      await db.transaction('rw', table, async () => {
+      await database.transaction('rw', table, async () => {
         await table.bulkAdd(fresh)
       })
       return fresh
@@ -556,7 +557,7 @@ const createCrudRepo = <T extends { id: EntityId }>(
       // the same id that each run get-then-put as separate dexie calls both
       // read the same stale row and the later `put` silently overwrites the
       // earlier one's patch (see specs.md §11, 2026-08-18).
-      return await db.transaction('rw', table, async () => {
+      return await database.transaction('rw', table, async () => {
         const existing = await table.get(id)
         if (!existing) {
           throw new RepoError(`no ${entityLabel} with id "${id}"`, 'not_found')
@@ -577,7 +578,7 @@ const createCrudRepo = <T extends { id: EntityId }>(
       // Same atomicity treatment as `update()` — today's worst case without
       // it is a harmless double-delete, but the unsynchronized get-then-delete
       // shape is the same latent bug.
-      await db.transaction('rw', table, async () => {
+      await database.transaction('rw', table, async () => {
         const existing = await table.get(id)
         if (!existing) {
           throw new RepoError(`no ${entityLabel} with id "${id}"`, 'not_found')
@@ -595,7 +596,7 @@ const createCrudRepo = <T extends { id: EntityId }>(
       // Symmetric with `remove`'s not_found guarantee: any missing id aborts
       // the whole batch (transaction throw ⇒ full rollback), never a
       // partial delete.
-      await db.transaction('rw', table, async () => {
+      await database.transaction('rw', table, async () => {
         for (const id of ids) {
           const existing = await table.get(id)
           if (!existing) {
@@ -614,15 +615,15 @@ const createCrudRepo = <T extends { id: EntityId }>(
 
 // --- ready() / schemaVersion gate -------------------------------------------
 
-const performReady = async (): Promise<void> => {
-  const stored = await db.config.get(CONFIG_ID)
+const performReady = async (database: ProfileDb): Promise<void> => {
+  const stored = await database.config.get(CONFIG_ID)
 
   if (!stored) {
     // First-run only: monedaPrincipal derives from the device region
     // (specs.md §10.7). A schemaVersion mismatch below never re-enters
     // this branch, so a currency the user already has is never reassigned.
     const seeded: ConfigRow = { ...buildSeedConfig(), id: CONFIG_ID }
-    await db.config.put(seeded)
+    await database.config.put(seeded)
     return
   }
 
@@ -636,53 +637,67 @@ const performReady = async (): Promise<void> => {
   }
 
   await migrateSchema(stored.schemaVersion, SCHEMA_VERSION, MIGRATIONS)
-  await db.config.update(CONFIG_ID, { schemaVersion: SCHEMA_VERSION })
+  await database.config.update(CONFIG_ID, { schemaVersion: SCHEMA_VERSION })
 }
 
 // --- ready() in-flight memo, scoped to the database ------------------------
 //
-// Keyed by the `db` connection itself (a `WeakMap`, not a plain module
-// variable) rather than by `createLocalRepo()` instance: two repo instances
-// wrapping the same underlying database must share one in-flight `ready()`
-// call, or two concurrent instances could each run a migration against the
-// same IndexedDB store. A *resolved* promise stays cached — performReady()
+// Keyed by the `ProfileDb` connection itself (a `WeakMap`, not a plain
+// module variable) rather than by `createLocalRepo()` instance: two repo
+// instances wrapping the same underlying database (same profile) must share
+// one in-flight `ready()` call, or two concurrent instances could each run a
+// migration against the same IndexedDB store. Two repos built against
+// *different* databases (different profiles, specs.md §10.15) get
+// independent entries here for the same reason — this WeakMap is what makes
+// "per-profile ready()" fall out of the existing memo design rather than
+// needing new plumbing. A *resolved* promise stays cached — performReady()
 // must run once per database connection, matching §10.3's "before first
 // use", not once per call (every CrudRepo method awaits ensureReady()). Only
 // a *rejected* attempt clears the entry, so a later call can retry instead
 // of being stuck replaying the same failure forever.
-const readyPromises = new WeakMap<typeof db, Promise<void>>()
+const readyPromises = new WeakMap<ProfileDb, Promise<void>>()
 
-const ready = (): Promise<void> => {
-  let promise = readyPromises.get(db)
-  if (!promise) {
-    promise = performReady().catch((error: unknown) => {
-      readyPromises.delete(db)
-      throw error instanceof RepoError
-        ? error
-        : new RepoError(error instanceof Error ? error.message : String(error), 'unknown', {
-            cause: error,
-          })
-    })
-    readyPromises.set(db, promise)
+const makeReady = (database: ProfileDb): (() => Promise<void>) => {
+  return (): Promise<void> => {
+    let promise = readyPromises.get(database)
+    if (!promise) {
+      promise = performReady(database).catch((error: unknown) => {
+        readyPromises.delete(database)
+        throw error instanceof RepoError
+          ? error
+          : new RepoError(error instanceof Error ? error.message : String(error), 'unknown', {
+              cause: error,
+            })
+      })
+      readyPromises.set(database, promise)
+    }
+    return promise
   }
-  return promise
 }
 
-// Test-only escape hatch: production code never calls this. `db` is a
-// module singleton reused across the whole test file (only its tables are
-// cleared between tests), so a resolved run-once memo would otherwise leak
-// across unrelated tests instead of resetting the way a real fresh database
-// connection would. Not exported from the `Repo` port.
-export const __resetReadyMemoForTests = (): void => {
-  readyPromises.delete(db)
+// Test-only escape hatch: production code never calls this. `database`
+// (default: the frozen module-level `db`) is a singleton reused across a
+// whole test file (only its tables are cleared between tests), so a
+// resolved run-once memo would otherwise leak across unrelated tests
+// instead of resetting the way a real fresh database connection would. Not
+// exported from the `Repo` port.
+export const __resetReadyMemoForTests = (database: ProfileDb = db): void => {
+  readyPromises.delete(database)
 }
 
 // --- factory -----------------------------------------------------------------
 
-export const createLocalRepo = (): Repo => {
+// Defaults to the frozen `kurobello` instance so every existing caller/test
+// is unchanged; a profile's own database is passed explicitly once
+// `src/lib/profiles/` resolves the active one (specs.md §10.15). Each call
+// gets its own `ready` closure, but two calls sharing the same `database`
+// share the same in-flight/resolved memo via the WeakMap above.
+export const createLocalRepo = (database: ProfileDb = db): Repo => {
+  const ready = makeReady(database)
+
   const movimientos = createCrudRepo<Movimiento>(
     {
-      table: db.movimientos as Table<Movimiento, EntityId, Movimiento>,
+      table: database.movimientos as Table<Movimiento, EntityId, Movimiento>,
       dateField: 'fecha',
       seccionField: 'seccion',
       tiebreakField: 'createdAt',
@@ -693,11 +708,12 @@ export const createLocalRepo = (): Repo => {
       entityLabel: 'movimiento',
     },
     ready,
+    database,
   )
 
   const activos = createCrudRepo<Activo>(
     {
-      table: db.activos as Table<Activo, EntityId, Activo>,
+      table: database.activos as Table<Activo, EntityId, Activo>,
       dateField: 'fechaActualizacion',
       seccionField: 'seccion',
       tiebreakField: undefined,
@@ -708,12 +724,13 @@ export const createLocalRepo = (): Repo => {
       entityLabel: 'activo',
     },
     ready,
+    database,
   )
 
   const getConfig = async (): Promise<Config> => {
     await ready()
     try {
-      const row = await db.config.get(CONFIG_ID)
+      const row = await database.config.get(CONFIG_ID)
       if (!row) {
         throw new RepoError('config missing after ready()', 'unknown')
       }
@@ -736,12 +753,12 @@ export const createLocalRepo = (): Repo => {
       throw new RepoError('schemaVersion is not caller-writable via updateConfig', 'invalid_input')
     }
     try {
-      const existing = await db.config.get(CONFIG_ID)
+      const existing = await database.config.get(CONFIG_ID)
       if (!existing) {
         throw new RepoError('config missing after ready()', 'unknown')
       }
       const merged: ConfigRow = { ...existing, ...patch, id: CONFIG_ID }
-      await db.config.put(merged)
+      await database.config.put(merged)
       const { id: _mergedId, ...config } = merged
       return config
     } catch (error) {

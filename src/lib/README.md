@@ -29,7 +29,10 @@ Shared stores, helpers, and the Drive/auth/lock logic layer. No UI here.
 - `db.ts` — the Dexie (IndexedDB) instance. `v1` has the `LockVault` table;
   `v2` additively adds `movimientos`, `activos`, and a single-row `config`
   table (indexes chosen to serve `Repo`'s `ListQuery` — see the comment
-  above `db.version(2)`).
+  above `db.version(2)`). `createProfileDb(name)` is the factory behind it
+  (`specs.md` §10.15): `db` is `createProfileDb('kurobello')`, the frozen
+  first profile, and every additional profile calls the same factory
+  against a suffixed name via `profiles/`.
 - `pinLock.ts` — WebCrypto envelope encryption for the cached token
   (PIN + optional biometric via WebAuthn PRF).
 - `lockStore.ts` — zustand store wrapping `pinLock.ts`: lock phase, throttle,
@@ -94,7 +97,12 @@ Shared stores, helpers, and the Drive/auth/lock logic layer. No UI here.
   `load()`.
 - `repoProvider.ts` — the single swap point: `getRepo()` returns the shared
   fake `Repo` today. `// STUB(wave3)` marks the one line to change once a
-  Drive-backed `Repo` exists (`specs.md` §12).
+  Drive-backed `Repo` exists (`specs.md` §12). `getActiveProfileRepo()`
+  builds the real per-profile-scoped repo and is fully tested, but nothing
+  calls it yet — the flip is gated on Wave 4's create UI.
+- `profiles/` — the device-scoped profile registry (`specs.md` §10.15). One
+  dexie database per profile; `getActiveProfile()` resolves which one is
+  active by recency, with no switcher UI yet. Own `README.md`.
 - `repo.contract.ts` — shared `Repo` behavior every implementation must
   agree on (`testRepoContract()`), invoked from both `repo.local.test.ts`
   and `repo.fake.test.ts` (`docs/error-handling.md` §6). A plain module, not
