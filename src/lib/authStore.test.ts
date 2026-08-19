@@ -259,6 +259,36 @@ describe('useAuthStore.login', () => {
     expect(s.session).toBeNull()
   })
 
+  // A narrower window than the one above: the same guard must hold across
+  // *every* await before the state-committing set(), not just the first
+  // one. authenticate() resolving is not the only await left before
+  // login() commits — resolveDriveOptIn()'s own storage read is a second
+  // one, and a logout() landing there must be caught too.
+  it('does not resurrect state when a logout() fires during the drive-decision lookup after authenticate() resolves', async () => {
+    mToken.mockResolvedValue({ accessToken: 'tok', expiresAt: 1 })
+    mUser.mockResolvedValue({ email: 'a@b.com', name: 'Ana' })
+    let resolveDecision!: (v: 'connected' | 'dismissed' | undefined) => void
+    mGetDriveDecision.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveDecision = resolve
+        }),
+    )
+    useAuthStore.setState({ driveOptIn: 'pending' })
+
+    const pending = useAuthStore.getState().login()
+    await vi.waitFor(() => expect(mGetDriveDecision).toHaveBeenCalled())
+
+    useAuthStore.getState().logout()
+    resolveDecision('connected')
+    await pending
+
+    const s = useAuthStore.getState()
+    expect(s.status).toBe('idle')
+    expect(s.session).toBeNull()
+    expect(s.driveOptIn).toBe('pending')
+  })
+
   // specs.md §11, 2026-08-19 (supersedes the 2026-08-18 in-memory-only
   // decision): a device that already answered must not be asked again, even
   // on a fresh explicit login() — e.g. after restore() fell back to idle
