@@ -3257,6 +3257,36 @@ lint` clean bar the one pre-existing `components/ui` warning). `AGENTS.md`
   ties (found and fixed by TDD in Track V). Real clock skew between devices
   is a different problem, and the current fix does not address it.
 
+- **Three device-scoped Dexie databases now exist where one would do:**
+  `kurobello-device` (`deviceStore.ts`), `kurobello-profiles` (§10.15's
+  registry), and `kurobello-network` (§10.11's offline-window anchor). Each
+  track created its own **correctly** — the Wave 3 stage-1 ownership table
+  left `deviceStore.ts` unassigned, and `AGENTS.md` says to stop rather than
+  edit a file you do not own. So this is an artifact of the operator's plan,
+  not of any track's judgment, and it is the exact class of seam a per-track
+  reviewer cannot see by construction. Consolidating into `kurobello-device`
+  as the canonical device-signals database is cheap now (each new database
+  holds essentially one table with one row) and gets steadily more expensive
+  as Wave 4 adds signals. Needs its own small task touching both tracks'
+  storage — not a unilateral edit by either.
+
+- **Accepted limitation: the 7-hour offline window compares wall-clock
+  time.** `canWrite()` measures `Date.now() - lastOnlineAt`, so a device
+  clock change moves the boundary: backwards silently extends the
+  offline-create grace period, forwards can block a legitimate offline
+  create early. Both directions are benign — no data loss, no security
+  consequence, worst case an annoying false block the user clears by
+  reconnecting. Recorded rather than fixed because there is no trusted time
+  source available without a backend (§6), so this is the honest cost of the
+  no-backend architecture, not an oversight.
+
+- **`syncLockedSession` is the one async auth path not gated on
+  `authGeneration`**, verified deliberate during Track R's review. A stale
+  write re-persists the same account's already-encrypted data under the same
+  DEK — no cross-account leak and no lock bypass — so gating it would add a
+  guard with nothing to guard. Noted so a future sweep does not re-file it
+  as the missing fifth case.
+
 ### Development waves (parallel tracks, sequencing, worktree log)
 
 Moved to **[`docs/waves.md`](../docs/waves.md)** — the full wave/track plan

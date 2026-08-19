@@ -511,9 +511,9 @@ Never R, T, U, V or Y.
 
 ## 5. Live status
 
-| Track | Status                                                  |
-| ----- | ------------------------------------------------------- |
-| R     | merged `1aea99e`, review in flight (`wave3/r-review`)   |
+| Track | Status                                                   |
+| ----- | -------------------------------------------------------- |
+| R     | ✅ merged `1aea99e` + review (clean, no code changes)    |
 | S     | ✅ merged `823bf59` + review `1058b5c`, worktree removed |
 | U     | ✅ merged `32d71d0` + review `3b98736`, worktree removed |
 | V     | ✅ merged `f350705` + review `99f3dbf`, worktree removed |

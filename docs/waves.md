@@ -214,7 +214,7 @@ should eventually use. The operator swaps one for the other after both merge.
 
 ---
 
-## Wave 3 — foundations (stage 1 in flight, 2026-08-19)
+## Wave 3 — foundations (stage 1 ✅ complete, 2026-08-19)
 
 > **Execution detail lives in [`wave-3-plan.md`](wave-3-plan.md)** — the
 > operator's decomposition: file ownership, the conflicts resolved up front,
@@ -304,9 +304,7 @@ Check this table against `git worktree list` at the start of any parallel
 session; prune anything stale (merged-but-not-removed, or on disk but
 missing/finished here).
 
-| Path                          | Branch           | Status            |
-| ----------------------------- | ---------------- | ----------------- |
-| `../moneta-worktrees/wave3-r` | `wave3/r-review` | merged, in review |
+_Empty — every Wave 3 stage-1 worktree was removed when its branch merged._
 
 Paths are relative to the repo root (`web/moneta`), i.e. a sibling
 `web/moneta-worktrees/` directory outside the repo — deliberately not nested
