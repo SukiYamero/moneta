@@ -753,12 +753,20 @@ export const createLocalRepo = (database: ProfileDb = db): Repo => {
       throw new RepoError('schemaVersion is not caller-writable via updateConfig', 'invalid_input')
     }
     try {
-      const existing = await database.config.get(CONFIG_ID)
-      if (!existing) {
-        throw new RepoError('config missing after ready()', 'unknown')
-      }
-      const merged: ConfigRow = { ...existing, ...patch, id: CONFIG_ID }
-      await database.config.put(merged)
+      // Read-merge-write must be one atomic unit, same reasoning as
+      // `update()`/`remove()` above (specs.md §11, 2026-08-18): two
+      // concurrent updateConfig() calls that each run get-then-put as
+      // separate dexie calls both read the same stale row and the later
+      // `put` silently overwrites the earlier one's patch.
+      const merged = await database.transaction('rw', database.config, async () => {
+        const existing = await database.config.get(CONFIG_ID)
+        if (!existing) {
+          throw new RepoError('config missing after ready()', 'unknown')
+        }
+        const next: ConfigRow = { ...existing, ...patch, id: CONFIG_ID }
+        await database.config.put(next)
+        return next
+      })
       const { id: _mergedId, ...config } = merged
       return config
     } catch (error) {
