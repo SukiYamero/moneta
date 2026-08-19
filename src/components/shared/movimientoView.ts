@@ -88,8 +88,17 @@ const AMOUNT_COLOR_CLASS: Record<TipoMovimiento, string> = {
   gasto: 'text-foreground',
 }
 
+// Constructing an Intl.NumberFormat is expensive relative to formatting a
+// number — MovimientoRow calls this per row per render in a list the spec
+// expects to grow to years of entries, so the formatters are built once per
+// currency at module scope instead of on every call.
+const CURRENCY_FORMATTERS: Record<Moneda, Intl.NumberFormat> = {
+  COP: new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP' }),
+  USD: new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'USD' }),
+}
+
 export function formatMonto(monto: number, moneda: Moneda): string {
-  return new Intl.NumberFormat('es-CO', { style: 'currency', currency: moneda }).format(monto)
+  return CURRENCY_FORMATTERS[moneda].format(monto)
 }
 
 export interface MovimientoAmountView {

@@ -1,9 +1,10 @@
-import type { KeyboardEvent } from 'react'
+import { useRef, type KeyboardEvent } from 'react'
 import { cn } from '@/lib/utils'
 
 export interface SegmentedControlOption<T extends string> {
   value: T
   label: string
+  disabled?: boolean
 }
 
 export interface SegmentedControlProps<T extends string> {
@@ -25,11 +26,27 @@ function isArrowKey(key: string): key is ArrowKey {
   return key === 'ArrowLeft' || key === 'ArrowRight'
 }
 
+/** Steps from `from` in `delta` direction, wrapping, skipping disabled options. `null` if every option is disabled. */
+function findNextEnabledIndex<T extends string>(
+  options: SegmentedControlOption<T>[],
+  from: number,
+  delta: number,
+): number | null {
+  const count = options.length
+  for (let step = 1; step <= count; step++) {
+    const index = (((from + delta * step) % count) + count) % count
+    if (!options[index]?.disabled) return index
+  }
+  return null
+}
+
 /**
  * Generic pill-group toggle (history scope, gasto/ingreso, tag-breakdown
  * tabs, number-format prefs…) — no screen-specific assumptions baked in.
  * Follows the APG "radio group" pattern: one tab stop, arrow keys move
- * focus and selection together.
+ * focus and selection together. The visible pill keeps its designed
+ * height; each segment's button grows to the 44px touch-target floor via
+ * invisible padding so the tap target doesn't inflate the pill.
  */
 export function SegmentedControl<T extends string>({
   options,
@@ -38,6 +55,7 @@ export function SegmentedControl<T extends string>({
   'aria-label': ariaLabel,
   className,
 }: SegmentedControlProps<T>) {
+  const buttonRefs = useRef<(HTMLButtonElement | null)[]>([])
   const selectedIndex = Math.max(
     0,
     options.findIndex((o) => o.value === value),
@@ -47,13 +65,12 @@ export function SegmentedControl<T extends string>({
     if (!isArrowKey(event.key)) return
     event.preventDefault()
     const delta = ARROW_DELTA[event.key]
-    const nextIndex = (selectedIndex + delta + options.length) % options.length
+    const nextIndex = findNextEnabledIndex(options, selectedIndex, delta)
+    if (nextIndex === null) return
     const next = options[nextIndex]
     if (!next) return
     onChange(next.value)
-    ;(
-      event.currentTarget.parentElement?.children[nextIndex] as HTMLButtonElement | undefined
-    )?.focus()
+    buttonRefs.current[nextIndex]?.focus()
   }
 
   return (
@@ -69,18 +86,26 @@ export function SegmentedControl<T extends string>({
             key={option.value}
             type="button"
             role="radio"
+            ref={(el) => {
+              buttonRefs.current[index] = el
+            }}
             aria-checked={selected}
+            disabled={option.disabled}
             tabIndex={index === selectedIndex ? 0 : -1}
             onClick={() => onChange(option.value)}
             onKeyDown={handleKeyDown}
-            className={cn(
-              'min-h-9 flex-1 rounded-md px-1 py-2 text-ms font-bold whitespace-nowrap transition-colors',
-              selected
-                ? 'bg-primary text-primary-foreground'
-                : 'text-fg-tertiary hover:text-foreground',
-            )}
+            className="group flex min-h-11 flex-1 items-center justify-center disabled:opacity-50"
           >
-            {option.label}
+            <span
+              className={cn(
+                'flex h-9 w-full items-center justify-center rounded-md px-1 text-ms font-bold whitespace-nowrap transition-colors',
+                selected
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-fg-tertiary group-hover:text-foreground',
+              )}
+            >
+              {option.label}
+            </span>
           </button>
         )
       })}

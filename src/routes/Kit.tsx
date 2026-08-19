@@ -1,5 +1,5 @@
-import { useState, type ReactNode } from 'react'
-import { Gift, House, Search, Utensils } from 'lucide-react'
+import { useRef, useState, type ReactNode } from 'react'
+import { Gift, House, Search, Trash2, Utensils } from 'lucide-react'
 import {
   BottomSheet,
   CenterModal,
@@ -72,6 +72,13 @@ const TYPE_OPTIONS = [
   { value: 'ingreso', label: 'Ingreso' },
 ] as const
 
+const SCOPE_OPTIONS_WITH_DISABLED = [
+  { value: 'day', label: 'Día' },
+  { value: 'week', label: 'Semana', disabled: true },
+  { value: 'month', label: 'Mes' },
+  { value: 'year', label: 'Año' },
+] as const
+
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="flex flex-col gap-3">
@@ -84,6 +91,8 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 /** Dev-only gallery for src/components/shared/** — gated on import.meta.env.DEV in router.tsx. */
 export function Kit() {
   const [scope, setScope] = useState<(typeof SCOPE_OPTIONS)[number]['value']>('week')
+  const [scopeWithDisabled, setScopeWithDisabled] =
+    useState<(typeof SCOPE_OPTIONS_WITH_DISABLED)[number]['value']>('day')
   const [type, setType] = useState<(typeof TYPE_OPTIONS)[number]['value']>('gasto')
   const [notifications, setNotifications] = useState(true)
   const [darkTheme, setDarkTheme] = useState(false)
@@ -92,6 +101,15 @@ export function Kit() {
   const [sheetOpen, setSheetOpen] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
   const [infoOpen, setInfoOpen] = useState(false)
+  // Nested-overlay demo: the delete-confirm CenterModal opens from inside
+  // the Movement BottomSheet — the real, reachable flow the overlay stack
+  // (useOverlay.ts) exists for.
+  const [movementSheetOpen, setMovementSheetOpen] = useState(false)
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+  // initialFocus demo: the amount input should get focus on open even
+  // though it isn't the sheet's first focusable descendant.
+  const [addSheetOpen, setAddSheetOpen] = useState(false)
+  const amountInputRef = useRef<HTMLInputElement>(null)
 
   return (
     <main className="mx-auto flex max-w-md flex-col gap-8 p-5 pb-24">
@@ -132,6 +150,7 @@ export function Kit() {
           />
           <TagChip icon={House} label="Hogar" />
           <TagChip icon={Gift} label="Regalo" selected />
+          <TagChip icon={Utensils} label="Deshabilitado" disabled />
         </div>
       </Section>
 
@@ -147,6 +166,12 @@ export function Kit() {
           value={type}
           onChange={setType}
           aria-label="Tipo"
+        />
+        <SegmentedControl
+          options={[...SCOPE_OPTIONS_WITH_DISABLED]}
+          value={scopeWithDisabled}
+          onChange={setScopeWithDisabled}
+          aria-label="Alcance con opción deshabilitada"
         />
       </Section>
 
@@ -185,7 +210,7 @@ export function Kit() {
       </Section>
 
       <Section title="BottomSheet / CenterModal">
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button
             type="button"
             onClick={() => setSheetOpen(true)}
@@ -199,6 +224,20 @@ export function Kit() {
             className="min-h-11 rounded-md bg-secondary px-4 text-sm font-bold text-secondary-foreground"
           >
             Abrir modal
+          </button>
+          <button
+            type="button"
+            onClick={() => setMovementSheetOpen(true)}
+            className="min-h-11 rounded-md bg-secondary px-4 text-sm font-bold text-secondary-foreground"
+          >
+            Sheet anidado
+          </button>
+          <button
+            type="button"
+            onClick={() => setAddSheetOpen(true)}
+            className="min-h-11 rounded-md bg-secondary px-4 text-sm font-bold text-secondary-foreground"
+          >
+            Sheet con initialFocus
           </button>
         </div>
       </Section>
@@ -244,6 +283,84 @@ export function Kit() {
           </p>
         </div>
       </CenterModal>
+
+      {/* Nested-overlay demo: proves the overlay stack (useOverlay.ts) — the
+          delete-confirm CenterModal is the topmost overlay while it's open:
+          it gets initial focus, traps Tab, and Escape closes it first. */}
+      <BottomSheet
+        open={movementSheetOpen}
+        onClose={() => setMovementSheetOpen(false)}
+        ariaLabel="Movimiento (con confirmación anidada)"
+      >
+        <div className="flex flex-col gap-3 pb-2">
+          <div className="text-sm font-bold">Sueldo</div>
+          <p className="text-sm text-fg-secondary">Ejemplo de sheet con un CenterModal anidado.</p>
+          <button
+            type="button"
+            onClick={() => setDeleteConfirmOpen(true)}
+            className="flex min-h-11 items-center justify-center gap-2 rounded-md bg-danger/15 px-4 text-sm font-bold text-danger"
+          >
+            <Trash2 className="size-4" aria-hidden="true" /> Eliminar
+          </button>
+
+          <CenterModal
+            open={deleteConfirmOpen}
+            onClose={() => setDeleteConfirmOpen(false)}
+            ariaLabel="Confirmar eliminación"
+          >
+            <div className="flex flex-col items-center gap-3 text-center">
+              <div className="text-base font-extrabold">¿Eliminar este movimiento?</div>
+              <p className="text-sm text-fg-secondary">Esta acción no se puede deshacer.</p>
+              <div className="flex w-full gap-2">
+                <button
+                  type="button"
+                  onClick={() => setDeleteConfirmOpen(false)}
+                  className="min-h-11 flex-1 rounded-md bg-secondary text-sm font-bold text-secondary-foreground"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDeleteConfirmOpen(false)
+                    setMovementSheetOpen(false)
+                  }}
+                  className="min-h-11 flex-1 rounded-md bg-danger text-sm font-bold text-danger-foreground"
+                >
+                  Eliminar
+                </button>
+              </div>
+            </div>
+          </CenterModal>
+        </div>
+      </BottomSheet>
+
+      {/* initialFocus demo: the amount input gets focus on open even though
+          it isn't the sheet's first focusable descendant. */}
+      <BottomSheet
+        open={addSheetOpen}
+        onClose={() => setAddSheetOpen(false)}
+        ariaLabel="Agregar movimiento"
+        initialFocus={amountInputRef}
+      >
+        <div className="flex flex-col gap-3 pb-2">
+          <SegmentedControl
+            options={[...TYPE_OPTIONS]}
+            value={type}
+            onChange={setType}
+            aria-label="Tipo de movimiento"
+          />
+          <label className="flex flex-col gap-1.5 text-sm font-semibold">
+            Monto
+            <input
+              ref={amountInputRef}
+              type="number"
+              inputMode="decimal"
+              className="min-h-11 rounded-md border border-border-subtle bg-surface-sunken px-3.5 text-base font-bold"
+            />
+          </label>
+        </div>
+      </BottomSheet>
     </main>
   )
 }

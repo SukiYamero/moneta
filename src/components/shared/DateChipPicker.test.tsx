@@ -42,4 +42,30 @@ describe('DateChipPicker', () => {
 
     expect(screen.getByText('septiembre 2026')).toBeInTheDocument()
   })
+
+  it('closes the month grid on Escape', async () => {
+    const user = userEvent.setup()
+    render(<DateChipPicker value="2026-08-10" onChange={() => {}} />)
+
+    await user.click(screen.getByRole('button', { name: /10 de agosto/ }))
+    expect(screen.getByRole('group', { name: 'Selector de fecha' })).toBeInTheDocument()
+
+    await user.keyboard('{Escape}')
+
+    expect(screen.queryByRole('group', { name: 'Selector de fecha' })).not.toBeInTheDocument()
+  })
+
+  it('meets the 44px touch-target floor on the chip and month-nav buttons without inflating their visible size', async () => {
+    const user = userEvent.setup()
+    render(<DateChipPicker value="2026-08-10" onChange={() => {}} />)
+
+    const chipButton = screen.getByRole('button', { name: /10 de agosto/ })
+    expect(chipButton).toHaveClass('min-h-11')
+    expect(chipButton.firstElementChild).toHaveClass('h-9')
+
+    await user.click(chipButton)
+    const prevMonth = screen.getByRole('button', { name: 'Mes anterior' })
+    expect(prevMonth).toHaveClass('min-h-11', 'min-w-11')
+    expect(prevMonth.firstElementChild).toHaveClass('size-7')
+  })
 })

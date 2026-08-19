@@ -1,4 +1,11 @@
-import { useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
+import {
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+  type Ref,
+  type RefObject,
+} from 'react'
 import { createPortal } from 'react-dom'
 import { cn } from '@/lib/utils'
 import { OVERLAY_PANEL_CLASS, useOverlay } from '@/components/shared/useOverlay'
@@ -12,6 +19,9 @@ export type BottomSheetProps = {
   onClose: () => void
   children: ReactNode
   className?: string
+  /** Focus this element on open instead of the panel's first focusable descendant (e.g. the amount input in the Add sheet). */
+  initialFocus?: RefObject<HTMLElement | null>
+  ref?: Ref<HTMLDivElement>
 } & BottomSheetLabelProps
 
 const DRAG_DISMISS_THRESHOLD_PX = 120
@@ -28,18 +38,25 @@ export function BottomSheet({
   labelledBy,
   ariaLabel,
   className,
+  initialFocus,
+  ref,
 }: BottomSheetProps) {
-  const panelRef = useOverlay<HTMLDivElement>({ open, onClose })
+  const panelRef = useOverlay<HTMLDivElement>({ open, onClose, initialFocus, ref })
   const [dragY, setDragY] = useState(0)
   const [dragging, setDragging] = useState(false)
   const dragStartY = useRef(0)
+  const pointerIdRef = useRef<number | null>(null)
 
   if (!open) return null
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     dragStartY.current = event.clientY
+    pointerIdRef.current = event.pointerId
     setDragging(true)
-    event.currentTarget.setPointerCapture(event.pointerId)
+    // Pointer capture keeps move/up events targeting this handle even once
+    // the pointer strays outside it (or the window) mid-drag. Guarded
+    // because jsdom (and some minimal WebViews) don't implement it.
+    event.currentTarget.setPointerCapture?.(event.pointerId)
   }
 
   const handlePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -47,10 +64,40 @@ export function BottomSheet({
     setDragY(Math.max(0, event.clientY - dragStartY.current))
   }
 
-  const endDrag = () => {
+  const releaseCapture = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (pointerIdRef.current === null) return
+    if (event.currentTarget.hasPointerCapture?.(pointerIdRef.current)) {
+      event.currentTarget.releasePointerCapture(pointerIdRef.current)
+    }
+    pointerIdRef.current = null
+  }
+
+  const endDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    releaseCapture(event)
     if (!dragging) return
     setDragging(false)
     if (dragY > DRAG_DISMISS_THRESHOLD_PX) onClose()
+    setDragY(0)
+  }
+
+  // A cancelled gesture (system gesture, multi-touch conflict, pointer
+  // capture lost outright) never counts as user intent to dismiss — only
+  // reset the drag state, don't check the threshold.
+  const cancelDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    releaseCapture(event)
+    setDragging(false)
+    setDragY(0)
+  }
+
+  // `lostpointercapture` is the reliable catch-all for a drag that ends
+  // outside the window (the OS never delivers pointerup/pointercancel back
+  // to the page in that case) — it always fires once capture is released,
+  // including right after a normal pointerup, where `dragging` is already
+  // false and this is a harmless no-op.
+  const handleLostPointerCapture = () => {
+    pointerIdRef.current = null
+    if (!dragging) return
+    setDragging(false)
     setDragY(0)
   }
 
@@ -82,7 +129,8 @@ export function BottomSheet({
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={endDrag}
-          onPointerCancel={endDrag}
+          onPointerCancel={cancelDrag}
+          onLostPointerCapture={handleLostPointerCapture}
           className="mx-auto mb-[18px] flex h-8 w-full touch-none cursor-grab items-center justify-center active:cursor-grabbing"
         >
           <div className="h-[5px] w-[38px] rounded-full bg-border-strong" />

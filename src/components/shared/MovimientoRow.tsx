@@ -1,6 +1,7 @@
 import { format, parseISO } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { CircleHelp } from 'lucide-react'
+import type { Ref } from 'react'
 import type { Movimiento } from '@/lib/schema'
 import { cn } from '@/lib/utils'
 import { IconAvatar } from '@/components/shared/IconAvatar'
@@ -14,6 +15,7 @@ export interface MovimientoRowProps {
   /** Overrides the default `fecha`-derived label (e.g. "Hoy · 09:00" once a screen has that context). */
   meta?: string
   className?: string
+  ref?: Ref<HTMLDivElement>
 }
 
 export function MovimientoRow({
@@ -22,6 +24,7 @@ export function MovimientoRow({
   pending,
   meta,
   className,
+  ref,
 }: MovimientoRowProps) {
   const { icon, tint } = getMovimientoVisual(movimiento)
   const amount = getMovimientoAmountView(movimiento)
@@ -30,6 +33,7 @@ export function MovimientoRow({
 
   return (
     <div
+      ref={ref}
       role={isInteractive ? 'button' : undefined}
       tabIndex={isInteractive ? 0 : undefined}
       onClick={onClick}

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type Ref } from 'react'
 import {
   addDays,
   addMonths,
@@ -16,6 +16,7 @@ import {
 import { es } from 'date-fns/locale'
 import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useEscapeToClose } from '@/components/shared/useOverlay'
 
 export interface DateChipPickerProps {
   /** ISO `yyyy-mm-dd`, per schema.ts. */
@@ -28,6 +29,7 @@ export interface DateChipPickerProps {
    */
   firstDayOfWeek?: 0 | 1
   className?: string
+  ref?: Ref<HTMLDivElement>
 }
 
 const WEEKDAY_SLOTS = [0, 1, 2, 3, 4, 5, 6]
@@ -38,6 +40,7 @@ export function DateChipPicker({
   onChange,
   firstDayOfWeek = 1,
   className,
+  ref,
 }: DateChipPickerProps) {
   const selected = parseISO(value)
   const [open, setOpen] = useState(false)
@@ -52,6 +55,11 @@ export function DateChipPicker({
     document.addEventListener('pointerdown', handlePointerDown)
     return () => document.removeEventListener('pointerdown', handlePointerDown)
   }, [open])
+
+  // Shares the overlay stack with BottomSheet/CenterModal so this popover
+  // correctly outranks an ancestor sheet: Escape closes the picker first,
+  // not the sheet behind it.
+  useEscapeToClose({ open, onClose: () => setOpen(false) })
 
   const weekStartsOn = firstDayOfWeek
   const gridStart = startOfWeek(startOfMonth(viewMonth), { weekStartsOn })
@@ -72,19 +80,28 @@ export function DateChipPicker({
   }
 
   return (
-    <div ref={containerRef} className={cn('inline-flex flex-col items-stretch', className)}>
+    <div
+      ref={(node) => {
+        containerRef.current = node
+        if (typeof ref === 'function') ref(node)
+        else if (ref) (ref as { current: HTMLDivElement | null }).current = node
+      }}
+      className={cn('inline-flex flex-col items-stretch', className)}
+    >
       <button
         type="button"
         onClick={handleToggle}
         aria-expanded={open}
-        className="flex h-[34px] items-center gap-1.5 self-center rounded-md border border-border-subtle bg-surface-sunken px-3.5 text-ms font-bold text-fg-secondary"
+        className="inline-flex min-h-11 items-center self-center"
       >
-        <CalendarDays className="size-3.5 text-fg-faint" aria-hidden="true" />
-        {format(selected, "d 'de' MMMM", { locale: es })}
-        <ChevronDown
-          className={cn('size-2.5 text-fg-faint transition-transform', open && 'rotate-180')}
-          aria-hidden="true"
-        />
+        <span className="flex h-9 items-center gap-1.5 rounded-md border border-border-subtle bg-surface-sunken px-3.5 text-ms font-bold text-fg-secondary">
+          <CalendarDays className="size-3.5 text-fg-faint" aria-hidden="true" />
+          {format(selected, "d 'de' MMMM", { locale: es })}
+          <ChevronDown
+            className={cn('size-2.5 text-fg-faint transition-transform', open && 'rotate-180')}
+            aria-hidden="true"
+          />
+        </span>
       </button>
 
       {open && (
@@ -98,9 +115,11 @@ export function DateChipPicker({
               type="button"
               onClick={() => setViewMonth((m) => subMonths(m, 1))}
               aria-label="Mes anterior"
-              className="flex size-7 items-center justify-center rounded-sm bg-muted"
+              className="flex min-h-11 min-w-11 items-center justify-center"
             >
-              <ChevronLeft className="size-3.5" aria-hidden="true" />
+              <span className="flex size-7 items-center justify-center rounded-sm bg-muted">
+                <ChevronLeft className="size-3.5" aria-hidden="true" />
+              </span>
             </button>
             <span className="text-ms font-bold capitalize">
               {format(viewMonth, 'MMMM yyyy', { locale: es })}
@@ -109,9 +128,11 @@ export function DateChipPicker({
               type="button"
               onClick={() => setViewMonth((m) => addMonths(m, 1))}
               aria-label="Mes siguiente"
-              className="flex size-7 items-center justify-center rounded-sm bg-muted"
+              className="flex min-h-11 min-w-11 items-center justify-center"
             >
-              <ChevronRight className="size-3.5" aria-hidden="true" />
+              <span className="flex size-7 items-center justify-center rounded-sm bg-muted">
+                <ChevronRight className="size-3.5" aria-hidden="true" />
+              </span>
             </button>
           </div>
           <div className="mb-1 grid grid-cols-7 gap-1">

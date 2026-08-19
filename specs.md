@@ -594,6 +594,95 @@ operator, since `repo.ts` is Track A's file) so the fake repo can reject a
 non-positive `monto` the same way a real implementation should, instead of
 silently disagreeing with schema.ts's "monto always positive" invariant.
 
+### 10.5.1 Overlay stack + touch-target/API fixes (code review follow-up, 2026-08-18)
+
+A code review of §10.5's initial build found three reproduced `useOverlay`
+bugs plus a hard 44px touch-target violation, fixed on `fix/d-ui`:
+
+- **`useOverlay.ts` gained a module-level overlay stack.** Every open
+  `BottomSheet`/`CenterModal` instance registers a handle ordered by a
+  `seq` assigned once at first render (not by open/close timing) — React
+  renders ancestors before descendants, so a nested overlay (the
+  delete-confirm `CenterModal` opening from inside the Movement
+  `BottomSheet` — a real, reachable flow, not a hypothetical) always gets a
+  higher `seq` than the overlay it's nested inside, regardless of which
+  one's `open` flips true first or whether both mount already open in the
+  same commit. Only the topmost handle (highest `seq` among the
+  currently-open ones) reacts to Escape, traps Tab, and claims initial
+  focus; the body-scroll lock is refcounted against the stack instead of a
+  single acquire/release pair. This fixes three bugs that shipped past a
+  green suite because no test covered two overlays open at once (now
+  covered — `useOverlay.test.tsx`, "nested overlays" describe block):
+  1. The initial-focus effect re-running (and re-stealing focus) on every
+     parent re-render, because the natural `onClose={() => setOpen(false)}`
+     is a new function identity each render and the effect depended on
+     `[open, onClose]`. Fixed by keeping `onClose` in a ref and depending
+     only on `[open]`.
+  2. `Escape` closing every open overlay at once (each had its own
+     `document` keydown listener with no notion of "topmost").
+  3. A same-frame initial-focus race between nested overlays — React runs
+     child effects before parent effects, so both RAFs could fire in the
+     same frame with the outer sheet's running last and winning; now only
+     the stack's topmost claims focus, so the winner is deterministic
+     regardless of effect/RAF firing order.
+- **`useEscapeToClose` (new, exported)** — a lighter sibling of
+  `useOverlay` for surfaces that aren't a full portal/scroll-lock/focus-trap
+  shell. `DateChipPicker`'s inline month-grid popover now uses it, sharing
+  the same stack so Escape closes the popover first when it's open inside a
+  `BottomSheet`, not the sheet behind it — this "just works" from the stack
+  rather than needing bespoke wiring.
+- **`initialFocus?: RefObject<HTMLElement | null>`** added to
+  `BottomSheetProps`/`CenterModalProps` (forwarded to `useOverlay`) — an
+  escape hatch to focus a specific element on open instead of "the panel's
+  first focusable descendant," which was wrong for e.g. the Add sheet's
+  amount input.
+- **`ref` accepted and forwarded** (React 19: an ordinary prop, no
+  `forwardRef`) on `BottomSheet`, `CenterModal`, `TagChip`, `Toggle`,
+  `InfoButton`, `SegmentedControl` (container), `DateChipPicker`
+  (container), and `MovimientoRow` — the components a screen might
+  plausibly need to measure or imperatively focus. `IconAvatar` was left
+  out (purely decorative, `aria-hidden`, never a focus/measurement target).
+- **44px touch-target floor fixed on `TagChip`, `SegmentedControl`, and
+  `DateChipPicker`** (all three were below it — `min-h-9`/`h-[34px]`/
+  `size-7`), by splitting each into an outer 44px-floor hit target (via
+  `min-h-11`/`min-w-11`, invisible padding) wrapping an inner element that
+  keeps the pill/icon at its originally-designed visible size — the same
+  split `Toggle`/`InfoButton` already used, applied consistently instead of
+  inflating the visible chip/icon to reach 44px. `DateChipPicker`'s
+  `h-[34px]` was additionally a relative-units violation (AGENTS.md § UI);
+  replaced with the `h-9` Tailwind step used elsewhere in the kit.
+- **`disabled?: boolean` added to `TagChip` and per-option on
+  `SegmentedControlOption`** (`Toggle` already had it). A disabled
+  `SegmentedControl` option is skipped by arrow-key navigation (wraps past
+  it, per the APG radiogroup pattern) rather than becoming reachable but
+  inert.
+- **`SegmentedControl`'s keyboard handler now targets siblings via
+  per-button refs** (`buttonRefs.current[index]`), not
+  `event.currentTarget.parentElement?.children[nextIndex]` — the old
+  approach only worked because the render output happened to be a flat
+  `<button>` list and would have broken silently under any wrapping
+  variant.
+- **`movimientoView.ts`'s `Intl.NumberFormat` instances are memoized** in a
+  `Record<Moneda, Intl.NumberFormat>` at module scope instead of being
+  constructed on every `formatMonto` call — `MovimientoRow` calls this per
+  row per render in a list expected to grow to years of entries.
+  `getMovimientoVisual`'s category fallback was reviewed and confirmed
+  already total (an unmapped/custom category degrades to a `tipo`-based
+  icon/tint via `??`, covered by the existing "unknown category" test) —
+  no code change needed there.
+- **`BottomSheet`'s drag-to-dismiss hardened**: `setPointerCapture`/
+  `hasPointerCapture`/`releasePointerCapture` calls are now feature-detected
+  (`?.()`) — jsdom (and some minimal WebViews) don't implement them at all,
+  which would otherwise throw on the first pointerdown. `pointercancel` now
+  resets drag state without checking the dismiss threshold (a cancelled
+  gesture — system gesture, multi-touch conflict — is never user intent to
+  dismiss). Added an `onLostPointerCapture` handler as the reliable
+  catch-all for a drag that ends outside the browser window, where the OS
+  never delivers a pointerup/pointercancel back to the page.
+- **Done when (addendum):** `useOverlay.test.tsx` (new) covers two overlays
+  open simultaneously — the scenario absent from the original suite that
+  let all three bugs ship. `bun run check` green.
+
 ## 11. Decisions log
 
 - 2026-06-25 — Package manager: **bun**. Node: **24 LTS** (`.nvmrc`).
@@ -1222,6 +1311,38 @@ once per call`) pins the run-once property so this can't silently regress
   parallel fake-repo track: `removeMany` with a missing id stays
   `'not_found'` on both implementations (this one already did); a
   duplicate `id` is `'invalid_input'` on both.
+- 2026-08-18 — **`useOverlay`'s topmost-overlay determination uses a
+  render-order sequence number, not push/open order (Track D follow-up,
+  §10.5.1).** A naive "last pushed to the stack = topmost" breaks for two
+  overlays that mount already-open in the same commit (both effects run in
+  the same commit; React runs child effects before parent effects, so the
+  child/nested overlay would push first and the outer one would end up
+  "on top" by raw push order — backwards). Assigning each overlay a
+  monotonic `seq` at first **render** instead sidesteps this: React calls
+  parent render functions before descendants', so a nested overlay's `seq`
+  is always higher than its ancestor's regardless of effect-firing or
+  open/close timing, making "topmost = highest `seq` among currently open"
+  a stable, race-free rule.
+- 2026-08-18 — **Scroll lock is refcounted against the overlay stack, not a
+  single acquire/release pair (Track D follow-up, §10.5.1).** Closing a
+  nested `CenterModal` while its parent `BottomSheet` is still open must
+  not unlock body scroll; a plain counter incremented on every overlay
+  open and decremented on every overlay close, restoring `overflow` only
+  when it reaches zero, gives that for free without needing to inspect the
+  stack's contents.
+- 2026-08-18 — **Touch-target fix technique: an invisible-padding hit-area
+  wrapper, not inflating the visible pill/icon (Track D follow-up,
+  §10.5.1).** `Toggle`/`InfoButton` already used this split (outer
+  `min-h-11`/`min-w-11` button, inner element at the designed visual size);
+  applied the same pattern to `TagChip`, `SegmentedControl`, and
+  `DateChipPicker` instead of directly bumping `min-h-9`→`min-h-11` (which
+  would have grown the border/background box itself, visibly inflating the
+  pill past the design).
+- 2026-08-18 — **`IconAvatar` does not accept a forwarded `ref` (Track D
+  follow-up, §10.5.1).** Unlike the rest of the kit, it's purely
+  decorative (`aria-hidden`, no interactive semantics) — there's no
+  plausible screen need to measure or focus it, so it was left out of the
+  React 19 `ref`-as-prop pass rather than adding an unused capability.
 
 ## 12. Backlog (pending verification / deferred work)
 
@@ -1260,6 +1381,16 @@ once per call`) pins the run-once property so this can't silently regress
   `docs/waves.md` Track J — the "Ahora no" dismissal deliberately doesn't
   persist today (in-memory, per-session only, see §11 2026-08-18); Track J
   fixes that plus trims/resizes the screen and adds reassurance copy.
+- **Persistent Drive-sync toggle (follow-up from §10.4/§11 2026-08-18,
+  Track G, Wave 2).** The "Ahora no" dismissal deliberately doesn't persist
+  (per-session only, see §11). Once the Profile sheet exists, add a Drive
+  row there that reads `authStore.drive`/`driveOptIn` and can call
+  `connectDrive()` on demand — the "turn it back on" counterpart that makes
+  a persistent "don't ask again" viable later, if ever wanted.
+- **`DateChipPicker` `min`/`max` date bounds — deferred (Track D follow-up,
+  2026-08-18).** Explicitly out of scope for the code-review pass: no
+  screen has asked for a bounded date range yet, so adding the prop now
+  would be speculative. Revisit once a Wave 2 screen actually needs it.
 
 ### Development waves (parallel tracks, sequencing, worktree log)
 

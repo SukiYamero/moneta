@@ -1,3 +1,4 @@
+import type { Ref } from 'react'
 import { cn } from '@/lib/utils'
 
 export interface ToggleProps {
@@ -7,6 +8,7 @@ export interface ToggleProps {
   /** Required when no visible text labels the switch (e.g. used standalone in a settings row, pass the row's label). */
   'aria-label'?: string
   className?: string
+  ref?: Ref<HTMLButtonElement>
 }
 
 /** On/off switch. Touch target is 44px even though the visual pill is smaller, per AGENTS.md. */
@@ -16,10 +18,12 @@ export function Toggle({
   disabled,
   'aria-label': ariaLabel,
   className,
+  ref,
 }: ToggleProps) {
   return (
     <button
       type="button"
+      ref={ref}
       role="switch"
       aria-checked={checked}
       aria-label={ariaLabel}
