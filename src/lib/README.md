@@ -14,7 +14,16 @@ Shared stores, helpers, and the Drive/auth/lock logic layer. No UI here.
   triggers `bootstrap.ts` through `connectDrive`.
 - `drive.ts` — thin Drive REST client (find/create files & folders).
 - `bootstrap.ts` — idempotent provisioning of the `KuroBello` folder + the
-  three JSON data files.
+  three JSON data files. Find-before-create: `config.json`'s seed is only
+  written when no file exists yet, so a stored config is never overwritten.
+- `seedConfig.ts` — `buildSeedConfig(region = detectRegion())`: the
+  first-run `Config` seed, `monedaPrincipal` derived from the device region
+  via `i18n/regionCurrency.ts`. `CONFIG_SEMILLA` itself stays a **static
+  constant** — a region-dependent value computed at module-import time is a
+  defect shape this project has shipped twice (`specs.md` §11, 2026-08-19);
+  this function is what varies, not the constant. Shared by both seeding
+  paths (`repo.local.ts`, `bootstrap.ts`) so a fix to one can't drift from
+  the other (`specs.md` §10.7).
 - `db.ts` — the Dexie (IndexedDB) instance. `v1` has the `LockVault` table;
   `v2` additively adds `movimientos`, `activos`, and a single-row `config`
   table (indexes chosen to serve `Repo`'s `ListQuery` — see the comment
@@ -57,7 +66,8 @@ Shared stores, helpers, and the Drive/auth/lock logic layer. No UI here.
 - `repo.local.ts` — the real dexie-backed `Repo` implementation
   (`createLocalRepo()`): schemaVersion seeding/migration gate, generic
   `CrudRepo<T>` factory (shared by `movimientos`/`activos`) with keyset
-  pagination, write validation, and atomic bulk paths. Tests in
+  pagination, write validation, and atomic bulk paths. Its fresh-store seed
+  goes through `buildSeedConfig()`, not a raw `CONFIG_SEMILLA` copy. Tests in
   `repo.local.test.ts`. The Drive-backed implementation is a future sibling
   file behind the same port.
 - `repo.fake.ts` — in-memory `Repo` implementation, seeded with deterministic

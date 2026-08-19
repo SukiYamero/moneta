@@ -18,6 +18,19 @@ JSON resources — no `i18next-http-backend`, no CDN.
   wins; then language-subtag match; unmatched Spanish variants collapse to
   `es`, anything else unmatched falls back to `en`. No locale is persisted —
   detection re-runs identically every boot (`docs/wave-2-plan.md` §3.3).
+  Also exports `detectRegion()`: the device region (region subtag of
+  `navigator.languages`/`navigator.language`), an axis **independent of the
+  copy locale** above, falling back to the copy locale's canonical region
+  when no candidate carries a subtag (`specs.md` §10.7).
+- `regionCurrency.ts` — `monedaForRegion(region)`: a `Record` lookup from the
+  device region to the initial `Moneda` (`MX`→`MXN`, `AR`→`ARS`, `BR`→`BRL`,
+  `PE`→`PEN`, `CO`/unmapped→`COP`, `EC`/`US`→`USD`). Used only by
+  `src/lib/seedConfig.ts`'s first-run seed — never to reassign a `Config`
+  that already exists.
+- `localeFormatting.ts` — `useLocaleFormatting()` / `localeFormatting()`:
+  the single place that turns copy locale + device region into an `Intl` tag
+  and a `date-fns` `Locale`. Pure modules take these as parameters;
+  components read the hook (`specs.md` §11, 2026-08-19).
 - `i18next.d.ts` — module augmentation typing `t()`'s key space off `es`
   (base and fallback), so `t('does.not.exist')` is a compile error.
 - `locales/*.json` — one file per locale (`es`, `en`, `es-AR`, `pt-BR`), each
@@ -56,5 +69,7 @@ JSON resources — no `i18next-http-backend`, no CDN.
 ## Out of scope here (by design)
 
 No locale picker UI, no persisted locale (`Config.preferencias.idioma` is a
-Wave 3/Track G concern), no number/currency/date formatting — that's `Intl`
-at the call site, not this table.
+Wave 3/Track G concern), and no number/currency/date formatting — that's
+`Intl`/`date-fns` at the call site, not this table. Region _detection_ and
+the locale→tag mapping do live here (`detectRegion`, `localeFormatting.ts`);
+what stays out is the formatting itself.

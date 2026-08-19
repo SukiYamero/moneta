@@ -2382,6 +2382,36 @@ lint` clean bar the one pre-existing `components/ui` warning). `AGENTS.md`
   passed the whole suite with a category rendering one color as a row avatar
   and another as a chip.
 
+- 2026-08-19 — **Copy language and formatting region are two independent
+  axes.** `detectLocale()` resolves which language the UI speaks;
+  `detectRegion()` resolves how numbers and money are formatted and which
+  currency a first run seeds. `localeFormatting.ts` combines them into the
+  `Intl` tag. Verified against the real runtime rather than assumed:
+  `en-CO`/`en-MX`/`en-AR`/`en-BR` all resolve to plain `en` in CLDR, so for
+  English copy the region axis correctly affects the _currency_ and leaves
+  grouping alone; it has observable formatting effect for `es`/`pt-BR` copy
+  on a non-default region, which is the point of the feature.
+
+- 2026-08-19 — **The sign belongs to the number, not to the currency.**
+  `$ -12.000,00`, never `-$ 12.000,00`. Built by reordering
+  `Intl.NumberFormat.formatToParts` output — the currency symbol's position
+  is locale data (leading in es-CO/pt-BR, trailing in de-DE), so prepending a
+  `+`/`-` character to a formatted string is wrong by construction. Any call
+  site needing an explicit sign uses `formatMontoWithSign`; hand-concatenation
+  is the bug, and it was independently reproduced in two places
+  (`getMovimientoAmountView` and `BreakdownCard`) before being closed.
+  The reorder anchors on the first part that renders the number — `integer`,
+  `nan` **or** `infinity`; anchoring on `integer` alone put the sign back
+  before the symbol for a non-finite total, which a review caught.
+
+- 2026-08-19 — **Currency always renders as a symbol**
+  (`currencyDisplay: 'narrowSymbol'`), never the ISO code. Standard `Intl`
+  switches to the code when the currency is foreign to the formatting region
+  — that disambiguation is deliberately traded for a consistent look (user
+  decision). `$` therefore means COP, MXN, ARS or USD depending on context;
+  a future multi-currency view needs its own disambiguation, not the ISO
+  code bolted back on globally.
+
 ## 12. Backlog (pending verification / deferred work)
 
 - **The lock feature is not internationalised at all.** `LockScreen`,
@@ -2476,6 +2506,17 @@ lint` clean bar the one pre-existing `components/ui` warning). `AGENTS.md`
   row there that reads `authStore.drive`/`driveOptIn` and can call
   `connectDrive()` on demand — the "turn it back on" counterpart that makes
   a persistent "don't ask again" viable later, if ever wanted.
+- **The region-derived currency has no observable effect in the running app
+  yet.** `repoProvider.getRepo()` returns `repo.fake` unconditionally
+  (`// STUB(wave3)`), and `repo.fake`'s `FAKE_CONFIG` hardcodes `COP` by
+  spreading `CONFIG_SEMILLA`. Both real seeding paths (`repo.local.ts`,
+  `bootstrap.ts`) are correctly region-derived and tested, so the feature is
+  complete and correct — it simply cannot be seen until the Drive-backed
+  `Repo` lands. The _formatting_ half (symbol, sign placement, grouping) is
+  visible today. Note that making the fake repo region-aware would mean
+  building it at module-import time, the defect shape §11 records twice, so
+  it needs a lazy `getRepo()` rather than a one-line change.
+
 - **The light theme has no category colors at all — the `chart-*` tokens are
   still the scaffold's zero-chroma greys.** `src/styles/index.css` defines
   `--chart-1..5` as `oklch(0.87 0 0)`…`oklch(0.269 0 0)` in `:root` (light)

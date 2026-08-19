@@ -180,7 +180,7 @@ Owns: `src/routes/Home.tsx`, `src/lib/movimientoStats.ts`,
 
 ---
 
-## Wave 2.1 — active (user-reported adjustments, 2026-08-19)
+## Wave 2.1 — ✅ COMPLETE (merged to `main`, 2026-08-19)
 
 Two small tracks raised by the user after using the merged Wave 2 build.
 Both are specified in `specs.md` (§10.7, §10.8) — read the spec, not this

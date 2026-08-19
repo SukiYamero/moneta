@@ -43,7 +43,14 @@ doesn't belong to any one `src/features/**` folder. See `specs.md` §10.5.
   Home/Search/History call site passes the active locale via
   `useLocaleFormatting()` (`src/lib/i18n/localeFormatting.ts`); a missed
   call site is a compile error, not a silent es-CO fallback
-  (`docs/wave-2/track-m.md`). Accepts `ref`.
+  (`docs/wave-2/track-m.md`). Amounts always render
+  `currencyDisplay: 'narrowSymbol'` (never the ISO code) and attach the sign
+  to the **number**, not the currency (`$ -12.000,00`), by reordering
+  `formatToParts` output — the symbol's position is locale data, so a
+  prepended `+`/`-` character is wrong. A call site needing an explicitly
+  signed amount uses the exported `formatMontoWithSign`; hand-concatenating a
+  sign is the exact bug `BreakdownCard.tsx` reproduced independently
+  (`specs.md` §10.7, `docs/wave-2.1/track-n.md`). Accepts `ref`.
 - `TagChip.tsx` — icon + name pill (selected/unselected/`disabled`). The
   44px touch target is an invisible-padding wrapper around the visibly
   smaller designed pill (same split `Toggle`/`InfoButton` already use), so

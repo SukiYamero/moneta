@@ -41,7 +41,9 @@ and the movements list for the currently viewed period.
   gasto/ingreso `SegmentedControl` tabs and progress-bar breakdown, driven
   entirely by `breakdownBy()`'s `BreakdownEntry[]` (`share` is never
   recomputed locally). Calls `useLocaleFormatting()` directly for
-  `formatMonto`.
+  `formatMonto`/`formatMontoWithSign` — it previously hand-prepended a
+  `+`/`-` character, which put the sign before the currency symbol
+  (`docs/wave-2.1/track-n.md`).
 
 Not built: a hide/show-amounts toggle (the design draws one) — masking the
 movements list would need a prop `MovimientoRow` doesn't have, and adding
