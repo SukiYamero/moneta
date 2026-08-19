@@ -1828,6 +1828,41 @@ connectDrive()` were already self-catching from the phase-2 pass and are
   verified after the `AppLock`/`lockStore` changes. Not merged/pushed per
   the operator's instruction — stays on `fix/lock-hardening` for review.
 
+- **2026-08-19, `fix/types` — de-duplicated the `BottomSheet`/`CenterModal`
+  prop types, audited the rest of `src/` and found nothing else worth
+  extracting.** `BottomSheet.tsx` and `CenterModal.tsx` each declared a
+  private `{labelledBy xor ariaLabel}` union and an exported `Props` type
+  that repeated `open`/`onClose`/`children`/`className`/`initialFocus`/`ref`
+  verbatim, including the `initialFocus` JSDoc copied between files —
+  genuine duplication (two names for one shape), not a deliberate
+  difference. Fixed by moving the label union and the full shell prop
+  surface into `src/components/shared/useOverlay.ts` (the module that
+  already owns `UseOverlayOptions`, the subset of the same fields the hook
+  itself takes) as `OverlayLabelProps` and `OverlayShellProps<T>`;
+  `BottomSheetProps`/`CenterModalProps` are now `OverlayShellProps<HTMLDivElement>`
+  aliases, so both component's public type names are unchanged for
+  consumers. Pure type-level change — no runtime behavior, no widened/narrowed
+  API.
+
+  Audited all ~59 non-test `type`/`interface` declarations under `src/` for
+  the same shape of bug (identical or near-identical shapes under different
+  names, or a shape restating something `schema.ts`/`repo.ts` already
+  owns). Found one look-alike that is **not** duplication and was left
+  alone: `repo.local.ts`'s `EntityConfig<T>` (dexie table/index wiring) and
+  `repo.fake.ts`'s `CrudRepoConfig<T>` (in-memory store wiring) share 4
+  field names (`dateField`, `seccionField`, `tiebreakField`, `validate`) but
+  `EntityConfig` carries 5 more dexie-specific fields (`table`,
+  `compoundIndex`, `fastIndex`, `fastSeccionIndex`, `entityLabel`) that
+  `CrudRepoConfig` has no use for — a real per-backend difference, not an
+  accidental fork; unifying them would either bloat the fake's config with
+  dead fields or force the dexie repo's index wiring through an
+  under-specified shared shape. Every other shared/component `Props` type
+  audited (`SegmentedControlProps`, `ToggleProps`, `DateChipPickerProps`,
+  `MovimientoRowProps`, `IconAvatarProps`, `TagChipProps`,
+  `InfoButtonProps`, `MovimientoVisual`, `MovimientoAmountView`, and the
+  auth/lock/drive store types) is single-use and colocated correctly — left
+  as-is, not an oversight. `bun run check` green throughout (347 tests).
+
 ## 12. Backlog (pending verification / deferred work)
 
 - ✅ **Login verified end-to-end (§10.1)** — 2026-07-02. Real OAuth ran against Google

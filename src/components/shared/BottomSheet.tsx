@@ -1,28 +1,13 @@
-import {
-  useRef,
-  useState,
-  type PointerEvent as ReactPointerEvent,
-  type ReactNode,
-  type Ref,
-  type RefObject,
-} from 'react'
+import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { cn } from '@/lib/utils'
-import { OVERLAY_PANEL_CLASS, useOverlay } from '@/components/shared/useOverlay'
+import {
+  OVERLAY_PANEL_CLASS,
+  useOverlay,
+  type OverlayShellProps,
+} from '@/components/shared/useOverlay'
 
-type BottomSheetLabelProps =
-  | { labelledBy: string; ariaLabel?: never }
-  | { ariaLabel: string; labelledBy?: never }
-
-export type BottomSheetProps = {
-  open: boolean
-  onClose: () => void
-  children: ReactNode
-  className?: string
-  /** Focus this element on open instead of the panel's first focusable descendant (e.g. the amount input in the Add sheet). */
-  initialFocus?: RefObject<HTMLElement | null>
-  ref?: Ref<HTMLDivElement>
-} & BottomSheetLabelProps
+export type BottomSheetProps = OverlayShellProps<HTMLDivElement>
 
 const DRAG_DISMISS_THRESHOLD_PX = 120
 

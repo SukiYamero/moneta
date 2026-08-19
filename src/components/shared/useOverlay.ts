@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, type Ref, type RefObject } from 'react'
+import { useCallback, useEffect, useRef, type ReactNode, type Ref, type RefObject } from 'react'
 
 export interface UseOverlayOptions<T extends HTMLElement> {
   open: boolean
@@ -8,6 +8,17 @@ export interface UseOverlayOptions<T extends HTMLElement> {
   /** Forwarded consumer ref (React 19: ordinary prop), merged with the internal panel ref. */
   ref?: Ref<T>
 }
+
+/** Exactly one of `labelledBy` (references a visible heading) or `ariaLabel` (standalone string) must label the overlay. */
+export type OverlayLabelProps =
+  | { labelledBy: string; ariaLabel?: never }
+  | { ariaLabel: string; labelledBy?: never }
+
+/** Shared prop surface for the overlay shells (`BottomSheet`, `CenterModal`) built on top of `useOverlay`. */
+export type OverlayShellProps<T extends HTMLElement = HTMLDivElement> = UseOverlayOptions<T> & {
+  children: ReactNode
+  className?: string
+} & OverlayLabelProps
 
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])'
