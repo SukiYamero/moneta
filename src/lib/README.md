@@ -19,7 +19,15 @@ Shared stores, helpers, and the Drive/auth/lock logic layer. No UI here.
 - `pinLock.ts` — WebCrypto envelope encryption for the cached token
   (PIN + optional biometric via WebAuthn PRF).
 - `lockStore.ts` — zustand store wrapping `pinLock.ts`: lock phase, throttle,
-  biometric availability.
+  biometric availability (`biometricAvailable` — platform capability — vs
+  `biometricEnrolled` — this vault's own enrollment, see `specs.md` §11,
+  2026-08-19).
+- `loginMarker.ts` — a separate, tiny Dexie database (`kurobello-device`,
+  distinct from `db.ts`'s `kurobello`) holding one non-secret, per-device
+  signal: "has a Google login ever succeeded here." Gates
+  `authStore.restore()`'s silent re-auth so it can tell a returning user
+  apart from a first-ever visit or a just-locked-out device (`specs.md` §11,
+  2026-08-19).
 - `utils.ts` — `cn()`, the Tailwind class-merge helper.
 - `repo.ts` — the storage-agnostic `Repo` port contract (`Repo`, `CrudRepo`,
   `ListQuery`, `ListResult`, `RepoError`). Frozen shape — additive changes

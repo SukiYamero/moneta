@@ -4,7 +4,9 @@ Onboarding screens and the route guard that sits in front of the app.
 
 - `WelcomeScreen.tsx` — "Continuar con Google" screen, shown while
   unauthenticated; triggers the real `authStore.login()` (identity scopes
-  only, §5).
+  only, §5). A successful `login()` marks this device via
+  `@/lib/loginMarker` — the signal `RequireAuth`'s silent-restore attempt
+  (below) is gated on (`specs.md` §11, 2026-08-19).
 - `DrivePermissionScreen.tsx` — shown once per authenticated session, right
   after login, before the app. "Permitir y continuar" calls
   `authStore.connectDrive()` (busy overlay + inline error on failure);
@@ -12,7 +14,11 @@ Onboarding screens and the route guard that sits in front of the app.
   This is the real caller for `connectDrive` (specs.md §10.1/§10.4/§12).
 - `RequireAuth.tsx` — route guard: unauthenticated → `WelcomeScreen`;
   authenticated with `driveOptIn === 'pending'` → `DrivePermissionScreen`;
-  otherwise renders `children`.
+  otherwise renders `children`. Its mount-time silent `restore()` only ever
+  fires when `authStore.restore()` finds the `loginMarker` set — never on a
+  genuine first visit, and never right after a PIN lockout clears it
+  (`pinLock.resetVault()` clears the marker too — `specs.md` §11,
+  2026-08-19).
 - `errorCopy.ts` — maps a raw `AuthError`/`DriveError` message to the
   Spanish, actionable copy `WelcomeScreen`/`DrivePermissionScreen` actually
   render (`loginErrorCopy`, `driveErrorCopy`) — never the raw message

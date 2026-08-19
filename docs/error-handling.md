@@ -172,6 +172,28 @@ a comment at the swallow site — the "why", not just "we chose to skip
 logging" — the same documentation duty as any other legitimate swallow. If
 either answer is no, log it.
 
+**When recovery must pick a default: fail open or fail closed?** Added
+2026-08-19 (`fix/lock-hardening`), which hit both directions in the same
+file and needed to say why they don't contradict each other.
+`lockStore.init()`'s `hasVault()` read fails **open**: if IndexedDB is
+unreadable at boot, land on `phase: 'unlocked', enabled: false` rather than
+leaving the app stuck on `phase: 'unknown'` forever (no error boundary
+catches a rejected promise in a `useEffect`). `lockStore.onVisible()`'s
+`isBackgroundExpired()` read fails **closed**: if it can't be read, treat
+the background timeout as elapsed and re-lock, rather than silently leaving
+an already-unlocked app open. The question that picks the direction: **does
+refusing to proceed here protect anything the feature actually promises, or
+does it just break something for no security benefit?** Booting into
+`'unknown'` protects nothing — the PIN lock is a convenience layer on top of
+Google auth, not the app's real security boundary (specs.md §5) — so
+failing open there costs nothing and avoids a white screen. Silently staying
+unlocked past a background timeout, by contrast, defeats the one thing the
+lock promises to do, so the ambiguous case must resolve to the safer
+outcome. Same reasoning as `pinLock.isBiometricAvailable()`'s legitimate
+swallow above, applied to picking a fallback _value_ instead of just
+deciding whether to log: ask what the caller actually needs protected, not
+what's easiest to fall back to.
+
 ## 3. Scope of a `try`
 
 A `try` block's boundary is a claim: "every failure in here means the same
