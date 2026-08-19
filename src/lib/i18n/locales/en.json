@@ -47,8 +47,50 @@
   },
   "home": {},
   "search": {
-    "title": "Search",
-    "placeholder": "This screen is under construction."
+    "title": "Search movements",
+    "searchInputLabel": "Description or tag",
+    "clearSearchLabel": "Clear search",
+    "filterButtonLabel": "Filters",
+    "resultsCount_one": "{{count}} result",
+    "resultsCount_other": "{{count}} results",
+    "loading": "Loading movements…",
+    "error": "We couldn't load your movements.",
+    "retry": "Retry",
+    "emptyData": {
+      "title": "You don't have any movements yet",
+      "subtitle": "Add your first movement to be able to search for it here."
+    },
+    "emptyResults": {
+      "title": "No results",
+      "withQuery": "We couldn't find \"{{query}}\"",
+      "withoutQuery": "Try a different range or clearing filters"
+    },
+    "filters": {
+      "heading": "Search filters",
+      "dateRange": {
+        "heading": "Date range",
+        "all": "All time",
+        "last7Days": "Last 7 days",
+        "last30Days": "Last 30 days",
+        "thisMonth": "This month",
+        "thisYear": "This year",
+        "custom": "Custom",
+        "from": "From",
+        "to": "To"
+      },
+      "type": {
+        "heading": "Type",
+        "all": "All",
+        "gasto": "Expenses",
+        "ingreso": "Income"
+      },
+      "tags": {
+        "heading": "Tags"
+      },
+      "clear": "Clear",
+      "apply_one": "See {{count}} result",
+      "apply_other": "See {{count}} results"
+    }
   },
   "history": {
     "title": "History",
