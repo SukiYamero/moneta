@@ -24,22 +24,10 @@ const movimiento = (overrides: Partial<Movimiento> = {}): Movimiento => ({
   ...overrides,
 })
 
-// A minimal Repo stub whose list() always caps a page at maxPageSize
-// regardless of the requested `limit` — deliberately not honouring the
-// caller's limit, so the orchestrator's pagination loop is genuinely
-// exercised across several pages instead of being satisfied by one call
-// (the same reasoning index.ts itself gives for not trusting a limit-less
-// list() to return everything).
-const repoStubWithPages = (all: Movimiento[], maxPageSize: number): Repo => {
-  const list = (query?: ListQuery<Movimiento>): Promise<ListResult<Movimiento>> => {
-    const start = query?.cursor ? Number(query.cursor) : 0
-    const page = all.slice(start, start + maxPageSize)
-    const nextIndex = start + maxPageSize
-    return Promise.resolve({
-      items: page,
-      nextCursor: nextIndex < all.length ? String(nextIndex) : undefined,
-    })
-  }
+// A minimal Repo stub with a caller-supplied movimientos.list(); every other
+// method rejects, so a test fails loudly if the orchestrator calls one it
+// shouldn't.
+const repoStubWithList = (list: Repo['movimientos']['list']): Repo => {
   const notUsed = (): Promise<never> => Promise.reject(new Error('not used by this test'))
   return {
     ready: () => Promise.resolve(),
@@ -65,6 +53,21 @@ const repoStubWithPages = (all: Movimiento[], maxPageSize: number): Repo => {
     updateConfig: notUsed,
   }
 }
+
+// Deliberately not honouring the caller's `limit`, so the orchestrator's
+// pagination loop is genuinely exercised across several pages instead of
+// being satisfied by one call (the same reasoning index.ts itself gives for
+// not trusting a limit-less list() to return everything).
+const repoStubWithPages = (all: Movimiento[], maxPageSize: number): Repo =>
+  repoStubWithList((query?: ListQuery<Movimiento>): Promise<ListResult<Movimiento>> => {
+    const start = query?.cursor ? Number(query.cursor) : 0
+    const page = all.slice(start, start + maxPageSize)
+    const nextIndex = start + maxPageSize
+    return Promise.resolve({
+      items: page,
+      nextCursor: nextIndex < all.length ? String(nextIndex) : undefined,
+    })
+  })
 
 beforeEach(() => {
   mDeliverCsv.mockClear()
@@ -107,6 +110,26 @@ describe('exportMovimientosToCsv()', () => {
     // different sort is rejected as invalid_input, not silently answered).
     for (const [query] of listSpy.mock.calls) {
       expect(query).toMatchObject({ sortBy: 'fecha', sortDir: 'asc' })
+    }
+  })
+
+  it('stops paging on an empty page even if the Repo keeps returning a nextCursor, rather than looping forever', async () => {
+    const all = Array.from({ length: 3 }, (_, i) => movimiento({ id: `m${i}` }))
+    // A misbehaving Repo (the port makes no promise the last page's cursor
+    // is `undefined`) that returns an empty page but still sets nextCursor.
+    const list = vi.fn((query?: ListQuery<Movimiento>): Promise<ListResult<Movimiento>> => {
+      const start = query?.cursor ? Number(query.cursor) : 0
+      const page = all.slice(start, start + 3)
+      return Promise.resolve({ items: page, nextCursor: 'stuck-cursor' })
+    })
+    mGetRepo.mockReturnValue(repoStubWithList(list))
+
+    await exportMovimientosToCsv({ locale: 'es-CO' })
+
+    expect(list).toHaveBeenCalledTimes(2)
+    const csv = mDeliverCsv.mock.calls[0]![0].parts.join('')
+    for (const item of all) {
+      expect(csv).toContain(`${item.id};`)
     }
   })
 

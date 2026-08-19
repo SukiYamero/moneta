@@ -7,6 +7,13 @@
 
 const CSV_MIME_TYPE = 'text/csv;charset=utf-8'
 
+// Revoking in the same task as `anchor.click()` races the browser's blob
+// read — iOS Safari in particular doesn't guarantee the download has started
+// reading the blob before this task ends, and an early revoke can cancel it.
+// Deferring past the current task (the same fix FileSaver.js applies to this
+// exact hazard) lets the browser open the blob URL before it's invalidated.
+const REVOKE_DELAY_MS = 1000
+
 export interface CsvDelivery {
   filename: string
   /** String parts, handed straight to `new Blob(parts)` — never joined into one string first. */
@@ -32,7 +39,7 @@ const triggerDownload = (blob: Blob, filename: string): void => {
     anchor.click()
     anchor.remove()
   } finally {
-    URL.revokeObjectURL(url)
+    setTimeout(() => URL.revokeObjectURL(url), REVOKE_DELAY_MS)
   }
 }
 

@@ -32,7 +32,12 @@ const fetchAllMovimientos = async (): Promise<Movimiento[]> => {
       sortDir: 'asc',
     })
     all.push(...page.items)
-    cursor = page.nextCursor
+    // An empty page ends the export even if `nextCursor` is still set: the
+    // port (repo.ts) documents no invariant that the last page's cursor is
+    // `undefined`, only that both current implementations behave that way —
+    // trusting a non-empty cursor alone would spin forever against a future
+    // Repo that keeps returning one past the end of the data.
+    cursor = page.items.length > 0 ? page.nextCursor : undefined
   } while (cursor !== undefined)
   return all
 }
