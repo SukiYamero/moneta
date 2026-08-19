@@ -90,4 +90,62 @@ describe('BottomSheet', () => {
     expect(trigger).toHaveFocus()
     trigger.remove()
   })
+
+  describe('drag-to-dismiss', () => {
+    // The handle has no accessible role (purely decorative for touch/mouse
+    // drag) — it's the panel's first child, ahead of `children`.
+    function getHandle() {
+      const dialog = screen.getByRole('dialog')
+      return dialog.firstElementChild as HTMLElement
+    }
+
+    it('closes when dragged past the dismiss threshold', async () => {
+      const user = userEvent.setup()
+      const onClose = vi.fn()
+      render(<Harness open onClose={onClose} />)
+      const handle = getHandle()
+
+      await user.pointer([
+        { keys: '[MouseLeft>]', target: handle, coords: { clientY: 0 } },
+        { coords: { clientY: 200 } },
+        '[/MouseLeft]',
+      ])
+
+      expect(onClose).toHaveBeenCalledOnce()
+    })
+
+    it('does not close when dragged below the dismiss threshold', async () => {
+      const user = userEvent.setup()
+      const onClose = vi.fn()
+      render(<Harness open onClose={onClose} />)
+      const handle = getHandle()
+
+      await user.pointer([
+        { keys: '[MouseLeft>]', target: handle, coords: { clientY: 0 } },
+        { coords: { clientY: 40 } },
+        '[/MouseLeft]',
+      ])
+
+      expect(onClose).not.toHaveBeenCalled()
+    })
+
+    it('never closes on pointercancel, regardless of drag distance', async () => {
+      const user = userEvent.setup()
+      const onClose = vi.fn()
+      render(<Harness open onClose={onClose} />)
+      const handle = getHandle()
+
+      // pointercancel is browser/OS-generated (a system gesture, multi-touch
+      // conflict…), not a user interaction — user-event's pointer API has no
+      // equivalent, so this dispatches the native event directly rather than
+      // reaching for the banned `fireEvent`.
+      await user.pointer({ keys: '[MouseLeft>]', target: handle, coords: { clientY: 0 } })
+      await user.pointer({ coords: { clientY: 300 } })
+      handle.dispatchEvent(
+        new PointerEvent('pointercancel', { bubbles: true, cancelable: true, pointerId: 1 }),
+      )
+
+      expect(onClose).not.toHaveBeenCalled()
+    })
+  })
 })

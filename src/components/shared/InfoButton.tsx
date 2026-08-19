@@ -1,4 +1,5 @@
 import { Info } from 'lucide-react'
+import type { Ref } from 'react'
 import { cn } from '@/lib/utils'
 
 export interface InfoButtonProps {
@@ -6,13 +7,20 @@ export interface InfoButtonProps {
   /** Defaults to a generic label; pass a specific one when several InfoButtons share a screen. */
   label?: string
   className?: string
+  ref?: Ref<HTMLButtonElement>
 }
 
 /** The small "?" affordance that opens an info tooltip (CenterModal owned by the caller). */
-export function InfoButton({ onClick, label = 'Más información', className }: InfoButtonProps) {
+export function InfoButton({
+  onClick,
+  label = 'Más información',
+  className,
+  ref,
+}: InfoButtonProps) {
   return (
     <button
       type="button"
+      ref={ref}
       onClick={onClick}
       aria-label={label}
       className={cn(
