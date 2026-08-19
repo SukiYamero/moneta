@@ -32,6 +32,10 @@ export const HomeHeader = () => {
           <span className="mt-0.25 block text-xl font-bold">{name}</span>
         </h1>
       </div>
+      {/* Hit area (min-h/w-11, AGENTS.md's 44px floor) and visible pill are
+          split: the design's pill is 42px, growing it to 44px would resize
+          the badge itself, not just its tap target (same pattern as the
+          month-nav buttons in DateChipPicker.tsx). */}
       <button
         type="button"
         disabled
@@ -40,9 +44,11 @@ export const HomeHeader = () => {
         // a permanent unread dot with no binding behind it — dropped per
         // docs/ui/implementation-plan.md § Home ("no badge dot"), since a
         // static "you have something unread" claim is never true.
-        className="flex size-10.5 items-center justify-center rounded-xl border border-border bg-card text-fg-secondary disabled:opacity-100"
+        className="flex min-h-11 min-w-11 items-center justify-center disabled:opacity-100"
       >
-        <Bell className="size-5" aria-hidden="true" />
+        <span className="flex size-10.5 items-center justify-center rounded-xl border border-border bg-card text-fg-secondary">
+          <Bell className="size-5" aria-hidden="true" />
+        </span>
       </button>
     </div>
   )
