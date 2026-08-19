@@ -437,6 +437,20 @@ Full design: `docs/superpowers/specs/2026-06-26-pin-lock-design.md`.
   OCR-assisted version or add a backend for it. Entry button stays
   disabled; revisit if mobile-grade on-device vision matures or the
   backend trade-off gets reconsidered.
+- 2026-08-18 — **Voice category inference: regex/keyword parser confirmed
+  as the real v1 answer, not a stopgap.** Checked whether on-device AI
+  (text-only, unlike the receipt-scan image case) could improve category
+  inference without a backend: Chrome's Prompt API (Gemini Nano) text mode
+  has the _same_ desktop-only platform gate as its multimodal mode — being
+  text vs. image doesn't change it — so it's unreachable on Android
+  Chrome/iOS Safari, this app's actual mobile targets (~0% of real users
+  could use it today). Android's/iOS's on-device AI (ML Kit Gemini Nano,
+  Apple Foundation Models) are native-SDK-only, no web/PWA access. A cloud
+  LLM call would need a backend (same §6 trigger as receipt scan) — not
+  pursued, matching the scan decision above. Unlike scan, this one has a
+  plausible future path (no heavy multimodal hardware requirement once a
+  mobile-reachable on-device text API exists) — revisit only if that
+  changes, don't re-research this without a real platform change.
 
 ## 12. Backlog (pending verification / deferred work)
 
