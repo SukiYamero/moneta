@@ -189,5 +189,8 @@
       "title": "No movements",
       "subtitle": "There are no records in this period"
     }
+  },
+  "update": {
+    "available": "A new version is available. Reload the page to update."
   }
 }

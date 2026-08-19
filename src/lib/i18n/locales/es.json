@@ -189,5 +189,8 @@
       "title": "Sin movimientos",
       "subtitle": "No hay registros en este periodo"
     }
+  },
+  "update": {
+    "available": "Hay una nueva versión disponible. Recarga la página para actualizar."
   }
 }

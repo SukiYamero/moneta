@@ -62,8 +62,22 @@ Shared stores, helpers, and the Drive/auth/lock logic layer. No UI here.
   Stack capped at 3, one independent timer per card (4s success / 7s error),
   identical re-raises collapse instead of stacking. Suppressing also clears
   what is already on screen, so nothing can resurface after an unlock.
-  Callers pass already-localized copy; it never renders a raw
-  `error.message` (`docs/error-handling.md` §5/§7).
+  Callers pass a **translation key** (`ToastMessageKey`) plus optional
+  interpolation values and the store resolves the copy itself, so a raw
+  `error.message` is a compile error rather than a convention
+  (`docs/error-handling.md` §5/§7).
+- `swUpdate.ts` — service-worker update lifecycle (`specs.md` §10.16). A pure
+  `createSwUpdateController(registerSW)` factory around `virtual:pwa-register`
+  (`vite.config.ts`'s `registerType: 'prompt'`), injectable so tests never
+  need the real virtual module. Raises `toast.success('update:available')`
+  when a new version is waiting; polls `registration.update()` hourly so a
+  tab that never navigates still notices a deploy; a failed poll (offline)
+  and a registration failure are both swallowed/logged, never toasted — only
+  a deliberate call to `applyServiceWorkerUpdate()` ever applies the update
+  and reloads, so nothing here can interrupt a user mid-session on its own.
+  `initServiceWorkerUpdates()` (called once from `main.tsx`) is the real
+  entry point. **Not yet wired to a UI control** — `Toast`/`toastStore` have
+  no action-button capability today.
 - `utils.ts` — `cn()`, the Tailwind class-merge helper.
 - `repo.ts` — the storage-agnostic `Repo` port contract (`Repo`, `CrudRepo`,
   `ListQuery`, `ListResult`, `RepoError`). Frozen shape — additive changes
