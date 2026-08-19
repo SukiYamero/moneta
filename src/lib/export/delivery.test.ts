@@ -40,6 +40,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
+  vi.useRealTimers()
 })
 
 describe('deliverCsv()', () => {
@@ -50,6 +51,16 @@ describe('deliverCsv()', () => {
 
     expect(createObjectURLSpy).toHaveBeenCalledTimes(1)
     expect(downloadCapture).toEqual({ href: 'blob:mock-url', download: 'movimientos.csv' })
+  })
+
+  it('defers URL.revokeObjectURL past the click task, so it cannot race the browser reading the blob (iOS Safari hazard)', async () => {
+    vi.useFakeTimers()
+    vi.stubGlobal('navigator', { ...navigator, share: undefined, canShare: undefined })
+
+    await deliverCsv({ filename: 'movimientos.csv', parts: CSV_PARTS })
+
+    expect(revokeObjectURLSpy).not.toHaveBeenCalled()
+    await vi.runAllTimersAsync()
     expect(revokeObjectURLSpy).toHaveBeenCalledWith('blob:mock-url')
   })
 
