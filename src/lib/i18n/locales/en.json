@@ -1,0 +1,35 @@
+{
+  "common": {},
+  "auth": {
+    "welcome": {
+      "subtitleLine1": "Your finances, clear and private.",
+      "subtitleLine2": "You own your data.",
+      "googleCta": "Continue with Google",
+      "connecting": "Connecting…",
+      "legal": "By continuing you accept the <terms>Terms</terms> and the <privacy>Privacy Policy</privacy>"
+    }
+  },
+  "driveConsent": {
+    "title": "{{appName}} wants to save to your Google Drive",
+    "description": "Since we don't use servers, your expenses and income are saved in a private file inside your own Drive.",
+    "permissions": {
+      "createFiles": {
+        "title": "Create and edit its own files",
+        "body": "{{appName}} will only see and modify the files it creates itself."
+      },
+      "noOtherAccess": {
+        "title": "No access to your other files",
+        "body": "Your photos, documents, and other content stay private."
+      }
+    },
+    "revocable": "You can revoke access anytime",
+    "allowCta": "Allow and continue",
+    "dismissCta": "Not now",
+    "connecting": "Connecting to your Drive…"
+  },
+  "toast": {},
+  "nav": {},
+  "home": {},
+  "search": {},
+  "history": {}
+}

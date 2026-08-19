@@ -1,0 +1,56 @@
+# src/lib/i18n
+
+Translation table + locale detection. `react-i18next` + `i18next`, bundled
+JSON resources — no `i18next-http-backend`, no CDN.
+
+- `index.ts` — initializes the shared `i18next` instance (synchronous:
+  `initImmediate: false`, `useSuspense: false`, so no screen flashes empty)
+  and keeps `<html lang>` in sync via `languageChanged`. Imported once, as a
+  side effect, from `src/main.tsx`.
+- `resources.ts` — assembles the four locale JSON files into the shape
+  `i18next` expects (`resources[locale][namespace]`).
+- `detectLocale.ts` — pure `navigator.languages` → `SupportedLocale` mapping
+  (`Record` lookups, no `switch`/`if-else`, per `AGENTS.md`). Exact tag match
+  wins; then language-subtag match; unmatched Spanish variants collapse to
+  `es`, anything else unmatched falls back to `en`. No locale is persisted —
+  detection re-runs identically every boot (`docs/wave-2-plan.md` §3.3).
+- `i18next.d.ts` — module augmentation typing `t()`'s key space off `es`
+  (base and fallback), so `t('does.not.exist')` is a compile error.
+- `locales/*.json` — one file per locale (`es`, `en`, `es-AR`, `pt-BR`), each
+  with the same reserved namespace keys at the top level: `common`, `auth`,
+  `driveConsent`, `toast`, `nav`, `home`, `search`, `history`
+  (`docs/wave-2-plan.md` §1.6). `es` is the source of truth for shape; the
+  other three must stay key-identical even where a namespace is still `{}`.
+
+## Adding a key
+
+1. Add it to `locales/es.json`, inside the namespace object it belongs to
+   (never at the top level of the file, never appended after an unrelated
+   namespace).
+2. Add the same key, translated, to `en.json`, `es-AR.json`, `pt-BR.json` at
+   the same path. `es` typing will flag any component using a key that
+   doesn't exist yet — the other three files won't, so keep them
+   key-identical by hand (or a future lint pass, not built yet).
+3. Read it with `useTranslation('<namespace>')` then `t('path.to.key')`, or
+   `<Trans t={t} i18nKey="path.to.key" components={{...}} />` for copy that
+   embeds inline markup (styled spans, etc.) — don't hand-split a sentence
+   around JSX, `Trans` keeps word order translator-controlled.
+4. A value the caller controls (a brand name, a count) is an interpolation
+   value (`t('key', { appName: APP_NAME })` against `"{{appName}}"` in the
+   JSON) — never baked into the locale file itself.
+
+## Adding a locale
+
+1. Add a new `locales/<tag>.json` with the exact same namespace/key shape as
+   `es.json` (every namespace, even the empty ones).
+2. Register it in `resources.ts` and in `detectLocale.ts`'s `EXACT_LOCALE`
+   (and `SUBTAG_LOCALE` if it should also catch untargeted variants of its
+   language, the way `pt-BR` catches `pt-PT`).
+3. `SupportedLocale` (from `resources.ts`) widens automatically — no other
+   type change needed.
+
+## Out of scope here (by design)
+
+No locale picker UI, no persisted locale (`Config.preferencias.idioma` is a
+Wave 3/Track G concern), no number/currency/date formatting — that's `Intl`
+at the call site, not this table.
