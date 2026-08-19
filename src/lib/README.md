@@ -5,6 +5,9 @@ Shared stores, helpers, and the Drive/auth/lock logic layer. No UI here.
 - `schema.ts` — the data-model contract (`Movimiento`, `Activo`, `Config`
   types + `SCHEMA_VERSION`). Import it, never redefine the types.
 - `branding.ts` — `APP_NAME`, the single source for the display name.
+- `i18n/` — the translation table (`react-i18next`/`i18next`, bundled JSON,
+  four locales: `es`/`en`/`es-AR`/`pt-BR`, `es` base and fallback, key parity
+  across all four enforced by a test). Own `README.md`.
 - `auth.ts` — GIS token-client wrapper: identity scopes at login, Drive
   scopes requested incrementally via `connectDrive`.
 - `authStore.ts` — zustand store wrapping `auth.ts`; owns session status and

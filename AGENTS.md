@@ -69,7 +69,8 @@ We follow **spec-driven development**. `specs.md` is the source of truth.
 - **TypeScript always.** No `.js`/`.jsx`. `strict` is on; keep it green.
 - **Everything in English**: code, identifiers, comments, commit messages, docs,
   spec files. (Exception: the `schema.ts` domain terms above; user-facing UI
-  copy is Spanish.)
+  copy is looked up from `src/lib/i18n` — see that folder's `README.md` —
+  and is Spanish (`es`) for any string not yet retrofitted into the table.)
 - **Pure value → value mappings use a lookup table / `Record`**, never `switch`
   or `if/else` chains.
 - **Idiomatic, current code.** Modern standard APIs; avoid deprecated/legacy.

@@ -19,10 +19,12 @@ Onboarding screens and the route guard that sits in front of the app.
   genuine first visit, and never right after a PIN lockout clears it
   (`pinLock.resetVault()` clears the marker too — `specs.md` §11,
   2026-08-19).
-- `errorCopy.ts` — maps a raw `AuthError`/`DriveError` message to the
-  Spanish, actionable copy `WelcomeScreen`/`DrivePermissionScreen` actually
-  render (`loginErrorCopy`, `driveErrorCopy`) — never the raw message
-  (`docs/error-handling.md` §7).
+- `errorCopy.ts` — maps a raw `AuthError`/`DriveError` message to a
+  translation key in the `auth` namespace's `errors` group
+  (`loginErrorCopy`, `driveErrorCopy`) — never the raw message
+  (`docs/error-handling.md` §7). Stays a pure, i18next-free lookup;
+  `WelcomeScreen`/`DrivePermissionScreen` resolve the key with `t()` at the
+  render site, same as every other string on those screens.
 
 All three screens read `useAuthStore` (`@/lib/authStore`) for state; none
 hold local auth state of their own. The Google account-chooser screen from
