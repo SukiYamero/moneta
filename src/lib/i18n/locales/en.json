@@ -1,7 +1,5 @@
 {
-  "common": {
-    "back": "Back"
-  },
+  "common": {},
   "auth": {
     "welcome": {
       "subtitleLine1": "Your finances, clear and private.",
@@ -39,7 +37,14 @@
     "connecting": "Connecting to your Drive…"
   },
   "toast": {},
-  "nav": {},
+  "nav": {
+    "label": "Main navigation",
+    "home": "Home",
+    "history": "History",
+    "search": "Search",
+    "profile": "Profile",
+    "add": "Add movement"
+  },
   "home": {},
   "search": {
     "title": "Search",

@@ -1,7 +1,5 @@
 {
-  "common": {
-    "back": "Voltar"
-  },
+  "common": {},
   "auth": {
     "welcome": {
       "subtitleLine1": "Suas finanças, claras e privadas.",
@@ -39,7 +37,14 @@
     "connecting": "Conectando ao seu Drive…"
   },
   "toast": {},
-  "nav": {},
+  "nav": {
+    "label": "Navegação principal",
+    "home": "Início",
+    "history": "Histórico",
+    "search": "Pesquisar",
+    "profile": "Perfil",
+    "add": "Adicionar movimento"
+  },
   "home": {},
   "search": {
     "title": "Pesquisar",

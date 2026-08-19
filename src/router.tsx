@@ -1,5 +1,6 @@
 import { createBrowserRouter } from 'react-router'
 import { Home } from '@/routes/Home'
+import { AppShell } from '@/routes/AppShell'
 import { RequireAuth } from '@/features/auth/RequireAuth'
 import { RouteErrorFallback } from '@/RouteErrorFallback'
 import { SearchScreen } from '@/features/search/SearchScreen'
@@ -20,31 +21,22 @@ const devRoutes = import.meta.env.DEV
 
 export const router = createBrowserRouter([
   {
-    path: '/',
+    // Pathless layout route: BottomNav (via AppShell) persists across all
+    // three tabs, so RequireAuth wraps the shell once instead of each
+    // screen individually. errorElement here catches a failure in
+    // RequireAuth/AppShell itself; each child keeps its own too, so a
+    // crash in one screen doesn't take the persistent nav down with it.
     element: (
       <RequireAuth>
-        <Home />
+        <AppShell />
       </RequireAuth>
     ),
     errorElement: <RouteErrorFallback />,
-  },
-  {
-    path: '/search',
-    element: (
-      <RequireAuth>
-        <SearchScreen />
-      </RequireAuth>
-    ),
-    errorElement: <RouteErrorFallback />,
-  },
-  {
-    path: '/history',
-    element: (
-      <RequireAuth>
-        <HistoryScreen />
-      </RequireAuth>
-    ),
-    errorElement: <RouteErrorFallback />,
+    children: [
+      { index: true, element: <Home />, errorElement: <RouteErrorFallback /> },
+      { path: '/search', element: <SearchScreen />, errorElement: <RouteErrorFallback /> },
+      { path: '/history', element: <HistoryScreen />, errorElement: <RouteErrorFallback /> },
+    ],
   },
   ...devRoutes,
 ])

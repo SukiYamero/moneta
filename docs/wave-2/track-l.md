@@ -1,83 +1,120 @@
 # Track L — app shell: bottom nav, routes, FAB — report
 
-## Blocked: DesignSync unavailable this session
+## Timeline
 
-The brief says, verbatim: "If DesignSync is unavailable or unauthorised in
-your session, stop and report that rather than inventing a nav from scratch
-— I will pull it for you." That is exactly what happened.
+1. First pass: `DesignSync` unavailable in this session (confirmed via
+   `ToolSearch` — `select:DesignSync` and several broader queries all came
+   back empty; the deferred-tool listing had no design tool at all). Per the
+   brief, stopped rather than inventing a nav, built only what the brief's
+   own text specifies (routes, `LockSettings` move, placeholder screens),
+   and reported the blocker.
+2. The operator pulled the design themselves (`DesignSync` is
+   operator-only in this setup) and dropped the full source at
+   `Moneta.dc.html` on disk, with the bottom-nav structure paraphrased and
+   two brief corrections: the centre button is not a separate FAB, it's the
+   nav's third slot; and the nav is persistent across all three tabs, not
+   Home-only. **Read the actual source directly before building**
+   (`grep`/`sed` on the file, not just the paraphrase) — confirms below.
+3. Built `BottomNav`, `AppShell` (the layout route the persistent-nav
+   requirement forces — see "Restated handoff contract" below), rewired
+   `router.tsx`, fixed `SearchScreen`/`HistoryScreen` to match (no back
+   link, correct enter animation per screen), filled the `nav` namespace,
+   removed the now-unused `common.back` key.
 
-- `ToolSearch` for `select:DesignSync`, then broader queries (`DesignSync
-get_file`, `design sync file project artboard`, `claude design canvas
-get_file write_files`, `get_file write_files project artboard dc.html
-canvas`, `select:mcp__claude_ai_Design__get_file` and variants) returned
-  no matching tool in any case. The deferred-tool listing surfaced in this
-  session includes `mcp__claude_ai_Gmail__*`, `mcp__claude_ai_Google_Drive__*`,
-  `mcp__claude_ai_Google_Calendar__*`, `mcp__playwright__*`,
-  `mcp__google-search__search`, `mcp__sequential-thinking__*`, `WebFetch`,
-  `WebSearch`, `Monitor`, `EnterWorktree`/`ExitWorktree`, `SendMessage`,
-  `TaskStop`, `NotebookEdit` — no design tool at all.
-- Checked for a cached snapshot in this worktree in case one could at least
-  orient (not build from — the brief says pull fresh regardless): none
-  exists (`find . -iname "*.dc.html"` empty, `git log --all` shows no design
-  file ever committed).
-- **Consequence: `BottomNav.tsx`, the FAB, and the real Home shell layout
-  are not built.** Building them from guesswork would mean inventing the
-  exact tab set, icon choice, and order that `docs/ui/implementation-plan.md`
-  and `docs/ui/design-tokens.md` are explicit belong to the design file, not
-  to this agent. I did not do that.
+## What the design source actually says (verified by reading it directly)
 
-## What was built instead — everything in the brief that does not require the design file
+Confirmed the operator's paraphrase against `Moneta.dc.html` directly
+(`grep`/`sed`, not trusted secondhand):
 
-The brief's routes (`/`, `/search`, `/history`, all inside `RequireAuth`,
-each with `errorElement`), the `LockSettings` relocation, and the two
-placeholder screens are all specified in the brief's own text, not derived
-from the design canvas — so these are built and tested:
+- **Bottom nav**, line ~172: five slots, `justify-content: space-between`.
+  Home (`ph-house`/`ph-fill ph-house`) → `goHome`, History
+  (`ph-clock-counter-clockwise`/fill) → `goHistory`, centre Add
+  (`ph-bold ph-plus`, 58×58, `border-radius:20px`,
+  `margin-top:-18px`) → `openSheet`, Search
+  (`ph-magnifying-glass`/fill) → `goSearch`, Profile (`ph-user`, no active
+  variant) → `openProfile`.
+- **State bindings**, line ~2806-2811 (class component): `navHome`/
+  `navHistory`/`navSearch` are `'#2FD896'` when `state.tab` matches, else
+  `'#5A5D64'`; the icon class swaps `ph` → `ph-fill` the same way. Profile's
+  color and icon are hardcoded, never green — it has no active state by
+  design, not by omission.
+- **Layout**: nav height 96px, padding `0 24px 22px`, icon font-size 26px,
+  label 10px/weight 600, gap 3px, background
+  `linear-gradient(to top,#0C0D10 60%,rgba(12,13,16,.92) 88%,transparent)`,
+  `z-index:19`.
+- **History overlay**, line ~196: `position:absolute; inset:0; z-index:18;
+animation:mnPushIn .28s cubic-bezier(.32,.72,0,1)`.
+- **Search overlay**, line ~353: same `z-index:18`,
+  `animation:mnFade .2s ease` — a fade, not a push. This is a real
+  correction to my own earlier build (see "Spec deltas" below): I had
+  applied `animate-push-in` to neither screen in the pre-design pass and
+  hadn't yet distinguished the two; Search now gets `animate-fade-in`
+  (already an existing token, `fade-in 0.2s ease` — an exact match to
+  `mnFade`), History keeps `animate-push-in`.
+- **Home header bell**, line ~59-62: renders a permanent green dot
+  (`background:#2FD896`) next to the bell icon, unconditionally — no
+  binding gates it. See "The notification dot" below.
 
-- **`src/router.tsx`** — added `/search` → `SearchScreen`, `/history` →
-  `HistoryScreen`, both wrapped in `RequireAuth` with `RouteErrorFallback`,
-  matching the existing `/` pattern exactly.
-- **`LockSettings` moved off `Home` onto `/kit`** (`src/routes/Home.tsx`,
-  `src/routes/Kit.tsx`). See "How I verified it still works" below —
-  this was treated as non-negotiable and done regardless of the DesignSync
-  block, since dropping it silently deletes a shipped feature
-  (`docs/wave-2-plan.md` §3 item 1).
-- **`src/features/search/SearchScreen.tsx`**, **`src/features/history/HistoryScreen.tsx`**
-  — minimal, honest placeholders (title + back link to `/`, nothing fake).
-  `HistoryScreen` uses `animate-push-in` per the brief's explicit
-  instruction (independent of the design pull — the token and the "route,
-  not overlay-state" decision are both already specified in the brief text).
-  Both are named exports with no props — see "Handoff contract" below.
-- **`nav` namespace**: left empty in all four locale files, as it started.
-  Adding nav labels without knowing the real tab set would be the same
-  invented-nav problem in a different file.
-- **`search`/`history` namespaces**: seeded with the placeholder screens'
-  own copy (`title`, `placeholder`) — real content Track L's own files need,
-  not invented UI structure. `common.back` added for the shared back-link
-  label both screens use. All four locale files kept key-identical (checked
-  via `bun run test` — `resources.test.ts` — see output below).
-- **`src/components/shared/index.ts`**: **not touched.** The brief asks for
-  one export line for `BottomNav`, which does not exist. Appending nothing
-  would be a no-op diff; appending anything else would not match the brief.
+Color/token mapping, confirmed against `src/styles/index.css`'s `.dark`
+block rather than assumed: `#2FD896` = `--primary` exactly (also
+`--success-strong`), `#5A5D64` = `--fg-disabled` exactly (not
+`--muted-foreground`, which is `#85888F`/`--fg-tertiary`-adjacent — the
+design's inactive nav color is specifically the disabled tier, confirmed by
+grepping the hex, not assumed from the operator's paraphrase alone),
+`#0C0D10` = `--background`/`--canvas`.
 
-## How I verified LockSettings still works at `/kit`
+## What was built
 
-Two ways, both real:
+- **`src/components/shared/BottomNav.tsx`** (+ `.test.tsx`) — the five
+  slots. Home/History/Search are real `NavLink`s (`aria-current="page"`
+  comes from `NavLink` itself, not hand-rolled); active state uses
+  `text-primary` + heavier `strokeWidth` (2.5 vs 2) since Lucide has no
+  filled variant (`docs/ui/design-tokens.md`). Centre Add and Profile are
+  `disabled` buttons with `aria-label` and `// STUB(trackF)`/
+  `// STUB(trackG)` comments — visually complete, functionally inert, per
+  the STUB convention (`docs/ui/implementation-plan.md`), not silently
+  dead. Icon mapping: `ph-house`→`House`, `ph-clock-counter-clockwise`→
+  `History`, `ph-bold ph-plus`→`Plus`, `ph-magnifying-glass`→`Search`,
+  `ph-user`→`User` — five direct 1:1 Lucide equivalents, no gaps.
+  Every design measurement converted to the existing token/spacing scale,
+  not copied as raw px (`bun run lint:units` enforces this): 96px height →
+  `h-24` (exact rem match), 26px icon → `size-6.5` (26px exact), 58×58 FAB →
+  `size-14.5` (58px exact), `border-radius:20px` → `rounded-3xl`
+  (`--radius-3xl` is exactly 20px), `margin-top:-18px` → `-translate-y-4.5`
+  (18px exact), 3px gap → `gap-0.75` (3px exact), 24px horizontal padding →
+  `px-6` (Tailwind default, exact), 10px label → `text-2xs` (the token is
+  defined as exactly 10px). 22px bottom padding replaced with
+  `pb-[calc(env(safe-area-inset-bottom)+1.375rem)]` per the brief (real
+  home-indicator clearance instead of the prototype's fixed stand-in).
+  **Verified these aren't dead utility names**: built `dist/` and grepped
+  the generated CSS for each exact selector (`size-6\.5`, `size-14\.5`,
+  `gap-0\.75`, `-translate-y-4\.5`) — all five resolved to the expected
+  `calc(var(--spacing) * N)` rules with the exact pixel values above, not
+  silently-unmatched classes.
+- **`src/routes/AppShell.tsx`** (+ `.test.tsx`) — new layout route:
+  `<Outlet />` in a scrollable flex-1 container, `<BottomNav />` fixed
+  below it. Exists because the nav is persistent across all three tabs
+  (see "Restated handoff contract").
+- **`src/router.tsx`** — restructured to a pathless layout route
+  (`RequireAuth` + `AppShell`) with three children: `index: true` → `Home`,
+  `/search` → `SearchScreen`, `/history` → `HistoryScreen`. The layout
+  route keeps its own `errorElement` (catches a failure in
+  `RequireAuth`/`AppShell` itself); each child keeps its own too, so one
+  screen crashing doesn't take the persistent nav down with it — strictly
+  more resilient than the flat structure it replaces, not a regression.
+  `/kit` stays outside this tree, untouched.
+- **`SearchScreen.tsx`/`HistoryScreen.tsx`** — dropped the back-link header
+  built in the pre-design pass (wrong once the nav turned out to be
+  persistent — see "Spec deltas"). Search now uses `animate-fade-in`,
+  History keeps `animate-push-in`. Same stable no-props export contract as
+  before.
+- **`nav` namespace** filled in all four locale files: `label`, `home`,
+  `history`, `search`, `profile`, `add`. `common.back` removed (dead once
+  the back-link header was dropped — no orphaned translation left behind).
+- **`src/components/shared/index.ts`** — added the `BottomNav` export line
+  (the accepted one-line conflict with Track K, kept to exactly one line).
 
-1. **New `src/routes/Kit.test.tsx`** renders `<Kit />` (unmocked, real
-   `useLockStore`) and asserts the "Activar lock" button — the disabled-state
-   entry point — is present. `LockSettings`' own full behavior (enable,
-   re-lock, error copy) is already covered end-to-end by the pre-existing
-   `src/features/lock/LockSettings.test.tsx`, untouched by this move — same
-   component, same tests, new mount point.
-2. **Old assertion removed correctly, not just deleted**: `Home.test.tsx`
-   previously asserted `/activar lock/i` rendered on `Home`; I moved that
-   assertion (in spirit — the real one is more direct, per point 1) rather
-   than dropping test coverage for the feature. Ran both files together
-   before touching anything else (`bunx vitest run src/routes/Home.test.tsx
-src/routes/Kit.test.tsx`) — 2/2 passed — before proceeding to the rest of
-   the track.
-
-## Handoff contract for Track E3 / Track E4 (next stage)
+## Restated handoff contract (this changed from the first report)
 
 ```ts
 // src/features/search/SearchScreen.tsx
@@ -86,99 +123,139 @@ export const SearchScreen = () => { … } // no props
 export const HistoryScreen = () => { … } // no props
 ```
 
-Both are wired into `src/router.tsx` by name already — E3/E4 replace the
-function body only; the export name, the route path, and the
-`RequireAuth`/`errorElement` wrapping in `router.tsx` do not need to change.
+Export names/props are unchanged from the first report. **What changed**:
+these are no longer routed directly under `RequireAuth` — they are children
+of `AppShell` (`src/routes/AppShell.tsx`), which renders `<BottomNav />`
+once and an `<Outlet />` for them. Concretely, for Track E2/E3/E4:
+
+- **Don't render your own back/nav chrome.** `BottomNav` is already
+  mounted by `AppShell` and stays mounted across all three tabs — the
+  operator confirmed this from the design's z-index layering (nav at 19,
+  both overlays at 18, painted underneath). Building a second nav or a back
+  button in your screen would duplicate it.
+- **Your screen's root element does not need `min-h-dvh` and should not
+  assume it owns the full viewport** — you're rendered inside `AppShell`'s
+  scrollable content pane (`flex-1 overflow-y-auto pb-30`, 120px reserved
+  at the bottom so content doesn't sit under the fixed nav). `min-h-full`
+  is the right base, matching what `Home.tsx` already does.
+- **Enter animation is per-screen, not shared**: History uses
+  `animate-push-in`, Search uses `animate-fade-in` — confirmed from the
+  design source's own `mnPushIn`/`mnFade` keyframe names on each overlay,
+  not a single choice applied to both.
+- Route paths/wiring in `router.tsx` are otherwise unchanged — E2/E3/E4
+  don't touch `router.tsx` at all.
+
+## The notification dot — my view (Home content is Track E2's, not mine)
+
+The design source (line ~59-62) renders the bell's green dot
+unconditionally — there is no `sc-if`/binding gating it; it is not a
+"badge count > 0" indicator, it's a static decoration in the prototype.
+That is a meaningfully different fact than "the design shows a dot," which
+is how the operator's message summarized it.
+
+I agree with the operator's brief to E2 (no dot), and more strongly than
+"lean toward": a permanently-lit unread indicator with nothing feeding it
+is not a neutral placeholder the way the FAB is. A disabled FAB accurately
+represents its own state — tapping it does nothing, and it looks like it
+does nothing (or at least "not yet"). An always-on unread dot asserts a
+fact ("something new happened") that is never true, with no way for it to
+ever become false. That is a UI lie in the specific way
+`docs/error-handling.md`'s "never render fake data / never show a success
+you didn't get" principle is aimed at — same shape of bug in a different
+layer of the app.
+
+**One real tension worth flagging**: `docs/ui/implementation-plan.md`'s
+Home section already says, in the existing project doc (not something I'm
+introducing): _"notification bell (bell has no backend yet →
+`StubNotifications`, badge dot only)"_ — i.e., the project's own prior
+plan explicitly prescribed a static dot as the intended stub shape, the
+opposite of what the operator's brief to E2 says. I did not edit
+`implementation-plan.md` (not in my "Owns" list this track), but flagging
+it here so it doesn't silently contradict E2's actual brief: whoever picks
+up E2 should see this note, and `implementation-plan.md`'s Home bullet
+should get corrected to "no dot" in the same change, or the next reader
+will reasonably build the dot because the doc still says to.
 
 ## Decisions made (for specs.md §11)
 
-- **Routing model confirmed as three sibling top-level routes** (`/`,
-  `/search`, `/history`), not a nested layout route with an `<Outlet>` for
-  a shared `BottomNav`. This was an open question I did not resolve, because
-  resolving it requires knowing from the design whether `BottomNav` renders
-  on all three screens or only some (History is a full-screen overlay —
-  plausibly nav-less) — see "Open questions" below. `router.tsx` as it
-  stands works either way: a layout route wrapping the three children can
-  be introduced later without changing any of `SearchScreen`/`HistoryScreen`/
-  `Home`'s own code.
+- **Bottom nav requires a shared layout route.** Confirmed by the design's
+  z-index layering (nav above both overlay screens, not per-screen) —
+  `AppShell.tsx` + a pathless parent route in `router.tsx`, `Home`/
+  `SearchScreen`/`HistoryScreen` as `Outlet` children. This resolves both
+  open questions from the first report (nav renders on all three tabs;
+  the routes do share a layout route).
+- **Active-tab color mapping**: `#2FD896` → `--primary` (via `text-primary`
+  - heavier `strokeWidth`, since Lucide has no filled-icon variant),
+    `#5A5D64` → `--fg-disabled` (not `--muted-foreground` — confirmed by
+    grepping the hex against `src/styles/index.css`, not assumed).
+- **Search fades, History pushes** — read directly off each overlay's own
+  keyframe name in the design source, not inferred from one being "the
+  overlay screen" and the other not.
+- **No back-link header on Search/History.** Superseded by the persistent
+  nav; see "Spec deltas."
 
 ## Backlog / deferred (for specs.md §12)
 
-- **`BottomNav.tsx` + test, the FAB, and the real `Home.tsx` shell — not
-  built.** Blocked on the DesignSync pull described above. Once the design
-  is available: map its Phosphor icons 1:1 to Lucide
-  (`docs/ui/design-tokens.md`), decide whether `BottomNav` wraps all three
-  routes via a shared layout route or is rendered per-screen, and whether
-  `Search`/`History` show the nav at all (History reads as a full-screen
-  push in the brief, which is often nav-less in native apps — needs the
-  actual design, not a guess).
-- **`nav` namespace stays empty.** Fill it when `BottomNav` is built, in the
-  same change (tab labels are visual/structural content, not usable before
-  the tab set is known).
-- **`src/components/shared/index.ts` `BottomNav` export — not added.**
-  Whoever builds `BottomNav.tsx` next appends the one line the brief
-  originally asked for.
+Nothing new deferred beyond what the brief always scoped out (Add sheet
+content — Track F; Profile sheet content — Track G). Both stub buttons in
+`BottomNav` carry `// STUB(trackF)`/`// STUB(trackG)` markers pointing at
+those.
 
 ## Doc lines to add (say exactly which file and where)
 
-**`src/routes/README.md`** (operator-owned this wave, not edited directly)
-— update the `Home.tsx` bullet from:
+**`src/routes/README.md`** (operator-owned) — add bullets for the two new
+files and update `Home.tsx`'s:
 
-> `Home.tsx` — the only production route right now; hosts `LockSettings` as
-> a dev harness. Will host the dashboard/movimientos entry points once
-> those land.
-
-to:
-
-> `Home.tsx` — placeholder shell for `/`; the real bottom-nav/FAB/dashboard
-> shell is blocked on a DesignSync pull (`docs/wave-2/track-l.md`).
-> `LockSettings` moved to `Kit.tsx` (see below) — it is no longer here.
-
-and update the `Kit.tsx` bullet from:
-
-> `Kit.tsx` — dev-only gallery for `src/components/shared/**`, mounted at
-> `/kit` and gated on `import.meta.env.DEV` in `src/router.tsx` (not part of
-> the production build's routes). See `specs.md` §10.5.
-
-to:
-
+> `Home.tsx` — dashboard content placeholder for `/`, rendered inside
+> `AppShell`'s `<Outlet />`. `LockSettings` moved to `Kit.tsx` (see below).
+>
+> `AppShell.tsx` — layout route for `/`, `/search`, `/history`: renders
+> `BottomNav` once (persistent across all three tabs, per the design's
+> z-index layering) plus a scrollable `<Outlet />` for the active screen.
+>
 > `Kit.tsx` — dev-only gallery for `src/components/shared/**`, mounted at
 > `/kit` and gated on `import.meta.env.DEV` in `src/router.tsx` (not part of
 > the production build's routes). See `specs.md` §10.5. Also hosts
 > `LockSettings` — the only way to enable/disable the PIN lock (moved off
 > `Home` when the app shell was rebuilt).
 
-Add a new bullet for the two new sibling routes:
+**`src/components/shared/README.md`** (operator-owned) — add, near the
+other shell components:
 
-> `/search` and `/history` (`src/features/search/SearchScreen.tsx`,
-> `src/features/history/HistoryScreen.tsx`) — see those folders' own
-> `README.md`s. Currently minimal placeholders replaced in Wave 2 stage 3.
+> - `BottomNav.tsx` — the five-slot persistent tab bar (Home/History/centre
+>   Add/Search/Profile), mounted once by `src/routes/AppShell.tsx`. Home/
+>   History/Search are real `NavLink`s (`aria-current="page"` from
+>   `NavLink` itself); active state is `text-primary` + a heavier
+>   `strokeWidth` (Lucide has no filled-icon variant). Add and Profile have
+>   no destination yet this wave — rendered `disabled` with `aria-label`
+>   and a `// STUB(trackF|trackG)` marker, visually complete per the STUB
+>   convention rather than silently inert.
+
+**`docs/ui/implementation-plan.md`** — correct the Home bullet's
+"badge dot only" phrasing per "The notification dot" above (operator's
+call on exact wording; the design source has no binding gating the dot, it
+is static).
 
 ## Spec deltas (anything where the brief below turned out wrong)
 
-None found in the parts I could build. The brief's route list, the
-`LockSettings` move, the placeholder-screen contract, and the
-`animate-push-in` choice for History all held up as specified. The one
-place I diverged from "build it" is entirely the DesignSync unavailability,
-not a disagreement with the brief's design.
+- **Back-link header on Search/History, from the original brief, does not
+  match the actual design and was removed.** The original brief text said
+  "title + back affordance" — reasonable under the assumption these are
+  modal pushes on top of Home. The design proves otherwise (persistent nav
+  above both overlays); a back-chevron-to-Home link would duplicate the
+  Home tab and doesn't appear in the design source at all. Removed it from
+  both placeholders; `common.back` (added for it) removed too since nothing
+  uses it now.
+- **The FAB is not a separate component** — the operator's message already
+  corrected this; confirmed independently from the design source (it's the
+  nav's third `<button>`, not a separate positioned element). Built as part
+  of `BottomNav`, not a standalone `Fab.tsx`.
 
 ## Open questions for the operator
 
-1. **Does `BottomNav` render on `Search` and/or `History`, or only `Home`?**
-   `docs/ui/implementation-plan.md` lists "Bottom nav + FAB" only under the
-   Home screen's bullet list, and History is described as a full-screen
-   overlay (commonly nav-less in native apps), but neither statement is
-   conclusive without the actual design. Worth confirming alongside the
-   DesignSync pull so the next session doesn't have to re-derive it from a
-   layout guess.
-2. **Should the three routes move to a shared layout route (`<Outlet>`) once
-   `BottomNav` exists**, rather than three siblings each independently
-   wrapped in `RequireAuth`? I left them as siblings since that is what the
-   brief specifies verbatim ("Routes: `/` (Home), `/search`, `/history` —
-   all inside `RequireAuth`"), but a layout route would be the natural place
-   to mount a shared `BottomNav` once it exists, if question 1 says all
-   three need it. Flagging so it isn't silently decided either way in the
-   next session without being noticed as a routing-model change.
+None outstanding. Both open questions from the first report are resolved
+above (nav on all three tabs — yes; shared layout route — yes,
+`AppShell.tsx`).
 
 ## `bun run check` — real output
 
@@ -193,11 +270,15 @@ $ vitest run
  RUN  v4.1.9 /Users/sukiyamero/Desktop/programacion/web/moneta-worktrees/shell
 
 
- Test Files  43 passed (43)
-      Tests  401 passed (401)
-   Start at  02:05:53
-   Duration  7.09s (transform 1.54s, setup 8.42s, import 11.51s, tests 8.68s, environment 24.64s)
+ Test Files  45 passed (45)
+      Tests  407 passed (407)
+   Start at  02:16:57
+   Duration  7.87s (transform 964ms, setup 8.67s, import 12.66s, tests 10.16s, environment 28.85s)
 ```
 
 The one lint warning is pre-existing in `src/components/ui/button.tsx`
 (shadcn-generated, outside this track's scope — untouched by this diff).
+`bun run build` also verified clean, and used to confirm the fractional
+Tailwind utilities above (`size-6.5`, `size-14.5`, `gap-0.75`,
+`-translate-y-4.5`) generate real CSS rules rather than silently matching
+nothing.

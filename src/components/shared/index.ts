@@ -1,3 +1,4 @@
+export { BottomNav } from '@/components/shared/BottomNav'
 export { BottomSheet, type BottomSheetProps } from '@/components/shared/BottomSheet'
 export { CenterModal, type CenterModalProps } from '@/components/shared/CenterModal'
 export {
