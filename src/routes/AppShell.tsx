@@ -10,7 +10,7 @@ import { BottomNav } from '@/components/shared/BottomNav'
 export const AppShell = () => {
   return (
     <div className="relative flex min-h-dvh flex-col bg-background text-foreground">
-      <div className="flex-1 overflow-y-auto pb-30">
+      <div className="flex-1 overflow-y-auto pb-(--bottom-nav-clearance)">
         <Outlet />
       </div>
       <BottomNav />
