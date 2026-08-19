@@ -39,13 +39,20 @@ export const ConfirmDialog = ({
         </h2>
         {description !== undefined && <p className="text-sm text-fg-secondary">{description}</p>}
         <div className="flex w-full gap-2">
-          <Button type="button" variant="secondary" className="min-h-11 flex-1" onClick={onClose}>
+          <Button
+            type="button"
+            variant="secondary"
+            size="touch"
+            className="flex-1"
+            onClick={onClose}
+          >
             {cancelLabel}
           </Button>
           <Button
             type="button"
             variant="destructive"
-            className="min-h-11 flex-1"
+            size="touch"
+            className="flex-1"
             onClick={onConfirm}
           >
             {confirmLabel}

@@ -30,11 +30,9 @@ doesn't belong to any one `src/features/**` folder. See `specs.md` §10.5.
 - `ConfirmDialog.tsx` — delete-style confirmation built on `CenterModal`;
   generates its own `labelledBy` from `title` via `useId()`, so callers
   pass no aria props. Confirm/Cancel use `Button`'s `destructive`/
-  `secondary` variants at `min-h-11` (button.tsx's own sizes don't reach
-  the 44px touch target — the same per-call-site override
-  `LockSettings.tsx` already uses). Takes all copy as props — adds no
-  locale keys of its own. Replaces the `/kit` gallery's former hand-rolled
-  delete-confirm demo. Accepts `ref`.
+  `secondary` variants at `size="touch"` (button.tsx's 44px-compliant size).
+  Takes all copy as props — adds no locale keys of its own. Replaces the
+  `/kit` gallery's former hand-rolled delete-confirm demo. Accepts `ref`.
 - `CenterModal.tsx` — centered popup shell (Delete confirm, Info tooltip,
   Custom tag modal, Group editor). `CenterModalProps` is
   `OverlayShellProps<HTMLDivElement>` too. Accepts `initialFocus`/`ref`.
