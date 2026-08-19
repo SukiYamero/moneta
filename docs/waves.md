@@ -198,6 +198,22 @@ and the filter sheet was discarding it.
 
 ---
 
+## Wave 2.2 — active (user-reported adjustments, 2026-08-19)
+
+Specified in `specs.md` §10.9 and §10.10 — read the spec, not this summary.
+
+| Track                  | Scope                                                                                                                                   | Owns                                                                                             |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| **P — loading system** | `Skeleton` primitive, `ScreenLoading`, the two-sided anti-flash gate, and one shared loading treatment across Home/Search/History.      | `src/components/shared/**` (new), the three screens' loading states, `src/router.tsx`, `Kit.tsx` |
+| **Q — guest entry**    | Guest as a distinct auth state, `RequireAuth` letting it through, the Welcome screen's `or` divider + guest button, and the boot flash. | `src/lib/authStore.ts`, `src/features/auth/**`, the `auth` locale namespace                      |
+
+**The seam between them:** §10.9's Tier 1 fix (boot must not flash the login
+screen) lives in `RequireAuth.tsx`, which Track Q owns — so Q implements it
+with a minimal inline boot state and P builds the shared `ScreenLoading` it
+should eventually use. The operator swaps one for the other after both merge.
+
+---
+
 ## Wave 3 — planned (deferred from Wave 2 on 2026-08-19)
 
 These three were originally Wave 2. They move out so Wave 2 can land the
@@ -252,10 +268,10 @@ Check this table against `git worktree list` at the start of any parallel
 session; prune anything stale (merged-but-not-removed, or on disk but
 missing/finished here).
 
-| Created    | Track / task                   | Path                           | Branch              | Status | Notes                   |
-| ---------- | ------------------------------ | ------------------------------ | ------------------- | ------ | ----------------------- |
-| 2026-08-19 | Wave 2.1 · Track N (region)    | `../moneta-worktrees/region`   | `feat/w21-region`   | active | Spec: `specs.md` §10.7. |
-| 2026-08-19 | Wave 2.1 · Track O (tag color) | `../moneta-worktrees/tagcolor` | `feat/w21-tagcolor` | active | Spec: `specs.md` §10.8. |
+| Created    | Track / task                 | Path                          | Branch             | Status | Notes                    |
+| ---------- | ---------------------------- | ----------------------------- | ------------------ | ------ | ------------------------ |
+| 2026-08-19 | Wave 2.2 · Track P (loading) | `../moneta-worktrees/loading` | `feat/w22-loading` | active | Spec: `specs.md` §10.9.  |
+| 2026-08-19 | Wave 2.2 · Track Q (guest)   | `../moneta-worktrees/guest`   | `feat/w22-guest`   | active | Spec: `specs.md` §10.10. |
 
 Status values: `active` → `merged, pending cleanup` → row deleted once
 `git worktree remove <path>` runs.
