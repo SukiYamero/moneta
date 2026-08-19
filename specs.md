@@ -285,17 +285,22 @@ Shipped `createLocalRepo(): Repo` in `src/lib/repo.local.ts`, backed by
 `db.test.ts`), `bun run check` green. Implementation notes not obvious from
 the port spec alone:
 
-- **`ready()`** memoizes its in-flight promise in a module-level `WeakMap`
-  keyed by the `db` connection (2026-08-18 revision — see §11; the first cut
-  keyed it per repo instance, so two `createLocalRepo()` instances over the
-  same `db` didn't dedupe a concurrent `ready()`), so concurrent callers
-  across every `Repo` wrapping that database never seed/migrate twice. The
-  memo is cleared once an attempt **settles** — on success as well as on
-  failure — so a later, non-overlapping call always re-verifies against
-  current stored state (cheap: a no-op once `schemaVersion` is current)
-  rather than trusting a permanent "already ready" flag. Fresh install →
-  seeds `CONFIG_SEMILLA`. `Config.schemaVersion` < `SCHEMA_VERSION` →
-  dispatches through a `Record<number, Migration>` registry
+- **`ready()`** memoizes its in-flight/resolved promise in a module-level
+  `WeakMap` keyed by the `db` connection (2026-08-18 revision — see §11; the
+  first cut keyed it per repo instance, so two `createLocalRepo()` instances
+  over the same `db` didn't dedupe a concurrent `ready()`), so `performReady()`
+  runs **exactly once per database connection**, matching §10.3's "before
+  first use" — not once per call, even though every `CrudRepo` method awaits
+  `ensureReady()`. A resolved promise stays cached (a second, brief revision
+  the same day briefly cleared on success too — see §11 — which reintroduced
+  a schemaVersion round-trip on every single repo operation; reverted). Only
+  a **rejected** attempt clears the entry, so a later call can retry instead
+  of replaying the same failure forever. Tests reset this memo in `afterEach`
+  via the test-only `__resetReadyMemoForTests()` export, since the test
+  suite reuses one `db` singleton across files/tests while production
+  expects it to live for the database connection's whole lifetime. Fresh
+  install → seeds `CONFIG_SEMILLA`. `Config.schemaVersion` < `SCHEMA_VERSION`
+  → dispatches through a `Record<number, Migration>` registry
   (`migrateSchema(from, to, registry)`, exported for unit testing
   independently of the real registry, which is empty at v1). `>
 SCHEMA_VERSION` → `RepoError('schema_mismatch')`, no downgrade.
@@ -914,14 +919,24 @@ b DESC`, not a mix) and made the fast path's range-bound construction
   the same `db` used to have separate closures, so concurrent `ready()`
   calls across instances didn't dedupe — harmless while the migration
   registry is empty, but a real migration could then run twice against the
-  same IndexedDB store. The memo now lives keyed by `db` itself and is
-  cleared once an attempt **settles**, on success as well as on failure (the
-  old code only cleared on failure) — this still dedupes truly-concurrent
-  callers, and still lets a failed attempt retry, but a later,
-  non-overlapping call now always re-verifies against current stored state
-  (cheap: `performReady()` is a no-op once `schemaVersion` is current)
-  rather than trusting a permanent "already ready" flag that could go
-  stale.
+  same IndexedDB store. The memo now lives keyed by `db` itself; a resolved
+  promise stays cached (`performReady()` runs once per database connection,
+  per §10.3's "before first use"), and only a **rejected** attempt clears
+  the entry so a later call can still retry. **Correction, same day:** an
+  intermediate version of this fix cleared the memo on success too (`.finally()`
+  instead of `.catch()`), reasoning it "only dedupes concurrent callers, a
+  later call just re-verifies cheaply" — that traded the run-once guarantee
+  away: every `list()`/`get()`/`add()`/etc. awaits `ensureReady()`, so a
+  cleared-on-success memo made every single repo operation pay a fresh
+  `db.config.get` round-trip, caught by operator review
+  (`db.config.get` called on 3 of 3 ops after `ready()` had already
+  resolved). Reverted to clear-on-rejection-only; a new regression test
+  (`ready() runs performReady() exactly once per database connection, not
+once per call`) pins the run-once property so this can't silently regress
+  again. The test suite itself now needs `__resetReadyMemoForTests()`
+  (test-only export) in `afterEach`, since its tests share one `db`
+  singleton across the whole file while production expects the memo to live
+  for the connection's entire lifetime.
 - 2026-08-18 — **`update()`'s not-found message no longer names the date
   field (trivial code-review fix).** It rendered `no fecha entity with id
 "…"` — an internal field name (`dateField`) doing double duty as the

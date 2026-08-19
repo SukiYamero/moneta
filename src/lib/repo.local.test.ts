@@ -1,7 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { db } from '@/lib/db'
 import { RepoError } from '@/lib/repo'
-import { createLocalRepo, migrateSchema, type Migration } from '@/lib/repo.local'
+import {
+  __resetReadyMemoForTests,
+  createLocalRepo,
+  migrateSchema,
+  type Migration,
+} from '@/lib/repo.local'
 import {
   CONFIG_SEMILLA,
   SCHEMA_VERSION,
@@ -15,6 +20,11 @@ afterEach(async () => {
   await db.movimientos.clear()
   await db.activos.clear()
   await db.config.clear()
+  // `ready()`'s memo now runs once per database connection (not once per
+  // call) — `db` is a singleton reused across this whole file, so without
+  // this reset a resolved memo from an earlier test would leak into the
+  // next one and skip performReady() against config just cleared above.
+  __resetReadyMemoForTests()
 })
 
 function movimiento(overrides: Partial<Movimiento> = {}): Movimiento {
@@ -119,6 +129,21 @@ describe('ready() / schemaVersion gate', () => {
     await Promise.all([repoA.ready(), repoB.ready()])
     expect(putSpy).toHaveBeenCalledTimes(1)
     putSpy.mockRestore()
+  })
+
+  it('ready() runs performReady() exactly once per database connection, not once per call', async () => {
+    // Regression pin for the run-once guarantee: performReady() must not
+    // re-run on every subsequent repo operation just because the in-flight
+    // memo was cleared once the first call settled successfully.
+    const repo = createLocalRepo()
+    const getSpy = vi.spyOn(db.config, 'get')
+    await repo.ready()
+    expect(getSpy).toHaveBeenCalledTimes(1)
+    await repo.movimientos.list()
+    await repo.movimientos.get('missing')
+    await repo.movimientos.add(movimiento())
+    expect(getSpy).toHaveBeenCalledTimes(1)
+    getSpy.mockRestore()
   })
 
   it('a failed ready() attempt clears the memo so a later call retries against fresh state', async () => {

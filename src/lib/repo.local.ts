@@ -577,30 +577,36 @@ async function performReady(): Promise<void> {
 // variable) rather than by `createLocalRepo()` instance: two repo instances
 // wrapping the same underlying database must share one in-flight `ready()`
 // call, or two concurrent instances could each run a migration against the
-// same IndexedDB store. Cleared once the attempt settles — on success as
-// much as on failure — so it only dedupes truly-concurrent callers; any
-// later, non-overlapping call re-verifies against current stored state
-// (cheap and idempotent) instead of trusting a permanent "already ready"
-// flag that could go stale.
+// same IndexedDB store. A *resolved* promise stays cached — performReady()
+// must run once per database connection, matching §10.3's "before first
+// use", not once per call (every CrudRepo method awaits ensureReady()). Only
+// a *rejected* attempt clears the entry, so a later call can retry instead
+// of being stuck replaying the same failure forever.
 const readyPromises = new WeakMap<typeof db, Promise<void>>()
 
 function ready(): Promise<void> {
   let promise = readyPromises.get(db)
   if (!promise) {
-    promise = performReady()
-      .catch((error: unknown) => {
-        throw error instanceof RepoError
-          ? error
-          : new RepoError(error instanceof Error ? error.message : String(error), 'unknown', {
-              cause: error,
-            })
-      })
-      .finally(() => {
-        readyPromises.delete(db)
-      })
+    promise = performReady().catch((error: unknown) => {
+      readyPromises.delete(db)
+      throw error instanceof RepoError
+        ? error
+        : new RepoError(error instanceof Error ? error.message : String(error), 'unknown', {
+            cause: error,
+          })
+    })
     readyPromises.set(db, promise)
   }
   return promise
+}
+
+// Test-only escape hatch: production code never calls this. `db` is a
+// module singleton reused across the whole test file (only its tables are
+// cleared between tests), so a resolved run-once memo would otherwise leak
+// across unrelated tests instead of resetting the way a real fresh database
+// connection would. Not exported from the `Repo` port.
+export function __resetReadyMemoForTests(): void {
+  readyPromises.delete(db)
 }
 
 // --- factory -----------------------------------------------------------------
