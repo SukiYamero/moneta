@@ -13,9 +13,6 @@
       "guestCta": "Continuar como convidado",
       "guestReassurance": "Como convidado, seus dados ficam somente neste dispositivo. Eles não são sincronizados: se você perder o aparelho, perde os dados também."
     },
-    "boot": {
-      "loading": "Carregando…"
-    },
     "errors": {
       "missingClientId": "Erro de configuração. Tente novamente mais tarde.",
       "gisFailedToLoad": "Não conseguimos carregar o Google. Verifique sua conexão e tente de novo.",

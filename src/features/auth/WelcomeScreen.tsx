@@ -73,16 +73,6 @@ export const WelcomeScreen = () => {
             </>
           )}
         </button>
-        <p className="text-center text-xs leading-relaxed font-medium text-fg-disabled">
-          <Trans
-            t={t}
-            i18nKey="welcome.legal"
-            components={{
-              terms: <span className="text-muted-foreground" />,
-              privacy: <span className="text-muted-foreground" />,
-            }}
-          />
-        </p>
         {/* Generous separation (specs.md §10.10): the divider's own my-6
             margin stacks on top of the container's gap-4, so the guest
             choice reads as a second, distinct zone rather than one more
@@ -107,6 +97,16 @@ export const WelcomeScreen = () => {
             {t('welcome.guestReassurance')}
           </p>
         </div>
+        <p className="mt-2 text-center text-xs leading-relaxed font-medium text-fg-disabled">
+          <Trans
+            t={t}
+            i18nKey="welcome.legal"
+            components={{
+              terms: <span className="text-muted-foreground" />,
+              privacy: <span className="text-muted-foreground" />,
+            }}
+          />
+        </p>
         {status === 'error' && error ? (
           <p role="alert" className="text-center text-sm text-destructive">
             {t(loginErrorCopy(error))}

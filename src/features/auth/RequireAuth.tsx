@@ -1,24 +1,8 @@
 import { useEffect, useRef, type ReactNode } from 'react'
-import { Loader2 } from 'lucide-react'
-import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/lib/authStore'
+import { ScreenLoading } from '@/components/shared/ScreenLoading'
 import { WelcomeScreen } from '@/features/auth/WelcomeScreen'
 import { DrivePermissionScreen } from '@/features/auth/DrivePermissionScreen'
-
-// SEAM(track-p): stand-in for the shared `ScreenLoading` component (specs.md
-// §10.9, Track P) — deliberately minimal so it's a one-line swap once that
-// merges, not a second loading design to reconcile with it.
-const BootScreen = () => {
-  const { t } = useTranslation('auth')
-  return (
-    <main aria-busy="true" className="flex min-h-dvh items-center justify-center bg-background">
-      <span className="sr-only" role="status">
-        {t('boot.loading')}
-      </span>
-      <Loader2 className="size-8 animate-spin text-primary" aria-hidden="true" />
-    </main>
-  )
-}
 
 // RequireAuth only ever mounts with status 'idle' on a cold boot with no PIN
 // lock enabled — AppLock withholds it behind LockScreen while a vault exists,
@@ -32,8 +16,8 @@ export const RequireAuth = ({ children }: { children: ReactNode }) => {
   // explicit, user-initiated login() from an already-visible WelcomeScreen
   // (same status, different cause). `booted` disambiguates them — it flips
   // true once the initial restore attempt settles (or immediately, if this
-  // component never mounted with 'idle' to begin with), so BootScreen is
-  // reserved for the genuine cold-boot span. After that, 'authenticating'
+  // component never mounted with 'idle' to begin with), so the boot screen
+  // is reserved for the genuine cold-boot span. After that, 'authenticating'
   // falls through to WelcomeScreen, which owns its own inline busy state
   // (§10.9 tier 3) — a full-screen swap mid-tap would be a regression the
   // boot fix introduced, not the fix itself.
@@ -66,7 +50,7 @@ export const RequireAuth = ({ children }: { children: ReactNode }) => {
   // to the driveOptIn check below (specs.md §10.10 — a guest has no Drive
   // opt-in to answer, and never did).
   if (status === 'guest') return <>{children}</>
-  if (status === 'authenticating' && !booted.current) return <BootScreen />
+  if (status === 'authenticating' && !booted.current) return <ScreenLoading />
   if (status !== 'authenticated') return <WelcomeScreen />
   if (driveOptIn === 'pending') return <DrivePermissionScreen />
   return <>{children}</>
