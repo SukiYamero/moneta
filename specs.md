@@ -683,6 +683,66 @@ bugs plus a hard 44px touch-target violation, fixed on `fix/d-ui`:
   open simultaneously — the scenario absent from the original suite that
   let all three bugs ship. `bun run check` green.
 
+### 10.6 Toast — the global notification surface
+
+- **Goal:** one app-wide surface any code can push a short message to, so an
+  error or confirmation raised where no screen owns it still reaches the
+  user. Designed in `docs/ui/implementation-plan.md` ("Toast (generic,
+  global — build once, used after save/delete/add)"); the rule for when to
+  use it instead of an inline message is `docs/error-handling.md` §7,
+  "Where an error is allowed to land".
+- **User story:** as a user, when I save a movement from a sheet that closes,
+  or delete one by swiping, I see a short confirmation — and if it failed, I
+  find out then, not when the number silently doesn't change.
+- **UI:** a stack of short-lived cards. Callable from anywhere (a store, an
+  event handler, a component) through a plain function — no provider prop
+  drilling, no per-feature copy of the component.
+  - **Stacking, in arrival order.** Concurrent toasts do not replace one
+    another: the first raised is the first shown, newer ones join the stack.
+  - **Each keeps its own timer.** A toast's dismissal countdown is its own —
+    a later arrival never extends, resets, or shortens an earlier one.
+  - Success and error read differently (`--color-success` / `--color-danger`
+    tokens); animation uses the shared `animate-*` tokens and respects
+    `prefers-reduced-motion`.
+  - Sits above every overlay (a sheet or modal must never cover it) and
+    clear of the safe-area insets and the bottom nav.
+  - Touch-first: swipe to dismiss via Pointer Events, per `AGENTS.md` § UI.
+    It is a **notification, not a dialog** — it never blocks, never traps
+    focus, never asks a question. Anything needing a decision is a
+    `CenterModal`.
+- **Data touched:** none. Presentation only; it holds no domain state and
+  reads no store.
+- **Edge cases:**
+  - **Two or more at once** → stack, oldest at the anchored edge, each
+    expiring on its own schedule; the rest must not jump when one in the
+    middle leaves.
+  - **A cap on the stack** (a retry loop must not paper the screen). Decide
+    the number when building; oldest beyond the cap is dropped, not queued
+    indefinitely.
+  - **The same message repeating** (a failing action retried) → collapse
+    rather than stack N identical cards.
+  - **Raised from a surface that then unmounts** — the whole reason this
+    exists: it must live at app root, outside the router, so a closing sheet
+    cannot take it down with it.
+  - **Raised while the app is locked** → must not render over `LockScreen`;
+    a notification about data is content, and the lock exists to hide
+    content.
+  - **Accessibility:** errors announce assertively (`role="alert"`), routine
+    confirmations politely (`role="status"`). A timed message the user
+    cannot pause or dismiss fails WCAG 2.2.1, so dismissal must always be
+    reachable — and a screen reader user must not lose the message to a
+    timer before it is read.
+  - **Never render a raw `.message`** — Spanish copy only, per
+    `docs/error-handling.md` §5/§7.
+- **Done when:** any module can raise a toast without importing a feature;
+  concurrent toasts stack in arrival order with independent timers (tested);
+  it survives the unmounting of whatever raised it (tested); it is not
+  visible over `LockScreen`; swipe- and keyboard-dismissible; `bun run
+check` green.
+- **Out of scope:** undo affordances inside a toast, persistence across
+  reloads, and any queue that outlives the session — none are needed by the
+  screens that consume it.
+
 ## 11. Decisions log
 
 - 2026-06-25 — Package manager: **bun**. Node: **24 LTS** (`.nvmrc`).
@@ -1944,7 +2004,24 @@ lint` clean bar the one pre-existing `components/ui` warning). `AGENTS.md`
   removed again before the first commit — it has no ongoing use once
   `func-style` is enforcing.
 
+- 2026-08-19 — **Two error surfaces, and only two: inline or the global
+  toast** (`docs/error-handling.md` §7, `specs.md` §10.6). Prompted by the
+  observation that every existing error path lands on a screen that owns the
+  failed action, which stops being true the moment Wave 2 writes through
+  `Repo` from a sheet that closes on save. The toast is specified before the
+  screens rather than inside one of them, and specified as global,
+  stacking in arrival order, with an independent timer per toast — so a
+  second message never truncates the first. Deliberately a notification, not
+  a dialog: no blocking, no focus trap, no questions.
+
 ## 12. Backlog (pending verification / deferred work)
+
+- **Toast (§10.6) blocks Wave 2 — build it before the screen tracks, not
+  inside one of them.** `docs/ui/implementation-plan.md` files it under the
+  Movement sheet (Track F), which would leave E, G and H with no surface for
+  an error raised after a sheet closes — and four parallel tracks with no
+  shared surface invent four. No UI consumes `Repo` yet, so nothing is
+  broken today; the moment one does, a failed write has nowhere to land.
 
 - ✅ **Login verified end-to-end (§10.1)** — 2026-07-02. Real OAuth ran against Google
   with a Testing-mode client (`http://localhost:5173` origin, dev Gmail as test user):

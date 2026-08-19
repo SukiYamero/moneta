@@ -74,6 +74,13 @@ entry — not silently building past it.
 `src/components/shared/**` + `repo.fake.ts` are on `main`; every track below
 can build against them.
 
+**Blocker before the screen tracks: the Toast (`specs.md` §10.6).** It is
+the only surface for an error raised where no screen owns it — a failed
+write from a sheet that already closed. `implementation-plan.md` files it
+under Track F, but E, G and H need it just as much, and four tracks with no
+shared surface will invent four. Build it with (or immediately after) Track
+I, before E/F/G/H start writing screens.
+
 **Sequencing note:** run **Track I (i18n) first**, before E/F/G/H write much
 new UI copy. Every new screen built before Track I lands is Spanish text
 that has to be retrofitted — the earlier the scaffolding exists, the less

@@ -496,6 +496,36 @@ action()` call site becomes an unhandled-rejection bug. Keep the rule
   residual, lower-severity gap; close it the same way if `auth.ts` is ever
   opened for related work.
 
+### Where an error is allowed to land
+
+Every error a user can cause must reach them somewhere. There are exactly two
+surfaces, and the choice between them is not a matter of taste:
+
+- **Inline, next to the thing that failed** — when a screen or form owns the
+  failed action and has a place to put the message. Login, Drive consent,
+  PIN unlock, enabling the lock: each is a screen whose whole purpose is that
+  one action, so the message belongs there, as a `role="alert"` beside the
+  control. Prefer this whenever it is available: an error shown where the
+  user is looking beats one shown in a corner.
+- **The global toast** — when the action's own surface is gone or was never
+  the point: a bottom sheet that closed on save, a swipe-to-delete, a
+  background write, anything raised from a store rather than a form. Without
+  this, a failed `repo.movimientos.add(...)` from a sheet that already
+  dismissed leaves the user believing the movement saved.
+
+**Never let an error land nowhere.** If neither surface fits, that is a
+design gap to raise, not a reason to swallow it — see §2.
+
+**Do not invent a third surface.** Every screen using the shared toast is
+what makes "the write failed" look the same everywhere; a per-feature
+modal/banner/inline-red-text of its own is how four parallel tracks end up
+with four error languages.
+
+Technical detail (`.code`, `.message`, `cause`) stays in `console`; the user
+sees Spanish copy chosen from the error, per the copy tables above. The toast
+is a **notification**, not a dialog: it never blocks, never traps focus, and
+never asks a question — anything requiring a decision is a `CenterModal`.
+
 ## 8. How errors get tested
 
 `AGENTS.md`'s TDD rule already names `auth.ts`, `repo.ts`, `pinLock.ts`, and
