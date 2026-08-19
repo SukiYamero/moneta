@@ -1,21 +1,12 @@
-import type { ReactNode, Ref, RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import { cn } from '@/lib/utils'
-import { OVERLAY_PANEL_CLASS, useOverlay } from '@/components/shared/useOverlay'
+import {
+  OVERLAY_PANEL_CLASS,
+  useOverlay,
+  type OverlayShellProps,
+} from '@/components/shared/useOverlay'
 
-type CenterModalLabelProps =
-  | { labelledBy: string; ariaLabel?: never }
-  | { ariaLabel: string; labelledBy?: never }
-
-export type CenterModalProps = {
-  open: boolean
-  onClose: () => void
-  children: ReactNode
-  className?: string
-  /** Focus this element on open instead of the panel's first focusable descendant. */
-  initialFocus?: RefObject<HTMLElement | null>
-  ref?: Ref<HTMLDivElement>
-} & CenterModalLabelProps
+export type CenterModalProps = OverlayShellProps<HTMLDivElement>
 
 /** The centered popup shell (Delete confirm, Info tooltip, Custom tag modal, Group editor…). */
 export function CenterModal({

@@ -15,14 +15,21 @@ doesn't belong to any one `src/features/**` folder. See `specs.md` §10.5.
   case this exists for — only the topmost one handles Escape/Tab-trap/
   initial-focus, and the scroll lock is refcounted against the stack so
   closing the nested modal doesn't unlock the page while the sheet behind
-  it is still open. Not part of the public barrel.
+  it is still open. Not part of the public barrel. Also owns
+  `OverlayLabelProps` (the `labelledBy`-xor-`ariaLabel` union) and
+  `OverlayShellProps<T>` — the shared prop surface both `BottomSheet` and
+  `CenterModal` re-export their public `Props` type as, so the two shells
+  can't drift apart on `open`/`onClose`/`children`/`className`/
+  `initialFocus`/`ref` the way they used to (see `specs.md` §11, 2026-08-19).
 - `BottomSheet.tsx` — sliding-sheet shell with real drag-to-dismiss
   (Pointer Events, `setPointerCapture`/`pointercancel`/`lostpointercapture`
   all handled — the last one is the reliable catch-all for a drag that ends
   outside the window). Highest-reuse shell (Filter/Movement/Profile/Add
-  sheets, Tag picker). Accepts `initialFocus`/`ref`.
+  sheets, Tag picker). `BottomSheetProps` is `OverlayShellProps<HTMLDivElement>`
+  (see `useOverlay.ts` above). Accepts `initialFocus`/`ref`.
 - `CenterModal.tsx` — centered popup shell (Delete confirm, Info tooltip,
-  Custom tag modal, Group editor). Accepts `initialFocus`/`ref`.
+  Custom tag modal, Group editor). `CenterModalProps` is
+  `OverlayShellProps<HTMLDivElement>` too. Accepts `initialFocus`/`ref`.
 - `IconAvatar.tsx` — colored rounded-square icon badge; size/tint are
   `Record` lookups onto the `chart-1..5`/status tokens, not new hex.
 - `MovimientoRow.tsx` + `movimientoView.ts` — the movement list row, and
