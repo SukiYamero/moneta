@@ -69,6 +69,7 @@
       "evening": "Good evening"
     },
     "notifications": "Notifications",
+    "guestName": "Guest",
     "searchPlaceholder": "Search movements",
     "balance": {
       "title": "Total balance",

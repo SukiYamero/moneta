@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/lib/authStore'
@@ -27,19 +27,46 @@ const BootScreen = () => {
 export const RequireAuth = ({ children }: { children: ReactNode }) => {
   const status = useAuthStore((s) => s.status)
   const driveOptIn = useAuthStore((s) => s.driveOptIn)
+  // 'authenticating' is ambiguous on its own: the mount-time restore() call
+  // below sets it (the real boot-flash span, specs.md §10.9) but so does an
+  // explicit, user-initiated login() from an already-visible WelcomeScreen
+  // (same status, different cause). `booted` disambiguates them — it flips
+  // true once the initial restore attempt settles (or immediately, if this
+  // component never mounted with 'idle' to begin with), so BootScreen is
+  // reserved for the genuine cold-boot span. After that, 'authenticating'
+  // falls through to WelcomeScreen, which owns its own inline busy state
+  // (§10.9 tier 3) — a full-screen swap mid-tap would be a regression the
+  // boot fix introduced, not the fix itself.
+  const booted = useRef(false)
+  // Guards the effect body itself, not just its restore() call: StrictMode
+  // (main.tsx) double-invokes this effect on every mount, same component
+  // instance (refs survive the pair). Without this guard, the *second*
+  // invocation would see `status` already flipped to 'authenticating' by
+  // the first invocation's synchronous pre-await work, take the "wasn't
+  // idle" branch below, and mark `booted` true immediately — ending the
+  // boot window before the one real restore() call has actually settled.
+  const attemptedBoot = useRef(false)
 
   useEffect(() => {
-    if (useAuthStore.getState().status === 'idle') void useAuthStore.getState().restore()
+    if (attemptedBoot.current) return
+    attemptedBoot.current = true
+    if (useAuthStore.getState().status === 'idle') {
+      void useAuthStore
+        .getState()
+        .restore()
+        .finally(() => {
+          booted.current = true
+        })
+    } else {
+      booted.current = true
+    }
   }, [])
 
   // Guest is a distinct status, checked first: it must never fall through
   // to the driveOptIn check below (specs.md §10.10 — a guest has no Drive
   // opt-in to answer, and never did).
   if (status === 'guest') return <>{children}</>
-  // 'authenticating' covers the whole span of restore()'s network calls, not
-  // just an instant — rendering WelcomeScreen here is the boot-flash bug
-  // this track fixes (specs.md §10.9).
-  if (status === 'authenticating') return <BootScreen />
+  if (status === 'authenticating' && !booted.current) return <BootScreen />
   if (status !== 'authenticated') return <WelcomeScreen />
   if (driveOptIn === 'pending') return <DrivePermissionScreen />
   return <>{children}</>
