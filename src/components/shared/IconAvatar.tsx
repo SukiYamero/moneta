@@ -1,5 +1,6 @@
 import type { LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { TINT_CLASSES } from '@/components/shared/tintClasses'
 
 export type IconAvatarSize = 'sm' | 'md' | 'lg'
 
@@ -25,18 +26,6 @@ const SIZE_CLASSES: Record<IconAvatarSize, string> = {
   lg: 'size-13 rounded-xl [&_svg]:size-6',
 }
 
-const TINT_CLASSES: Record<IconAvatarTint, string> = {
-  emerald: 'bg-chart-1/15 text-chart-1',
-  blue: 'bg-chart-2/15 text-chart-2',
-  amber: 'bg-chart-3/15 text-chart-3',
-  rose: 'bg-chart-4/15 text-chart-4',
-  purple: 'bg-chart-5/15 text-chart-5',
-  success: 'bg-success/15 text-success',
-  danger: 'bg-danger/15 text-danger',
-  info: 'bg-info/15 text-info',
-  neutral: 'bg-muted text-muted-foreground',
-}
-
 export interface IconAvatarProps {
   icon: LucideIcon
   size?: IconAvatarSize
@@ -50,7 +39,7 @@ export const IconAvatar = ({ icon: Icon, size = 'md', tint, className }: IconAva
       className={cn(
         'flex shrink-0 items-center justify-center',
         SIZE_CLASSES[size],
-        TINT_CLASSES[tint],
+        TINT_CLASSES[tint].badge,
         className,
       )}
       aria-hidden="true"

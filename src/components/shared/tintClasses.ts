@@ -1,0 +1,61 @@
+import type { IconAvatarTint } from '@/components/shared/IconAvatar'
+
+/**
+ * Single source of truth for which chart/status token each tint name
+ * resolves to, in every shape a consumer needs. Tailwind's static scanner
+ * needs each class name to appear as a literal string, so the three shapes
+ * can't be built by concatenating a shorter per-tint fragment at runtime —
+ * but they can still live in one exhaustive table instead of one per
+ * consumer, which is what let `TagChip`'s own copy silently carry its own
+ * "amber = chart-3" pairing instead of `IconAvatar`'s.
+ * `icon`: text-only, for an always-colored icon on a neutral surface.
+ * `badge`: translucent bg + text, `IconAvatar`'s filled square.
+ * `pill`: `badge` plus a border, `TagChip`'s selected treatment.
+ */
+export const TINT_CLASSES: Record<IconAvatarTint, { icon: string; badge: string; pill: string }> = {
+  emerald: {
+    icon: 'text-chart-1',
+    badge: 'bg-chart-1/15 text-chart-1',
+    pill: 'border-chart-1/40 bg-chart-1/15 text-chart-1',
+  },
+  blue: {
+    icon: 'text-chart-2',
+    badge: 'bg-chart-2/15 text-chart-2',
+    pill: 'border-chart-2/40 bg-chart-2/15 text-chart-2',
+  },
+  amber: {
+    icon: 'text-chart-3',
+    badge: 'bg-chart-3/15 text-chart-3',
+    pill: 'border-chart-3/40 bg-chart-3/15 text-chart-3',
+  },
+  rose: {
+    icon: 'text-chart-4',
+    badge: 'bg-chart-4/15 text-chart-4',
+    pill: 'border-chart-4/40 bg-chart-4/15 text-chart-4',
+  },
+  purple: {
+    icon: 'text-chart-5',
+    badge: 'bg-chart-5/15 text-chart-5',
+    pill: 'border-chart-5/40 bg-chart-5/15 text-chart-5',
+  },
+  success: {
+    icon: 'text-success',
+    badge: 'bg-success/15 text-success',
+    pill: 'border-success/40 bg-success/15 text-success',
+  },
+  danger: {
+    icon: 'text-danger',
+    badge: 'bg-danger/15 text-danger',
+    pill: 'border-danger/40 bg-danger/15 text-danger',
+  },
+  info: {
+    icon: 'text-info',
+    badge: 'bg-info/15 text-info',
+    pill: 'border-info/40 bg-info/15 text-info',
+  },
+  neutral: {
+    icon: 'text-muted-foreground',
+    badge: 'bg-muted text-muted-foreground',
+    pill: 'border-border-strong bg-muted text-foreground',
+  },
+}
