@@ -285,25 +285,44 @@ Shipped `createLocalRepo(): Repo` in `src/lib/repo.local.ts`, backed by
 `db.test.ts`), `bun run check` green. Implementation notes not obvious from
 the port spec alone:
 
-- **`ready()`** memoizes its in-flight promise per repo instance (closure
-  state, not module-global) so concurrent callers on the same `Repo` never
-  seed/migrate twice; a failed attempt clears the memo so a later call can
-  retry. Fresh install → seeds `CONFIG_SEMILLA`. `Config.schemaVersion` <
-  `SCHEMA_VERSION` → dispatches through a `Record<number, Migration>`
-  registry (`migrateSchema(from, to, registry)`, exported for unit testing
+- **`ready()`** memoizes its in-flight promise in a module-level `WeakMap`
+  keyed by the `db` connection (2026-08-18 revision — see §11; the first cut
+  keyed it per repo instance, so two `createLocalRepo()` instances over the
+  same `db` didn't dedupe a concurrent `ready()`), so concurrent callers
+  across every `Repo` wrapping that database never seed/migrate twice. The
+  memo is cleared once an attempt **settles** — on success as well as on
+  failure — so a later, non-overlapping call always re-verifies against
+  current stored state (cheap: a no-op once `schemaVersion` is current)
+  rather than trusting a permanent "already ready" flag. Fresh install →
+  seeds `CONFIG_SEMILLA`. `Config.schemaVersion` < `SCHEMA_VERSION` →
+  dispatches through a `Record<number, Migration>` registry
+  (`migrateSchema(from, to, registry)`, exported for unit testing
   independently of the real registry, which is empty at v1). `>
 SCHEMA_VERSION` → `RepoError('schema_mismatch')`, no downgrade.
 - **`CrudRepo<T>` is one generic factory** parameterized per entity by
-  `{ table, dateField, seccionField, tiebreakField, compoundIndex, validate
-}` — `movimientos` uses `fecha`/`seccion`/`createdAt`, `activos` uses
-  `fechaActualizacion`/`seccion`/no tiebreak field. This is how
-  `dateFrom`/`dateTo`/`seccion` in the generic `ListQuery<T>` resolve to a
-  concrete field per entity without one-off methods.
+  `{ table, dateField, seccionField, tiebreakField, compoundIndex, validate,
+entityLabel }` — `movimientos` uses `fecha`/`seccion`/`createdAt`/
+  `"movimiento"`, `activos` uses `fechaActualizacion`/`seccion`/no tiebreak
+  field/`"activo"`. This is how `dateFrom`/`dateTo`/`seccion` in the generic
+  `ListQuery<T>` resolve to a concrete field per entity without one-off
+  methods; `entityLabel` names the entity in `update()`/`remove()`'s
+  not-found error message instead of leaking the internal `dateField` name.
+- **`update()`/`remove()` run their read-check-write as one atomic
+  `db.transaction('rw', table, …)`** (2026-08-18 revision — see §11; the
+  first cut did an unsynchronized `table.get` then a separate `table.put`/
+  `table.delete`, which let two concurrent `update()` calls on the same id
+  silently lose one's write). Validation still runs against the merged
+  result inside the transaction.
 - **Keyset pagination, with a real fast path — not just a safe API shape.**
-  The opaque `cursor` is a base64 JSON envelope of the last-returned row's
-  `{ sortValue, tiebreakValue, id }`. `list()` has two implementations
-  behind it now (2026-08-18 revision, see §11 — the first cut only had the
-  slow one):
+  The opaque `cursor` is a base64 JSON envelope of `{ sortBy, sortDir,
+sortValue, tiebreakValue, id }` — `sortBy`/`sortDir` record which query
+  minted the cursor (2026-08-18 addition — see §11; the first cut omitted
+  them, so replaying a cursor under a different `sortBy`/`sortDir` silently
+  misinterpreted `sortValue` against the wrong field/order instead of
+  erroring). `decodeCursor` takes the current call's `sortBy`/`sortDir` and
+  throws `RepoError('invalid_input')` on any mismatch. `list()` has two
+  implementations behind it now (2026-08-18 revision, see §11 — the first
+  cut only had the slow one):
   - **Fast path** (`tryFastPath`), used whenever `sortBy` is the entity's
     own indexed date field (the default) and a `limit` is given — the
     common case, and the one §10.3's "years of `Movimiento` rows" rationale
@@ -389,6 +408,14 @@ tiebreakValue }` bigger than the margin — e.g. a bulk import that
   malformed number could reach storage). All failures are
   `RepoError('invalid_input', …)` — see the new `RepoErrorCode` member
   below — and the row is never written.
+- **`limit` is validated** (2026-08-18 addition — see §11): `list()`
+  rejects `0`, negatives, non-integers, `NaN`, and `Infinity` with
+  `RepoError('invalid_input')` before either `list()` implementation runs.
+  The first cut let `limit: 0` through, which always produced an empty
+  `page`, making `lastItem` `undefined` and silently dropping `nextCursor`
+  even when more rows existed — "give me zero rows" isn't a meaningful
+  pagination request, so it errors instead of returning an ambiguous
+  `{ items: [] }`.
 - **`updateConfig`** rejects a patch that sets `schemaVersion` explicitly
   (`RepoError('invalid_input')`) rather than silently dropping it — the
   field is structurally reachable through `Partial<Config>`, so a silent
@@ -848,6 +875,58 @@ b DESC`, not a mix) and made the fast path's range-bound construction
   cases whose expectations depended on the old convention were updated to
   match (documented in their own test descriptions/comments, not just the
   diff).
+- 2026-08-18 — **`update()`/`remove()` made atomic (code-review fix, HIGH).**
+  Both used to do `table.get(id)` then a second, unsynchronized `table.put`/
+  `table.delete` call — two concurrent `update()` calls on the same id could
+  both read the same stale row, each merge its own patch, and the later
+  `put` would silently overwrite the earlier one's write with no error
+  surfaced (reproduced: seed `monto: 100`, run
+  `Promise.all([update(id,{monto:200}), update(id,{categoria:'cat_otro'})])`
+  → `monto: 200` vanished). Fixed by wrapping the whole read-merge-write (and
+  read-then-delete) in `db.transaction('rw', table, …)`, matching the
+  atomicity `addMany`/`removeMany` already had. `remove()`'s equivalent bug
+  was latent (harmless double-delete today, no data loss) but got the same
+  treatment for consistency — same shape, same fix. Validation still runs
+  against the **merged** result inside the transaction, unchanged.
+- 2026-08-18 — **Cursor payload now carries `sortBy`/`sortDir`; a replay
+  under a different one is rejected (code-review fix, MEDIUM).** `list()`'s
+  cursor used to encode only `{ sortValue, tiebreakValue, id }`, with no
+  record of which query minted it — replaying a cursor from
+  `list({ sortBy: 'monto', sortDir: 'asc' })` against a call defaulting to
+  `sortBy: 'fecha', sortDir: 'desc'` silently misinterpreted `sortValue` as
+  a `fecha` bound, excluding every row and returning `{ items: [] }` —
+  indistinguishable from "no data". `CursorPayload` now includes `sortBy`/
+  `sortDir`; `decodeCursor` takes the current call's `sortBy`/`sortDir` and
+  throws `RepoError('invalid_input')` on any mismatch. A loud error beats a
+  silently-wrong empty page.
+- 2026-08-18 — **`limit` is validated; `0`/negative/non-integer/`NaN`/
+  `Infinity` now reject instead of silently dropping `nextCursor` (code-review
+  fix, LOW).** With `limit: 0`, `page` was always `[]`, so `lastItem` was
+  `undefined` and `nextCursor` got dropped even when more rows existed,
+  leaving the caller stuck on `{ items: [] }` with no way to page forward.
+  "Give me zero rows" isn't a meaningful pagination request, so `list()` now
+  validates `limit` as a positive integer up front and throws
+  `RepoError('invalid_input')` otherwise — an honest error over an ambiguous
+  empty page.
+- 2026-08-18 — **`ready()`'s in-flight memo moved from per-repo-instance
+  closure state to a module-level `WeakMap` keyed by the `db` connection
+  (code-review fix, LOW, latent).** Two `createLocalRepo()` instances over
+  the same `db` used to have separate closures, so concurrent `ready()`
+  calls across instances didn't dedupe — harmless while the migration
+  registry is empty, but a real migration could then run twice against the
+  same IndexedDB store. The memo now lives keyed by `db` itself and is
+  cleared once an attempt **settles**, on success as well as on failure (the
+  old code only cleared on failure) — this still dedupes truly-concurrent
+  callers, and still lets a failed attempt retry, but a later,
+  non-overlapping call now always re-verifies against current stored state
+  (cheap: `performReady()` is a no-op once `schemaVersion` is current)
+  rather than trusting a permanent "already ready" flag that could go
+  stale.
+- 2026-08-18 — **`update()`'s not-found message no longer names the date
+  field (trivial code-review fix).** It rendered `no fecha entity with id
+"…"` — an internal field name (`dateField`) doing double duty as the
+  entity noun. `EntityConfig` gained an explicit `entityLabel` (`"movimiento"`
+  / `"activo"`) used by both `update()` and `remove()`'s not-found messages.
 
 ## 12. Backlog (pending verification / deferred work)
 

@@ -128,6 +128,11 @@ function makeComparator<T extends { id: EntityId }>(
 }
 
 interface CursorPayload {
+  // Which query minted this cursor — replaying it under a different
+  // sortBy/sortDir would reinterpret `sortValue`/`tiebreakValue` against the
+  // wrong field/order and silently misfilter (see specs.md §11, 2026-08-18).
+  sortBy: string
+  sortDir: 'asc' | 'desc'
   sortValue: unknown
   tiebreakValue: unknown
   id: EntityId
@@ -136,9 +141,12 @@ interface CursorPayload {
 function encodeCursor<T extends { id: EntityId }>(
   item: T,
   sortBy: keyof T,
+  sortDir: 'asc' | 'desc',
   tiebreakField: (keyof T & string) | undefined,
 ): string {
   const payload: CursorPayload = {
+    sortBy: String(sortBy),
+    sortDir,
     sortValue: item[sortBy],
     tiebreakValue: tiebreakField ? item[tiebreakField] : undefined,
     id: item.id,
@@ -146,15 +154,47 @@ function encodeCursor<T extends { id: EntityId }>(
   return btoa(encodeURIComponent(JSON.stringify(payload)))
 }
 
-function decodeCursor(cursor: string): CursorPayload {
+function decodeCursor(cursor: string, sortBy: string, sortDir: 'asc' | 'desc'): CursorPayload {
   try {
     const parsed = JSON.parse(decodeURIComponent(atob(cursor))) as Partial<CursorPayload>
-    if (typeof parsed !== 'object' || parsed === null || typeof parsed.id !== 'string') {
+    if (
+      typeof parsed !== 'object' ||
+      parsed === null ||
+      typeof parsed.id !== 'string' ||
+      typeof parsed.sortBy !== 'string' ||
+      (parsed.sortDir !== 'asc' && parsed.sortDir !== 'desc')
+    ) {
       throw new Error('malformed cursor payload')
     }
-    return { sortValue: parsed.sortValue, tiebreakValue: parsed.tiebreakValue, id: parsed.id }
+    if (parsed.sortBy !== sortBy || parsed.sortDir !== sortDir) {
+      // A cursor minted under a different sortBy/sortDir would have its
+      // sortValue/tiebreakValue reinterpreted against the wrong field/order —
+      // silently wrong results are worse than a loud, honest error.
+      throw new Error(
+        `cursor was minted for sortBy="${parsed.sortBy}"/sortDir="${parsed.sortDir}", ` +
+          `not the current sortBy="${sortBy}"/sortDir="${sortDir}"`,
+      )
+    }
+    return {
+      sortBy: parsed.sortBy,
+      sortDir: parsed.sortDir,
+      sortValue: parsed.sortValue,
+      tiebreakValue: parsed.tiebreakValue,
+      id: parsed.id,
+    }
   } catch (cause) {
     throw new RepoError('invalid pagination cursor', 'invalid_input', { cause })
+  }
+}
+
+// `limit` drives pagination's "more data" signal (`nextCursor`); 0 rows is
+// not a meaningful page request and would silently drop that signal (an
+// empty `page` makes `lastItem` undefined — see specs.md §11, 2026-08-18).
+// Erroring is more honest than returning an ambiguous `{ items: [] }`.
+function validateLimit(limit: number | undefined): void {
+  if (limit === undefined) return
+  if (!Number.isInteger(limit) || limit < 1) {
+    throw new RepoError(`limit must be a positive integer (got ${limit})`, 'invalid_input')
   }
 }
 
@@ -181,6 +221,10 @@ interface EntityConfig<T extends { id: EntityId }> {
   fastIndex: string
   fastSeccionIndex: string
   validate: (item: T) => void
+  // Human-readable noun for not_found error messages, e.g. "movimiento" —
+  // kept distinct from `dateField` so the message never leaks an internal
+  // field name (a real bug: it used to render "no fecha entity...").
+  entityLabel: string
 }
 
 // A cluster of rows tied on the full (date, tiebreak) key bigger than this
@@ -237,6 +281,7 @@ function createCrudRepo<T extends { id: EntityId }>(
     fastIndex,
     fastSeccionIndex,
     validate,
+    entityLabel,
   } = config
 
   async function fetchCandidates(
@@ -286,7 +331,8 @@ function createCrudRepo<T extends { id: EntityId }>(
 
     let afterCursor = sorted
     if (cursor !== undefined) {
-      const cursorItem = buildCursorItem<T>(decodeCursor(cursor), sortBy, tiebreakField)
+      const decoded = decodeCursor(cursor, String(sortBy), sortDir)
+      const cursorItem = buildCursorItem<T>(decoded, sortBy, tiebreakField)
       afterCursor = sorted.filter((item) => comparator(item, cursorItem) > 0)
     }
 
@@ -296,7 +342,9 @@ function createCrudRepo<T extends { id: EntityId }>(
 
     return {
       items: page,
-      ...(hasMore && lastItem ? { nextCursor: encodeCursor(lastItem, sortBy, tiebreakField) } : {}),
+      ...(hasMore && lastItem
+        ? { nextCursor: encodeCursor(lastItem, sortBy, sortDir, tiebreakField) }
+        : {}),
     }
   }
 
@@ -326,7 +374,7 @@ function createCrudRepo<T extends { id: EntityId }>(
 
     let cursorItem: T | undefined
     if (cursor !== undefined) {
-      const payload = decodeCursor(cursor)
+      const payload = decodeCursor(cursor, String(dateField), sortDir)
       cursorItem = buildCursorItem<T>(payload, dateField, tiebreakField)
       // Start the range at the cursor's own position, inclusive — narrows
       // the query to exactly what hasn't been returned yet instead of
@@ -375,7 +423,7 @@ function createCrudRepo<T extends { id: EntityId }>(
     return {
       items: page,
       ...(hasMore && lastItem
-        ? { nextCursor: encodeCursor(lastItem, dateField, tiebreakField) }
+        ? { nextCursor: encodeCursor(lastItem, dateField, sortDir, tiebreakField) }
         : {}),
     }
   }
@@ -384,6 +432,7 @@ function createCrudRepo<T extends { id: EntityId }>(
     await ensureReady()
     try {
       const { dateFrom, dateTo, seccion, sortDir = 'desc', limit, cursor } = query
+      validateLimit(limit)
       const sortBy = query.sortBy ?? dateField
 
       if (sortBy === dateField && limit !== undefined) {
@@ -438,14 +487,20 @@ function createCrudRepo<T extends { id: EntityId }>(
   async function update(id: EntityId, patch: Partial<Omit<T, 'id'>>): Promise<T> {
     await ensureReady()
     try {
-      const existing = await table.get(id)
-      if (!existing) {
-        throw new RepoError(`no ${String(dateField)} entity with id "${id}"`, 'not_found')
-      }
-      const merged = { ...existing, ...patch, id } as T
-      validate(merged)
-      await table.put(merged)
-      return merged
+      // Read-merge-write must be one atomic unit: two concurrent updates on
+      // the same id that each run get-then-put as separate dexie calls both
+      // read the same stale row and the later `put` silently overwrites the
+      // earlier one's patch (see specs.md §11, 2026-08-18).
+      return await db.transaction('rw', table, async () => {
+        const existing = await table.get(id)
+        if (!existing) {
+          throw new RepoError(`no ${entityLabel} with id "${id}"`, 'not_found')
+        }
+        const merged = { ...existing, ...patch, id } as T
+        validate(merged)
+        await table.put(merged)
+        return merged
+      })
     } catch (error) {
       wrapUnknown(error)
     }
@@ -454,11 +509,16 @@ function createCrudRepo<T extends { id: EntityId }>(
   async function remove(id: EntityId): Promise<void> {
     await ensureReady()
     try {
-      const existing = await table.get(id)
-      if (!existing) {
-        throw new RepoError(`no entity with id "${id}"`, 'not_found')
-      }
-      await table.delete(id)
+      // Same atomicity treatment as `update()` — today's worst case without
+      // it is a harmless double-delete, but the unsynchronized get-then-delete
+      // shape is the same latent bug.
+      await db.transaction('rw', table, async () => {
+        const existing = await table.get(id)
+        if (!existing) {
+          throw new RepoError(`no ${entityLabel} with id "${id}"`, 'not_found')
+        }
+        await table.delete(id)
+      })
     } catch (error) {
       wrapUnknown(error)
     }
@@ -511,28 +571,41 @@ async function performReady(): Promise<void> {
   await db.config.update(CONFIG_ID, { schemaVersion: SCHEMA_VERSION })
 }
 
-// --- factory -----------------------------------------------------------------
+// --- ready() in-flight memo, scoped to the database ------------------------
+//
+// Keyed by the `db` connection itself (a `WeakMap`, not a plain module
+// variable) rather than by `createLocalRepo()` instance: two repo instances
+// wrapping the same underlying database must share one in-flight `ready()`
+// call, or two concurrent instances could each run a migration against the
+// same IndexedDB store. Cleared once the attempt settles — on success as
+// much as on failure — so it only dedupes truly-concurrent callers; any
+// later, non-overlapping call re-verifies against current stored state
+// (cheap and idempotent) instead of trusting a permanent "already ready"
+// flag that could go stale.
+const readyPromises = new WeakMap<typeof db, Promise<void>>()
 
-export function createLocalRepo(): Repo {
-  // Memoized per repo instance: two concurrent `ready()` callers on the same
-  // instance share one in-flight promise, so migrations never run twice. A
-  // failed attempt clears the memo so a later retry can re-run it.
-  let readyPromise: Promise<void> | null = null
-
-  function ready(): Promise<void> {
-    if (!readyPromise) {
-      readyPromise = performReady().catch((error: unknown) => {
-        readyPromise = null
+function ready(): Promise<void> {
+  let promise = readyPromises.get(db)
+  if (!promise) {
+    promise = performReady()
+      .catch((error: unknown) => {
         throw error instanceof RepoError
           ? error
           : new RepoError(error instanceof Error ? error.message : String(error), 'unknown', {
               cause: error,
             })
       })
-    }
-    return readyPromise
+      .finally(() => {
+        readyPromises.delete(db)
+      })
+    readyPromises.set(db, promise)
   }
+  return promise
+}
 
+// --- factory -----------------------------------------------------------------
+
+export function createLocalRepo(): Repo {
   const movimientos = createCrudRepo<Movimiento>(
     {
       table: db.movimientos as Table<Movimiento, EntityId, Movimiento>,
@@ -543,6 +616,7 @@ export function createLocalRepo(): Repo {
       fastIndex: '[fecha+createdAt]',
       fastSeccionIndex: '[seccion+fecha+createdAt]',
       validate: validateMovimiento,
+      entityLabel: 'movimiento',
     },
     ready,
   )
@@ -557,6 +631,7 @@ export function createLocalRepo(): Repo {
       fastIndex: '[fechaActualizacion+id]',
       fastSeccionIndex: '[seccion+fechaActualizacion+id]',
       validate: validateActivo,
+      entityLabel: 'activo',
     },
     ready,
   )
