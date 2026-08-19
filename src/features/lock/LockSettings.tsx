@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useLockStore } from '@/lib/lockStore'
 import { Button } from '@/components/ui/button'
+import { enableLockErrorCopy } from '@/features/lock/errorCopy'
 
 export function LockSettings() {
   const enabled = useLockStore((s) => s.enabled)
@@ -76,7 +77,7 @@ export function LockSettings() {
       </Button>
       {error && (
         <p role="alert" className="text-destructive text-sm">
-          {error}
+          {enableLockErrorCopy(error)}
         </p>
       )}
     </div>

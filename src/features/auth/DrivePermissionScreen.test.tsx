@@ -50,10 +50,11 @@ describe('DrivePermissionScreen', () => {
     expect(screen.getByRole('button', { name: /ahora no/i })).toBeDisabled()
   })
 
-  it('shows a real inline error on failure and stays usable', () => {
-    useAuthStore.setState({ driveError: 'drive: 403' })
+  it('shows a Spanish, actionable inline error on failure and stays usable — never the raw message', () => {
+    useAuthStore.setState({ driveError: 'drive: list 403' })
     render(<DrivePermissionScreen />)
-    expect(screen.getByRole('alert')).toHaveTextContent('403')
+    expect(screen.getByRole('alert')).toHaveTextContent(/no se pudo conectar con drive/i)
+    expect(screen.queryByText(/403/)).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: /permitir y continuar/i })).toBeEnabled()
     expect(screen.getByRole('button', { name: /ahora no/i })).toBeEnabled()
   })

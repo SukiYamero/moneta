@@ -31,9 +31,17 @@ describe('WelcomeScreen', () => {
     expect(button).toBeDisabled()
   })
 
-  it('shows an inline error when login fails', () => {
+  it('shows a Spanish, actionable error when login fails — never the raw message', () => {
     useAuthStore.setState({ status: 'error', error: 'auth: access_denied' })
     render(<WelcomeScreen />)
-    expect(screen.getByRole('alert')).toHaveTextContent('access_denied')
+    expect(screen.getByRole('alert')).toHaveTextContent(/cancelaste el inicio de sesión/i)
+    expect(screen.queryByText(/access_denied/i)).not.toBeInTheDocument()
+  })
+
+  it('falls back to a generic Spanish message for an unmapped error', () => {
+    useAuthStore.setState({ status: 'error', error: 'auth: some_new_gis_error_code' })
+    render(<WelcomeScreen />)
+    expect(screen.getByRole('alert')).toHaveTextContent(/no se pudo iniciar sesión/i)
+    expect(screen.queryByText(/some_new_gis_error_code/i)).not.toBeInTheDocument()
   })
 })

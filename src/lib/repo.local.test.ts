@@ -1,19 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { db } from '@/lib/db'
+import { testRepoContract } from '@/lib/repo.contract'
 import {
   __resetReadyMemoForTests,
   createLocalRepo,
   migrateSchema,
   type Migration,
 } from '@/lib/repo.local'
-import {
-  CONFIG_SEMILLA,
-  SCHEMA_VERSION,
-  type Activo,
-  type Config,
-  type Moneda,
-  type Movimiento,
-} from '@/lib/schema'
+import { CONFIG_SEMILLA, SCHEMA_VERSION, type Activo, type Movimiento } from '@/lib/schema'
 
 afterEach(async () => {
   await db.movimientos.clear()
@@ -51,6 +45,13 @@ function activo(overrides: Partial<Activo> = {}): Activo {
     ...overrides,
   }
 }
+
+// Behavior every Repo implementation must agree on (docs/error-handling.md
+// §6) — run here and in repo.fake.test.ts against the same suite. Anything
+// below this point in the file is implementation-specific to the dexie-
+// backed repo (fast path, ready()/migration mechanics, cursor identity
+// binding, message-text regressions, concurrency mechanics).
+testRepoContract(() => createLocalRepo())
 
 describe('migrateSchema (dispatch registry)', () => {
   it('runs every migration from fromVersion+1 through toVersion, in order', async () => {
@@ -156,36 +157,6 @@ describe('ready() / schemaVersion gate', () => {
 })
 
 describe('movimientos CRUD', () => {
-  it('adds and gets a movimiento', async () => {
-    const repo = createLocalRepo()
-    const m = movimiento()
-    const added = await repo.movimientos.add(m)
-    expect(added).toEqual(m)
-    const fetched = await repo.movimientos.get(m.id)
-    expect(fetched).toEqual(m)
-  })
-
-  it('get() on a missing id returns undefined, not a throw', async () => {
-    const repo = createLocalRepo()
-    await expect(repo.movimientos.get('missing')).resolves.toBeUndefined()
-  })
-
-  it('updates an existing movimiento with a shallow patch', async () => {
-    const repo = createLocalRepo()
-    const m = await repo.movimientos.add(movimiento())
-    const updated = await repo.movimientos.update(m.id, { monto: 2000, nota: 'ajustado' })
-    expect(updated.monto).toBe(2000)
-    expect(updated.nota).toBe('ajustado')
-    expect(updated.id).toBe(m.id)
-  })
-
-  it('update() on a missing id throws RepoError(not_found)', async () => {
-    const repo = createLocalRepo()
-    await expect(repo.movimientos.update('missing', { monto: 1 })).rejects.toMatchObject({
-      code: 'not_found',
-    })
-  })
-
   it('update() not_found error names the entity, not the date field it happens to sort by', async () => {
     const repo = createLocalRepo()
     // Regression for a message bug: it used to render "no fecha entity..."
@@ -198,18 +169,6 @@ describe('movimientos CRUD', () => {
     )
   })
 
-  it('removes an existing movimiento', async () => {
-    const repo = createLocalRepo()
-    const m = await repo.movimientos.add(movimiento())
-    await repo.movimientos.remove(m.id)
-    await expect(repo.movimientos.get(m.id)).resolves.toBeUndefined()
-  })
-
-  it('remove() on a missing id throws RepoError(not_found)', async () => {
-    const repo = createLocalRepo()
-    await expect(repo.movimientos.remove('missing')).rejects.toMatchObject({ code: 'not_found' })
-  })
-
   it('add() with a duplicate id rejects as invalid_input, naming the id, not unknown', async () => {
     const repo = createLocalRepo()
     const m = await repo.movimientos.add(movimiento())
@@ -220,22 +179,9 @@ describe('movimientos CRUD', () => {
     await expect(repo.movimientos.add({ ...m })).rejects.toThrow(new RegExp(m.id))
   })
 
-  it('does not mutate the caller-supplied object on add()', async () => {
+  it('removeMany() not_found error names the entity too, same as remove()/update()', async () => {
     const repo = createLocalRepo()
-    const m = movimiento()
-    const frozen = { ...m }
-    await repo.movimientos.add(m)
-    expect(m).toEqual(frozen)
-  })
-
-  it('returns fresh objects: mutating a read result never affects stored data', async () => {
-    const repo = createLocalRepo()
-    const m = await repo.movimientos.add(movimiento())
-    const read = await repo.movimientos.get(m.id)
-    // biome/ts: intentional in-place mutation of the *returned* object only
-    ;(read as Movimiento).monto = 999_999
-    const readAgain = await repo.movimientos.get(m.id)
-    expect(readAgain?.monto).toBe(m.monto)
+    await expect(repo.movimientos.removeMany(['missing'])).rejects.toThrow(/movimiento with id/i)
   })
 })
 
@@ -270,31 +216,6 @@ describe('movimientos CRUD — update()/remove() atomicity', () => {
 })
 
 describe('movimientos bulk paths (addMany / removeMany)', () => {
-  it('addMany adds every item in one transaction', async () => {
-    const repo = createLocalRepo()
-    const items = [movimiento(), movimiento(), movimiento()]
-    const added = await repo.movimientos.addMany(items)
-    expect(added).toHaveLength(3)
-    const { items: stored } = await repo.movimientos.list()
-    expect(stored).toHaveLength(3)
-  })
-
-  it('addMany is all-or-nothing: one bad row rolls back the whole batch', async () => {
-    const repo = createLocalRepo()
-    const dup = movimiento()
-    await repo.movimientos.add(dup)
-    const batch = [movimiento(), { ...dup }, movimiento()] // dup.id already exists -> ConstraintError
-    // Was `rejects.toBeInstanceOf(RepoError)` only — tightened to the
-    // specific code now that a duplicate id maps to 'invalid_input' (bad
-    // caller input) instead of the generic 'unknown' it fell through to
-    // before.
-    await expect(repo.movimientos.addMany(batch)).rejects.toMatchObject({
-      code: 'invalid_input',
-    })
-    const { items } = await repo.movimientos.list()
-    expect(items).toHaveLength(1) // only the original `dup`, batch fully rolled back
-  })
-
   it('addMany with a duplicate id names the offending id in the error message', async () => {
     const repo = createLocalRepo()
     const dup = await repo.movimientos.add(movimiento())
@@ -302,153 +223,9 @@ describe('movimientos bulk paths (addMany / removeMany)', () => {
       new RegExp(dup.id),
     )
   })
-
-  it('addMany rejects a batch with a duplicate id among its own items (no pre-existing row)', async () => {
-    const repo = createLocalRepo()
-    const selfDup = movimiento()
-    await expect(
-      repo.movimientos.addMany([movimiento(), selfDup, { ...selfDup }]),
-    ).rejects.toMatchObject({ code: 'invalid_input' })
-    const { items } = await repo.movimientos.list()
-    expect(items).toHaveLength(0) // nothing committed, including the two non-conflicting rows
-  })
-
-  it('removeMany removes every id in one transaction', async () => {
-    const repo = createLocalRepo()
-    const a = await repo.movimientos.add(movimiento())
-    const b = await repo.movimientos.add(movimiento())
-    await repo.movimientos.removeMany([a.id, b.id])
-    const { items } = await repo.movimientos.list()
-    expect(items).toHaveLength(0)
-  })
-
-  it('removeMany is all-or-nothing: one missing id rolls back the whole batch', async () => {
-    const repo = createLocalRepo()
-    const a = await repo.movimientos.add(movimiento())
-    await expect(repo.movimientos.removeMany([a.id, 'missing'])).rejects.toMatchObject({
-      code: 'not_found',
-    })
-    const { items } = await repo.movimientos.list()
-    expect(items).toHaveLength(1) // `a` was NOT removed despite being valid
-  })
-})
-
-describe('movimientos validation (money)', () => {
-  it('rejects monto <= 0', async () => {
-    const repo = createLocalRepo()
-    await expect(repo.movimientos.add(movimiento({ monto: 0 }))).rejects.toMatchObject({
-      code: 'invalid_input',
-    })
-    await expect(repo.movimientos.add(movimiento({ monto: -5 }))).rejects.toMatchObject({
-      code: 'invalid_input',
-    })
-  })
-
-  it('rejects a non-finite monto', async () => {
-    const repo = createLocalRepo()
-    await expect(repo.movimientos.add(movimiento({ monto: Number.NaN }))).rejects.toMatchObject({
-      code: 'invalid_input',
-    })
-    await expect(
-      repo.movimientos.add(movimiento({ monto: Number.POSITIVE_INFINITY })),
-    ).rejects.toMatchObject({
-      code: 'invalid_input',
-    })
-  })
-
-  it('rejects a non-ISO fecha', async () => {
-    const repo = createLocalRepo()
-    await expect(repo.movimientos.add(movimiento({ fecha: '01/01/2026' }))).rejects.toMatchObject({
-      code: 'invalid_input',
-    })
-    await expect(repo.movimientos.add(movimiento({ fecha: '2026-13-40' }))).rejects.toMatchObject({
-      code: 'invalid_input',
-    })
-  })
-
-  it('rejects a missing moneda', async () => {
-    const repo = createLocalRepo()
-    const bad = { ...movimiento(), moneda: '' as unknown as Moneda }
-    await expect(repo.movimientos.add(bad)).rejects.toMatchObject({ code: 'invalid_input' })
-  })
-
-  it('validates on update() too, not just add()', async () => {
-    const repo = createLocalRepo()
-    const m = await repo.movimientos.add(movimiento())
-    await expect(repo.movimientos.update(m.id, { monto: -1 })).rejects.toMatchObject({
-      code: 'invalid_input',
-    })
-  })
-
-  it('never silently coerces invalid input: the row is not written', async () => {
-    const repo = createLocalRepo()
-    const bad = movimiento({ monto: -1 })
-    await expect(repo.movimientos.add(bad)).rejects.toThrow()
-    await expect(repo.movimientos.get(bad.id)).resolves.toBeUndefined()
-  })
-})
-
-describe('activos validation (money)', () => {
-  it('rejects a non-ISO fechaActualizacion', async () => {
-    const repo = createLocalRepo()
-    await expect(
-      repo.activos.add(activo({ fechaActualizacion: 'not-a-date' })),
-    ).rejects.toMatchObject({
-      code: 'invalid_input',
-    })
-  })
-
-  it('rejects a missing moneda', async () => {
-    const repo = createLocalRepo()
-    const bad = { ...activo(), moneda: '' as unknown as Moneda }
-    await expect(repo.activos.add(bad)).rejects.toMatchObject({ code: 'invalid_input' })
-  })
-
-  it('rejects a negative or non-finite valorActual', async () => {
-    const repo = createLocalRepo()
-    await expect(repo.activos.add(activo({ valorActual: -1 }))).rejects.toMatchObject({
-      code: 'invalid_input',
-    })
-    await expect(repo.activos.add(activo({ valorActual: Number.NaN }))).rejects.toMatchObject({
-      code: 'invalid_input',
-    })
-  })
-
-  it('accepts a valid activo', async () => {
-    const repo = createLocalRepo()
-    const a = activo()
-    await expect(repo.activos.add(a)).resolves.toEqual(a)
-  })
 })
 
 describe('list() — filtering', () => {
-  it('empty store returns { items: [] }, never an error', async () => {
-    const repo = createLocalRepo()
-    await expect(repo.movimientos.list()).resolves.toEqual({ items: [] })
-  })
-
-  it('dateFrom/dateTo are inclusive on fecha', async () => {
-    const repo = createLocalRepo()
-    await repo.movimientos.addMany([
-      movimiento({ fecha: '2026-01-01' }),
-      movimiento({ fecha: '2026-01-05' }),
-      movimiento({ fecha: '2026-01-10' }),
-    ])
-    const { items } = await repo.movimientos.list({ dateFrom: '2026-01-01', dateTo: '2026-01-05' })
-    expect(items.map((m) => m.fecha).toSorted()).toEqual(['2026-01-01', '2026-01-05'])
-  })
-
-  it('seccion filters by exact match', async () => {
-    const repo = createLocalRepo()
-    await repo.movimientos.addMany([
-      movimiento({ seccion: 'sec_personal' }),
-      movimiento({ seccion: 'sec_trabajo' }),
-    ])
-    const { items } = await repo.movimientos.list({ seccion: 'sec_trabajo' })
-    expect(items).toHaveLength(1)
-    expect(items[0]?.seccion).toBe('sec_trabajo')
-  })
-
   it('combines seccion + date range (exercises the compound index path)', async () => {
     const repo = createLocalRepo()
     await repo.movimientos.addMany([
@@ -474,56 +251,6 @@ describe('list() — filtering', () => {
     const { items } = await repo.activos.list({ dateFrom: '2026-01-01', dateTo: '2026-01-31' })
     expect(items).toHaveLength(1)
     expect(items[0]?.fechaActualizacion).toBe('2026-01-01')
-  })
-})
-
-describe('list() — sorting', () => {
-  it('defaults to fecha desc', async () => {
-    const repo = createLocalRepo()
-    await repo.movimientos.addMany([
-      movimiento({ fecha: '2026-01-01' }),
-      movimiento({ fecha: '2026-01-03' }),
-      movimiento({ fecha: '2026-01-02' }),
-    ])
-    const { items } = await repo.movimientos.list()
-    expect(items.map((m) => m.fecha)).toEqual(['2026-01-03', '2026-01-02', '2026-01-01'])
-  })
-
-  it('breaks ties on the same fecha by createdAt, following sortDir uniformly', async () => {
-    const repo = createLocalRepo()
-    const older = movimiento({ fecha: '2026-01-01', createdAt: '2026-01-01T08:00:00.000Z' })
-    const newer = movimiento({ fecha: '2026-01-01', createdAt: '2026-01-01T09:00:00.000Z' })
-    await repo.movimientos.addMany([newer, older])
-    // sortDir applies to the whole key tuple, not just fecha: desc means the
-    // tiebreak is desc too, so the more-recently-created row sorts first —
-    // this is what lets the fast path express the order as one lexicographic
-    // range scan over `[fecha+createdAt]` with `.reverse()`.
-    const desc = await repo.movimientos.list()
-    expect(desc.items.map((m) => m.id)).toEqual([newer.id, older.id])
-    const asc = await repo.movimientos.list({ sortDir: 'asc' })
-    expect(asc.items.map((m) => m.id)).toEqual([older.id, newer.id])
-  })
-
-  it('breaks a full tie (same fecha AND createdAt) deterministically by id, following sortDir', async () => {
-    const repo = createLocalRepo()
-    const a = movimiento({ fecha: '2026-01-01', createdAt: '2026-01-01T08:00:00.000Z', id: 'aaa' })
-    const b = movimiento({ fecha: '2026-01-01', createdAt: '2026-01-01T08:00:00.000Z', id: 'bbb' })
-    await repo.movimientos.addMany([b, a])
-    const first = await repo.movimientos.list() // desc: id desc too -> 'bbb' first
-    const second = await repo.movimientos.list()
-    expect(first.items.map((m) => m.id)).toEqual(['bbb', 'aaa'])
-    expect(second.items.map((m) => m.id)).toEqual(first.items.map((m) => m.id))
-  })
-
-  it('honors an explicit sortBy/sortDir', async () => {
-    const repo = createLocalRepo()
-    await repo.movimientos.addMany([
-      movimiento({ monto: 300 }),
-      movimiento({ monto: 100 }),
-      movimiento({ monto: 200 }),
-    ])
-    const { items } = await repo.movimientos.list({ sortBy: 'monto', sortDir: 'asc' })
-    expect(items.map((m) => m.monto)).toEqual([100, 200, 300])
   })
 })
 
@@ -605,14 +332,6 @@ describe('list() — keyset pagination', () => {
     expect(page2.items.map((m) => m.fecha)).toEqual(['2026-01-02'])
   })
 
-  it('rejects a malformed cursor as invalid_input rather than crashing', async () => {
-    const repo = createLocalRepo()
-    await repo.movimientos.add(movimiento())
-    await expect(repo.movimientos.list({ cursor: 'not-a-real-cursor' })).rejects.toMatchObject({
-      code: 'invalid_input',
-    })
-  })
-
   it('rejects a cursor minted under a different sortBy/sortDir instead of silently returning nothing', async () => {
     const repo = createLocalRepo()
     await repo.movimientos.addMany([
@@ -650,60 +369,12 @@ describe('list() — keyset pagination', () => {
   })
 })
 
-describe('list() — limit validation', () => {
-  it.each([0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY])(
-    'rejects limit=%p as invalid_input rather than an ambiguous empty page',
-    async (limit) => {
-      const repo = createLocalRepo()
-      await repo.movimientos.add(movimiento())
-      await expect(repo.movimientos.list({ limit })).rejects.toMatchObject({
-        code: 'invalid_input',
-      })
-    },
-  )
-
-  it('accepts a positive integer limit', async () => {
-    const repo = createLocalRepo()
-    await repo.movimientos.add(movimiento())
-    const { items } = await repo.movimientos.list({ limit: 1 })
-    expect(items).toHaveLength(1)
-  })
-})
-
 describe('Config', () => {
-  it('shallow-merges a patch: untouched top-level keys survive', async () => {
-    const repo = createLocalRepo()
-    await repo.ready()
-    const before = await repo.getConfig()
-    const updated = await repo.updateConfig({ secciones: [] })
-    expect(updated.secciones).toEqual([])
-    expect(updated.categorias).toEqual(before.categorias)
-    expect(updated.preferencias).toEqual(before.preferencias)
-  })
-
   it('is atomic: getConfig() after updateConfig() reflects the full merged result', async () => {
     const repo = createLocalRepo()
     await repo.updateConfig({ secciones: [] })
     const config = await repo.getConfig()
     expect(config.secciones).toEqual([])
-  })
-
-  it('rejects a caller-supplied schemaVersion; the stored version is unchanged', async () => {
-    const repo = createLocalRepo()
-    await repo.ready()
-    await expect(repo.updateConfig({ schemaVersion: 999 })).rejects.toMatchObject({
-      code: 'invalid_input',
-    })
-    const config = await repo.getConfig()
-    expect(config.schemaVersion).toBe(SCHEMA_VERSION)
-  })
-
-  it('returns fresh objects: mutating a getConfig() result never affects stored data', async () => {
-    const repo = createLocalRepo()
-    const config = await repo.getConfig()
-    ;(config as Config).secciones.push({ id: 'hack', nombre: 'x', orden: 99 })
-    const again = await repo.getConfig()
-    expect(again.secciones).toEqual(CONFIG_SEMILLA.secciones)
   })
 })
 

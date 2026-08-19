@@ -89,6 +89,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ status: 'authenticated', session, user })
       await syncLockedSession(session)
     } catch {
+      // Deliberately silent, unlike syncLockedSession's console.warn
+      // (docs/error-handling.md §2): a silent-auth attempt failing is the
+      // routine, expected outcome for anyone without a live Google session
+      // (most first visits), not a symptom of something broken — logging it
+      // would be noise on every such visit, not a signal. It also isn't the
+      // last word on whether login works: falling back to 'idle' shows
+      // WelcomeScreen, and an explicit login() from there has its own
+      // error-visible path (status: 'error', §7's error-copy mapping) if
+      // the real problem persists.
       set({ status: 'idle' })
     }
   },

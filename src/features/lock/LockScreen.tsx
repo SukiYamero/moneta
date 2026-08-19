@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useLockStore } from '@/lib/lockStore'
+import { unlockErrorCopy } from '@/features/lock/errorCopy'
 
 export default function LockScreen() {
   const phase = useLockStore((s) => s.phase)
@@ -41,7 +42,7 @@ export default function LockScreen() {
       >
         Unlock
       </button>
-      {error && <p role="alert">{error}</p>}
+      {error && <p role="alert">{unlockErrorCopy(error)}</p>}
     </div>
   )
 }

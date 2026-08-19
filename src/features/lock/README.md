@@ -8,5 +8,9 @@ PIN/biometric lock UI, layered on top of auth.
 - `LockSettings.tsx` — enable/disable/re-lock controls. This is a **dev/test
   harness**, not the polished settings UI (`specs.md` §12) — the visual
   design is a separate, not-yet-written spec.
+- `errorCopy.ts` — maps a raw `pinLock.ts`/`lockStore.ts` error message to
+  the Spanish, actionable copy `LockScreen`/`LockSettings` actually render
+  (`unlockErrorCopy`, `enableLockErrorCopy`) — never the raw message
+  (`docs/error-handling.md` §7).
 
-All three read `useLockStore` (`@/lib/lockStore`) for state.
+All three screens read `useLockStore` (`@/lib/lockStore`) for state.

@@ -150,6 +150,28 @@ Never swallow:
 - Anything the user needs to act on (wrong PIN, network down, Drive
   permission denied).
 
+**One narrow exception to "never be silent": an expected negative outcome
+used as control flow, whose failure has its own separate, error-visible
+path.** `authStore.restore()` is the case that surfaced this during phase 2:
+it attempts a _silent_ Google re-auth on cold boot and falls back to
+`status: 'idle'` (→ `WelcomeScreen`) with a bare `catch {}`, no `console.warn`.
+This is not the same shape of bug as `syncLockedSession`. Silent auth failing
+is the routine outcome for anyone without a live Google session — most first
+visits — so a `console.warn` on every one of them would be noise, not
+signal, and would train whoever reads the console to ignore warnings from
+this function. Crucially, it's also not the last word: falling back to
+`WelcomeScreen` isn't a dead end where the failure disappears — an explicit
+`login()` from there has its own error-visible path (`status: 'error'`, §7's
+error-copy mapping) if the real problem persists. Compare `syncLockedSession`:
+its failure has no other path that will ever surface it — a broken vault
+stays broken and silently stale until this exact code logs it. The test
+before staying silent: **would a legitimate, frequent, non-buggy caller hit
+this branch, and does the user (or a developer) have another route to find
+out if it's actually broken?** If yes to both, silence is fine, but say so in
+a comment at the swallow site — the "why", not just "we chose to skip
+logging" — the same documentation duty as any other legitimate swallow. If
+either answer is no, log it.
+
 ## 3. Scope of a `try`
 
 A `try` block's boundary is a claim: "every failure in here means the same
@@ -307,10 +329,10 @@ and won't get re-run on every future change.
 implementation.** A single `repo.contract.test.ts` exporting a function like
 
 ```ts
-export function testRepoContract(makeRepo: () => Repo) {
+export function testRepoContract(makeRepo: () => Promise<Repo> | Repo): void {
   describe('Repo contract', () => {
     it('add() rejects a non-positive monto with invalid_input', async () => {
-      const repo = makeRepo()
+      const repo = await makeRepo()
       await expect(repo.movimientos.add(movimiento({ monto: 0 }))).rejects.toMatchObject({
         code: 'invalid_input',
       })
@@ -326,10 +348,31 @@ implementation's own test file still covers what's genuinely
 implementation-specific (dexie transaction semantics, keyset-pagination fast
 path). The contract suite is what makes divergence a compiler-visible test
 failure in whichever implementation lags, instead of something a reviewer
-has to notice by reading both files side by side. This is the enforcement
-mechanism recommended for phase 2 (§10) — not written yet, since
-`fix/a-repo` and `fix/d-fake` are mid-flight on the very files it would
-import from.
+has to notice by reading both files side by side.
+
+**Implemented phase 2, 2026-08-18** — `src/lib/repo.contract.ts` (a plain
+module, not `*.test.ts`, per the operator's decision: a bare-helper
+`*.test.ts` file gets collected by vitest as a standalone test file with no
+top-level test of its own). It found two real divergences on first run
+against the merged `fix/a-repo`/`fix/d-fake` code, both fixed the same
+session:
+
+1. `repo.fake.ts`'s `list()` had no `limit` validation at all — `limit: 0`
+   returned `{ items: [], nextCursor: '-1' }`, the exact ambiguous-empty-page
+   shape §4 warns about, where `repo.local.ts` correctly threw
+   `invalid_input`. Fixed by porting `repo.local.ts`'s `validateLimit`.
+2. `repo.fake.ts`'s `getConfig()`/`updateConfig()` returned `{ ...config }` —
+   a shallow copy whose nested `secciones`/`categorias`/`preferencias` were
+   still the _same array/object references_ as the live in-memory store, so
+   a caller mutating the returned config silently corrupted the fake's own
+   state. Invisible in `repo.local.ts` only because IndexedDB's own
+   structured-clone boundary happens to protect every read there — not a
+   guarantee `repo.fake.ts`'s plain in-memory variable gets for free. Fixed
+   with `structuredClone(config)`, the native platform API for exactly this
+   (no library, matches the "prefer native APIs" rule).
+
+Both are exactly the class of bug the suite exists to catch structurally
+instead of by manual review.
 
 The same principle generalizes past `Repo`: any time a second implementation
 of an existing interface appears, its error behavior is part of the contract,
@@ -343,17 +386,18 @@ transfer directly to components — a component's job is to render state and
 handle events, not to carry a `RepoErrorCode` switch. Different rules for a
 different job:
 
-- **Error boundaries.** None exist yet in this codebase — a render-time
-  throw anywhere currently white-screens the app. Two additive layers, no new
-  dependency:
+- **Error boundaries.** Two additive layers, no new dependency (implemented
+  phase 2, 2026-08-18):
   - `createBrowserRouter`'s built-in `errorElement` per top-level route
-    (`src/router.tsx`) — the idiomatic React Router (already a dependency)
-    mechanism for "this route crashed, show a fallback," native to the
-    framework already in use.
-  - One minimal class-component `ErrorBoundary` (the only way to catch a
-    render error in React — no hook does this) wrapping `AppLock` +
+    (`src/router.tsx`, rendering `src/RouteErrorFallback.tsx`) — the
+    idiomatic React Router (already a dependency) mechanism for "this route
+    crashed, show a fallback," native to the framework already in use.
+  - One minimal class-component `src/AppErrorBoundary.tsx` (the only way to
+    catch a render error in React — no hook does this) wrapping `AppLock` +
     `RouterProvider` in `main.tsx`, for failures outside the router's own
-    tree (e.g. `AppLock`/`LockScreen` itself).
+    tree (e.g. `AppLock`/`LockScreen` itself). Both log via `console.error`
+    and render a fixed Spanish fallback line — never the caught error's
+    message.
 - **A rejected promise in an event handler never floats unhandled.** The
   `void store.action()` pattern used throughout (`WelcomeScreen`,
   `DrivePermissionScreen`, `LockScreen`) is only safe because every store
@@ -369,16 +413,23 @@ action()` call site becomes an unhandled-rejection bug. Keep the rule
   `DrivePermissionScreen`, `WelcomeScreen`. `role="alert"` is what makes a
   screen-reader announce the error without the user needing focus on it —
   don't drop it when adding a new error surface.
-- **Never render `error.message`/`RepoError.code` raw as user copy.** Today
-  every one of those four screens does exactly that
-  (`` `No se pudo iniciar sesión: ${error}` `` where `error` is `e.message`) —
-  this is flagged as a phase-2 fix, not held up as the pattern to copy. It
-  currently leaks developer-facing English (`"auth: missing
-VITE_GOOGLE_CLIENT_ID"`) into Spanish UI, and a future error message change
-  becomes a user-facing copy change by accident. The fix is a small
-  `Record<code, spanishCopy>` lookup (per the "value → value mappings use a
-  `Record`" coding rule) with a generic fallback line for codes/messages that
-  aren't mapped — never string-interpolate the raw error into the DOM.
+- **Never render `error.message`/`RepoError.code` raw as user copy.** Before
+  phase 2, all four auth/lock screens did exactly that
+  (`` `No se pudo iniciar sesión: ${error}` `` where `error` is `e.message`),
+  leaking developer-facing English (`"auth: missing VITE_GOOGLE_CLIENT_ID"`)
+  into Spanish UI. Fixed via `src/features/auth/errorCopy.ts` and
+  `src/features/lock/errorCopy.ts`: a `Record<message, spanishCopy>` lookup
+  (per the "value → value mappings use a `Record`" coding rule) with a
+  generic fallback line for anything unmapped — never string-interpolate the
+  raw error into the DOM. Keyed by the error's exact message rather than a
+  formal `code`: neither `AuthError`/`DriveError` (auth/Drive) nor
+  `WrongPinError`/`LockedOutError`/`BiometricUnavailableError` (lock) carry
+  one — see §1's note on when a class earns a `code` union, and the phase-2
+  operator decision not to add one speculatively. The lookup only needs
+  keys for the few messages worth a distinct, actionable line; everything
+  else — a dynamic `DriveError` HTTP-status message, an unrecognized OAuth
+  reason — falls through to the fallback, same mechanism a `code`-keyed
+  table would use.
 
 ## 8. How errors get tested
 
@@ -458,11 +509,9 @@ throw new RepoError(`monto must be a finite, positive number (got ${item.monto})
 // NOT THIS — raw developer-facing message straight into Spanish UI.
 <p role="alert">No se pudo iniciar sesión: {error}</p>
 
-// THIS — a lookup table maps the failure to real copy; role="alert" stays.
-const AUTH_ERROR_COPY: Record<string, string> = {
-  'missing VITE_GOOGLE_CLIENT_ID': 'Error de configuración. Intenta más tarde.',
-}
-<p role="alert">{AUTH_ERROR_COPY[error] ?? 'No se pudo iniciar sesión. Intenta de nuevo.'}</p>
+// THIS — a lookup table (src/features/auth/errorCopy.ts) maps the failure to
+// real copy, with a generic fallback for anything unmapped; role="alert" stays.
+<p role="alert">{loginErrorCopy(error)}</p>
 ```
 
 ## Options considered, and why the status quo (mostly) wins
@@ -518,71 +567,67 @@ Drive-backed `Repo`) needs the same guarantee.
 
 ## Migration plan
 
-Ranked by risk — how bad it is that a file violates the standard today, not
-how much code would change to fix it. Files owned by the four in-flight
-fixer branches are marked; several of them already ship the exact fix listed
-here, since these branches and this document were written from the same
-review findings independently. Re-verify against `main` once they merge
-rather than re-doing the work.
+Ranked by risk at the time this was written (phase 1) — how bad it is that a
+file violates the standard, not how much code would change to fix it. Status
+column added at the end of phase 2 (2026-08-18, branch `fix/errors`), once
+`fix/a-repo`/`fix/b-auth`/`fix/d-fake` had merged to `main`.
 
 1. **`src/lib/authStore.ts` — swallow scope + swallow visibility (cases
-   1–2).** `fix/b-auth` already lands this fix (whole-operation `try`,
-   `console.warn` instead of bare `catch {}`). Highest risk of the six
-   because it directly caused a real "correctly authenticated user gets
-   logged out" bug. Once merged: verify the merged version matches §3's
-   worked example exactly, and check `hydrate()`/`login()`/`restore()`
-   for the same "does the try cover the real full operation" question —
-   this review only found the bug in `syncLockedSession`, not because the
-   others were checked and passed.
-2. **`src/lib/repo.local.ts` — cursor/limit success-shaped failures (case 3) + taxonomy gap (case 4).** `fix/a-repo` lands the cursor
-   `sortBy`/`sortDir` binding and `validateLimit`. Second-highest risk:
-   silently wrong query results are worse than a crash because nothing
-   signals that anything went wrong. Once merged: this is also where the
-   §6 contract suite should be built first, since `repo.local.ts` and
-   `repo.fake.ts` are the two existing implementations to extract it from.
-3. **`src/lib/repo.fake.ts` — contract parity (case 5).** `fix/d-fake`
-   lands validation/error-code parity with `repo.local.ts`. Medium risk on
-   its own (it's a dev/test fixture, not production data), but every Wave 2
-   screen is being built and tested against this fake first — a divergence
-   here silently teaches new UI code the wrong error contract, which then
-   has to be re-learned against the real repo later. This is the strongest
-   case for building the §6 contract suite now rather than deferring it:
-   without it, this exact divergence can recur on the very next fake/real
-   split.
+   1–2).** ✅ Done — `fix/b-auth` already carried the exact fix (whole-
+   operation `try`, `console.warn` instead of bare `catch {}`) by the time
+   phase 2 started; verified it matches §3's worked example exactly.
+   `restore()`'s own bare `catch {}` (not part of the original six cases)
+   turned out to be a _legitimate_ silent swallow, not a gap — see §2's
+   "one narrow exception," added because of this exact function; it now
+   carries a comment explaining why.
+2. **`src/lib/repo.local.ts` — cursor/limit success-shaped failures (case 3) + taxonomy gap (case 4).** ✅ Done — `fix/a-repo` carried the cursor
+   `sortBy`/`sortDir` binding and `validateLimit` fixes. One small
+   leftover inconsistency fixed directly: `removeMany()`'s `not_found`
+   message named the raw entity generically (`"no entity with id..."`)
+   instead of `entityLabel`, unlike `update()`/`remove()` — cosmetic
+   (message text isn't part of the contract, §8), fixed for consistency
+   with a regression test.
+3. **`src/lib/repo.fake.ts` — contract parity (case 5).** ✅ Done —
+   `fix/d-fake` carried validation/error-code parity, but the §6 contract
+   suite (built this same session) found **two divergences it missed**:
+   no `limit` validation at all, and `getConfig()` leaking live references
+   to `secciones`/`categorias`/`preferencias`. Both fixed; see §6 for the
+   detail. This is the item that most concretely proves the contract
+   suite's value — manual parity review, even careful review across
+   multiple passes, missed what the suite caught on its first run.
 4. **No React error boundary anywhere (`src/main.tsx`, `src/router.tsx`).**
-   Not owned by any in-flight fixer branch — net-new, low risk to add
-   (additive, no behavior change to the happy path), but currently a real
-   gap: any render-time throw white-screens the app with no recovery UI.
-   Straightforward phase-2 addition per §7.
+   ✅ Done — `src/RouteErrorFallback.tsx` (via `errorElement` on every route)
+   - `src/AppErrorBoundary.tsx` (wrapping `AppLock`/`RouterProvider`), both
+     tested.
 5. **`src/features/auth/*.tsx`, `src/features/lock/*.tsx` — raw error
-   messages in user-facing copy.** Not a regression (it's how these screens
-   were built), not caused by any of the six reviewed bugs, but a real,
-   visible violation of §7's "never render `.message` raw" rule today, in
-   four screens. Lower risk than 1–3 (nothing breaks, it's a
-   correctness-of-intent issue, not a functional bug) but user-visible in
-   Spanish-language production. Fix is mechanical: one `Record<string,
-string>` copy lookup per screen/error domain.
+   messages in user-facing copy.** ✅ Done — `src/features/auth/errorCopy.ts`
+   and `src/features/lock/errorCopy.ts`; exact copy strings reported to the
+   operator for review per their instruction. Also caught two pre-existing
+   tests (`WelcomeScreen`/`RequireAuth`/`DrivePermissionScreen`) that were
+   asserting the _raw_ English message appeared in the DOM — i.e. tests that
+   enforced the very bug this item fixes. Updated to assert the Spanish
+   copy and the absence of the raw string instead.
 6. **`src/lib/pinLock.ts`, `src/lib/drive.ts`, `src/lib/auth.ts` — no `code`
-   union yet.** Lowest risk — correct as-is per §1's "only add `code` when a
-   caller needs to branch on more than pass/fail," and no caller does yet.
-   Listed here only so a future PR doesn't reach for a new `AuthError`
-   subclass instead of adding a `code` when that day comes.
+   union yet.** Deliberately not done — operator's explicit instruction:
+   correct as-is per §1's "only add `code` when a caller needs to branch on
+   more than pass/fail," no caller does yet, and speculative surface area
+   isn't wanted. Still the right call after implementing 1–5: nothing in
+   this pass needed it — the auth/lock copy lookups (item 5) key on the
+   error's message, not a `code`, and work fine that way (§7).
 
-**Decisions for the operator before phase 2 touches code:**
+**What changed from the phase-1 plan, and why (per the standing instruction
+to fix the document, not just the code, when a rule turns out wrong):**
 
-- **Behavior change, needs explicit sign-off:** mapping `RepoError`/`AuthError`
-  messages to Spanish copy (item 5) changes what users literally see on
-  screen today (currently raw English fragments like `"missing
-VITE_GOOGLE_CLIENT_ID"`) — worth a quick look at the proposed copy before
-  it ships, not just the mechanism.
-- **API-surface question, not yet answered:** should the §6 contract test
-  suite live as `src/lib/repo.contract.test.ts` (a real Vitest file with an
-  exported `testRepoContract()` helper, imported by both implementation test
-  files) or as a non-test shared fixture module? The former is more
-  idiomatic Vitest; the latter avoids a test file with no `describe` block
-  of its own. No public API changes either way — internal to `src/lib/`.
-- **Sequencing:** items 1–3 should not be touched until `fix/a-repo`,
-  `fix/b-auth`, and `fix/d-fake` merge — reimplementing them now would
-  conflict with in-flight work on the same files. `fix/d-ui` currently has no
-  diff against `main` (checked at research time) — confirm its actual scope
-  before phase 2 assumes it's a no-op.
+- **§2 gained a documented exception** to "a legitimate swallow must never be
+  silent" — `authStore.restore()`'s silent-auth-attempt catch is a real,
+  defensible case that rule didn't originally account for. See §2 for the
+  test ("would a legitimate, frequent, non-buggy caller hit this branch, and
+  is there another route to find out if it's actually broken?").
+- **§7's copy lookup is keyed by exact error message, not a formal `code`**,
+  because item 6 was correctly left undone — the document's original
+  `Record<code, spanishCopy>` phrasing assumed a `code` that doesn't exist
+  for `AuthError`/`DriveError`/the lock error classes. The mechanism (a
+  `Record` with a generic fallback) is unchanged; only what it's keyed on
+  differs from the original sketch.
+- Everything else in phase 1's plan held up as written once implemented —
+  no other rule needed correcting.

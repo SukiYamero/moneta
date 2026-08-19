@@ -33,3 +33,8 @@ Shared stores, helpers, and the Drive/auth/lock logic layer. No UI here.
 - `repo.fake.ts` — in-memory `Repo` implementation, seeded with deterministic
   Spanish sample data (`createFakeRepo()` for an isolated instance, the
   `fakeRepo` singleton for app code — see `specs.md` §10.5).
+- `repo.contract.ts` — shared `Repo` behavior every implementation must
+  agree on (`testRepoContract()`), invoked from both `repo.local.test.ts`
+  and `repo.fake.test.ts` (`docs/error-handling.md` §6). A plain module, not
+  a `*.test.ts` file, so vitest doesn't collect it as its own standalone
+  suite.
