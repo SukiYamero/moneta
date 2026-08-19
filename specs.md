@@ -536,7 +536,9 @@ this table but the branch is already merged/gone).
 
 | Created    | Track / task    | Path | Branch | Status | Notes                                                                                 |
 | ---------- | --------------- | ---- | ------ | ------ | ------------------------------------------------------------------------------------- |
-| 2026-08-18 | _(none active)_ | —    | —      | —      | No worktrees exist right now — only the main checkout (`git worktree list` verified). |
+| 2026-08-18 | Wave 1 · Track A | `../moneta-wt/a-repo-dexie`  | `track/a-repo-dexie`  | active | Dexie-backed `Repo` implementation (§10.3). No dev server.        |
+| 2026-08-18 | Wave 1 · Track B | `../moneta-wt/b-drive-optin` | `track/b-drive-optin` | active | Welcome + Drive-permission screens, `updateSession` wiring. Dev port 5175. |
+| 2026-08-18 | Wave 1 · Track D | `../moneta-wt/d-ui-kit`      | `track/d-ui-kit`      | active | Shared UI kit + `repo.fake.ts`. Dev port 5174.                     |
 
 Status values: `active` (work in progress) → `merged, pending cleanup` (branch
 merged to `main`, worktree not yet removed) → row deleted once
