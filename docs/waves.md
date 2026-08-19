@@ -234,8 +234,11 @@ Check this table against `git worktree list` at the start of any parallel
 session; prune anything stale (merged-but-not-removed, or on disk but
 missing/finished here).
 
-| Created | Track / task | Path | Branch | Status | Notes |
-| ------- | ------------ | ---- | ------ | ------ | ----- |
+| Created    | Track / task                     | Path                                | Branch                     | Status | Notes                                |
+| ---------- | -------------------------------- | ----------------------------------- | -------------------------- | ------ | ------------------------------------ |
+| 2026-08-19 | Wave 2 · Track K (Toast)         | `../moneta-worktrees/toast`         | `feat/wave2-toast`         | active | Stage 2. Brief: `wave-2-plan.md` §4. |
+| 2026-08-19 | Wave 2 · Track J (Drive consent) | `../moneta-worktrees/drive-consent` | `feat/wave2-drive-consent` | active | Stage 2. Brief: `wave-2-plan.md` §4. |
+| 2026-08-19 | Wave 2 · Track L (app shell)     | `../moneta-worktrees/shell`         | `feat/wave2-shell`         | active | Stage 2. Brief: `wave-2-plan.md` §4. |
 
 Status values: `active` → `merged, pending cleanup` → row deleted once
 `git worktree remove <path>` runs.

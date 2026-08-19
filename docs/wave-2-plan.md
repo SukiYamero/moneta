@@ -735,9 +735,9 @@ live Google account (needs a human in the OAuth popup).
 | ----- | -------------------------- | ----- | ----------- |
 | I     | `feat/wave2-i18n`          | 1     | merged      |
 | E1    | `feat/wave2-stats`         | 1     | merged      |
-| K     | `feat/wave2-toast`         | 2     | not started |
-| J     | `feat/wave2-drive-consent` | 2     | not started |
-| L     | `feat/wave2-shell`         | 2     | not started |
+| K     | `feat/wave2-toast`         | 2     | dispatched  |
+| J     | `feat/wave2-drive-consent` | 2     | dispatched  |
+| L     | `feat/wave2-shell`         | 2     | dispatched  |
 | E2    | `feat/wave2-home`          | 3     | not started |
 | E3    | `feat/wave2-search`        | 3     | not started |
 | E4    | `feat/wave2-history`       | 3     | not started |
