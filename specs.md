@@ -976,6 +976,240 @@ check` green.
 - **Out of scope:** guest→Google migration, a "you are in guest mode" banner
   inside the app, and any account-creation flow.
 
+## Wave 3 — foundations. Specs §10.11–§10.17
+
+Written 2026-08-19, **not implemented**. Wave 3 is plumbing: what every later
+feature assumes already exists. Evidence: `docs/wave-3-audit-runtime.md` and
+`docs/wave-3-audit-surface.md`. Each spec below carries a **Blast radius**
+line — how much of the codebase it should touch — because the answer for most
+of these is "less than it sounds", and a track that touches more than its
+blast radius says has misunderstood the job.
+
+### 10.11 Offline entry, network state, and the offline session window
+
+- **Goal:** the app opens and works without a network, and says so honestly
+  when it can't do something. `specs.md` §3 has claimed "offline-first" since
+  the beginning; today both entry paths call Google, so the claim is false.
+- **User story:** I'm on the subway. I open the app, unlock with my
+  fingerprint, look at this month's spending, and add the coffee I just
+  bought. Nothing asks me to sign in.
+- **The two defects to fix** (both CONFIRMED, traced):
+  - `authStore.restore()` calls `authenticate('')` on cold boot; offline it
+    throws, falls to `idle`, and strands the user on `WelcomeScreen`.
+  - `authStore.hydrate()` calls `fetchGoogleUser()` **after** a fully local
+    vault decrypt, so PIN/biometric unlock fails offline. The blocker is a
+    profile fetch — name and avatar. That is decoration, not authorization:
+    the vault already proved identity locally. Cache the profile alongside
+    the session and treat `fetchGoogleUser()` as a refresh, never a gate.
+- **Network state gets an owner.** `navigator.onLine` appears nowhere in
+  `src` today. One small store owns online/offline (plus the `online`/
+  `offline` events); everything else reads it. `navigator.onLine` lies in one
+  direction — it reports `true` for a connected-but-dead network — so treat
+  it as a hint, and let a failed request downgrade it.
+- **The offline session window — decided (user, 2026-08-19): 7 hours, and
+  reduced permissions while offline.**
+  - Offline you may **read everything and create movements**. You may not
+    edit, delete, or change settings.
+  - The reason this split is right, and worth keeping when someone
+    re-litigates it: **appends commute, mutations don't.** Two devices
+    creating movements offline merge cleanly because every `id` is a
+    `crypto.randomUUID()`. Two devices editing or deleting the same movement
+    produce a genuine conflict with no correct automatic answer.
+  - The window starts at the **last successful online validation**, not at
+    app launch. After 7 hours the app blocks new writes and asks the user to
+    reconnect — reads stay available, because refusing to show a user their
+    own local data protects nobody.
+  - Copy must never imply data loss. Shape: _"Reconéctate para seguir
+    agregando — Llevás más de 7 horas sin conexión. Lo que registraste está
+    guardado en este dispositivo; conectate a internet para sincronizarlo con
+    tu cuenta."_ (Final wording lives in the `i18n` table, all four locales.)
+- **The unified error copy** (user request): the three screens share one
+  message for a failed load, **derived from the `RepoErrorCode`** rather than
+  a generic per-screen string. Today only Home tells the user _why_ it failed
+  — Search and History discard the code and say something generic, so a user
+  with no connection is told "couldn't load" on two screens out of three. The
+  mapping in `src/features/home/errorCopy.ts` is not Home-specific; it maps a
+  global `RepoErrorCode` and should move to a shared home.
+- **Edge cases:** an expired token with valid local data (read-only, don't
+  bounce to login); coming back online mid-session (revalidate quietly, don't
+  interrupt); a guest, who has no token and should never see a reconnect
+  prompt; the lock's own error path (`SESSION_RESTORE_ERROR`) must
+  distinguish "wrong PIN" from "no network".
+- **Done when:** airplane mode + biometric unlock reaches the dashboard with
+  real data; a create works offline and a delete is refused with an honest
+  message; past 7 hours writes are blocked and reads are not; all three
+  screens name the actual failure.
+- **Blast radius:** `src/lib/authStore.ts`, `src/lib/lockStore.ts` (small),
+  `src/lib/pinLock.ts` (cache the profile in the vault), a new network store,
+  a shared `errorCopy`, and the three screens' error rendering. **No screen
+  layout changes, no schema change.**
+
+### 10.12 Export / backup
+
+- **Goal:** the user can get their data out. Today there is no path at all,
+  and because `repoProvider` still returns the fake repo, **every user is
+  effectively local-only** — an IndexedDB eviction, Safari private mode, or a
+  lost phone is unrecoverable, silently.
+- **User story:** before wiping my phone, I export a file I can keep.
+- **UI:** one action (Settings, later; a `/kit`-reachable action until then)
+  that reads through the existing `Repo` port and downloads a single JSON
+  file — movimientos, activos, config, plus a `schemaVersion` and an export
+  timestamp.
+- **Import is deliberately NOT in this spec.** Export is safe and one-way;
+  import is a merge with all the conflict questions §10.15 exists to answer.
+  Ship export first — it is the half that prevents loss.
+- **Edge cases:** a large dataset (stream or chunk rather than building one
+  giant string); an export must never contain the OAuth token or vault
+  material; the file name should carry a date.
+- **Done when:** the file round-trips through `JSON.parse`, contains every
+  entity the repo holds, contains no secret, and works offline.
+- **Blast radius:** one new module + one call site. Reads through `Repo`, so
+  it works against fake, local, or Drive implementations unchanged.
+
+### 10.13 The write path
+
+- **Goal:** one way to write, shared by every future feature. `dataStore`
+  exposes only `load()`; `repo.updateConfig` is called by **zero production
+  files**. Wave 4's three tracks all need writes on day one and would
+  otherwise invent three conventions.
+- **What it is:** mutation actions on `dataStore` (create/update/delete a
+  `Movimiento`, update `Config`) with a single agreed convention for optimistic
+  update, rollback on failure, and error surfacing. The Toast (§10.6) already
+  exists for exactly this and has had no consumer since it was built.
+- **The convention must decide, once:** optimistic or pessimistic; where the
+  error lands (inline vs toast — `docs/error-handling.md` §7 already rules);
+  whether a failed write rolls back the store or leaves it dirty; and how a
+  write interacts with §10.11's offline permission window.
+- **Edge cases:** two writes racing; a write while offline past the 7-hour
+  window; a write that fails after the sheet that issued it has closed (the
+  Toast's original justification).
+- **Done when:** a movement can be created, edited and deleted through the
+  store with tests covering success, failure and rollback; `Config` writes go
+  through the same path; the offline window is enforced in one place, not per
+  call site.
+- **Blast radius:** `src/lib/dataStore.ts` and its tests. No screens — Wave 4
+  consumes it. This is deliberately built with no UI on top of it.
+
+### 10.14 Form primitives + confirm dialog
+
+- **Goal:** Wave 4 has forms and nothing to build them with. Only
+  `button.tsx` is installed from shadcn; the one text input in the codebase
+  is a raw `<input>` in the dev-only `/kit` route.
+- **What it is:** the shadcn `input`/`label` primitives added properly (and
+  normalised per `AGENTS.md`'s namespace-import and `func-style` rules), plus
+  the composed pieces Wave 4 needs: a labelled text field, a numeric/amount
+  field that respects the active locale (`§10.7`'s formatter rules apply —
+  never a hand-rolled parser), and a `ConfirmDialog` built on the existing
+  `CenterModal` for delete confirmations.
+- **Form accessibility comes with it:** label association and
+  `aria-describedby` for errors. The overlay layer's a11y is already a real,
+  tested system (`useOverlay`); the form layer has no equivalent only because
+  no form field exists yet.
+- **Edge cases:** an amount field under a locale that groups with `.` vs `,`
+  — parse from the locale, don't assume; a confirm dialog must reuse
+  `useOverlay`'s stack, never reimplement Escape/focus-trap/scroll-lock.
+- **Done when:** the primitives exist, are in `/kit`, and a delete confirm
+  can be assembled without touching overlay internals.
+- **Blast radius:** `src/components/ui` (additive) + `src/components/shared`.
+  Nothing else — no feature consumes it until Wave 4.
+
+### 10.15 Local data scoping — profiles
+
+- **Goal:** local data belongs to _someone_. Today `db.ts`'s tables are
+  global to the browser, so the moment `repoProvider` stops returning the
+  fake repo, a guest's data and every Google account's data land in the same
+  tables. Deciding this **after** that swap is a user-data migration;
+  deciding it before is a naming choice.
+- **The model (confirmed direction, user + operator 2026-08-19):** one dexie
+  **database per profile**, not a `profileId` column on every row. Isolation
+  costs nothing at query time, deleting a profile is deleting a database, and
+  cross-profile reads — which we never want — become impossible rather than
+  merely discouraged.
+  - **The existing `kurobello` database is adopted as the first profile**, not
+    migrated. `AGENTS.md` freezes that identifier; additional profiles get a
+    suffixed name.
+  - A small **device-scoped registry** (the pattern `deviceStore` already uses
+    for the Drive decision) lists profiles: id, label, kind (`local` |
+    `google`), created/last-used timestamps, database name.
+  - `repoProvider.getRepo()` binds to the active profile. **Because every
+    screen already reads through `getRepo()`, switching profiles touches no
+    screen, no `dataStore`, and no `schema.ts`.**
+- **Nothing is ever replaced.** A user with local data who signs into an
+  account that already has data ends up with **two profiles side by side** —
+  no merge, no overwrite, no conflict resolution. Consolidation is an
+  explicit, separate action the user asks for (below), never a side effect of
+  signing in.
+- **Consolidation, when the user asks for it:** "move these N local movements
+  into this account" — implemented as a union by `id`. Safe by construction
+  because every `id` is a `crypto.randomUUID()`; the early decision to use
+  UUIDs is what makes merging a non-problem. What it cannot solve is
+  **semantic duplicates** (the same real purchase entered on two devices):
+  those are not id collisions, and heuristics over date+amount+category will
+  be wrong sometimes — so consolidation must be reviewable, not silent.
+- **The user-facing surface is Wave 5+, not this wave.** Wave 3 ships the
+  scoping and the registry so the data is correctly separated from day one;
+  the profile switcher in Settings comes with the account UI.
+- **Edge cases:** the same Google account on two devices (different local
+  databases, reconciled by Drive, not by this); a profile whose database
+  fails to open; deleting a profile (irreversible — needs a confirm and,
+  ideally, an export first, which §10.12 provides); guest data when the user
+  later signs in (stays its own profile, untouched).
+- **Done when:** a guest and a signed-in account read and write entirely
+  separate stores on the same device; existing `kurobello` data is reachable
+  as the first profile with no migration; `getRepo()` is still the only swap
+  point.
+- **Blast radius:** `src/lib/db.ts` (parameterise the name), a new profile
+  registry + store, `src/lib/repoProvider.ts`. **Deliberately not** the
+  screens, `dataStore`, or `schema.ts`.
+- **Sequencing:** this **gates** the `repoProvider` swap to the real dexie
+  repo. Do not flip the stub before this lands.
+
+### 10.16 Service-worker update lifecycle
+
+- **Goal:** a deploy doesn't break a user mid-session. `vite.config.ts` uses
+  `registerType: 'autoUpdate'` and nothing imports `virtual:pwa-register`, so
+  a new version takes over silently — the classic failure is a lazily-loaded
+  chunk 404ing after the deploy because the open tab still holds the old
+  manifest.
+- **UI:** a non-intrusive "a new version is available — reload" affordance,
+  following §10.9's Tier 3 rule (it is a notification, not a blocking modal —
+  the Toast surface already fits).
+- **Edge cases:** don't nag on every navigation; don't reload out from under
+  a user mid-input; an update that arrives while offline.
+- **Done when:** a simulated new SW produces the prompt, and taking it
+  reloads to the new version cleanly.
+- **Blast radius:** `vite.config.ts`, one small registration module, one
+  Toast call. No feature code.
+
+### 10.17 Local diagnostics log
+
+- **Goal:** when a user hits a bug, somebody can see what happened. There is
+  no backend by design (§6), so today every error dead-ends at `console.*` in
+  a browser nobody is looking at — while `docs/error-handling.md` maintains a
+  real error taxonomy whose information is then thrown away.
+- **What it is:** a capped ring buffer in IndexedDB (bounded rows, oldest
+  evicted) holding error code, a short context string, and a timestamp —
+  **never** a token, a PIN, vault material, or raw user data — exportable
+  through §10.12's download mechanism so a user can attach it to a bug report.
+- **Edge cases:** the log must never itself throw into the path it is logging
+  (a failure to log is swallowed, per `docs/error-handling.md`); it must be
+  clearable; and it must not grow without bound.
+- **Done when:** a forced repo failure appears in the log, the buffer evicts
+  at its cap, and an export contains no secret.
+- **Blast radius:** one module + the existing `console.*` sites. Lowest
+  priority of the seven — do it last, or drop it if the wave is too big.
+
+### Wave 3 — suggested order
+
+`§10.11 offline` and `§10.12 export` first: both close a gap between what
+`specs.md` promises and what the code does, and offline touches the hottest
+files so it should not queue behind anything. `§10.15 profiles` next, because
+it **gates** the `repoProvider` swap that makes everything else real.
+`§10.13 write path` and `§10.14 form primitives` are day-scale, not
+track-scale, and are the "build once so three Wave 4 tracks share it" move
+that already paid off with the Toast. `§10.16 SW update` and `§10.17
+diagnostics` are cheap and can ride at the end or be cut.
+
 ## 11. Decisions log
 
 - 2026-06-25 — Package manager: **bun**. Node: **24 LTS** (`.nvmrc`).
@@ -2534,6 +2768,29 @@ lint` clean bar the one pre-existing `components/ui` warning). `AGENTS.md`
   decision). `$` therefore means COP, MXN, ARS or USD depending on context;
   a future multi-currency view needs its own disambiguation, not the ISO
   code bolted back on globally.
+
+- 2026-08-19 — **Offline permissions are reduced, not absent: read anything,
+  create movements, for 7 hours.** No editing, deleting or settings changes
+  while offline, and the window starts at the last successful online
+  validation. The reasoning, so it survives being re-litigated: **appends
+  commute, mutations don't.** Two devices creating movements offline merge
+  cleanly because every `id` is a `crypto.randomUUID()`; two devices editing
+  or deleting the same movement is a real conflict with no correct automatic
+  answer. Past the window, writes stop and **reads do not** — refusing to
+  show users their own local data protects nobody. User decision; spec in
+  §10.11.
+
+- 2026-08-19 — **Local data is scoped by profile, one dexie database each,
+  and signing in never replaces anything.** A guest and a Google account on
+  the same device get separate databases; the existing `kurobello` database
+  is adopted as the first profile rather than migrated (its identifier is
+  frozen by `AGENTS.md`). Rejected: a `profileId` column on every row —
+  per-database isolation costs nothing at query time and makes cross-profile
+  reads impossible instead of merely discouraged. Consolidating a local
+  profile into an account is an **explicit user action**, implemented as a
+  union by `id` (safe because ids are UUIDs), never a side effect of signing
+  in. This is why `crypto.randomUUID()` (2026-06-25) turned out to matter far
+  beyond ID generation. User + operator decision; spec in §10.15.
 
 ## 12. Backlog (pending verification / deferred work)
 

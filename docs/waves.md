@@ -218,9 +218,22 @@ should eventually use. The operator swaps one for the other after both merge.
 
 The feature tracks that used to be Wave 3 moved to Wave 4 (user decision,
 2026-08-19) so a wave of **foundations** can land first: the plumbing every
-later feature assumes exists. Scope is being decided from two audits —
-`docs/wave-3-audit-runtime.md` and `docs/wave-3-audit-surface.md`. Neither is
-a plan; they are the evidence the plan is built from.
+later feature assumes exists. Built from two audits — `docs/wave-3-audit-runtime.md` and
+`docs/wave-3-audit-surface.md` (evidence, not plans).
+
+**The specs are written and the wave is not started:** `specs.md`
+§10.11–§10.17, each with a _Blast radius_ line saying how much it may touch,
+plus a suggested order at the end of that block.
+
+| Track | Spec   | What it is                                                               |
+| ----- | ------ | ------------------------------------------------------------------------ |
+| R     | §10.11 | Offline entry, network state, the 7-hour window, unified error copy      |
+| S     | §10.12 | Export / backup (import deliberately excluded)                           |
+| T     | §10.13 | The write path — `dataStore` mutations + one convention                  |
+| U     | §10.14 | Form primitives + `ConfirmDialog`                                        |
+| V     | §10.15 | Profiles: per-profile dexie database — **gates the `repoProvider` swap** |
+| W     | §10.16 | Service-worker update lifecycle                                          |
+| X     | §10.17 | Local diagnostics log (cuttable)                                         |
 
 ---
 
