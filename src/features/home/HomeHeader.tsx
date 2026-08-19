@@ -11,9 +11,11 @@ import { getGreetingKey, getInitials } from '@/features/home/homeView'
 export const HomeHeader = () => {
   const { t } = useTranslation('home')
   // Real Google profile data (authStore.user), not the design's mock "Alex
-  // Rivera" — RequireAuth guarantees `user` is set whenever this renders,
-  // since authStore sets `status: 'authenticated'` and `user` together.
-  const name = useAuthStore((s) => s.user?.name ?? '')
+  // Rivera" — but RequireAuth also lets a guest (specs.md §10.10) straight
+  // through with `user` still null, so this can't assume a profile exists.
+  const isGuest = useAuthStore((s) => s.status === 'guest')
+  const userName = useAuthStore((s) => s.user?.name)
+  const name = isGuest ? t('guestName') : (userName ?? '')
   const greetingKey = getGreetingKey(new Date())
 
   return (

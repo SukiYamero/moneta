@@ -1,3 +1,4 @@
+import { StrictMode } from 'react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -169,5 +170,79 @@ describe('RequireAuth', () => {
     expect(screen.queryByRole('button', { name: /google/i })).not.toBeInTheDocument()
     expect(screen.queryByText('secret')).not.toBeInTheDocument()
     expect(screen.getByRole('status')).toBeInTheDocument()
+  })
+
+  // Regression: the boot-flash fix above must not swallow an explicit,
+  // user-initiated login. login() sets the exact same `status:
+  // 'authenticating'` that a cold-boot restore() does, so a naive guard
+  // that keys only off `status` would rip the whole WelcomeScreen out from
+  // under the user's tap and replace it with the full-screen boot
+  // placeholder — a regression against specs.md §10.9 tier 3 ("the busy
+  // state lives on the control that was pressed... never a full-screen
+  // overlay"; "WelcomeScreen's Google button already does the label swap;
+  // that is the pattern").
+  it('keeps the welcome screen on screen when login() is triggered from it, instead of swapping in the boot placeholder', async () => {
+    const login = vi.fn(() => {
+      useAuthStore.setState({ status: 'authenticating' })
+      return Promise.resolve()
+    })
+    useAuthStore.setState({ login })
+    render(
+      <RequireAuth>
+        <div>secret</div>
+      </RequireAuth>,
+    )
+    // Let the mount-time restore() mock settle so the boot window has closed.
+    await waitFor(() => expect(screen.getByRole('button', { name: /google/i })).toBeInTheDocument())
+
+    await userEvent.click(screen.getByRole('button', { name: /google/i }))
+
+    // Still the welcome screen, showing its own inline busy state — not the
+    // full-screen boot placeholder.
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /conectando/i })).toBeInTheDocument()
+  })
+
+  // StrictMode (main.tsx) double-invokes effects in dev: mount, run effect,
+  // simulate unmount, remount, run effect again — same component instance,
+  // so refs survive across the pair. A naive "settle the boot window in the
+  // mount effect" implementation resolves this per *invocation*: the second
+  // invocation sees `status` already flipped away from 'idle' by the first
+  // invocation's synchronous pre-await work, takes the "not idle" branch,
+  // and marks boot settled immediately — reopening the exact boot-flash bug
+  // this track fixes, in dev only, for a slow restore(). The real restore()
+  // call must be the only one whose settlement can end the boot window.
+  it('does not end the boot window early under StrictMode double-invocation while the real restore() is still pending', async () => {
+    let resolveRestore: () => void = () => {}
+    // Mirrors the real restore(): flips status synchronously, before any
+    // await, which is exactly what makes the second StrictMode invocation
+    // see a non-'idle' status.
+    const restore = vi.fn(() => {
+      useAuthStore.setState({ status: 'authenticating' })
+      return new Promise<void>((resolve) => {
+        resolveRestore = resolve
+      })
+    })
+    useAuthStore.setState({ restore })
+
+    render(
+      <StrictMode>
+        <RequireAuth>
+          <div>secret</div>
+        </RequireAuth>
+      </StrictMode>,
+    )
+
+    // Still booting — the boot placeholder must still be up, not the welcome
+    // screen, no matter how many times the mount effect fired.
+    expect(screen.getByRole('status')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /google/i })).not.toBeInTheDocument()
+
+    act(() => {
+      useAuthStore.setState({ status: 'idle' })
+      resolveRestore()
+    })
+
+    await waitFor(() => expect(screen.getByRole('button', { name: /google/i })).toBeInTheDocument())
   })
 })

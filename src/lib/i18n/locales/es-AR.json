@@ -69,6 +69,7 @@
       "evening": "Buenas noches"
     },
     "notifications": "Notificaciones",
+    "guestName": "Invitado",
     "searchPlaceholder": "Buscar movimientos",
     "balance": {
       "title": "Balance total",
