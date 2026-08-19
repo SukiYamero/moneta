@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseAmount, formatAmountForInput } from '@/components/shared/amountFormat'
+import { parseAmount, formatAmountForInput } from '@/lib/i18n/amountFormat'
 
 describe('parseAmount', () => {
   it('parses a dot-grouped, comma-decimal amount (es-CO)', () => {

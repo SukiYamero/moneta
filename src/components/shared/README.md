@@ -30,11 +30,9 @@ doesn't belong to any one `src/features/**` folder. See `specs.md` §10.5.
 - `ConfirmDialog.tsx` — delete-style confirmation built on `CenterModal`;
   generates its own `labelledBy` from `title` via `useId()`, so callers
   pass no aria props. Confirm/Cancel use `Button`'s `destructive`/
-  `secondary` variants at `min-h-11` (button.tsx's own sizes don't reach
-  the 44px touch target — the same per-call-site override
-  `LockSettings.tsx` already uses). Takes all copy as props — adds no
-  locale keys of its own. Replaces the `/kit` gallery's former hand-rolled
-  delete-confirm demo. Accepts `ref`.
+  `secondary` variants at `size="touch"` (button.tsx's 44px-compliant size).
+  Takes all copy as props — adds no locale keys of its own. Replaces the
+  `/kit` gallery's former hand-rolled delete-confirm demo. Accepts `ref`.
 - `CenterModal.tsx` — centered popup shell (Delete confirm, Info tooltip,
   Custom tag modal, Group editor). `CenterModalProps` is
   `OverlayShellProps<HTMLDivElement>` too. Accepts `initialFocus`/`ref`.
@@ -102,21 +100,12 @@ doesn't belong to any one `src/features/**` folder. See `specs.md` §10.5.
   (always positive; sign comes from `tipo`). `type="text"` +
   `inputMode="decimal"`, never `type="number"` (native spinners, and
   `valueAsNumber` ignores locale entirely). A controlled **string** field,
-  not a controlled number — the parsing lives in `amountFormat.ts` below,
+  not a controlled number — the parsing lives in `src/lib/i18n/amountFormat.ts`,
   never a hand-rolled parser here. `aria-invalid` is true both for a
   caller-supplied `error` and for text `parseAmount` can't parse under the
   given `locale`, so malformed input is flagged even with no `error` copy
   passed. Required `locale` (BCP-47 from `useLocaleFormatting()`), same
   no-default convention as `MovimientoRow`/`formatMonto`. Accepts `ref`.
-- `amountFormat.ts` — the pure locale money helpers behind `AmountField`:
-  `parseAmount(raw, locale)` and its inverse `formatAmountForInput(value,
-  locale)`, built on `Intl.NumberFormat(locale).formatToParts` to read the
-  locale's actual decimal/group separators (`es-CO` groups `.`/decimals
-  `,`; `en-US` the reverse). Its own module, not exported from the
-  component file, because a pure helper shipped alongside a component
-  breaks Fast Refresh. `parseAmount` gates on a strict decimal pattern
-  before `Number()`: bare `Number()` turns `''` into `0` and accepts hex,
-  so a lone separator once parsed as $0 and `0x1a` as 26.
 - `BottomNav.tsx` — the five-slot persistent tab bar (Home / History /
   centre Add / Search / Profile), mounted once by `src/routes/AppShell.tsx`.
   Home, History and Search are real `NavLink`s, so `aria-current="page"`
@@ -132,7 +121,12 @@ doesn't belong to any one `src/features/**` folder. See `specs.md` §10.5.
   `role="status"` (confirmations), swipe-to-dismiss via Pointer Events
   (`touch-pan-y`, mirroring `BottomSheet`'s drag handling), plus a
   keyboard-reachable close button — a timed message must stay dismissible
-  without the gesture (WCAG 2.2.1).
+  without the gesture (WCAG 2.2.1). An optional `item.action`
+  (`src/lib/toastStore.ts`'s `ToastAction`) renders a second, `min-h-11`
+  button before dismiss — taking it calls `onAction()` then dismisses.
+  Resolves the action's label via the shared `i18next` instance directly
+  (its `labelKey` is namespace-prefixed, e.g. `update:reload`, not scoped to
+  this card's own `toast` namespace).
 - `Toaster.tsx` — the stack: subscribes to `src/lib/toastStore.ts`, portals
   to `document.body`, sits at `z-[60]` (above `BottomSheet`/`CenterModal`'s
   `z-50`, so a sheet can never cover it). Mounted once, inside `AppLock`,

@@ -1,29 +1,23 @@
 import { create } from 'zustand'
-import Dexie, { type EntityTable } from 'dexie'
+import { deviceDb } from '@/lib/deviceStore'
 
 // 7 hours, anchored to the last successful online validation (specs.md
 // §10.11, decided 2026-08-19) — not to app launch, and not to the browser's
 // online/offline events, which only ever report a *hint* (see below).
 export const OFFLINE_WRITE_WINDOW_MS = 7 * 60 * 60_000
 
-type AnchorRow = { id: number; lastOnlineAt: number }
 const ANCHOR_ID = 1 as const
 
-// A dedicated database, not a new table on deviceStore.ts's
-// `kurobello-device` — that file belongs to another in-flight Wave 3 track
-// this stage (docs/wave-3-plan.md §2's ownership map), so it is off limits
-// here even though it is the more natural home for one more device-local
-// signal. Same "kurobello-<suffix>" naming the frozen-identifiers rule
-// already uses (AGENTS.md), and the same self-catching-read/write shape
-// deviceStore.ts established for a device-local, non-secret signal.
-const networkDb = new Dexie('kurobello-network') as Dexie & {
-  anchor: EntityTable<AnchorRow, 'id'>
-}
-networkDb.version(1).stores({ anchor: 'id' })
-
+// Persisted on deviceStore.ts's shared `kurobello-device` connection (its
+// `anchor` table), not a database of its own — this originally shipped as a
+// separate `kurobello-network` database only because `deviceStore.ts` was
+// another in-flight Wave 3 track's file this stage (docs/wave-3-plan.md §2's
+// ownership map); folded in once that stopped being true (`specs.md` §11,
+// 2026-08-19). Same self-catching-read/write shape deviceStore.ts already
+// uses for every device-local, non-secret signal.
 const readAnchor = async (): Promise<number | null> => {
   try {
-    return (await networkDb.anchor.get(ANCHOR_ID))?.lastOnlineAt ?? null
+    return (await deviceDb.anchor.get(ANCHOR_ID))?.lastOnlineAt ?? null
   } catch (e) {
     console.warn('network: could not read the last-online anchor, offline window may misfire', e)
     return null
@@ -32,7 +26,7 @@ const readAnchor = async (): Promise<number | null> => {
 
 const writeAnchor = async (at: number): Promise<void> => {
   try {
-    await networkDb.anchor.put({ id: ANCHOR_ID, lastOnlineAt: at })
+    await deviceDb.anchor.put({ id: ANCHOR_ID, lastOnlineAt: at })
   } catch (e) {
     console.warn('network: could not persist the last-online anchor', e)
   }

@@ -1,18 +1,40 @@
 import Dexie, { type EntityTable } from 'dexie'
 
 // A separate Dexie database, not a table on db.ts's `kurobello` (frozen,
-// AGENTS.md) — a tiny standalone store for device-local, non-secret signals.
-// Two live here: "has a Google login ever succeeded on this device" (the
+// AGENTS.md) — the canonical home for every device-local, non-secret signal.
+// Four live here: "has a Google login ever succeeded on this device" (the
 // marker, used to gate authStore.restore()'s silent re-auth, specs.md §11
-// 2026-08-19) and "has this device already answered the Drive-sync prompt"
-// (the decision, specs.md §11 2026-08-19 driveOptIn entry — now superseded,
-// see the same-dated entry this track adds). One device-signal module beats
-// a third Dexie database for one more boolean-ish row. Not secret, but
+// 2026-08-19); "has this device already answered the Drive-sync prompt" (the
+// decision, specs.md §11 2026-08-19 driveOptIn entry); the offline-window
+// anchor (`specs.md` §10.11 — networkStore.ts's own module, `anchor` table
+// below); and the device-scoped profile registry (`specs.md` §10.15 —
+// profiles/profileRegistry.ts, `profiles` table below). The latter two
+// originally shipped as their own separate Dexie databases
+// (`kurobello-network`, `kurobello-profiles`) only because the Wave 3
+// stage-1 file-ownership table left this file unassigned — folded in here
+// once it was back in scope (`specs.md` §11, 2026-08-19); neither had ever
+// shipped, so no migration was owed. One device-signal database beats N
+// separate ones for what is, in each case, one small table. Not secret, but
 // IndexedDB is still the right home (never localStorage/sessionStorage,
 // specs.md §7): consistency with every other device-local signal in this app.
 type MarkerRow = { id: number; loggedInBefore: boolean }
 type DriveDecision = 'connected' | 'dismissed'
 type DriveDecisionRow = { id: number; decision: DriveDecision }
+// Kept as plain, locally-scoped row types (not imported from
+// networkStore.ts/profiles/profileRegistry.ts) the same way MarkerRow/
+// DriveDecisionRow already are — this module stays the generic storage
+// layer; the domain-typed public API (`WriteDecision`, `ProfileRecord`, …)
+// lives in the modules that own the *meaning* of these rows, not the table
+// declaration.
+export type AnchorRow = { id: number; lastOnlineAt: number }
+export type ProfileRow = {
+  id: string
+  label: string
+  kind: 'local' | 'google'
+  databaseName: string
+  createdAt: string
+  lastUsedAt: string
+}
 
 const MARKER_ID = 1 as const
 const DRIVE_DECISION_ID = 1 as const
@@ -23,15 +45,31 @@ const DRIVE_DECISION_ID = 1 as const
 // Exported so tests can inject a storage failure by spying on a table
 // method directly — the same seam db.ts's own exported `db` gives
 // pinLock.test.ts (fake-indexeddb has no built-in way to simulate this).
+// Also exported for networkStore.ts/profiles/profileRegistry.ts to open
+// their own tables on this same connection rather than a database of their
+// own.
 export const deviceDb = new Dexie('kurobello-device') as Dexie & {
   marker: EntityTable<MarkerRow, 'id'>
   driveDecision: EntityTable<DriveDecisionRow, 'id'>
+  anchor: EntityTable<AnchorRow, 'id'>
+  profiles: EntityTable<ProfileRow, 'id'>
 }
 deviceDb.version(1).stores({ marker: 'id' })
 // Additive: `marker` keeps its v1 definition unchanged — same reasoning as
 // db.ts's own version bumps — so an existing device upgrades to v2 without
 // losing the marker it already has.
 deviceDb.version(2).stores({ marker: 'id', driveDecision: 'id' })
+// Additive again: `anchor` (networkStore.ts) and `profiles`
+// (profiles/profileRegistry.ts) are new tables with their own index
+// requirements (`profiles` needs `kind`/`lastUsedAt` for recency lookups);
+// `marker`/`driveDecision` are restated unchanged so an existing v1/v2
+// device upgrades to v3 without losing either.
+deviceDb.version(3).stores({
+  marker: 'id',
+  driveDecision: 'id',
+  anchor: 'id',
+  profiles: 'id, kind, lastUsedAt',
+})
 
 export const hasLoggedInBefore = async (): Promise<boolean> => {
   try {

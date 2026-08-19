@@ -46,8 +46,45 @@ describe('createSwUpdateController', () => {
 
     fake.options().onNeedRefresh?.()
 
-    expect(toast.success).toHaveBeenCalledExactlyOnceWith('update:available')
+    expect(toast.success).toHaveBeenCalledExactlyOnceWith('update:available', undefined, {
+      labelKey: 'update:reload',
+      onAction: expect.any(Function),
+    })
     expect(toast.error).not.toHaveBeenCalled()
+  })
+
+  it("taking the toast action applies this controller's own injected updateServiceWorker, not a different one", async () => {
+    const { createSwUpdateController } = await import('@/lib/swUpdate')
+    const fake = createFakeRegisterSW()
+    createSwUpdateController(fake.registerSW)
+
+    fake.options().onNeedRefresh?.()
+    const action = vi.mocked(toast.success).mock.calls[0]?.[2]
+    action?.onAction()
+    await Promise.resolve()
+
+    expect(fake.updateServiceWorker).toHaveBeenCalledOnce()
+  })
+
+  it('a toast action failure is caught and logged, not left to float unhandled', async () => {
+    const { createSwUpdateController } = await import('@/lib/swUpdate')
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const fake = createFakeRegisterSW()
+    const applyError = new Error('update failed')
+    fake.updateServiceWorker.mockRejectedValueOnce(applyError)
+    createSwUpdateController(fake.registerSW)
+
+    fake.options().onNeedRefresh?.()
+    const action = vi.mocked(toast.success).mock.calls[0]?.[2]
+    action?.onAction()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      'sw update: failed to apply the waiting update',
+      applyError,
+    )
+    warnSpy.mockRestore()
   })
 
   it('taking the prompt applies the waiting worker cleanly', async () => {
@@ -83,8 +120,9 @@ describe('createSwUpdateController', () => {
     // duplicate-collapse (same variant + message) is what prevents nagging,
     // so both calls reaching toast.success with the identical key is correct.
     expect(toast.success).toHaveBeenCalledTimes(2)
-    expect(toast.success).toHaveBeenNthCalledWith(1, 'update:available')
-    expect(toast.success).toHaveBeenNthCalledWith(2, 'update:available')
+    const expectedAction = { labelKey: 'update:reload', onAction: expect.any(Function) }
+    expect(toast.success).toHaveBeenNthCalledWith(1, 'update:available', undefined, expectedAction)
+    expect(toast.success).toHaveBeenNthCalledWith(2, 'update:available', undefined, expectedAction)
   })
 
   it('logs a registration failure without toasting it', async () => {

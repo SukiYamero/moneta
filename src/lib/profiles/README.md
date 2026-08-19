@@ -4,15 +4,16 @@ Device-scoped profile registry (`specs.md` §10.15): local data belongs to
 _someone_. One dexie database per profile, not a `profileId` column — see
 `src/lib/db.ts`'s `createProfileDb()`, the factory this module builds on.
 
-- `profileRegistry.ts` — a separate, tiny Dexie database
-  (`kurobello-profiles`, distinct from a profile's own `db.ts` database)
-  listing profiles: `id`, `label`, `kind` (`local` | `google`),
-  `databaseName`, `createdAt`, `lastUsedAt`. `getActiveProfile()` lazily
-  adopts the frozen `kurobello` database as the first profile on a device
-  that has never written a registry row, then returns whichever profile was
-  used most recently — there is no switcher UI yet (Wave 5+), so recency is
-  the only signal available. Every read self-catches and degrades to "no
-  signal recorded" (empty list / `undefined`), same posture as
+- `profileRegistry.ts` — lists profiles (`id`, `label`, `kind` (`local` |
+  `google`), `databaseName`, `createdAt`, `lastUsedAt`) on
+  `src/lib/deviceStore.ts`'s shared `kurobello-device` connection (its
+  `profiles` table), not a database of its own and not a profile's own
+  `db.ts` database. `getActiveProfile()` lazily adopts the frozen
+  `kurobello` database as the first profile on a device that has never
+  written a registry row, then returns whichever profile was used most
+  recently — there is no switcher UI yet (Wave 5+), so recency is the only
+  signal available. Every read self-catches and degrades to "no signal
+  recorded" (empty list / `undefined`), same posture as
   `src/lib/deviceStore.ts`: storage trouble may suppress a convenience, must
   never block boot. `makeProfileDatabaseName(id)` mints a `kurobello-<id>`
   suffix for any profile beyond the adopted default — the frozen

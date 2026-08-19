@@ -31,6 +31,17 @@ JSON resources — no `i18next-http-backend`, no CDN.
   the single place that turns copy locale + device region into an `Intl` tag
   and a `date-fns` `Locale`. Pure modules take these as parameters;
   components read the hook (`specs.md` §11, 2026-08-19).
+- `amountFormat.ts` — `parseAmount(raw, locale)` and its inverse
+  `formatAmountForInput(value, locale)`, the pure locale money helpers
+  behind `src/components/shared/AmountField.tsx`. Built on
+  `Intl.NumberFormat(locale).formatToParts` to read the locale's actual
+  decimal/group separators (`es-CO` groups `.`/decimals `,`; `en-US` the
+  reverse) — never a hand-rolled parser (`specs.md` §10.14). `parseAmount`
+  gates on a strict decimal pattern before `Number()`: bare `Number()` turns
+  `''` into `0` and accepts hex, so a lone separator once parsed as $0 and
+  `0x1a` as 26. Moved here from `src/components/shared/` (`specs.md` §12,
+  2026-08-19) — pure locale logic with no React in it, a sibling of this
+  file rather than a component helper.
 - `i18next.d.ts` — module augmentation typing `t()`'s key space off `es`
   (base and fallback), so `t('does.not.exist')` is a compile error.
 - `locales/*.json` — one file per locale (`es`, `en`, `es-AR`, `pt-BR`), each
@@ -69,7 +80,8 @@ JSON resources — no `i18next-http-backend`, no CDN.
 ## Out of scope here (by design)
 
 No locale picker UI, no persisted locale (`Config.preferencias.idioma` is a
-Wave 3/Track G concern), and no number/currency/date formatting — that's
+`specs.md` §10.18 concern, gated on the write path), and no
+number/currency/date formatting — that's
 `Intl`/`date-fns` at the call site, not this table. Region _detection_ and
 the locale→tag mapping do live here (`detectRegion`, `localeFormatting.ts`);
 what stays out is the formatting itself.

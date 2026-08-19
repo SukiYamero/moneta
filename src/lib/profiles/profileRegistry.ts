@@ -1,4 +1,4 @@
-import Dexie, { type EntityTable } from 'dexie'
+import { deviceDb } from '@/lib/deviceStore'
 
 export type ProfileKind = 'local' | 'google'
 
@@ -11,20 +11,15 @@ export interface ProfileRecord {
   lastUsedAt: string
 }
 
-type ProfileRegistryDb = Dexie & {
-  profiles: EntityTable<ProfileRecord, 'id'>
-}
-
-// A separate, tiny Dexie database — same posture as src/lib/deviceStore.ts's
-// own `kurobello-device`, not a table bolted onto a profile's own database
-// (`db.ts`'s `kurobello`, frozen per AGENTS.md). The registry lists profiles;
-// it never holds a profile's actual data. Name is suffixed off the frozen
-// `kurobello` base (AGENTS.md § Branding vs storage identifiers) and, once
-// this ships to a real device, is itself frozen the same way.
-export const PROFILE_REGISTRY_DB_NAME = 'kurobello-profiles' as const
-
-export const profileRegistryDb = new Dexie(PROFILE_REGISTRY_DB_NAME) as ProfileRegistryDb
-profileRegistryDb.version(1).stores({ profiles: 'id, kind, lastUsedAt' })
+// Lives on src/lib/deviceStore.ts's shared `kurobello-device` connection
+// (its `profiles` table), not a database of its own — the registry lists
+// profiles, it never holds a profile's actual data (`db.ts`'s
+// `createProfileDb()` builds each profile's real database). This originally
+// shipped as its own `kurobello-profiles` database only because
+// `deviceStore.ts` was another in-flight Wave 3 track's file this stage
+// (docs/wave-3-plan.md §2's ownership map); folded in once that stopped
+// being true, since neither had shipped yet (`specs.md` §11, 2026-08-19).
+const profileTable = deviceDb.profiles
 
 // The existing `kurobello` database is *adopted* as the first profile
 // (AGENTS.md, specs.md §10.15) — never migrated, never renamed. Every later
@@ -70,7 +65,7 @@ const defaultProfileRecord = (): ProfileRecord => {
 // boot.
 export const listProfiles = async (): Promise<ProfileRecord[]> => {
   try {
-    return await profileRegistryDb.profiles.toArray()
+    return await profileTable.toArray()
   } catch (e) {
     console.warn('profiles: could not read the registry, treating as empty', e)
     return []
@@ -79,7 +74,7 @@ export const listProfiles = async (): Promise<ProfileRecord[]> => {
 
 export const getProfile = async (id: string): Promise<ProfileRecord | undefined> => {
   try {
-    return await profileRegistryDb.profiles.get(id)
+    return await profileTable.get(id)
   } catch (e) {
     console.warn(`profiles: could not read profile "${id}"`, e)
     return undefined
@@ -102,23 +97,23 @@ export interface RegisterProfileInput {
 // existing rows when computing a strictly-increasing `lastUsedAt`, or a
 // get-then-put race could hand both the same candidate timestamp.
 export const registerProfile = async (input: RegisterProfileInput): Promise<ProfileRecord> => {
-  return profileRegistryDb.transaction('rw', profileRegistryDb.profiles, async () => {
-    const existing = await profileRegistryDb.profiles.toArray()
+  return deviceDb.transaction('rw', profileTable, async () => {
+    const existing = await profileTable.toArray()
     const record: ProfileRecord = {
       ...input,
       createdAt: nowIso(),
       lastUsedAt: nextLastUsedAt(existing),
     }
-    await profileRegistryDb.profiles.put(record)
+    await profileTable.put(record)
     return record
   })
 }
 
 export const touchLastUsed = async (id: string): Promise<void> => {
   try {
-    await profileRegistryDb.transaction('rw', profileRegistryDb.profiles, async () => {
-      const existing = await profileRegistryDb.profiles.toArray()
-      await profileRegistryDb.profiles.update(id, { lastUsedAt: nextLastUsedAt(existing) })
+    await deviceDb.transaction('rw', profileTable, async () => {
+      const existing = await profileTable.toArray()
+      await profileTable.update(id, { lastUsedAt: nextLastUsedAt(existing) })
     })
   } catch (e) {
     // Best-effort, same posture as deviceStore.ts's markLoggedIn: losing
@@ -138,7 +133,7 @@ export const getActiveProfile = async (): Promise<ProfileRecord> => {
   if (existing.length === 0) {
     const record = defaultProfileRecord()
     try {
-      await profileRegistryDb.profiles.put(record)
+      await profileTable.put(record)
     } catch (e) {
       // Best-effort: a registry write failure must not block resolving a
       // working repo — the caller still gets a valid record pointing at
@@ -153,8 +148,8 @@ export const getActiveProfile = async (): Promise<ProfileRecord> => {
 }
 
 // Test-only escape hatch, same posture as repo.local.ts's
-// __resetReadyMemoForTests: `profileRegistryDb` is a module singleton
-// reused across a whole test file. Not exported from any public surface.
+// __resetReadyMemoForTests: `deviceDb` is a module singleton reused across a
+// whole test file. Not exported from any public surface.
 export const __clearRegistryForTests = async (): Promise<void> => {
-  await profileRegistryDb.profiles.clear()
+  await profileTable.clear()
 }

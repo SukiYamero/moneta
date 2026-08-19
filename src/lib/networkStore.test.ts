@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { deviceDb } from '@/lib/deviceStore'
 import {
   __resetNetworkStoreForTests,
   OFFLINE_WRITE_WINDOW_MS,
@@ -140,5 +141,52 @@ describe('offline-window anchor persistence', () => {
     const fresh = await import('@/lib/networkStore')
 
     await vi.waitFor(() => expect(fresh.useNetworkStore.getState().lastOnlineAt).toBe(42_000))
+  })
+})
+
+// docs/error-handling.md §8: every swallow needs a test proving the failure
+// path, not just the happy path. Same posture as deviceStore.ts/
+// profiles/profileRegistry.ts's own storage-failure tests, now that the
+// anchor lives on the same shared `kurobello-device` connection.
+describe('offline-window anchor storage failures', () => {
+  it('a read failure at module-load hydration leaves the anchor at its fail-open null default', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    // vi.resetModules() means the next '@/lib/networkStore' import gets a
+    // fresh '@/lib/deviceStore' too (a new deviceDb instance) — the spy has
+    // to land on *that* instance, imported first so it's in place before
+    // networkStore's own top-level hydration call runs against it.
+    vi.resetModules()
+    const freshDeviceStore = await import('@/lib/deviceStore')
+    const spy = vi
+      .spyOn(freshDeviceStore.deviceDb.anchor, 'get')
+      .mockRejectedValue(new Error('IDB blocked'))
+
+    const fresh = await import('@/lib/networkStore')
+    // Give the fire-and-forget hydration a turn to run and fail.
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(fresh.useNetworkStore.getState().lastOnlineAt).toBeNull()
+    expect(warn).toHaveBeenCalled()
+
+    spy.mockRestore()
+    warn.mockRestore()
+  })
+
+  it('reportOnlineSuccess is safe to fire-and-forget: a persistence failure is caught and logged, not thrown', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const spy = vi.spyOn(deviceDb.anchor, 'put').mockRejectedValue(new Error('IDB blocked'))
+
+    useNetworkStore.getState().reportOnlineSuccess(9_000)
+    await Promise.resolve()
+    await Promise.resolve()
+
+    // The in-memory state still updates even though the persisted write failed.
+    expect(useNetworkStore.getState().lastOnlineAt).toBe(9_000)
+    expect(warn).toHaveBeenCalled()
+
+    spy.mockRestore()
+    warn.mockRestore()
   })
 })

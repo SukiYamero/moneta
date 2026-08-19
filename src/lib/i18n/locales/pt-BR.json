@@ -207,7 +207,8 @@
     }
   },
   "update": {
-    "available": "Uma nova versão está disponível. Recarregue a página para atualizar."
+    "available": "Uma nova versão está disponível. Recarregue a página para atualizar.",
+    "reload": "Recarregar"
   },
   "errors": {
     "offline": {

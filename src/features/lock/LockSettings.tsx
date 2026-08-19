@@ -32,15 +32,10 @@ export const LockSettings = () => {
       <div className="flex flex-col items-center gap-3">
         <p className="text-muted-foreground text-sm">Lock activo</p>
         <div className="flex gap-2">
-          <Button type="button" className="min-h-11" onClick={() => lock()}>
+          <Button type="button" size="touch" onClick={() => lock()}>
             Lock now
           </Button>
-          <Button
-            type="button"
-            variant="destructive"
-            className="min-h-11"
-            onClick={() => void onReset()}
-          >
+          <Button type="button" variant="destructive" size="touch" onClick={() => void onReset()}>
             Desactivar
           </Button>
         </div>
@@ -88,7 +83,7 @@ export const LockSettings = () => {
       )}
       <Button
         type="button"
-        className="min-h-11"
+        size="touch"
         disabled={pin.length !== 4}
         onClick={() => void onEnable()}
       >

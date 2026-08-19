@@ -1,8 +1,8 @@
 import { useId, type Ref } from 'react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { parseAmount } from '@/lib/i18n/amountFormat'
 import { cn } from '@/lib/utils'
-import { parseAmount } from '@/components/shared/amountFormat'
 
 export interface AmountFieldProps {
   label: string
