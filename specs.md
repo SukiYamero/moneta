@@ -343,6 +343,7 @@ Full design: Claude Design canvas `Moneta.dc.html` ("AUTH: WELCOME" and
 - **Out of scope (deferred, see §12):** a persistent "don't ask again" for
   Drive sync and a way to re-enable it later — Profile sheet's Drive row,
   Wave 2.
+
 ### 10.5 Shared UI kit + fake repo
 
 - **Goal:** the foundational, cross-feature component layer + a shared
@@ -743,11 +744,11 @@ table against `git worktree list` at the start of any parallel session and
 remove anything marked done (or orphaned: on disk but not in this table, or in
 this table but the branch is already merged/gone).
 
-| Created    | Track / task     | Path                         | Branch                | Status | Notes                                                                      |
-| ---------- | ---------------- | ---------------------------- | --------------------- | ------ | -------------------------------------------------------------------------- |
-| 2026-08-18 | Wave 1 · Track A | `../moneta-wt/a-repo-dexie`  | `track/a-repo-dexie`  | active | Dexie-backed `Repo` implementation (§10.3). No dev server.                 |
-| 2026-08-18 | Wave 1 · Track B | `../moneta-wt/b-drive-optin` | `track/b-drive-optin` | active | Welcome + Drive-permission screens, `updateSession` wiring. Dev port 5175. |
-| 2026-08-18 | Wave 1 · Track D | `../moneta-wt/d-ui-kit`      | `track/d-ui-kit`      | active | Shared UI kit + `repo.fake.ts`. Dev port 5174.                             |
+| Created    | Track / task     | Path                         | Branch                | Status                  | Notes                                                                      |
+| ---------- | ---------------- | ---------------------------- | --------------------- | ----------------------- | -------------------------------------------------------------------------- |
+| 2026-08-18 | Wave 1 · Track A | `../moneta-wt/a-repo-dexie`  | `track/a-repo-dexie`  | active                  | Dexie-backed `Repo` implementation (§10.3). No dev server.                 |
+| 2026-08-18 | Wave 1 · Track B | `../moneta-wt/b-drive-optin` | `track/b-drive-optin` | merged, pending cleanup | Welcome + Drive-permission screens, `updateSession` wiring. Dev port 5175. |
+| 2026-08-18 | Wave 1 · Track D | `../moneta-wt/d-ui-kit`      | `track/d-ui-kit`      | merged, pending cleanup | Shared UI kit + `repo.fake.ts`. Dev port 5174.                             |
 
 Status values: `active` (work in progress) → `merged, pending cleanup` (branch
 merged to `main`, worktree not yet removed) → row deleted once
