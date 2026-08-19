@@ -778,16 +778,16 @@ live Google account (needs a human in the OAuth popup).
 
 ## 7. Live status
 
-| Track | Branch                     | Stage | Status |
-| ----- | -------------------------- | ----- | ------ |
-| I     | `feat/wave2-i18n`          | 1     | merged |
-| E1    | `feat/wave2-stats`         | 1     | merged |
-| K     | `feat/wave2-toast`         | 2     | merged |
-| J     | `feat/wave2-drive-consent` | 2     | merged |
-| L     | `feat/wave2-shell`         | 2     | merged |
-| E2    | `feat/wave2-home`          | 3     | merged |
-| E3    | `feat/wave2-search`        | 3     | merged |
-| E4    | `feat/wave2-history`       | 3     | merged |
+| Track | Branch                     | Stage | Status                |
+| ----- | -------------------------- | ----- | --------------------- |
+| I     | `feat/wave2-i18n`          | 1     | reviewed              |
+| E1    | `feat/wave2-stats`         | 1     | reviewed              |
+| K     | `feat/wave2-toast`         | 2     | reviewed              |
+| J     | `feat/wave2-drive-consent` | 2     | reviewed              |
+| L     | `feat/wave2-shell`         | 2     | reviewed              |
+| E2    | `feat/wave2-home`          | 3     | review 4 (dispatched) |
+| E3    | `feat/wave2-search`        | 3     | review 4 (dispatched) |
+| E4    | `feat/wave2-history`       | 3     | reviewed              |
 
 Status values: `not started` → `dispatched` → `reported, verifying` →
 `merged` → `reviewed`.
