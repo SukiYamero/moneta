@@ -19,5 +19,6 @@ Shared stores, helpers, and the Drive/auth/lock logic layer. No UI here.
 - `lockStore.ts` — zustand store wrapping `pinLock.ts`: lock phase, throttle,
   biometric availability.
 - `utils.ts` — `cn()`, the Tailwind class-merge helper.
-
-Not here yet: `repo.ts` (the CRUD data port — see `specs.md` §12, Track A).
+- `repo.ts` — the storage-agnostic `Repo` port (**interface only for now** —
+  see `specs.md` §10.3). Implementations (local dexie, Drive-backed) land
+  per `specs.md` §12, Track A.

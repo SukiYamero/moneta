@@ -229,6 +229,53 @@ Full design: `docs/superpowers/specs/2026-06-26-pin-lock-design.md`.
   refresh path — both ride with the polished UI; the polished lock-screen visual
   design; `repo.ts` CRUD; encrypting the local financial-data cache.
 
+### 10.3 Data port (`Repo`)
+
+- **Goal:** a single storage-agnostic contract the rest of the app depends on
+  for reading/writing `Movimiento`, `Activo`, and `Config`, so every feature
+  (movimientos UI, dashboard, Drive sync) is built against one interface
+  instead of a concrete storage engine. Local IndexedDB (dexie) is the first
+  implementation; Drive-backed sync is a second implementation behind the
+  same port (§11, 2026-07-02).
+- **User story:** as a developer, I write features against `Repo` without
+  knowing or caring whether data currently lives in IndexedDB or Drive;
+  swapping/adding an implementation never touches a consumer.
+- **UI:** none — pure data-access contract, no component.
+- **Data touched:** `Movimiento[]`, `Activo[]`, `Config` (per `schema.ts`).
+  No new fields; the port changes how data is accessed, not the model.
+- **Design, deliberately generous for scale (see §11 decision):**
+  - `movimientos` and `activos` share one generic `CrudRepo<T>` shape
+    (`list`/`get`/`add`/`addMany`/`update`/`remove`/`removeMany`) instead of
+    one-off methods per entity — less duplication as entity types are added.
+  - `list()` takes an optional query (date range, section, sort,
+    `limit`/`cursor`) from day one. A personal-finance app accumulates years
+    of `Movimiento` rows; baking in filtering/pagination now avoids a
+    breaking change to every call site once "load everything into memory"
+    stops being viable.
+  - `addMany`/`removeMany` for bulk paths (CSV import, migrations) that are
+    inevitable once real usage starts.
+  - `Config` stays atomic (`getConfig`/`updateConfig`) — it's small (tens of
+    rows, not years of transactions) and is one JSON file in
+    `appDataFolder`; fine-grained CRUD on `secciones`/`categorias` would be
+    over-engineering the one part that doesn't grow like `Movimiento` does.
+  - Errors are a typed `RepoError` (`code: 'not_found' | 'schema_mismatch' |
+'network' | 'unknown'`) instead of raw throws, since a Drive-backed
+    implementation fails in more ways (network, auth) than IndexedDB does,
+    and callers need to branch on failure kind uniformly across
+    implementations.
+  - `ready()` runs the `schemaVersion` check/migration before first use —
+    every implementation must expose it, not just the local one.
+- **Edge cases:** empty store (fresh account) → `list()` returns
+  `{ items: [] }`, not an error; `get()` on a missing id → `undefined`, not
+  a throw; `update`/`remove` on a missing id → `RepoError('not_found')`;
+  `ready()` detects a stale `schemaVersion` and runs the pending migration
+  before any other call proceeds.
+- **Done when:** `src/lib/repo.ts` exports the `Repo`/`CrudRepo`/`RepoError`
+  contract (interface only, no implementation) and `typecheck` is green.
+  Implementing it (dexie-backed) and its tests are Track A's job (§12).
+- **Out of scope (own spec/track):** the local (dexie) implementation, the
+  Drive-backed implementation, the movimientos UI.
+
 ## 11. Decisions log
 
 - 2026-06-25 — Package manager: **bun**. Node: **24 LTS** (`.nvmrc`).
@@ -321,6 +368,16 @@ Full design: `docs/superpowers/specs/2026-06-26-pin-lock-design.md`.
 - 2026-08-18 — **Parallel-agent workflow adopted.** One agent = one branch = one
   worktree, with per-track file ownership declared in §12; `specs.md` edits from
   parallel tracks are append-only. Trunk-based merges to `main` stay the rule.
+- 2026-08-18 — **`Repo` port interface (§10.3) designed generously for scale,
+  on purpose.** Deviates from the project's usual "no speculative
+  abstraction" default: the user explicitly asked for this one contract to
+  be over-built because the app is expected to grow a lot and the port is
+  the seam every feature depends on — hard to widen later without touching
+  every consumer. Concretely: generic `CrudRepo<T>` instead of per-entity
+  methods, `list()` ships filter/sort/pagination from day one, bulk
+  `addMany`/`removeMany`, a typed `RepoError`. `Config` was deliberately
+  left atomic (not over-built) since it doesn't grow the way
+  `Movimiento`/`Activo` do — the generosity is targeted, not blanket.
 
 ## 12. Backlog (pending verification / deferred work)
 
