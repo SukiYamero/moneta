@@ -15,6 +15,7 @@ import {
   BACKGROUND_TIMEOUT_MS,
   markActive,
   isBackgroundExpired,
+  forgetDek,
 } from '@/lib/pinLock'
 import type { AuthSession } from '@/lib/auth'
 
@@ -75,6 +76,24 @@ test('enableLock leaves the vault unlocked in this tab, no separate unlock neede
   const refreshed: AuthSession = { accessToken: 'tok-fresh', expiresAt: 1_234_567_890_000 }
   await updateSession(refreshed)
 
+  expect(await unlockWithPin('1234')).toEqual(refreshed)
+})
+
+test('forgetDek discards the in-memory key so updateSession requires a fresh unlock', async () => {
+  await enableLock({ pin: '1234', session })
+  forgetDek()
+  await expect(updateSession(session)).rejects.toThrow('lock: not unlocked')
+})
+
+test('unlocking again after forgetDek restores a usable, refreshable session', async () => {
+  await enableLock({ pin: '1234', session })
+  forgetDek()
+
+  const unlocked = await unlockWithPin('1234')
+  expect(unlocked).toEqual(session)
+
+  const refreshed: AuthSession = { accessToken: 'tok-after-relock', expiresAt: 1_222_333_444_000 }
+  await updateSession(refreshed)
   expect(await unlockWithPin('1234')).toEqual(refreshed)
 })
 

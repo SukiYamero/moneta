@@ -917,6 +917,51 @@ silent restore when a lock-screen unlock already settled status`).
   would make the check fragile to reorder. TDD'd in `authStore.test.ts`
   (`does not resurrect a logged-out session with a stale in-flight resolve`
   — failed with the stale session/drive resurrected pre-fix).
+- 2026-08-18 — **Locking now discards the resident DEK, closing the gap the
+  `activeDek` fix above widened (fix, code review follow-up).** `lockStore`'s
+  `lock: () => { if (get().enabled) set({ phase: 'locked' }) }` was a pure UI
+  state flip — `activeDek` was only ever cleared by `resetVault()`, never by
+  re-locking, on either the manual "Lock now" path or the 7-minute
+  background-timeout re-lock in `onVisible`. A "locked" tab still held the
+  key that decrypts the cached OAuth token resident in module memory: the
+  curtain was up but the key was still in hand. §5's threat model is casual
+  access, not a forensic attacker, but "the key is discarded on lock" is the
+  one-line property that makes the curtain mean anything, and the
+  `enableLock`/`activeDek` fix above made the vault carry a live DEK in
+  strictly more situations than before it, not fewer — so this needed
+  closing in the same pass. Added `pinLock.forgetDek()` — an explicit
+  exported operation, not a raw `activeDek = null` reached into from
+  `lockStore` — so key material stays owned by the module that created it;
+  `resetVault` now calls it too instead of duplicating the assignment.
+  Wired into every route `lockStore` has into the locked phase: the manual
+  `lock()`, the background-timeout re-lock in `onVisible()`, and (for the
+  invariant "phase locked ⇒ no DEK resident" to hold unconditionally, not
+  just because a fresh module load happens to start `activeDek` at `null`)
+  the cold-start path in `init()` too. The `LockedOutError` branch in
+  `resume()` and the manual `reset()` path were already covered — both call
+  `resetVault()`, which now routes through `forgetDek()`. Verified the
+  composition with the `syncLockedSession` change from the previous entry:
+  a token refresh attempted in a locked tab now legitimately throws `'lock:
+not unlocked'` and hits the `console.warn` path — correct, not a
+  regression — and confirmed (a) nothing in the codebase calls
+  `login`/`restore`/`hydrate`/`connectDrive` on an interval or proactive
+  refresh timer (grepped for `setInterval`/`expiresAt` scheduling — none
+  exists), so this can't become a noisy warning loop, and (b) unlocking
+  again after a `forgetDek()` still fully restores a usable, refreshable
+  session (`unlockWithPin`/`unlockWithBiometric` re-populate `activeDek`
+  exactly as before). Also added an explicit test pinning down that
+  `syncLockedSession`'s `console.warn` never carries the access token (it
+  only ever logs the caught error, never the `session` argument) — specs.md
+  §7 is absolute on this, worth checking rather than assuming. TDD'd in
+  `pinLock.test.ts` (`forgetDek discards the in-memory key so updateSession
+requires a fresh unlock`, `unlocking again after forgetDek restores a
+usable, refreshable session` — the first failed with `forgetDek is not a
+function` pre-fix) and `lockStore.test.ts` (`init forgets any DEK before
+landing on the locked phase`, `lock re-locks only when enabled` extended
+  to assert `forgetDek`, `onVisible re-locks after background expiry`
+  extended likewise, plus a negative case that a not-yet-expired
+  `onVisible` leaves the DEK untouched — all three failed on the missing
+  `forgetDek()` call pre-fix).
 
 ## 12. Backlog (pending verification / deferred work)
 

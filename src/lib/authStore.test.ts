@@ -104,6 +104,28 @@ describe('useAuthStore.login', () => {
     expect(warn).toHaveBeenCalled()
     warn.mockRestore()
   })
+
+  // specs.md §7: the access token must never reach a log. syncLockedSession's
+  // catch only ever logs the caught error, never the session it was given —
+  // this pins that down explicitly instead of leaving it an assumption.
+  it('never logs the access token when the vault sync fails', async () => {
+    const secretToken = 'ya29.super-secret-access-token'
+    mToken.mockResolvedValue({ accessToken: secretToken, expiresAt: 1 })
+    mUser.mockResolvedValue({ email: 'a@b.com', name: 'Ana' })
+    mHasVault.mockResolvedValue(true)
+    mUpdateSession.mockRejectedValue(new Error('lock: not unlocked'))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    await useAuthStore.getState().login()
+
+    expect(warn).toHaveBeenCalled()
+    const loggedText = warn.mock.calls
+      .flat()
+      .map((arg) => JSON.stringify(arg))
+      .join(' ')
+    expect(loggedText).not.toContain(secretToken)
+    warn.mockRestore()
+  })
 })
 
 describe('useAuthStore.restore', () => {

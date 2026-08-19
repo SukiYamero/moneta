@@ -9,6 +9,7 @@ const pinLock = {
   resetVault: vi.fn(),
   markActive: vi.fn(),
   isBackgroundExpired: vi.fn(),
+  forgetDek: vi.fn(),
   LockedOutError: class LockedOutError extends Error {},
 }
 const hydrate = vi.fn()
@@ -47,6 +48,14 @@ describe('useLockStore', () => {
     expect(useLockStore.getState().biometricAvailable).toBe(true)
   })
 
+  test('init forgets any DEK before landing on the locked phase', async () => {
+    pinLock.hasVault.mockResolvedValue(true)
+    pinLock.isBiometricAvailable.mockResolvedValue(false)
+    const { useLockStore } = await import('@/lib/lockStore')
+    await useLockStore.getState().init()
+    expect(pinLock.forgetDek).toHaveBeenCalledOnce()
+  })
+
   test('init unlocks when no vault exists', async () => {
     pinLock.hasVault.mockResolvedValue(false)
     pinLock.isBiometricAvailable.mockResolvedValue(false)
@@ -54,6 +63,7 @@ describe('useLockStore', () => {
     await useLockStore.getState().init()
     expect(useLockStore.getState().phase).toBe('unlocked')
     expect(useLockStore.getState().enabled).toBe(false)
+    expect(pinLock.forgetDek).not.toHaveBeenCalled()
   })
 
   test('init reports enabled when a vault exists', async () => {
@@ -84,9 +94,11 @@ describe('useLockStore', () => {
     useLockStore.setState({ phase: 'unlocked', enabled: false })
     useLockStore.getState().lock()
     expect(useLockStore.getState().phase).toBe('unlocked')
+    expect(pinLock.forgetDek).not.toHaveBeenCalled()
     useLockStore.setState({ enabled: true })
     useLockStore.getState().lock()
     expect(useLockStore.getState().phase).toBe('locked')
+    expect(pinLock.forgetDek).toHaveBeenCalledOnce()
   })
 
   test('reset clears the enabled flag', async () => {
@@ -155,5 +167,15 @@ describe('useLockStore', () => {
     useLockStore.setState({ phase: 'unlocked' })
     await useLockStore.getState().onVisible()
     expect(useLockStore.getState().phase).toBe('locked')
+    expect(pinLock.forgetDek).toHaveBeenCalledOnce()
+  })
+
+  test('onVisible does not touch the DEK when the background timeout has not elapsed', async () => {
+    pinLock.isBackgroundExpired.mockResolvedValue(false)
+    const { useLockStore } = await import('@/lib/lockStore')
+    useLockStore.setState({ phase: 'unlocked' })
+    await useLockStore.getState().onVisible()
+    expect(useLockStore.getState().phase).toBe('unlocked')
+    expect(pinLock.forgetDek).not.toHaveBeenCalled()
   })
 })

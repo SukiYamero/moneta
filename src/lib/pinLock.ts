@@ -237,9 +237,16 @@ async function decryptSession(vault: LockVault, dek: Bytes): Promise<AuthSession
   return JSON.parse(dec.decode(plain)) as AuthSession
 }
 
+// The only place module-level key material is discarded. Exported so callers
+// (lockStore, on any transition into the locked phase) can make the key
+// disappear without reaching into pinLock's module state themselves.
+export function forgetDek(): void {
+  activeDek = null
+}
+
 export async function resetVault(): Promise<void> {
   await db.vault.delete(VAULT_ID)
-  activeDek = null
+  forgetDek()
 }
 
 export async function unlockWithPin(pin: string): Promise<AuthSession> {
