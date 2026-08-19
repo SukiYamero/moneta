@@ -203,6 +203,25 @@ as bugs.
 
 ---
 
+## 3b. Answers already given to stage-1 open questions
+
+Recorded here so the stage-3 agents inherit them instead of re-asking.
+
+- **`series()` bucket granularity is confirmed:** `dia` → 1 bucket,
+  `semana` → 7 daily, `mes` → weekly (honouring `primerDiaSemana`),
+  `anio` → 12 monthly. Home's chart drives it with `'semana'`; History drives
+  it from its scope selector. Every bucket is clamped to the period, so the
+  bars always sum to the total printed beside them — E1 proved this with an
+  invariant test over all four periods, after the operator caught the first
+  and last bucket escaping the range.
+- **`breakdownBy()` requires `tipo`.** See the Track E4 brief.
+- **`dataStore.load()` short-circuits once `status` is `'ready'`** — load
+  once per session. That is correct for Wave 2 (nothing writes yet); Wave 3's
+  writes will update store state directly rather than refetch. Do not add a
+  refetch path.
+
+---
+
 ## 4. Track briefs
 
 Every brief assumes the agent has already read, in this order: `AGENTS.md`,
@@ -588,7 +607,10 @@ re-pull, do not trust a snapshot).
   hide/show toggle, income/expense mini-totals. **Real** numbers from
   `movimientoStats` + `dataStore` (Track E1) — never a hardcoded figure.
 - Weekly bar chart — real, same source, `recharts` (already a dependency).
-  Respect `prefers-reduced-motion`.
+  Respect `prefers-reduced-motion`. Call
+  `series(movimientos, 'semana', periodRange('semana', today, primerDiaSemana), primerDiaSemana)`
+  — it returns exactly seven buckets, empty days included, already clamped
+  to the week. Do not bucket the data yourself.
 - "Áreas" banner → renders, does not navigate, `// STUB(trackH)`.
 - Recent movimientos → `MovimientoRow` from `@/components/shared`.
 - **Formatting:** `Intl.NumberFormat` with the active locale and
@@ -662,8 +684,11 @@ design.
 - Year menu, scope `SegmentedControl` (day/week/month/year → `Periodo` from
   `schema.ts`), and the day/week/month pickers.
 - Balance card + "por etiqueta" breakdown with progress bars —
-  `breakdownBy()` from Track E1, including its `share` values. Do not compute
-  percentages locally.
+  `breakdownBy(movimientos, 'categoria', tipo)` from Track E1, including its
+  `share` values. Do not compute percentages locally. **`tipo` is
+  required** (operator decision after E1's review: a `share` computed over
+  `ingresos + gastos` mixed together is not a quantity, so the API no longer
+  allows the call) — drive it from the income/expense tab the design shows.
 - Movements list via `MovimientoRow` (pending-badge variant where the design
   shows it) + empty state per scope.
 - Period navigation (previous/next) must respect
