@@ -9,7 +9,7 @@ const TODAY = new Date('2026-08-18T12:00:00.000Z')
 // The contract suite expects an empty store (repo.contract.ts's own
 // precondition doc); createFakeRepo() always seeds demo data, so strip it
 // before handing the repo to the shared suite.
-async function emptyFakeRepo(): Promise<Repo> {
+const emptyFakeRepo = async (): Promise<Repo> => {
   const repo = createFakeRepo({ today: TODAY })
   const [movs, acts] = await Promise.all([repo.movimientos.list(), repo.activos.list()])
   await Promise.all([

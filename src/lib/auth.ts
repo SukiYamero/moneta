@@ -17,13 +17,13 @@ export class AuthError extends Error {
 export type AuthSession = { accessToken: string; expiresAt: number }
 export type GoogleUser = { email: string; name: string; photoLink?: string }
 
-function clientId(): string {
+const clientId = (): string => {
   const id = import.meta.env.VITE_GOOGLE_CLIENT_ID
   if (!id) throw new AuthError('missing VITE_GOOGLE_CLIENT_ID')
   return id
 }
 
-export function loadGis(): Promise<void> {
+export const loadGis = (): Promise<void> => {
   if (window.google?.accounts?.oauth2) return Promise.resolve()
   return new Promise((resolve, reject) => {
     const existing = document.querySelector<HTMLScriptElement>(`script[src="${GIS_SRC}"]`)
@@ -37,16 +37,18 @@ export function loadGis(): Promise<void> {
     const script = document.createElement('script')
     script.src = GIS_SRC
     script.async = true
-    script.onload = () => resolve()
-    script.onerror = () => reject(new AuthError('GIS failed to load'))
-    document.head.appendChild(script)
+    script.addEventListener('load', () => resolve(), { once: true })
+    script.addEventListener('error', () => reject(new AuthError('GIS failed to load')), {
+      once: true,
+    })
+    document.head.append(script)
   })
 }
 
-export function requestAccessToken(
+export const requestAccessToken = (
   prompt: '' | 'consent' = '',
   scope: string = IDENTITY_SCOPES,
-): Promise<AuthSession> {
+): Promise<AuthSession> => {
   const makeRequest = (): Promise<AuthSession> =>
     new Promise<AuthSession>((resolve, reject) => {
       const client = google.accounts.oauth2.initTokenClient({
@@ -73,7 +75,7 @@ export function requestAccessToken(
   return loadGis().then(() => makeRequest())
 }
 
-export async function fetchGoogleUser(accessToken: string): Promise<GoogleUser> {
+export const fetchGoogleUser = async (accessToken: string): Promise<GoogleUser> => {
   const res = await fetch(USERINFO_URL, { headers: { Authorization: `Bearer ${accessToken}` } })
   if (!res.ok) throw new AuthError(`userinfo ${res.status}`)
   const data = (await res.json()) as { email: string; name: string; picture?: string }

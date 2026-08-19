@@ -3,7 +3,7 @@ import { useAuthStore } from '@/lib/authStore'
 import { APP_NAME } from '@/lib/branding'
 import { driveErrorCopy } from '@/features/auth/errorCopy'
 
-export function DrivePermissionScreen() {
+export const DrivePermissionScreen = () => {
   const connecting = useAuthStore((s) => s.driveConnecting)
   const error = useAuthStore((s) => s.driveError)
   const connectDrive = useAuthStore((s) => s.connectDrive)

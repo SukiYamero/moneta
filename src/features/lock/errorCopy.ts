@@ -24,10 +24,10 @@ const ENABLE_ERROR_COPY: Record<string, string> = {
 const DEFAULT_UNLOCK_COPY = 'No se pudo desbloquear. Intenta de nuevo.'
 const DEFAULT_ENABLE_COPY = 'No se pudo activar el bloqueo. Intenta de nuevo.'
 
-export function unlockErrorCopy(message: string): string {
+export const unlockErrorCopy = (message: string): string => {
   return UNLOCK_ERROR_COPY[message] ?? DEFAULT_UNLOCK_COPY
 }
 
-export function enableLockErrorCopy(message: string): string {
+export const enableLockErrorCopy = (message: string): string => {
   return ENABLE_ERROR_COPY[message] ?? DEFAULT_ENABLE_COPY
 }

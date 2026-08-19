@@ -72,7 +72,9 @@ export interface MovimientoVisual {
 }
 
 /** Unknown category names (custom user tags) fall back to a type-based icon/tint. */
-export function getMovimientoVisual(m: Pick<Movimiento, 'categoria' | 'tipo'>): MovimientoVisual {
+export const getMovimientoVisual = (
+  m: Pick<Movimiento, 'categoria' | 'tipo'>,
+): MovimientoVisual => {
   return {
     icon: CATEGORY_ICON[m.categoria] ?? FALLBACK_ICON[m.tipo],
     tint: CATEGORY_TINT[m.categoria] ?? FALLBACK_TINT[m.tipo],
@@ -97,7 +99,7 @@ const CURRENCY_FORMATTERS: Record<Moneda, Intl.NumberFormat> = {
   USD: new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'USD' }),
 }
 
-export function formatMonto(monto: number, moneda: Moneda): string {
+export const formatMonto = (monto: number, moneda: Moneda): string => {
   return CURRENCY_FORMATTERS[moneda].format(monto)
 }
 
@@ -107,9 +109,9 @@ export interface MovimientoAmountView {
 }
 
 /** `monto` is always positive (schema.ts) — sign and color come from `tipo`. */
-export function getMovimientoAmountView(
+export const getMovimientoAmountView = (
   m: Pick<Movimiento, 'monto' | 'moneda' | 'tipo'>,
-): MovimientoAmountView {
+): MovimientoAmountView => {
   return {
     text: SIGN[m.tipo] + formatMonto(m.monto, m.moneda),
     colorClass: AMOUNT_COLOR_CLASS[m.tipo],

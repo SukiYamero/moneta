@@ -300,7 +300,7 @@ const MOVIMIENTO_TEMPLATES: MovimientoTemplate[] = [
   },
 ]
 
-function seedMovimientos(today: Date): Movimiento[] {
+const seedMovimientos = (today: Date): Movimiento[] => {
   return MOVIMIENTO_TEMPLATES.map((t, index) => {
     const at = subDays(today, t.offsetDays)
     return {
@@ -318,7 +318,7 @@ function seedMovimientos(today: Date): Movimiento[] {
   })
 }
 
-function seedActivos(today: Date): Activo[] {
+const seedActivos = (today: Date): Activo[] => {
   const fechaActualizacion = (offsetDays: number) =>
     format(subDays(today, offsetDays), 'yyyy-MM-dd')
   return [
@@ -363,13 +363,13 @@ function seedActivos(today: Date): Activo[] {
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 
-function isValidIsoDate(value: string): boolean {
+const isValidIsoDate = (value: string): boolean => {
   if (!ISO_DATE_RE.test(value)) return false
   const date = new Date(`${value}T00:00:00.000Z`)
   return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value
 }
 
-function validateMovimiento(m: Movimiento): void {
+const validateMovimiento = (m: Movimiento): void => {
   if (!Number.isFinite(m.monto) || m.monto <= 0) {
     throw new RepoError(`monto must be a finite, positive number (got ${m.monto})`, 'invalid_input')
   }
@@ -381,7 +381,7 @@ function validateMovimiento(m: Movimiento): void {
   }
 }
 
-function validateActivo(a: Activo): void {
+const validateActivo = (a: Activo): void => {
   if (!isValidIsoDate(a.fechaActualizacion)) {
     throw new RepoError(
       `fechaActualizacion must be ISO "yyyy-mm-dd" (got "${a.fechaActualizacion}")`,
@@ -404,7 +404,7 @@ function validateActivo(a: Activo): void {
 // index-encoded cursor below is the one deliberate simplification (§10.5) —
 // everything else (defaults, comparator, error codes) is meant to agree.
 
-function compareValues(a: unknown, b: unknown): number {
+const compareValues = (a: unknown, b: unknown): number => {
   if (a === b) return 0
   if (a === undefined || a === null) return -1
   if (b === undefined || b === null) return 1
@@ -419,11 +419,11 @@ function compareValues(a: unknown, b: unknown): number {
 // `sortDir` applies uniformly across the whole key tuple (primary field,
 // tiebreak field, final id fallback) — see specs.md §11, 2026-08-18: mixing
 // direction across levels was a real reproduced ordering bug in repo.local.ts.
-function makeComparator<T extends { id: EntityId }>(
+const makeComparator = <T extends { id: EntityId }>(
   sortBy: keyof T,
   sortDir: 'asc' | 'desc',
   tiebreakField: (keyof T & string) | undefined,
-): (a: T, b: T) => number {
+): ((a: T, b: T) => number) => {
   const dirMul = sortDir === 'asc' ? 1 : -1
   return (a, b) => {
     const primary = compareValues(a[sortBy], b[sortBy]) * dirMul
@@ -440,7 +440,7 @@ function makeComparator<T extends { id: EntityId }>(
 // opaque value-tuple cursor — fine for an in-memory store with no compound
 // index to walk). Still must reject garbage the same way the real repo does:
 // `Number('garbage')` is NaN and `slice(NaN)` silently behaves like `slice(0)`.
-function decodeCursor(cursor: string | undefined): number {
+const decodeCursor = (cursor: string | undefined): number => {
   if (cursor === undefined) return 0
   const index = Number(cursor)
   if (!Number.isInteger(index) || index < 0) {
@@ -454,14 +454,14 @@ function decodeCursor(cursor: string | undefined): number {
 // fractional/negative/non-finite value is bad caller input, not a request
 // for an empty page — must reject, not silently answer with an ambiguous
 // `{ items: [] }`.
-function validateLimit(limit: number | undefined): void {
+const validateLimit = (limit: number | undefined): void => {
   if (limit === undefined) return
   if (!Number.isInteger(limit) || limit < 1) {
     throw new RepoError(`limit must be a positive integer (got ${limit})`, 'invalid_input')
   }
 }
 
-function paginate<T>(items: T[], limit?: number, cursor?: string): ListResult<T> {
+const paginate = <T>(items: T[], limit?: number, cursor?: string): ListResult<T> => {
   validateLimit(limit)
   const start = decodeCursor(cursor)
   if (limit === undefined) return { items: items.slice(start) }
@@ -480,14 +480,14 @@ interface CrudRepoConfig<T> {
   validate: (item: T) => void
 }
 
-function createCrudRepo<T extends { id: EntityId }>(
+const createCrudRepo = <T extends { id: EntityId }>(
   seed: T[],
   config: CrudRepoConfig<T>,
-): CrudRepo<T> {
+): CrudRepo<T> => {
   let store = [...seed]
   const { dateField, seccionField, tiebreakField, validate } = config
 
-  function applyFilters(query: ListQuery<T> | undefined): T[] {
+  const applyFilters = (query: ListQuery<T> | undefined): T[] => {
     const { dateFrom, dateTo, seccion } = query ?? {}
     return store.filter((item) => {
       if (dateFrom !== undefined && String(item[dateField]) < dateFrom) return false
@@ -497,7 +497,7 @@ function createCrudRepo<T extends { id: EntityId }>(
     })
   }
 
-  function sortItems(items: T[], query: ListQuery<T> | undefined): T[] {
+  const sortItems = (items: T[], query: ListQuery<T> | undefined): T[] => {
     const sortBy = query?.sortBy ?? dateField
     const sortDir = query?.sortDir ?? 'desc'
     return items.toSorted(makeComparator<T>(sortBy, sortDir, tiebreakField))
@@ -523,7 +523,7 @@ function createCrudRepo<T extends { id: EntityId }>(
       return { ...fresh }
     },
     async addMany(items) {
-      items.forEach(validate)
+      items.forEach((item) => validate(item))
       // All-or-nothing, mirroring repo.local.ts's bulkAdd-inside-a-transaction
       // guarantee: every id (within the batch, and against the existing store)
       // is checked before the store is touched, so a bad row never leaves a
@@ -578,7 +578,7 @@ export interface CreateFakeRepoOptions {
 }
 
 /** In-memory `Repo` implementation, seeded with deterministic Spanish sample data. */
-export function createFakeRepo({ today = new Date() }: CreateFakeRepoOptions = {}): Repo {
+export const createFakeRepo = ({ today = new Date() }: CreateFakeRepoOptions = {}): Repo => {
   let config: Config = { ...FAKE_CONFIG }
 
   const movimientos = createCrudRepo<Movimiento>(seedMovimientos(today), {

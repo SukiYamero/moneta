@@ -8,7 +8,7 @@ afterEach(async () => {
   await db.config.clear()
 })
 
-function sampleVault(): LockVault {
+const sampleVault = (): LockVault => {
   return {
     schemaVersion: 1,
     tokenCipher: new Uint8Array([1, 2, 3]),

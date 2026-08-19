@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { BottomSheet } from '@/components/shared/BottomSheet'
 
-function Harness({ open, onClose }: { open: boolean; onClose: () => void }) {
+const Harness = ({ open, onClose }: { open: boolean; onClose: () => void }) => {
   return (
     <BottomSheet open={open} onClose={onClose} ariaLabel="Panel de prueba">
       <button type="button">Primero</button>
@@ -77,7 +77,7 @@ describe('BottomSheet', () => {
   it('restores focus to the trigger element on close', async () => {
     const trigger = document.createElement('button')
     trigger.textContent = 'Abrir'
-    document.body.appendChild(trigger)
+    document.body.append(trigger)
     trigger.focus()
 
     const { rerender } = render(<Harness open onClose={() => {}} />)
@@ -94,7 +94,7 @@ describe('BottomSheet', () => {
   describe('drag-to-dismiss', () => {
     // The handle has no accessible role (purely decorative for touch/mouse
     // drag) — it's the panel's first child, ahead of `children`.
-    function getHandle() {
+    const getHandle = () => {
       const dialog = screen.getByRole('dialog')
       return dialog.firstElementChild as HTMLElement
     }

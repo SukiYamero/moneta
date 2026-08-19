@@ -6,7 +6,7 @@ import { loginErrorCopy } from '@/features/auth/errorCopy'
 // Official "Sign in with Google" button surface: fixed white/near-black per
 // Google's own brand guidelines, not our app palette — same deliberate
 // exception as the G-logo colors below it (docs/ui/design-tokens.md).
-function GoogleGlyph() {
+const GoogleGlyph = () => {
   return (
     <svg width="22" height="22" viewBox="0 0 48 48" aria-hidden="true">
       <path
@@ -29,7 +29,7 @@ function GoogleGlyph() {
   )
 }
 
-export function WelcomeScreen() {
+export const WelcomeScreen = () => {
   const status = useAuthStore((s) => s.status)
   const error = useAuthStore((s) => s.error)
   const login = useAuthStore((s) => s.login)

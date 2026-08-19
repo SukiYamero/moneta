@@ -18,10 +18,10 @@ export type DriveLayout = {
   configFileId: string
 }
 
-async function ensureJson(
+const ensureJson = async (
   token: string,
   opts: { name: string; data: unknown; parent?: string; space?: DriveSpace },
-): Promise<string> {
+): Promise<string> => {
   const existing = await findFile(token, {
     name: opts.name,
     parent: opts.parent,
@@ -31,7 +31,7 @@ async function ensureJson(
   return createJsonFile(token, opts)
 }
 
-export async function bootstrap(token: string): Promise<DriveLayout> {
+export const bootstrap = async (token: string): Promise<DriveLayout> => {
   const folderId =
     (await findFile(token, { name: FOLDER_NAME, mimeType: FOLDER_MIME })) ??
     (await createFolder(token, FOLDER_NAME))

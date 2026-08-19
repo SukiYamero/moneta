@@ -7,7 +7,7 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-function renderAtBrokenRoute() {
+const renderAtBrokenRoute = () => {
   const router = createMemoryRouter(
     [
       {

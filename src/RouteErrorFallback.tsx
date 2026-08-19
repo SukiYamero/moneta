@@ -6,7 +6,7 @@ import { APP_NAME } from '@/lib/branding'
 // without taking down the rest of the app. docs/error-handling.md §7: the
 // technical detail goes to console only, the DOM only ever gets fixed,
 // translated copy.
-export function RouteErrorFallback() {
+export const RouteErrorFallback = () => {
   const error = useRouteError()
   console.error('[RouteErrorFallback]', error)
 

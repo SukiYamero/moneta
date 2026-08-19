@@ -9,7 +9,7 @@ import {
 export type CenterModalProps = OverlayShellProps<HTMLDivElement>
 
 /** The centered popup shell (Delete confirm, Info tooltip, Custom tag modal, Group editor…). */
-export function CenterModal({
+export const CenterModal = ({
   open,
   onClose,
   children,
@@ -18,7 +18,7 @@ export function CenterModal({
   className,
   initialFocus,
   ref,
-}: CenterModalProps) {
+}: CenterModalProps) => {
   const panelRef = useOverlay<HTMLDivElement>({ open, onClose, initialFocus, ref })
 
   if (!open) return null

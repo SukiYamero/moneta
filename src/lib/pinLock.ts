@@ -38,30 +38,30 @@ export class BiometricUnavailableError extends Error {
   }
 }
 
-function randomBytes(length: number): Bytes {
+const randomBytes = (length: number): Bytes => {
   return crypto.getRandomValues(new Uint8Array(length))
 }
 
-function generateDek(): Bytes {
+const generateDek = (): Bytes => {
   return randomBytes(32)
 }
 
-function importAesKey(raw: Bytes): Promise<CryptoKey> {
+const importAesKey = (raw: Bytes): Promise<CryptoKey> => {
   return crypto.subtle.importKey('raw', raw, 'AES-GCM', false, ['encrypt', 'decrypt'])
 }
 
-async function aesEncrypt(key: CryptoKey, data: Bytes): Promise<{ iv: Bytes; cipher: Bytes }> {
+const aesEncrypt = async (key: CryptoKey, data: Bytes): Promise<{ iv: Bytes; cipher: Bytes }> => {
   const iv = randomBytes(12)
   const cipher = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, data)
   return { iv, cipher: new Uint8Array(cipher) }
 }
 
-async function aesDecrypt(key: CryptoKey, iv: Bytes, cipher: Bytes): Promise<Bytes> {
+const aesDecrypt = async (key: CryptoKey, iv: Bytes, cipher: Bytes): Promise<Bytes> => {
   const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, cipher)
   return new Uint8Array(plain)
 }
 
-async function derivePinKey(pin: string, salt: Bytes, iterations: number): Promise<CryptoKey> {
+const derivePinKey = async (pin: string, salt: Bytes, iterations: number): Promise<CryptoKey> => {
   const base = await crypto.subtle.importKey('raw', enc.encode(pin), 'PBKDF2', false, ['deriveKey'])
   return crypto.subtle.deriveKey(
     { name: 'PBKDF2', salt, iterations, hash: 'SHA-256' },
@@ -72,11 +72,11 @@ async function derivePinKey(pin: string, salt: Bytes, iterations: number): Promi
   )
 }
 
-export async function hasVault(): Promise<boolean> {
+export const hasVault = async (): Promise<boolean> => {
   return (await db.vault.get(VAULT_ID)) !== undefined
 }
 
-async function deriveBiometricKey(prfSecret: BufferSource): Promise<CryptoKey> {
+const deriveBiometricKey = async (prfSecret: BufferSource): Promise<CryptoKey> => {
   const base = await crypto.subtle.importKey('raw', prfSecret, 'HKDF', false, ['deriveKey'])
   return crypto.subtle.deriveKey(
     { name: 'HKDF', hash: 'SHA-256', salt: new Uint8Array(0), info: HKDF_INFO },
@@ -87,11 +87,14 @@ async function deriveBiometricKey(prfSecret: BufferSource): Promise<CryptoKey> {
   )
 }
 
-function prfResult(credential: PublicKeyCredential): BufferSource | undefined {
+const prfResult = (credential: PublicKeyCredential): BufferSource | undefined => {
   return credential.getClientExtensionResults().prf?.results?.first
 }
 
-async function evaluatePrf(credentialId: Bytes, prfSalt: Bytes): Promise<BufferSource | undefined> {
+const evaluatePrf = async (
+  credentialId: Bytes,
+  prfSalt: Bytes,
+): Promise<BufferSource | undefined> => {
   const assertion = (await navigator.credentials.get({
     publicKey: {
       challenge: randomBytes(32),
@@ -103,9 +106,9 @@ async function evaluatePrf(credentialId: Bytes, prfSalt: Bytes): Promise<BufferS
   return assertion ? prfResult(assertion) : undefined
 }
 
-async function registerBiometric(
+const registerBiometric = async (
   prfSalt: Bytes,
-): Promise<{ credentialId: Bytes; secret: BufferSource } | null> {
+): Promise<{ credentialId: Bytes; secret: BufferSource } | null> => {
   const created = (await navigator.credentials.create({
     publicKey: {
       challenge: randomBytes(32),
@@ -130,7 +133,7 @@ async function registerBiometric(
   return secret ? { credentialId, secret } : null
 }
 
-export async function isBiometricAvailable(): Promise<boolean> {
+export const isBiometricAvailable = async (): Promise<boolean> => {
   const api = globalThis.PublicKeyCredential
   if (!api?.isUserVerifyingPlatformAuthenticatorAvailable) return false
   try {
@@ -145,16 +148,16 @@ export async function isBiometricAvailable(): Promise<boolean> {
   }
 }
 
-export async function biometricEnabled(): Promise<boolean> {
+export const biometricEnabled = async (): Promise<boolean> => {
   const vault = await db.vault.get(VAULT_ID)
   return vault?.biometric !== undefined
 }
 
-export async function enableLock(opts: {
+export const enableLock = async (opts: {
   pin: string
   session: AuthSession
   biometric?: boolean
-}): Promise<void> {
+}): Promise<void> => {
   const dek = generateDek()
   const dekKey = await importAesKey(dek)
   const token = await aesEncrypt(dekKey, enc.encode(JSON.stringify(opts.session)))
@@ -197,7 +200,33 @@ export async function enableLock(opts: {
   activeDek = dek
 }
 
-export async function unlockWithBiometric(): Promise<AuthSession> {
+// A partial db.vault.update() makes the store round-trip the untouched binary
+// fields back as plain numeric-keyed objects, which WebCrypto rejects.
+// Re-wrap them into a real Uint8Array before any crypto call.
+const asBytes = (v: unknown): Bytes => {
+  if (v instanceof Uint8Array) return Uint8Array.from(v)
+  if (v instanceof ArrayBuffer) return new Uint8Array(v)
+  if (ArrayBuffer.isView(v))
+    return Uint8Array.from(new Uint8Array(v.buffer, v.byteOffset, v.byteLength))
+  if (Array.isArray(v)) return Uint8Array.from(v as number[])
+  if (v !== null && typeof v === 'object')
+    return Uint8Array.from(Object.values(v as Record<string, number>))
+  throw new TypeError('lock: expected binary field')
+}
+
+const readVault = async (): Promise<LockVault> => {
+  const vault = await db.vault.get(VAULT_ID)
+  if (!vault) throw new Error('lock: no vault')
+  return vault
+}
+
+const decryptSession = async (vault: LockVault, dek: Bytes): Promise<AuthSession> => {
+  const dekKey = await importAesKey(dek)
+  const plain = await aesDecrypt(dekKey, asBytes(vault.tokenIv), asBytes(vault.tokenCipher))
+  return JSON.parse(dec.decode(plain)) as AuthSession
+}
+
+export const unlockWithBiometric = async (): Promise<AuthSession> => {
   const vault = await readVault()
   if (!vault.biometric) throw new BiometricUnavailableError()
   const secret = await evaluatePrf(
@@ -220,40 +249,14 @@ export async function unlockWithBiometric(): Promise<AuthSession> {
   return decryptSession(vault, dek)
 }
 
-// A partial db.vault.update() makes the store round-trip the untouched binary
-// fields back as plain numeric-keyed objects, which WebCrypto rejects.
-// Re-wrap them into a real Uint8Array before any crypto call.
-function asBytes(v: unknown): Bytes {
-  if (v instanceof Uint8Array) return Uint8Array.from(v)
-  if (v instanceof ArrayBuffer) return new Uint8Array(v)
-  if (ArrayBuffer.isView(v))
-    return Uint8Array.from(new Uint8Array(v.buffer, v.byteOffset, v.byteLength))
-  if (Array.isArray(v)) return Uint8Array.from(v as number[])
-  if (v !== null && typeof v === 'object')
-    return Uint8Array.from(Object.values(v as Record<string, number>))
-  throw new TypeError('lock: expected binary field')
-}
-
-async function readVault(): Promise<LockVault> {
-  const vault = await db.vault.get(VAULT_ID)
-  if (!vault) throw new Error('lock: no vault')
-  return vault
-}
-
-async function decryptSession(vault: LockVault, dek: Bytes): Promise<AuthSession> {
-  const dekKey = await importAesKey(dek)
-  const plain = await aesDecrypt(dekKey, asBytes(vault.tokenIv), asBytes(vault.tokenCipher))
-  return JSON.parse(dec.decode(plain)) as AuthSession
-}
-
 // The only place module-level key material is discarded. Exported so callers
 // (lockStore, on any transition into the locked phase) can make the key
 // disappear without reaching into pinLock's module state themselves.
-export function forgetDek(): void {
+export const forgetDek = (): void => {
   activeDek = null
 }
 
-export async function resetVault(): Promise<void> {
+export const resetVault = async (): Promise<void> => {
   await db.vault.delete(VAULT_ID)
   forgetDek()
   // The vault and this device's "has logged in before" signal are wiped
@@ -263,7 +266,7 @@ export async function resetVault(): Promise<void> {
   await clearLoggedIn()
 }
 
-export async function unlockWithPin(pin: string): Promise<AuthSession> {
+export const unlockWithPin = async (pin: string): Promise<AuthSession> => {
   const vault = await readVault()
   if (vault.failedAttempts >= MAX_ATTEMPTS) throw new LockedOutError()
 
@@ -293,14 +296,14 @@ export async function unlockWithPin(pin: string): Promise<AuthSession> {
   return decryptSession(vault, dek)
 }
 
-export async function updateSession(session: AuthSession): Promise<void> {
+export const updateSession = async (session: AuthSession): Promise<void> => {
   if (!activeDek) throw new Error('lock: not unlocked')
   const dekKey = await importAesKey(activeDek)
   const token = await aesEncrypt(dekKey, enc.encode(JSON.stringify(session)))
   await db.vault.update(VAULT_ID, { tokenCipher: token.cipher, tokenIv: token.iv })
 }
 
-export async function markActive(now: number = Date.now()): Promise<void> {
+export const markActive = async (now: number = Date.now()): Promise<void> => {
   try {
     await db.vault.update(VAULT_ID, { lastActiveAt: now })
   } catch (e) {
@@ -315,7 +318,7 @@ export async function markActive(now: number = Date.now()): Promise<void> {
   }
 }
 
-export async function isBackgroundExpired(now: number = Date.now()): Promise<boolean> {
+export const isBackgroundExpired = async (now: number = Date.now()): Promise<boolean> => {
   const vault = await db.vault.get(VAULT_ID)
   if (!vault) return false
   return now - vault.lastActiveAt > BACKGROUND_TIMEOUT_MS

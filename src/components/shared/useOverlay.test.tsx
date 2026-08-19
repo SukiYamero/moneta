@@ -13,8 +13,7 @@ import { DateChipPicker } from '@/components/shared/DateChipPicker'
  * nests overlays (delete-confirm CenterModal opening from inside the
  * Movement BottomSheet), so this is a real, reachable flow.
  */
-
-function Harness({ open, onClose }: { open: boolean; onClose: () => void }) {
+const Harness = ({ open, onClose }: { open: boolean; onClose: () => void }) => {
   return (
     <BottomSheet open={open} onClose={onClose} ariaLabel="Panel de prueba">
       <button type="button">Primero</button>
@@ -23,13 +22,13 @@ function Harness({ open, onClose }: { open: boolean; onClose: () => void }) {
   )
 }
 
-function NestedOverlaysHarness({
+const NestedOverlaysHarness = ({
   onSheetClose,
   onModalClose,
 }: {
   onSheetClose: () => void
   onModalClose: () => void
-}) {
+}) => {
   return (
     <BottomSheet open onClose={onSheetClose} ariaLabel="Sheet exterior">
       <button type="button">Eliminar</button>
@@ -96,7 +95,7 @@ describe('useOverlay — nested overlays (bugs 2 & 3)', () => {
     const user = userEvent.setup()
     const onSheetClose = vi.fn()
 
-    function Wrapper() {
+    const Wrapper = () => {
       const [modalOpen, setModalOpen] = useState(true)
       return (
         <BottomSheet open onClose={onSheetClose} ariaLabel="Sheet exterior">
@@ -138,7 +137,7 @@ describe('useOverlay — nested overlays (bugs 2 & 3)', () => {
   it('keeps the body scroll lock held while the nested modal closes but the outer sheet stays open', async () => {
     const user = userEvent.setup()
 
-    function Wrapper() {
+    const Wrapper = () => {
       const [modalOpen, setModalOpen] = useState(true)
       return (
         <BottomSheet open onClose={() => {}} ariaLabel="Sheet exterior">
@@ -164,7 +163,7 @@ describe('useOverlay — nested overlays (bugs 2 & 3)', () => {
   it('releases the body scroll lock once the last overlay closes', async () => {
     const previousOverflow = document.body.style.overflow
 
-    function Wrapper() {
+    const Wrapper = () => {
       const [open, setOpen] = useState(true)
       return (
         <BottomSheet open={open} onClose={() => setOpen(false)} ariaLabel="Sheet único">
@@ -179,7 +178,7 @@ describe('useOverlay — nested overlays (bugs 2 & 3)', () => {
     })
     expect(document.body.style.overflow).toBe('hidden')
 
-    function ClosedHarness() {
+    const ClosedHarness = () => {
       return <Harness open={false} onClose={() => {}} />
     }
     rerender(<ClosedHarness />)
@@ -193,7 +192,7 @@ describe('useOverlay + useEscapeToClose — DateChipPicker inside a BottomSheet'
     const user = userEvent.setup()
     const onSheetClose = vi.fn()
 
-    function Wrapper() {
+    const Wrapper = () => {
       const [date, setDate] = useState('2026-08-10')
       return (
         <BottomSheet open onClose={onSheetClose} ariaLabel="Sheet con selector de fecha">

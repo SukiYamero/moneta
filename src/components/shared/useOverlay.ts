@@ -56,19 +56,19 @@ let stack: OverlayHandle[] = []
 let scrollLockCount = 0
 let previousBodyOverflow = ''
 
-function pushOverlay(handle: OverlayHandle) {
-  stack = [...stack, handle].sort((a, b) => a.seq - b.seq)
+const pushOverlay = (handle: OverlayHandle) => {
+  stack = [...stack, handle].toSorted((a, b) => a.seq - b.seq)
 }
 
-function popOverlay(handle: OverlayHandle) {
+const popOverlay = (handle: OverlayHandle) => {
   stack = stack.filter((entry) => entry !== handle)
 }
 
-function isTopOverlay(handle: OverlayHandle) {
-  return stack.length > 0 && stack[stack.length - 1] === handle
+const isTopOverlay = (handle: OverlayHandle) => {
+  return stack.length > 0 && stack.at(-1) === handle
 }
 
-function acquireScrollLock() {
+const acquireScrollLock = () => {
   if (scrollLockCount === 0) {
     previousBodyOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
@@ -76,7 +76,7 @@ function acquireScrollLock() {
   scrollLockCount += 1
 }
 
-function releaseScrollLock() {
+const releaseScrollLock = () => {
   scrollLockCount = Math.max(0, scrollLockCount - 1)
   if (scrollLockCount === 0) {
     document.body.style.overflow = previousBodyOverflow
@@ -93,12 +93,12 @@ function releaseScrollLock() {
  * scroll lock is refcounted against the stack so a nested modal closing
  * doesn't unlock the page while the sheet behind it is still open.
  */
-export function useOverlay<T extends HTMLElement>({
+export const useOverlay = <T extends HTMLElement>({
   open,
   onClose,
   initialFocus,
   ref,
-}: UseOverlayOptions<T>) {
+}: UseOverlayOptions<T>) => {
   const panelRef = useRef<T | null>(null)
 
   // Keeping the latest onClose in a ref (instead of an effect dependency)
@@ -154,9 +154,9 @@ export function useOverlay<T extends HTMLElement>({
 
       const panel = panelRef.current
       if (!panel) return
-      const focusable = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR))
+      const focusable = [...panel.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)]
       const first = focusable[0]
-      const last = focusable[focusable.length - 1]
+      const last = focusable.at(-1)
       if (!first || !last) return
 
       if (event.shiftKey && document.activeElement === first) {
@@ -202,7 +202,7 @@ export interface UseEscapeToCloseOptions {
  * CenterModal — pressing Escape closes the popover first, not the sheet
  * behind it.
  */
-export function useEscapeToClose({ open, onClose }: UseEscapeToCloseOptions) {
+export const useEscapeToClose = ({ open, onClose }: UseEscapeToCloseOptions) => {
   const onCloseRef = useRef(onClose)
   onCloseRef.current = onClose
 

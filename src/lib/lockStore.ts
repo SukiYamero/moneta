@@ -52,10 +52,10 @@ type LockState = {
   clearError: () => void
 }
 
-async function resume(
+const resume = async (
   set: (partial: Partial<LockState>) => void,
   unlock: () => Promise<AuthSession>,
-): Promise<void> {
+): Promise<void> => {
   try {
     const session = await unlock()
     await useAuthStore.getState().hydrate(session)

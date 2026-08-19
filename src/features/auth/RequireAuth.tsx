@@ -7,7 +7,7 @@ import { DrivePermissionScreen } from '@/features/auth/DrivePermissionScreen'
 // lock enabled — AppLock withholds it behind LockScreen while a vault exists,
 // and lockStore.resume() already settles status (authenticated/error) before
 // handing off. So a single idle-gated restore attempt here can't race that path.
-export function RequireAuth({ children }: { children: ReactNode }) {
+export const RequireAuth = ({ children }: { children: ReactNode }) => {
   const status = useAuthStore((s) => s.status)
   const driveOptIn = useAuthStore((s) => s.driveOptIn)
 

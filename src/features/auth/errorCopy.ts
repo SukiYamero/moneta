@@ -22,10 +22,10 @@ const AUTH_ERROR_COPY: Record<string, string> = {
 const DEFAULT_LOGIN_COPY = 'No se pudo iniciar sesión. Intenta de nuevo.'
 const DEFAULT_DRIVE_COPY = 'No se pudo conectar con Drive. Intenta de nuevo.'
 
-export function loginErrorCopy(message: string): string {
+export const loginErrorCopy = (message: string): string => {
   return AUTH_ERROR_COPY[message] ?? DEFAULT_LOGIN_COPY
 }
 
-export function driveErrorCopy(message: string): string {
+export const driveErrorCopy = (message: string): string => {
   return AUTH_ERROR_COPY[message] ?? DEFAULT_DRIVE_COPY
 }

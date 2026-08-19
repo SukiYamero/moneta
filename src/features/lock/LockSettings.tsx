@@ -8,7 +8,7 @@ import { enableLockErrorCopy } from '@/features/lock/errorCopy'
 // single fixed fallback line is the whole mapping needed here.
 const DISABLE_ERROR_COPY = 'No se pudo desactivar el bloqueo. Intenta de nuevo.'
 
-export function LockSettings() {
+export const LockSettings = () => {
   const enabled = useLockStore((s) => s.enabled)
   const biometricAvailable = useLockStore((s) => s.biometricAvailable)
   const enable = useLockStore((s) => s.enable)
@@ -72,7 +72,7 @@ export function LockSettings() {
           pattern="\d*"
           maxLength={4}
           value={pin}
-          onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+          onChange={(e) => setPin(e.target.value.replaceAll(/\D/g, '').slice(0, 4))}
           className="min-h-11 rounded-md border px-3 text-center tracking-widest"
         />
       </label>

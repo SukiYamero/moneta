@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useLockStore } from '@/lib/lockStore'
 import { unlockErrorCopy } from '@/features/lock/errorCopy'
 
-export default function LockScreen() {
+const LockScreen = () => {
   const phase = useLockStore((s) => s.phase)
   // Gated on whether *this vault* enrolled biometrics, not just whether the
   // platform supports it — a user who declined biometrics at enrollment
@@ -34,7 +34,7 @@ export default function LockScreen() {
           pattern="\d*"
           maxLength={4}
           value={pin}
-          onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+          onChange={(e) => setPin(e.target.value.replaceAll(/\D/g, '').slice(0, 4))}
           className="min-h-11 rounded-md border px-3 text-center tracking-widest"
         />
       </label>
@@ -50,3 +50,5 @@ export default function LockScreen() {
     </div>
   )
 }
+
+export default LockScreen
