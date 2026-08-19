@@ -118,6 +118,15 @@ We follow **spec-driven development**. `specs.md` is the source of truth.
   but don't design the interaction model around a mouse in the meantime (see
   next point). This isn't a license to gold-plate desktop handling now —
   just don't paint yourself into a click-only corner.
+- **Relative units, not fixed device sizes.** Never hardcode a mockup
+  frame's pixel size (e.g. a `430×844` phone-frame container) as a real
+  layout container — the app is fluid. `rem` for type/spacing (respects the
+  user's font-size preference); `dvh`/`dvw`, not `vh`/`vw`, for
+  viewport-relative sizing — `dvh` accounts for a mobile browser's chrome
+  showing/hiding, `vh` doesn't and causes layout jumps. Design against a
+  fluid range (~360px min width up through ~430px), not one fixed width;
+  Tailwind's `sm`/`md`/`lg` breakpoints are the only fixed numbers that
+  matter, and only as the enhancement layer above.
 - **Touch/swipe is the primary interaction model, not click/hover.** This
   app should feel like a native app, not a website with touch support
   bolted on. Concretely:
@@ -148,6 +157,14 @@ We follow **spec-driven development**. `specs.md` is the source of truth.
   why). Fonts: Manrope (`@fontsource-variable/manrope`), matching the
   design — supersedes the earlier Geist/Nova-preset default, see `specs.md`
   §11, 2026-08-18.
+- **No CDN dependencies, ever — self-host everything.** Fonts, icon sets,
+  any library: install it as a real package (`bun add`) and bundle it,
+  never load it from a third-party CDN (`unpkg`, `cdnjs`, a Google Fonts
+  `<link>`, etc.) at runtime. This app is offline-first (`specs.md` §3); a
+  CDN request breaks offline use and adds a third party watching the
+  request. This is why Manrope/Lucide won over the design canvas's
+  CDN-loaded Phosphor (`docs/ui/design-tokens.md`) — the same rule applies
+  to every future dependency, don't re-litigate it case by case.
 - **All style values come from tokens in `src/styles/index.css`** — colors,
   radius, font sizes/weights, animation timing all have named tokens there;
   never hand-type a raw hex/px value that duplicates one. See

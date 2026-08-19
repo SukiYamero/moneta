@@ -409,6 +409,13 @@ Full design: `docs/superpowers/specs/2026-06-26-pin-lock-design.md`.
   breaks this PWA's offline-first requirement, and switching icon sets would
   mean a new dependency plus remapping ~150+ icon references for a purely
   cosmetic difference. Full reasoning in `docs/ui/design-tokens.md`.
+- 2026-08-18 — **Formalized as hard rules, not just this-one-case choices:**
+  (1) no CDN dependencies ever — every font/icon-set/library is installed
+  and self-hosted, no exceptions litigated per-dependency, since a CDN call
+  breaks §3's offline-first requirement outright; (2) UI sizing uses
+  relative units (`rem`, `dvh`/`dvw`) against a fluid width range, never a
+  mockup frame's fixed pixel size. See `AGENTS.md` § UI for the concrete
+  rules; both generalize decisions already made for fonts/icons above.
 
 ## 12. Backlog (pending verification / deferred work)
 

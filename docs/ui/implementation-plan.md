@@ -26,13 +26,17 @@ needs>` comment on its definition — greppable with `rg "// STUB\("`. Visually
 complete, functionally fixed/fake. This unblocks the screen without
 inventing real logic that belongs to another track.
 
-## Not in scope for now (explicitly mocked in the design itself)
+## Deferred, not cut (explicitly mocked in the design itself)
 
 - **"Escaneo de factura" (receipt scan)** and **"Voice" (dictation)** — the
-  design itself labels both `(mock)`. These are AI features with no backend
-  decided (would need §6 review — an LLM API key can't be hidden client-side
-  per `specs.md` §6/§7). Build their entry buttons as disabled/hidden for
-  now; don't build the mock flows.
+  design itself labels both `(mock)`. Both **will ship eventually** — they
+  are deferred pending an architecture decision, not rejected features.
+  Open question: do they need a backend (per `specs.md` §6, an LLM API key
+  can't be hidden client-side) or can they stay on-device (browser
+  Speech-to-Text + a client-side OCR library, no key, no server)? That
+  research is in progress — see `specs.md` §12 once it lands. Until
+  resolved, build their entry buttons as disabled/hidden; don't build the
+  mock flows or assume either answer.
 - **Auth "Account Chooser" screen** — this recreates Google's own native
   account picker. We never render a fake copy of Google's UI: with GIS
   (`initTokenClient`), Google renders the real chooser in its own popup.
