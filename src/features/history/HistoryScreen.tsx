@@ -6,6 +6,7 @@ import { breakdownBy, filterByRange, periodRange, totals } from '@/lib/movimient
 import { useDataStore } from '@/lib/dataStore'
 import { useLocaleFormatting } from '@/lib/i18n/localeFormatting'
 import {
+  InlineErrorState,
   MovimientoRow,
   SegmentedControl,
   usePendingDelay,
@@ -142,18 +143,11 @@ export const HistoryScreen = () => {
         {showLoading ? (
           <HistoryLoadingState />
         ) : status === 'error' ? (
-          <div className="flex flex-col items-center gap-3 pt-16 text-center">
-            <p role="alert" className="text-sm font-medium text-destructive">
-              {t('error')}
-            </p>
-            <button
-              type="button"
-              onClick={() => void load()}
-              className="min-h-11 rounded-lg border border-border-subtle px-4 text-sm font-bold text-fg-secondary"
-            >
-              {t('retry')}
-            </button>
-          </div>
+          <InlineErrorState
+            message={t('error')}
+            retryLabel={t('retry')}
+            onRetry={() => void load()}
+          />
         ) : isPending ? null : periodMovimientos.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
             <SearchIcon className="size-9 text-fg-disabled" aria-hidden="true" />

@@ -8,6 +8,7 @@ export {
   type IconAvatarTint,
 } from '@/components/shared/IconAvatar'
 export { MovimientoRow, type MovimientoRowProps } from '@/components/shared/MovimientoRow'
+export { InlineErrorState, type InlineErrorStateProps } from '@/components/shared/InlineErrorState'
 export {
   formatMonto,
   getMovimientoAmountView,
