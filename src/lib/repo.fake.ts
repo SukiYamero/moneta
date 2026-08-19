@@ -373,6 +373,12 @@ function validateMovimiento(m: Movimiento): void {
   if (!Number.isFinite(m.monto) || m.monto <= 0) {
     throw new RepoError(`monto must be a finite, positive number (got ${m.monto})`, 'invalid_input')
   }
+  if (!isValidIsoDate(m.fecha)) {
+    throw new RepoError(`fecha must be ISO "yyyy-mm-dd" (got "${m.fecha}")`, 'invalid_input')
+  }
+  if (!m.moneda) {
+    throw new RepoError('moneda is required', 'invalid_input')
+  }
 }
 
 function validateActivo(a: Activo): void {

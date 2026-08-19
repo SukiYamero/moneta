@@ -513,9 +513,12 @@ Full design: Claude Design canvas `Moneta.dc.html` ("AUTH: WELCOME" and
   fake at all. The one intentional difference is the cursor's wire shape:
   the fake keeps a plain index-encoded cursor (fine for an in-memory store
   with no compound index to walk) instead of `repo.local.ts`'s opaque
-  `{ sortValue, tiebreakValue, id }` envelope — the _behavior_ (default
+  `{ sortValue, tiebreakValue, id }` envelope — the *behavior* (default
   sort, tiebreaks, rejecting garbage) is what's mirrored, not the wire
-  format.**
+  format. **Known open gap (§11, 2026-08-18 final-sweep entry):**
+  `add`/`addMany` don't reject a duplicate `id` and `removeMany` doesn't
+  reject a missing `id`, unlike `repo.local.ts`'s dexie-enforced/explicit
+  checks — flagged, not yet fixed.**
 - **Done when:** every component has a colocated `*.test.tsx`
   (`user-event`, not `fireEvent`), is keyboard-reachable with ≥44px touch
   targets and sensible `role`/`aria`; `repo.fake.ts` has `repo.fake.test.ts`
@@ -918,13 +921,48 @@ m.monto <= 0` (was `m.monto <= 0` alone, which lets `NaN` through since
      sorted output was already copy-safe only at the array level, not the
      item level, before this pass.
 
-  **A further (unfixed) divergence spotted on this pass, reported rather
-  than silently fixed per the review brief:** `repo.local.ts`'s
-  `validateMovimiento` also checks `fecha` is a valid ISO `yyyy-mm-dd` and
-  that `moneda` is present; `repo.fake.ts`'s `validateMovimiento` only ever
-  checked `monto` (before and after this pass) — the reproduced findings
-  list didn't include it and the operator should decide whether to fold it
-  in.
+  **A further divergence spotted on this pass — resolved same-day, not left
+  open:** `repo.local.ts`'s `validateMovimiento` also checks `fecha` is a
+  valid ISO `yyyy-mm-dd` and that `moneda` is present; `repo.fake.ts`'s
+  `validateMovimiento` only ever checked `monto`. Flagged to the operator
+  rather than folded in silently (per the review brief); the operator
+  confirmed it's the same divergence class as #4 (`activos`) and asked for
+  it to be fixed. TDD, same as the eight above: added failing tests first
+  (`rejects an invalid fecha on a Movimiento` — bad format `'not-a-date'`
+  and three impossible calendar dates `'2026-13-40'`/`'2026-02-30'`/
+  `'2023-02-29'`; `rejects a Movimiento with missing moneda`; plus a
+  positive control, `accepts a real leap day fecha` — `'2024-02-29'`, which
+  already passed since `isValidIsoDate` itself was correct, only
+  `validateMovimiento` never called it), confirmed both failed for the
+  right reason, then added the same `isValidIsoDate`/`moneda` checks
+  `validateActivo` already had — reusing the one helper rather than adding
+  a second. `validateMovimiento` now checks `monto`, `fecha`, and `moneda`,
+  matching `repo.local.ts` exactly.
+
+- 2026-08-18 — **Final sweep of `repo.fake.ts` against the §10.3 port
+  contract found a tenth divergence: `add()`/`addMany()` never reject a
+  duplicate `id`, and `removeMany()` never rejects a missing `id`.**
+  Reported to the operator per the same "report, don't quietly fix or
+  ignore" rule as the ninth — **not fixed in this pass**, since it wasn't
+  in the original reproduced-findings list and the operator asked for an
+  explicit report this round, not another silent fix. Reproduced directly
+  (throwaway probe, not committed): `movimientos.add()` with an `id` that
+  already exists in the store resolves instead of throwing, leaving two
+  rows sharing one `id`; `movimientos.addMany()` with a duplicate `id`
+  inside the batch does the same; `movimientos.removeMany(['missing-id'])`
+  resolves instead of throwing. `repo.local.ts` diverges from all three:
+  `table.add`/`table.bulkAdd` throw on a primary-key collision (dexie
+  `ConstraintError`, wrapped to `RepoError('unknown')`), and `removeMany`
+  explicitly checks every id exists before `bulkDelete`, throwing
+  `RepoError('not_found')` and aborting the whole batch on any miss — the
+  same guarantee `remove()` already gives for a single id. The fake is
+  self-inconsistent here too: `remove()`/`update()` already throw
+  `not_found` on a missing id; `removeMany()` silently doesn't. Left open
+  for the operator to triage, noting the other fixer's in-flight
+  `repo.local.ts` changes (stricter `limit` validation, a richer cursor
+  payload, transactional writes) don't appear to touch this specific
+  behavior, but should be re-checked against whatever that track lands
+  with before this is picked up.
 
 ## 12. Backlog (pending verification / deferred work)
 

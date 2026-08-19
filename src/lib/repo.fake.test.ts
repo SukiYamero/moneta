@@ -203,6 +203,58 @@ describe('createFakeRepo — parity with the real (dexie) repo contract', () => 
     await expect(repo.movimientos.add(invalid)).rejects.toMatchObject({ code: 'invalid_input' })
   })
 
+  it('rejects an invalid fecha on a Movimiento (bad format, impossible calendar date)', async () => {
+    const repo = createFakeRepo({ today: TODAY })
+    const base = {
+      id: 'mov_bad_fecha',
+      seccion: 'sec_personal',
+      categoria: 'Comida',
+      tipo: 'gasto' as const,
+      monto: 1000,
+      moneda: 'COP' as const,
+      createdAt: TODAY.toISOString(),
+    }
+
+    for (const fecha of ['not-a-date', '2026-13-40', '2026-02-30', '2023-02-29']) {
+      await expect(
+        repo.movimientos.add({ ...base, id: `mov_bad_fecha_${fecha}`, fecha }),
+      ).rejects.toMatchObject({ code: 'invalid_input' })
+    }
+  })
+
+  it('accepts a real leap day fecha on a Movimiento (2024-02-29)', async () => {
+    const repo = createFakeRepo({ today: TODAY })
+    const valid: Movimiento = {
+      id: 'mov_leap_day',
+      fecha: '2024-02-29',
+      seccion: 'sec_personal',
+      categoria: 'Comida',
+      tipo: 'gasto',
+      monto: 1000,
+      moneda: 'COP',
+      createdAt: TODAY.toISOString(),
+    }
+
+    const added = await repo.movimientos.add(valid)
+    expect(added.fecha).toBe('2024-02-29')
+  })
+
+  it('rejects a Movimiento with missing moneda', async () => {
+    const repo = createFakeRepo({ today: TODAY })
+    const invalid = {
+      id: 'mov_no_moneda',
+      fecha: '2026-08-18',
+      seccion: 'sec_personal',
+      categoria: 'Comida',
+      tipo: 'gasto' as const,
+      monto: 1000,
+      moneda: '' as Movimiento['moneda'],
+      createdAt: TODAY.toISOString(),
+    }
+
+    await expect(repo.movimientos.add(invalid)).rejects.toMatchObject({ code: 'invalid_input' })
+  })
+
   it('rejects an invalid Activo (bad date, missing moneda, negative valorActual)', async () => {
     const repo = createFakeRepo({ today: TODAY })
 
