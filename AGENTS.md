@@ -87,6 +87,13 @@ We follow **spec-driven development**. `specs.md` is the source of truth.
 - **Comments only when truly necessary** — explain the _why_ (tradeoff, workaround),
   never the _what_. No conversational/changelog/restating comments.
 - Use the `@/` alias for imports from `src`.
+- **No namespace imports — `import * as React from 'react'` is banned.** Import only
+  what you use, named: `import type { ComponentProps } from 'react'`,
+  `import { useState } from 'react'`. `React.ComponentProps<'button'>` becomes
+  `ComponentProps<'button'>`. The shadcn CLI emits namespace imports as its house
+  style, so after `bunx shadcn@latest add <name>` normalize the new component's
+  import before committing. Enforced by `import/no-namespace` in
+  `.oxlintrc.json` — `bun run lint` fails on any reintroduction.
 - **Error handling follows [docs/error-handling.md](docs/error-handling.md).**
   Read it before writing a `try`, adding an error type, or deciding what a
   failure returns. It is binding, not advisory: it fixes the error taxonomy,
