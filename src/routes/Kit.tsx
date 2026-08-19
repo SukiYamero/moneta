@@ -167,12 +167,14 @@ export const Kit = () => {
           <TagChip
             icon={Utensils}
             label="Comida"
+            tint="amber"
             selected={selectedTag}
             onClick={() => setSelectedTag((s) => !s)}
           />
-          <TagChip icon={House} label="Hogar" />
-          <TagChip icon={Gift} label="Regalo" selected />
-          <TagChip icon={Utensils} label="Deshabilitado" disabled />
+          <TagChip icon={House} label="Hogar" tint="emerald" />
+          <TagChip icon={Gift} label="Regalo" tint="purple" selected />
+          <TagChip icon={Utensils} label="Sin categoría" tint="neutral" selected />
+          <TagChip icon={Utensils} label="Deshabilitado" tint="neutral" disabled />
         </div>
       </Section>
 
