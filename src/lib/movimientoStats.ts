@@ -104,17 +104,23 @@ export const totals = (movimientos: Movimiento[]): Totals => {
 }
 
 /**
- * Totals grouped by `seccion` or `categoria`, optionally pre-filtered by
- * `tipo`, sorted by total desc. `share` is each group's fraction of the
- * grand total (summing to 1), or 0 for every entry when the grand total is 0
- * — never `NaN`.
+ * Totals grouped by `seccion` or `categoria`, pre-filtered by `tipo`, sorted
+ * by total desc. `share` is each group's fraction of the grand total
+ * (summing to 1), or 0 for every entry when the grand total is 0 — never
+ * `NaN`.
+ *
+ * `tipo` is required, not optional: mixing ingresos and gastos into one
+ * grand total makes `share` a fraction of "income plus spending," a
+ * quantity no screen can present meaningfully. Call it once per tipo if a
+ * combined view is ever needed — that's an explicit choice at the call
+ * site, not a silent default here.
  */
 export const breakdownBy = (
   movimientos: Movimiento[],
   groupKey: 'seccion' | 'categoria',
-  tipo?: Movimiento['tipo'],
+  tipo: Movimiento['tipo'],
 ): BreakdownEntry[] => {
-  const filtered = tipo === undefined ? movimientos : movimientos.filter((m) => m.tipo === tipo)
+  const filtered = movimientos.filter((m) => m.tipo === tipo)
   const minorByKey = new Map<string, number>()
   for (const m of filtered) {
     const key = m[groupKey]
@@ -168,6 +174,20 @@ const bucketEndFor = (
  * week with no movements still needs seven bars). Sub-period granularity is
  * a property of `periodo` (day/week/month bars for semana/mes/anio
  * respectively; a single bucket for dia), not of the chart consumer.
+ *
+ * `eachWeekOfInterval`/`eachMonthOfInterval` snap to their own calendar grid,
+ * so the first/last natural sub-period can start before `range.from` or end
+ * after `range.to` (e.g. August's first ISO week starts in late July). Every
+ * bucket is clamped to `range` on both ends — both what it counts and its
+ * `bucketStart` label — so `sum(series(...).ingresos) ===
+ * totals(filterByRange(movimientos, range)).ingresos` always holds (and the
+ * same for `gastos`). This is the guarantee Home's chart bars and Home's own
+ * balance card (or History's total, for the same period) depend on to never
+ * disagree. Clamping is applied unconditionally, not only for the `mes`/
+ * `week` case that can currently overflow: 'day' and 'month' granularities
+ * only stay aligned today because `periodRange` happens to hand them an
+ * already-aligned range, which is an accident of the current
+ * periodo↔granularity pairing, not a property the bucket math can rely on.
  */
 export const series = (
   movimientos: Movimiento[],
@@ -176,8 +196,12 @@ export const series = (
   primerDiaSemana: 0 | 1,
 ): SeriesBucket[] => {
   const granularity = GRANULARITY_FOR_PERIODO[periodo]
-  return bucketStartsFor(granularity, range, primerDiaSemana).map((start) => {
-    const end = bucketEndFor(granularity, start, primerDiaSemana)
+  const rangeStart = toLocalDate(range.from)
+  const rangeEnd = toLocalDate(range.to)
+  return bucketStartsFor(granularity, range, primerDiaSemana).map((naturalStart) => {
+    const naturalEnd = bucketEndFor(granularity, naturalStart, primerDiaSemana)
+    const start = naturalStart < rangeStart ? rangeStart : naturalStart
+    const end = naturalEnd > rangeEnd ? rangeEnd : naturalEnd
     const bucketRange = { from: toIsoDate(start), to: toIsoDate(end) }
     const { ingresos, gastos } = totals(filterByRange(movimientos, bucketRange))
     return { bucketStart: bucketRange.from, ingresos, gastos }

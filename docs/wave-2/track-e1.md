@@ -184,7 +184,7 @@ The one lint warning is pre-existing in `src/components/ui/button.tsx`
 periodRange(periodo: Periodo, anchor: string, primerDiaSemana: 0 | 1): { from: string; to: string }
 filterByRange(movimientos: Movimiento[], range: { from: string; to: string }): Movimiento[]
 totals(movimientos: Movimiento[]): { ingresos: number; gastos: number; balance: number }
-breakdownBy(movimientos: Movimiento[], groupKey: 'seccion' | 'categoria', tipo?: Movimiento['tipo']): { key: string; total: number; share: number }[]
+breakdownBy(movimientos: Movimiento[], groupKey: 'seccion' | 'categoria', tipo: Movimiento['tipo']): { key: string; total: number; share: number }[]
 series(movimientos: Movimiento[], periodo: Periodo, range: { from: string; to: string }, primerDiaSemana: 0 | 1): { bucketStart: string; ingresos: number; gastos: number }[]
 
 // dataStore.ts
@@ -200,3 +200,77 @@ useDataStore: {
 // repoProvider.ts
 getRepo(): Repo
 ```
+
+## Follow-up (operator review, 2026-08-19)
+
+The operator's review caught a real bug and asked one open question before
+merge. Both addressed on this branch, additional commits.
+
+### 1. CONFIRMED — `series()` buckets overflowed the period range
+
+`eachWeekOfInterval`'s natural first/last bucket for a `mes` period snaps to
+ISO week boundaries, which can start before `range.from` (e.g. August 2026's
+first week starts Monday July 27) or end after `range.to` (its last week
+ends Sunday September 6). `bucketEndFor` inherited that unclamped end. Two
+concrete errors that followed: a movement dated one day before the month
+(`fecha` in July) was counted in August's first bucket, and one dated one day
+after was counted in August's last bucket — silently, since both still
+produced a plausible-looking number, not a crash or an empty result.
+
+**Watched failing first**, per the operator's exact ask, before touching the
+implementation: added `bucket-range invariant: sum(series) ===
+totals(filterByRange)` (`it.each` over all four `Periodo`s, each with
+movements one day before `range.from` and one day after `range.to`) and
+updated the pinned `mes` shape test to expect the clamped label. Both failed
+against the pre-fix code:
+
+- The `mes` shape test: `expected '2026-07-27' to be '2026-08-01'` — the
+  unclamped natural week start leaking into the label.
+- The invariant test for `periodo=mes`: `expected 444 to be 333` on the
+  `ingresos` assertion — `seriesIngresos` came out to 444 (111 from the
+  `before` movement leaking into the unclamped first bucket, plus 333 from
+  `at-to`) against an expected 333 (only `at-to`, the only ingreso actually
+  inside `[range.from, range.to]`). Confirms both ends were overflowing, not
+  just one.
+
+**Fix**: `series()` now clamps every bucket's `start`/`end` to `range` before
+computing `bucketRange` (`start = naturalStart < rangeStart ? rangeStart :
+naturalStart`, symmetric for `end`), and `bucketStart` is the _clamped_
+start — so a partial edge bucket's label never claims to cover days it
+didn't count. Applied unconditionally to all four granularities, not only
+`mes`/`week`: `dia`/`semana`(day) and `anio`(month) currently never overflow
+only because `periodRange` happens to hand them an already grid-aligned
+range — an accident of the current periodo↔granularity pairing, not a
+property `bucketStartsFor`/`bucketEndFor` can rely on by construction. All
+25 tests (now 25, up from 21) pass post-fix, including the invariant for
+every `Periodo`.
+
+**Sweep result**: grepped `movimientoStats.ts` for every `*OfInterval`/
+`startOf*`/`endOf*` call. The only other calendar-boundary computation is
+`RANGE_FOR_PERIODO` inside `periodRange()` itself — but that computes a range
+_from an anchor_, it doesn't subdivide an existing range, so "escaping the
+range it was derived from" doesn't apply there; it's the source of the
+range, not a consumer of one. Also grepped the rest of `src/lib/` for any
+other `*OfInterval` usage or consumer of `breakdownBy`/`series` — none
+exist yet (no screen track has merged). **Nothing else found** — this is the
+only site with this defect shape, and the fix's unconditional-clamp
+structure is what keeps a future periodo/granularity change from
+reintroducing it by accident.
+
+### 2. `breakdownBy` — `tipo` made required
+
+Agreed with the operator's lean (option a). Checked both concrete consumers
+in `docs/wave-2-plan.md`: Track E4 (History) is the only one that names
+`breakdownBy()` at all, calling for "por etiqueta breakdown with progress
+bars... including its share values" fed by a `SegmentedControl` — and
+`docs/ui/implementation-plan.md`'s shared-component list confirms that
+control is reused for "history scope, expense/income type, **tag breakdown
+tabs**," i.e. the breakdown view is always entered already scoped to one
+`tipo`. Track E2 (Home) and E3 (Search) don't call `breakdownBy` at all per
+their briefs. No consumer needs a combined ingreso+gasto breakdown, so there
+was no real use case being closed off — only a legal call that returned a
+number with no meaning (share of "income plus spending"). Changed the
+signature from `tipo?: Movimiento['tipo']` to `tipo: Movimiento['tipo']`
+(required, last parameter, no default) and updated all four `breakdownBy`
+tests accordingly; no other file in the repo calls `breakdownBy` yet, so
+this was the only call site to update.

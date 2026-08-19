@@ -1,5 +1,6 @@
+import { addDays, format, parseISO, subDays } from 'date-fns'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { Movimiento } from '@/lib/schema'
+import type { Movimiento, Periodo } from '@/lib/schema'
 import { breakdownBy, filterByRange, periodRange, series, totals } from '@/lib/movimientoStats'
 
 const movimiento = (overrides: Partial<Movimiento> = {}): Movimiento => ({
@@ -13,6 +14,9 @@ const movimiento = (overrides: Partial<Movimiento> = {}): Movimiento => ({
   createdAt: '2026-08-15T00:00:00.000Z',
   ...overrides,
 })
+
+const dayBefore = (iso: string): string => format(subDays(parseISO(iso), 1), 'yyyy-MM-dd')
+const dayAfter = (iso: string): string => format(addDays(parseISO(iso), 1), 'yyyy-MM-dd')
 
 afterEach(() => {
   vi.unstubAllEnvs()
@@ -124,20 +128,26 @@ describe('filterByRange()', () => {
 })
 
 describe('breakdownBy()', () => {
+  // `tipo` is required (2026-08-19 revision, operator review): omitting it
+  // mixes ingresos and gastos minor units into one `grandTotalMinor`, so
+  // `share` becomes a fraction of "income plus spending" — a quantity with
+  // no meaning a screen can present. Every real consumer (History's
+  // per-tipo breakdown tabs) already calls this per-tipo, so a legal call
+  // that returns a meaningless number is a pure trap, not a feature.
   it('groups by seccion, sorted by total desc, shares summing to 1', () => {
     const movimientos = [
-      movimiento({ seccion: 'sec_personal', monto: 100 }),
-      movimiento({ seccion: 'sec_personal', monto: 200 }),
-      movimiento({ seccion: 'sec_trabajo', monto: 100 }),
+      movimiento({ seccion: 'sec_personal', tipo: 'gasto', monto: 100 }),
+      movimiento({ seccion: 'sec_personal', tipo: 'gasto', monto: 200 }),
+      movimiento({ seccion: 'sec_trabajo', tipo: 'gasto', monto: 100 }),
     ]
-    const result = breakdownBy(movimientos, 'seccion')
+    const result = breakdownBy(movimientos, 'seccion', 'gasto')
     expect(result).toEqual([
       { key: 'sec_personal', total: 300, share: 0.75 },
       { key: 'sec_trabajo', total: 100, share: 0.25 },
     ])
   })
 
-  it('filters by tipo before grouping when given', () => {
+  it('filters by tipo before grouping', () => {
     const movimientos = [
       movimiento({ seccion: 'sec_personal', tipo: 'ingreso', monto: 500 }),
       movimiento({ seccion: 'sec_personal', tipo: 'gasto', monto: 100 }),
@@ -147,15 +157,15 @@ describe('breakdownBy()', () => {
   })
 
   it('returns an empty array with no NaN shares when the total is zero', () => {
-    expect(breakdownBy([], 'seccion')).toEqual([])
+    expect(breakdownBy([], 'seccion', 'gasto')).toEqual([])
   })
 
   it('groups by categoria as well', () => {
     const movimientos = [
-      movimiento({ categoria: 'cat_sueldo', monto: 100 }),
-      movimiento({ categoria: 'cat_ventas', monto: 100 }),
+      movimiento({ categoria: 'cat_sueldo', tipo: 'ingreso', monto: 100 }),
+      movimiento({ categoria: 'cat_ventas', tipo: 'ingreso', monto: 100 }),
     ]
-    const result = breakdownBy(movimientos, 'categoria')
+    const result = breakdownBy(movimientos, 'categoria', 'ingreso')
     expect(result).toHaveLength(2)
     expect(result.reduce((sum, entry) => sum + entry.share, 0)).toBe(1)
   })
@@ -186,11 +196,48 @@ describe('series()', () => {
     expect(result[2]).toEqual({ bucketStart: '2026-03-01', ingresos: 0, gastos: 50 })
   })
 
-  it('produces weekly buckets for a mes period, respecting primerDiaSemana', () => {
+  it('produces weekly buckets for a mes period, clamped to the month (not the natural week)', () => {
     const range = periodRange('mes', '2026-08-01', 1)
     const result = series([], 'mes', range, 1)
-    // August 2026: weeks starting Mon 2026-07-27 through the week containing Aug 31.
-    expect(result.at(0)?.bucketStart).toBe('2026-07-27')
+    // August 2026: the natural first week is Mon 2026-07-27–Sun 2026-08-02,
+    // but its bucketStart must be clamped to the month's own start (2026-08-01),
+    // not the true week start (2026-07-27) — a label claiming to cover July
+    // 27–31 when nothing from those days was counted would be a lie.
+    expect(result.at(0)?.bucketStart).toBe('2026-08-01')
     expect(result.every((bucket) => bucket.ingresos === 0 && bucket.gastos === 0)).toBe(true)
+  })
+
+  // The invariant every screen depends on: Home's weekly chart bars must sum
+  // to the same balance printed on Home's own balance card, and History's
+  // chart (if/when it has one) must sum to History's own total for the same
+  // period. `eachWeekOfInterval`/`eachMonthOfInterval` snap to their own
+  // grid, so a naive implementation lets the first/last bucket extend past
+  // `range` and silently pull in movements from the adjacent period.
+  describe('bucket-range invariant: sum(series) === totals(filterByRange)', () => {
+    const periods: Periodo[] = ['dia', 'semana', 'mes', 'anio']
+
+    it.each(periods)(
+      'holds for periodo=%s even with movements just outside the range',
+      (periodo) => {
+        const primerDiaSemana = 1
+        const range = periodRange(periodo, '2026-08-19', primerDiaSemana)
+        const movimientos = [
+          movimiento({ id: 'before', fecha: dayBefore(range.from), tipo: 'ingreso', monto: 111 }),
+          movimiento({ id: 'at-from', fecha: range.from, tipo: 'gasto', monto: 222 }),
+          movimiento({ id: 'at-to', fecha: range.to, tipo: 'ingreso', monto: 333 }),
+          movimiento({ id: 'after', fecha: dayAfter(range.to), tipo: 'gasto', monto: 444 }),
+        ]
+
+        const result = series(movimientos, periodo, range, primerDiaSemana)
+        const seriesIngresos = result.reduce((sum, b) => sum + b.ingresos, 0)
+        const seriesGastos = result.reduce((sum, b) => sum + b.gastos, 0)
+        const expected = totals(filterByRange(movimientos, range))
+
+        expect(seriesIngresos).toBe(expected.ingresos)
+        expect(seriesGastos).toBe(expected.gastos)
+        // The label itself must never claim to start before the range does.
+        expect((result.at(0)?.bucketStart ?? '') >= range.from).toBe(true)
+      },
+    )
   })
 })
