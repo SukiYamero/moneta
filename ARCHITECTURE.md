@@ -20,6 +20,10 @@ file is just "where do I look", not "how does it work".
   [src/routes/README.md](src/routes/README.md).
 - `src/router.tsx` — the route table (React Router data router).
 - `src/main.tsx` — app entry point (mounts `AppLock` + `RouterProvider`).
+- `src/AppErrorBoundary.tsx` — top-level React error boundary; catches a
+  render-time throw anywhere below it instead of white-screening the app.
+- `src/RouteErrorFallback.tsx` — the router's `errorElement`, for a throw
+  raised while resolving or rendering a route.
 - `docs/ui/` — UI implementation plan + design-token rationale, sourced from
   the Claude Design project. See [docs/ui/README.md](docs/ui/README.md).
 - `docs/waves.md` — the development-wave/track sequencing plan and worktree
