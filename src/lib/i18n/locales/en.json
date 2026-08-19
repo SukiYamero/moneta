@@ -36,7 +36,10 @@
     "dismissCta": "Not now",
     "connecting": "Connecting to your Drive…"
   },
-  "toast": {},
+  "toast": {
+    "dismiss": "Dismiss",
+    "repeatSuffix": "×{{count}}"
+  },
   "nav": {},
   "home": {},
   "search": {},
