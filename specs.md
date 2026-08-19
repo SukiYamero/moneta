@@ -2370,6 +2370,18 @@ lint` clean bar the one pre-existing `components/ui` warning). `AGENTS.md`
   gives any component for free — the single-source-of-truth rule pointing
   the opposite way from prop-threading here.
 
+- 2026-08-19 — **One table owns tint → token, in every shape a consumer
+  needs.** `src/components/shared/tintClasses.ts` maps each
+  `IconAvatarTint` to an `icon` / `badge` / `pill` class string.
+  Tailwind's static scanner needs each class name as a **literal**, so the
+  shapes cannot be concatenated from a shared fragment at runtime — but that
+  forces three _shapes_, not three _files_. Before this, `IconAvatar` and
+  `TagChip` each asserted `amber = chart-3` independently, and a review
+  proved the risk was real: mis-mapping one tint in a single shared table
+  fails a test immediately, while the same edit to one of two parallel tables
+  passed the whole suite with a category rendering one color as a row avatar
+  and another as a chip.
+
 ## 12. Backlog (pending verification / deferred work)
 
 - **The lock feature is not internationalised at all.** `LockScreen`,
@@ -2464,6 +2476,36 @@ lint` clean bar the one pre-existing `components/ui` warning). `AGENTS.md`
   row there that reads `authStore.drive`/`driveOptIn` and can call
   `connectDrive()` on demand — the "turn it back on" counterpart that makes
   a persistent "don't ask again" viable later, if ever wanted.
+- **The light theme has no category colors at all — the `chart-*` tokens are
+  still the scaffold's zero-chroma greys.** `src/styles/index.css` defines
+  `--chart-1..5` as `oklch(0.87 0 0)`…`oklch(0.269 0 0)` in `:root` (light)
+  while `.dark` carries the design's real palette (`#2fd896`, `#7ba7f0`,
+  `#f5b93f`, `#fb8989`, `#c084fc`). Every category tint therefore renders
+  grey in light mode — the movement-row avatars, the tag chips, and the
+  History breakdown bars alike. Since `preferencias.tema` defaults to
+  `sistema`, a user on a light OS gets a colorless app and the
+  "scan by color" affordance silently does not work. Pre-existing, not
+  introduced by any Wave 2/2.1 track, and it needs **design values**, not a
+  code decision: the design canvas is dark-only today. Blocking for anyone
+  who ships light mode; harmless until then.
+
+- **`BreakdownCard.tsx` still owns a fourth private copy of the tint → token
+  mapping** (`FILL_CLASS`, from Track E4). `tintClasses.ts` now holds the
+  single source for `IconAvatar` and `TagChip`; folding `BreakdownCard` in
+  needs a `bar`/`fill` shape added to that table. Left alone deliberately —
+  it was outside Track O's scope and its own feature was not being touched.
+
+- **A selected `neutral` `TagChip` is weakly distinguishable in dark mode.**
+  Measured, not eyeballed: the selected and unselected backgrounds differ by
+  1.06:1, so the whole signal rides on a border-alpha step (0.04 → 0.1) and a
+  text-brightness step of ~1.48:1 self-contrast. Both states are individually
+  legible; they are just not strongly different from each other. `neutral` is
+  the fallback tint for a custom category with no entry in `CATEGORY_TINT`,
+  so this affects user-created tags specifically. Strengthening it (a heavier
+  border, a different selected surface) is a design-weight call, not a bug
+  fix — deliberately left for a design decision rather than changed
+  unilaterally.
+
 - **`DateChipPicker`'s aria-labels are still hardcoded Spanish**
   ("Mes anterior", "Mes siguiente", "Selector de fecha") — the component has
   no assigned locale namespace, so Track M (a formatter-wiring track)
