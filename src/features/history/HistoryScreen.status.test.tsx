@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { endOfWeek, format, startOfWeek } from 'date-fns'
+import { es } from 'date-fns/locale'
 import { useDataStore } from '@/lib/dataStore'
+import { CONFIG_SEMILLA } from '@/lib/schema'
 import { HistoryScreen } from '@/features/history/HistoryScreen'
 
 // A dedicated file so `vi.mock` (file-scoped) doesn't leak into
@@ -69,5 +72,57 @@ describe('HistoryScreen status handling', () => {
     mockStore({ status: 'idle', load })
     render(<HistoryScreen />)
     expect(load).toHaveBeenCalled()
+  })
+
+  // Reproduces the risk named in the review brief: the always-mounted chrome
+  // (period nav, picker strip) falls back to CONFIG_SEMILLA.preferencias
+  // before `config` loads. `primerDiaSemana` only feeds the rendered header
+  // in `semana` scope (movimientoStats.ts's `periodRange` ignores it for
+  // `dia`/`mes`/`anio`), so switching to `semana` while `config` is still
+  // `null` renders the week boundary CONFIG_SEMILLA assumes (Monday-start);
+  // once the real config resolves with a different `primerDiaSemana`, the
+  // header recomputes and the visible date range changes with no user
+  // action beyond having loaded. `toFake: ['Date']` pins "today" without
+  // faking `setTimeout` — the pairing that hangs with `user-event`
+  // (specs.md §11, 2026-08-19) — mirroring HistoryScreen.test.tsx's own
+  // pattern.
+  it('recomputes the semana header once config resolves with a different primerDiaSemana than the CONFIG_SEMILLA fallback', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-08-19T12:00:00'))
+    const user = userEvent.setup()
+    const today = new Date()
+
+    mockStore({ status: 'loading', config: null })
+    const { rerender } = render(<HistoryScreen />)
+
+    await user.click(screen.getByRole('radio', { name: 'Semana' }))
+
+    const seedFrom = startOfWeek(today, {
+      weekStartsOn: CONFIG_SEMILLA.preferencias.primerDiaSemana,
+    })
+    const seedTo = endOfWeek(today, { weekStartsOn: CONFIG_SEMILLA.preferencias.primerDiaSemana })
+    // The header title and the picker strip's own selected chip both render
+    // the range in the same "d–d MMM" shape — either match proves the chrome
+    // used the seed default before config resolved.
+    expect(
+      screen.getAllByText(`${format(seedFrom, 'd')}–${format(seedTo, 'd MMM', { locale: es })}`),
+    ).not.toHaveLength(0)
+
+    mockStore({
+      status: 'ready',
+      config: {
+        ...CONFIG_SEMILLA,
+        preferencias: { ...CONFIG_SEMILLA.preferencias, primerDiaSemana: 0 },
+      },
+    })
+    rerender(<HistoryScreen />)
+
+    const realFrom = startOfWeek(today, { weekStartsOn: 0 })
+    const realTo = endOfWeek(today, { weekStartsOn: 0 })
+    expect(
+      screen.getAllByText(`${format(realFrom, 'd')}–${format(realTo, 'd MMM', { locale: es })}`),
+    ).not.toHaveLength(0)
+
+    vi.useRealTimers()
   })
 })
