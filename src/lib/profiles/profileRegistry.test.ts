@@ -1,4 +1,5 @@
 import { afterEach, expect, test, vi } from 'vitest'
+import { deviceDb } from '@/lib/deviceStore'
 import {
   __clearRegistryForTests,
   DEFAULT_PROFILE_DATABASE_NAME,
@@ -7,7 +8,6 @@ import {
   getProfile,
   listProfiles,
   makeProfileDatabaseName,
-  profileRegistryDb,
   registerProfile,
   touchLastUsed,
 } from '@/lib/profiles/profileRegistry'
@@ -85,9 +85,7 @@ test('a guest profile and a signed-in profile stay side by side: nothing is ever
 // signal", never blocks boot.
 test('listProfiles degrades to an empty array on a storage read failure', async () => {
   const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-  const spy = vi
-    .spyOn(profileRegistryDb.profiles, 'toArray')
-    .mockRejectedValue(new Error('IDB blocked'))
+  const spy = vi.spyOn(deviceDb.profiles, 'toArray').mockRejectedValue(new Error('IDB blocked'))
 
   expect(await listProfiles()).toEqual([])
   expect(warn).toHaveBeenCalled()
@@ -98,9 +96,7 @@ test('listProfiles degrades to an empty array on a storage read failure', async 
 
 test('getProfile degrades to undefined on a storage read failure', async () => {
   const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-  const spy = vi
-    .spyOn(profileRegistryDb.profiles, 'get')
-    .mockRejectedValue(new Error('IDB blocked'))
+  const spy = vi.spyOn(deviceDb.profiles, 'get').mockRejectedValue(new Error('IDB blocked'))
 
   expect(await getProfile(DEFAULT_PROFILE_ID)).toBeUndefined()
   expect(warn).toHaveBeenCalled()
@@ -111,9 +107,7 @@ test('getProfile degrades to undefined on a storage read failure', async () => {
 
 test('touchLastUsed is safe to fire-and-forget: a write failure is caught and logged, not thrown', async () => {
   const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-  const spy = vi
-    .spyOn(profileRegistryDb.profiles, 'update')
-    .mockRejectedValue(new Error('IDB blocked'))
+  const spy = vi.spyOn(deviceDb.profiles, 'update').mockRejectedValue(new Error('IDB blocked'))
 
   await expect(touchLastUsed(DEFAULT_PROFILE_ID)).resolves.toBeUndefined()
   expect(warn).toHaveBeenCalled()
@@ -124,9 +118,7 @@ test('touchLastUsed is safe to fire-and-forget: a write failure is caught and lo
 
 test('getActiveProfile still returns a usable default record when persisting it fails', async () => {
   const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-  const spy = vi
-    .spyOn(profileRegistryDb.profiles, 'put')
-    .mockRejectedValue(new Error('IDB blocked'))
+  const spy = vi.spyOn(deviceDb.profiles, 'put').mockRejectedValue(new Error('IDB blocked'))
 
   const active = await getActiveProfile()
   expect(active.id).toBe(DEFAULT_PROFILE_ID)

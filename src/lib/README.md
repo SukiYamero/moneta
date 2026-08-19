@@ -48,30 +48,32 @@ Shared stores, helpers, and the Drive/auth/lock logic layer. No UI here.
   `biometricEnrolled` — this vault's own enrollment, see `specs.md` §11,
   2026-08-19).
 - `deviceStore.ts` — a separate, tiny Dexie database (`kurobello-device`,
-  distinct from `db.ts`'s `kurobello`) holding the non-secret, per-device
-  signals. Two live here: the login marker
+  distinct from `db.ts`'s `kurobello`), the canonical home for every
+  non-secret, per-device signal. Four live here: the login marker
   (`hasLoggedInBefore`/`markLoggedIn`/`clearLoggedIn`), which gates
   `authStore.restore()`'s silent re-auth so it can tell a returning user
-  apart from a first-ever visit or a just-locked-out device; and the
-  Drive-sync decision
-  (`getDriveDecision`/`setDriveDecision`/`clearDriveDecision`), so a device
-  that already answered the permission prompt is not asked again on every
-  cold start (`specs.md` §11, 2026-08-19 — supersedes the 2026-08-18
-  in-memory entry). The database name is frozen; only the module was
-  renamed from `loginMarker.ts`. Every function self-catches and degrades
-  to "no signal recorded" — storage trouble can suppress a convenience,
-  never block boot.
+  apart from a first-ever visit or a just-locked-out device; the Drive-sync
+  decision (`getDriveDecision`/`setDriveDecision`/`clearDriveDecision`), so a
+  device that already answered the permission prompt is not asked again on
+  every cold start (`specs.md` §11, 2026-08-19 — supersedes the 2026-08-18
+  in-memory entry); the `anchor` table `networkStore.ts` owns; and the
+  `profiles` table `profiles/profileRegistry.ts` owns. The latter two folded
+  in from their own short-lived `kurobello-network`/`kurobello-profiles`
+  databases (`specs.md` §11, 2026-08-19) — both existed only because Wave 3
+  stage 1's file-ownership table left this file unassigned to either track,
+  and neither had shipped, so no migration was owed. The database name is
+  frozen; only the module was renamed from `loginMarker.ts`. Every function
+  self-catches and degrades to "no signal recorded" — storage trouble can
+  suppress a convenience, never block boot.
 - `networkStore.ts` — a small, self-initialising zustand store (attaches
   `online`/`offline` listeners at module scope, since `main.tsx` is another
   track's file) owning the online/offline hint plus the 7-hour offline
   write window. The window's anchor (last successful online validation) is
-  persisted in its own Dexie database, `kurobello-network`, deliberately
-  separate from `deviceStore.ts`'s `kurobello-device` (this track's file
-  ownership excluded that file — see `specs.md` §11, 2026-08-19).
-  `canWrite(kind, now?)` is the single "may this write proceed?" answer:
-  read/create always allowed, edit/delete/settings refused offline
-  regardless of the window, create additionally refused past the window.
-  Reads no other store.
+  persisted on `deviceStore.ts`'s shared `kurobello-device` connection (its
+  `anchor` table). `canWrite(kind, now?)` is the single "may this write
+  proceed?" answer: read/create always allowed, edit/delete/settings refused
+  offline regardless of the window, create additionally refused past the
+  window. Reads no other store.
 - `errorCopy.ts` — `RepoErrorCode` → translation key, shared by Home/
   Search/History (moved from `src/features/home/errorCopy.ts`, which was
   never Home-specific — `specs.md` §10.11).
@@ -137,8 +139,10 @@ Shared stores, helpers, and the Drive/auth/lock logic layer. No UI here.
   builds the real per-profile-scoped repo and is fully tested, but nothing
   calls it yet — the flip is gated on Wave 4's create UI.
 - `profiles/` — the device-scoped profile registry (`specs.md` §10.15). One
-  dexie database per profile; `getActiveProfile()` resolves which one is
-  active by recency, with no switcher UI yet. Own `README.md`.
+  dexie database per profile (via `db.ts`'s `createProfileDb()`); the
+  registry itself lives in `deviceStore.ts`'s shared `kurobello-device`
+  connection (its `profiles` table). `getActiveProfile()` resolves which one
+  is active by recency, with no switcher UI yet. Own `README.md`.
 - `repo.contract.ts` — shared `Repo` behavior every implementation must
   agree on (`testRepoContract()`), invoked from both `repo.local.test.ts`
   and `repo.fake.test.ts` (`docs/error-handling.md` §6). A plain module, not
