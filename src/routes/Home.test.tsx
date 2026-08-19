@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/lib/repoProvider', () => ({ getRepo: vi.fn() }))
 
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import type { GoogleUser } from '@/lib/auth'
@@ -63,10 +63,23 @@ describe('Home', () => {
     expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('Alex Rivera')
   })
 
-  it('shows a loading state while data is being fetched', () => {
+  // Anti-flash gate (specs.md §10.9): a load fast enough to beat the
+  // ~150ms show-delay must render nothing, not the skeleton immediately.
+  it('shows nothing yet immediately after mount, before the anti-flash delay elapses', () => {
+    vi.useFakeTimers()
     mGetRepo.mockReturnValue(makeRepo({}))
     renderHome()
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    vi.useRealTimers()
+  })
+
+  it('shows a loading state once the anti-flash delay elapses while still loading', () => {
+    vi.useFakeTimers()
+    mGetRepo.mockReturnValue(makeRepo({}))
+    renderHome()
+    act(() => vi.advanceTimersByTime(150))
     expect(screen.getByRole('status')).toHaveTextContent(/cargando/i)
+    vi.useRealTimers()
   })
 
   it('shows the empty state once ready with zero movimientos', async () => {

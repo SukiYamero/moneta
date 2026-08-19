@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import { createBrowserRouter } from 'react-router'
 import { Home } from '@/routes/Home'
 import { AppShell } from '@/routes/AppShell'
@@ -5,15 +6,22 @@ import { RequireAuth } from '@/features/auth/RequireAuth'
 import { RouteErrorFallback } from '@/RouteErrorFallback'
 import { SearchScreen } from '@/features/search/SearchScreen'
 import { HistoryScreen } from '@/features/history/HistoryScreen'
+import { ScreenLoading } from '@/components/shared/ScreenLoading'
+import { KitLazy } from '@/routes/KitLazy'
 
 const devRoutes = import.meta.env.DEV
   ? [
       {
         path: '/kit',
-        lazy: async () => {
-          const { Kit } = await import('@/routes/Kit')
-          return { Component: Kit }
-        },
+        // React.lazy + Suspense (not react-router's own route-level `lazy`,
+        // which has no fallback slot of its own) so a real Tier 1
+        // `ScreenLoading` (specs.md §10.9) covers the module fetch instead
+        // of leaving the route pending with nothing on screen.
+        element: (
+          <Suspense fallback={<ScreenLoading />}>
+            <KitLazy />
+          </Suspense>
+        ),
         errorElement: <RouteErrorFallback />,
       },
     ]

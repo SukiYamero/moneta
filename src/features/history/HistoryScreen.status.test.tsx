@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useDataStore } from '@/lib/dataStore'
 import { HistoryScreen } from '@/features/history/HistoryScreen'
@@ -22,10 +22,23 @@ const mockStore = (overrides: Partial<ReturnType<typeof useDataStore>>) => {
 }
 
 describe('HistoryScreen status handling', () => {
-  it('shows a loading message while status is idle or loading', () => {
+  // Anti-flash gate (specs.md §10.9): a load fast enough to beat the
+  // ~150ms show-delay must render nothing, not the skeleton immediately.
+  it('shows nothing yet immediately while status is idle or loading, before the anti-flash delay elapses', () => {
+    vi.useFakeTimers()
     mockStore({ status: 'loading' })
     render(<HistoryScreen />)
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    vi.useRealTimers()
+  })
+
+  it('shows a loading message once the anti-flash delay elapses while status is still loading', () => {
+    vi.useFakeTimers()
+    mockStore({ status: 'loading' })
+    render(<HistoryScreen />)
+    act(() => vi.advanceTimersByTime(150))
     expect(screen.getByRole('status')).toHaveTextContent('Cargando')
+    vi.useRealTimers()
   })
 
   it('shows an error message with role="alert" when status is error, per docs/error-handling.md §7', () => {

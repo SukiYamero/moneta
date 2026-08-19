@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/lib/repoProvider', () => ({ getRepo: vi.fn() }))
 
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { Config, Movimiento } from '@/lib/schema'
 import { CONFIG_SEMILLA } from '@/lib/schema'
@@ -99,10 +99,23 @@ describe('SearchScreen', () => {
     expect(container.querySelector('main')?.className).not.toMatch(/bottom-nav-clearance/)
   })
 
-  it('shows a loading state while the data store is not ready', () => {
+  // Anti-flash gate (specs.md §10.9): a load fast enough to beat the
+  // ~150ms show-delay must render nothing, not the skeleton immediately.
+  it('shows nothing yet immediately while the data store is not ready, before the anti-flash delay elapses', () => {
+    vi.useFakeTimers()
     useDataStore.setState({ status: 'loading' })
     render(<SearchScreen />)
+    expect(screen.queryByText(/cargando/i)).not.toBeInTheDocument()
+    vi.useRealTimers()
+  })
+
+  it('shows a loading state once the anti-flash delay elapses while the data store is still not ready', () => {
+    vi.useFakeTimers()
+    useDataStore.setState({ status: 'loading' })
+    render(<SearchScreen />)
+    act(() => vi.advanceTimersByTime(150))
     expect(screen.getByText(/cargando/i)).toBeInTheDocument()
+    vi.useRealTimers()
   })
 
   it('shows an inline error with a retry action when the load failed', async () => {
