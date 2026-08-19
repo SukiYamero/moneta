@@ -36,20 +36,30 @@ doesn't belong to any one `src/features/**` folder. See `specs.md` §10.5.
   the single source of truth for category → icon/tint and signed-amount
   formatting. Every screen that renders a `Movimiento` imports the mapper
   from here instead of re-deriving it. `formatMonto`'s `Intl.NumberFormat`
-  instances are memoized per `Moneda` at module scope (a list this grows to
-  years of rows can't afford building one per row per render). Accepts
-  `ref`.
+  instances are memoized per `(locale, currency)` pair at module scope (a
+  list this grows to years of rows can't afford building one per row per
+  render). `formatMonto`/`getMovimientoAmountView` and `MovimientoRow`'s
+  `locale`/`dateFnsLocale` are **required**, not optional/defaulted — every
+  Home/Search/History call site passes the active locale via
+  `useLocaleFormatting()` (`src/lib/i18n/localeFormatting.ts`); a missed
+  call site is a compile error, not a silent es-CO fallback
+  (`docs/wave-2/track-m.md`). Accepts `ref`.
 - `TagChip.tsx` — icon + name pill (selected/unselected/`disabled`). The
   44px touch target is an invisible-padding wrapper around the visibly
   smaller designed pill (same split `Toggle`/`InfoButton` already use), so
   the hit area grows without inflating the visible chip. Accepts `ref`.
-- `DateChipPicker.tsx` — date chip that expands an inline month grid
-  (date-fns, Spanish locale). Takes `firstDayOfWeek` as a prop; stays
-  repo-agnostic (see `specs.md` §11, 2026-08-18). Escape closes the
-  popover via `useEscapeToClose`, correctly outranking an ancestor
-  `BottomSheet`/`CenterModal` through the shared overlay stack. Same
-  invisible-padding touch-target treatment as `TagChip` on the chip and
-  month-nav buttons. Accepts `ref`.
+- `DateChipPicker.tsx` — date chip that expands an inline month grid.
+  Takes `firstDayOfWeek` as a prop; stays repo-agnostic (see `specs.md`
+  §11, 2026-08-18). Takes required `locale` (BCP-47, used via a
+  `useMemo`-cached `Intl.DateTimeFormat` for the day+month chip label — a
+  date-fns pattern can't localize the day/month connector word, only the
+  month name) and `dateFnsLocale` (for the month header and weekday
+  captions, which have no embedded literal words) — both forwarded by the
+  calling screen from `useLocaleFormatting()` (`docs/wave-2/track-m.md`).
+  Escape closes the popover via `useEscapeToClose`, correctly outranking
+  an ancestor `BottomSheet`/`CenterModal` through the shared overlay
+  stack. Same invisible-padding touch-target treatment as `TagChip` on
+  the chip and month-nav buttons. Accepts `ref`.
 - `SegmentedControl.tsx` — generic pill-group toggle (radiogroup pattern,
   arrow-key navigation), no screen-specific option assumptions. Per-option
   `disabled` (arrow-key nav skips disabled options); keyboard focus moves

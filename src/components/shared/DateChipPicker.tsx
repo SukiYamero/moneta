@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type Ref } from 'react'
+import { useEffect, useMemo, useRef, useState, type Ref } from 'react'
 import {
   addDays,
   addMonths,
@@ -90,6 +90,15 @@ export const DateChipPicker = ({
   const weekdayLabels = WEEKDAY_SLOTS.map((offset) =>
     format(addDays(gridStart, offset), 'EEEEE', { locale: dateFnsLocale }),
   )
+  // Constructing an Intl.DateTimeFormat is the same non-trivial cost
+  // movimientoView.ts's Intl.NumberFormat cache exists to avoid — memoized
+  // per locale here rather than a module-level Map (the pure-module cache
+  // pattern) because this instance is scoped to one component's props, not
+  // shared across unrelated call sites.
+  const dayMonthFormatter = useMemo(
+    () => new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long' }),
+    [locale],
+  )
 
   const handleToggle = () => {
     setViewMonth(startOfMonth(selected))
@@ -118,7 +127,7 @@ export const DateChipPicker = ({
       >
         <span className="flex h-9 items-center gap-1.5 rounded-md border border-border-subtle bg-surface-sunken px-3.5 text-ms font-bold text-fg-secondary">
           <CalendarDays className="size-3.5 text-fg-faint" aria-hidden="true" />
-          {new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long' }).format(selected)}
+          {dayMonthFormatter.format(selected)}
           <ChevronDown
             className={cn('size-2.5 text-fg-faint transition-transform', open && 'rotate-180')}
             aria-hidden="true"

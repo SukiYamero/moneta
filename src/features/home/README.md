@@ -12,7 +12,10 @@ Track L).
 - `homeView.ts` — pure, data-free presentation helpers: greeting bucket
   (morning/afternoon/evening), initials from a display name, weekday
   labels, and the week-strip's 7-day scaffold (which days have a real
-  movement — membership only, not a total).
+  movement — membership only, not a total). `shortDayLabel`/
+  `narrowDayLabel`/`monthYearLabel`/`buildWeekStripDays` take a required
+  `Locale` parameter (no default) — `useHomeDashboard.ts` supplies it via
+  `useLocaleFormatting()` (`docs/wave-2/track-m.md`).
 - `errorCopy.ts` — `RepoErrorCode` → translation key, exhaustive over the
   closed union (a missing case is a compile error, no drift-guard test
   needed, unlike the message-keyed auth/lock copy tables).
@@ -27,13 +30,16 @@ Track L).
   day-tap; see `docs/wave-2/track-e2.md` for why).
 - `BalanceCard.tsx` — all-time balance (not period-scoped — matches the
   design), hide/show toggle (local state, not persisted), income/expense
-  mini-stats.
+  mini-stats. Calls `useLocaleFormatting()` directly for `formatMonto`.
 - `WeeklyChart.tsx` — recharts bar chart of the current week's daily
-  `gastos`, from a single `series(...)` call.
+  `gastos`, from a single `series(...)` call. Calls `useLocaleFormatting()`
+  directly for `formatMonto`/day labels.
 - `AreasBanner.tsx` — `// STUB(trackH)`, rendered `disabled` and dimmed
   like `BottomNav`'s own stub slots, not a full-color dead link.
 - `RecentMovimientos.tsx` — most recent movements via the shared
-  `MovimientoRow`, "Ver todo" linking to `/history`.
+  `MovimientoRow`, "Ver todo" linking to `/history`. Calls
+  `useLocaleFormatting()` directly and forwards `locale`/`dateFnsLocale`
+  to each `MovimientoRow`.
 - `HomeLoadingState.tsx` / `HomeEmptyState.tsx` / `HomeErrorState.tsx` —
   the three non-happy states `Home.tsx` switches on; the error state's
   retry button calls `useHomeDashboard`'s `retry` (re-invokes
