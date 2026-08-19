@@ -1,0 +1,44 @@
+{
+  "common": {},
+  "auth": {
+    "welcome": {
+      "subtitleLine1": "Tus finanzas, claras y privadas.",
+      "subtitleLine2": "Tú eres el dueño de tus datos.",
+      "googleCta": "Continuar con Google",
+      "connecting": "Conectando…",
+      "legal": "Al continuar aceptas los <terms>Términos</terms> y la <privacy>Política de privacidad</privacy>"
+    },
+    "errors": {
+      "missingClientId": "Error de configuración. Intenta más tarde.",
+      "gisFailedToLoad": "No pudimos cargar Google. Revisa tu conexión e intenta de nuevo.",
+      "accessDenied": "Cancelaste el inicio de sesión con Google.",
+      "popupClosed": "Cerraste la ventana de Google antes de terminar. Intenta de nuevo.",
+      "popupFailedToOpen": "El navegador bloqueó la ventana de Google. Revisa el bloqueador de ventanas emergentes.",
+      "loginDefault": "No se pudo iniciar sesión. Intenta de nuevo.",
+      "driveDefault": "No se pudo conectar con Drive. Intenta de nuevo."
+    }
+  },
+  "driveConsent": {
+    "title": "{{appName}} quiere guardar en tu Google Drive",
+    "description": "Como no usamos servidores, tus gastos e ingresos se guardan en un archivo privado dentro de tu propio Drive.",
+    "permissions": {
+      "createFiles": {
+        "title": "Crear y editar sus propios archivos",
+        "body": "{{appName}} solo verá y modificará los archivos que ella misma crea."
+      },
+      "noOtherAccess": {
+        "title": "No accede a tus otros archivos",
+        "body": "Tus fotos, documentos y demás contenido siguen siendo privados."
+      }
+    },
+    "revocable": "Puedes revocar el acceso cuando quieras",
+    "allowCta": "Permitir y continuar",
+    "dismissCta": "Ahora no",
+    "connecting": "Conectando con tu Drive…"
+  },
+  "toast": {},
+  "nav": {},
+  "home": {},
+  "search": {},
+  "history": {}
+}

@@ -8,41 +8,40 @@ import { driveErrorCopy, loginErrorCopy } from '@/features/auth/errorCopy'
 // literal — if auth.ts/drive.ts ever change the "auth: "/"drive: " message
 // template, these tests fail instead of the copy table silently going
 // stale while `bun run check` stays green (the exact drift this suite
-// exists to catch, per docs/error-handling.md §7).
+// exists to catch, per docs/error-handling.md §7). The expected output is
+// now a stable translation key, not a Spanish sentence — a copy reword no
+// longer breaks this suite, only a change in which error gets recognized
+// does.
 describe('loginErrorCopy', () => {
-  it('maps a known AuthError reason to actionable Spanish copy', () => {
-    expect(loginErrorCopy(new AuthError('access_denied').message)).toBe(
-      'Cancelaste el inicio de sesión con Google.',
-    )
+  it('maps a known AuthError reason to its translation key', () => {
+    expect(loginErrorCopy(new AuthError('access_denied').message)).toBe('errors.accessDenied')
   })
 
-  it('maps a missing client id to actionable Spanish copy', () => {
+  it('maps a missing client id to its translation key', () => {
     expect(loginErrorCopy(new AuthError('missing VITE_GOOGLE_CLIENT_ID').message)).toBe(
-      'Error de configuración. Intenta más tarde.',
+      'errors.missingClientId',
     )
   })
 
-  it('maps a GIS script load failure to actionable Spanish copy', () => {
+  it('maps a GIS script load failure to its translation key', () => {
     expect(loginErrorCopy(new AuthError('GIS failed to load').message)).toBe(
-      'No pudimos cargar Google. Revisa tu conexión e intenta de nuevo.',
+      'errors.gisFailedToLoad',
     )
   })
 
-  it('maps a closed popup to actionable Spanish copy', () => {
-    expect(loginErrorCopy(new AuthError('popup_closed').message)).toBe(
-      'Cerraste la ventana de Google antes de terminar. Intenta de nuevo.',
-    )
+  it('maps a closed popup to its translation key', () => {
+    expect(loginErrorCopy(new AuthError('popup_closed').message)).toBe('errors.popupClosed')
   })
 
-  it('maps a blocked popup to actionable Spanish copy', () => {
+  it('maps a blocked popup to its translation key', () => {
     expect(loginErrorCopy(new AuthError('popup_failed_to_open').message)).toBe(
-      'El navegador bloqueó la ventana de Google. Revisa el bloqueador de ventanas emergentes.',
+      'errors.popupFailedToOpen',
     )
   })
 
-  it('falls back to a generic Spanish message for a reason the table deliberately does not know', () => {
+  it('falls back to the generic login key for a reason the table deliberately does not know', () => {
     expect(loginErrorCopy(new AuthError('some_future_gis_error').message)).toBe(
-      'No se pudo iniciar sesión. Intenta de nuevo.',
+      'errors.loginDefault',
     )
   })
 
@@ -53,15 +52,11 @@ describe('loginErrorCopy', () => {
 })
 
 describe('driveErrorCopy', () => {
-  it('maps a known AuthError reason (Drive scope denied) to actionable Spanish copy', () => {
-    expect(driveErrorCopy(new AuthError('access_denied').message)).toBe(
-      'Cancelaste el inicio de sesión con Google.',
-    )
+  it('maps a known AuthError reason (Drive scope denied) to its translation key', () => {
+    expect(driveErrorCopy(new AuthError('access_denied').message)).toBe('errors.accessDenied')
   })
 
-  it('falls back to a generic Spanish message for a dynamic DriveError message', () => {
-    expect(driveErrorCopy(new DriveError('list 403').message)).toBe(
-      'No se pudo conectar con Drive. Intenta de nuevo.',
-    )
+  it('falls back to the generic drive key for a dynamic DriveError message', () => {
+    expect(driveErrorCopy(new DriveError('list 403').message)).toBe('errors.driveDefault')
   })
 })

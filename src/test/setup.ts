@@ -1,10 +1,19 @@
 import '@testing-library/jest-dom/vitest'
-import { afterEach, expect } from 'vitest'
+import { afterEach, beforeAll, expect } from 'vitest'
 import { cleanup } from '@testing-library/react'
 import 'fake-indexeddb/auto'
+import { i18next } from '@/lib/i18n'
 
-afterEach(() => {
+// Tests must not depend on the runner's ambient locale (jsdom's default
+// navigator.languages) — force `es` before the suite and after every test,
+// so a test that changes locale never leaks into the next one.
+beforeAll(async () => {
+  await i18next.changeLanguage('es')
+})
+
+afterEach(async () => {
   cleanup()
+  await i18next.changeLanguage('es')
 })
 
 const isUint8Array = (v: unknown): v is Uint8Array =>

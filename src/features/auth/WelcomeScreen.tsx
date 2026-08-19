@@ -1,4 +1,5 @@
 import { Coins } from 'lucide-react'
+import { Trans, useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/lib/authStore'
 import { APP_NAME } from '@/lib/branding'
 import { loginErrorCopy } from '@/features/auth/errorCopy'
@@ -30,6 +31,7 @@ const GoogleGlyph = () => {
 }
 
 export const WelcomeScreen = () => {
+  const { t } = useTranslation('auth')
   const status = useAuthStore((s) => s.status)
   const error = useAuthStore((s) => s.error)
   const login = useAuthStore((s) => s.login)
@@ -48,9 +50,9 @@ export const WelcomeScreen = () => {
         <div className="space-y-2.5">
           <h1 className="text-[2.125rem] font-extrabold tracking-tight text-balance">{APP_NAME}</h1>
           <p className="text-md leading-relaxed font-medium text-muted-foreground">
-            Tus finanzas, claras y privadas.
+            {t('welcome.subtitleLine1')}
             <br />
-            Tú eres el dueño de tus datos.
+            {t('welcome.subtitleLine2')}
           </p>
         </div>
       </div>
@@ -62,21 +64,27 @@ export const WelcomeScreen = () => {
           className="flex h-14 items-center justify-center gap-3 rounded-2xl bg-white text-base font-bold text-neutral-900 shadow-[0_8px_24px_rgba(0,0,0,.3)] transition-opacity disabled:opacity-60"
         >
           {busy ? (
-            'Conectando…'
+            t('welcome.connecting')
           ) : (
             <>
               <GoogleGlyph />
-              Continuar con Google
+              {t('welcome.googleCta')}
             </>
           )}
         </button>
         <p className="text-center text-xs leading-relaxed font-medium text-fg-disabled">
-          Al continuar aceptas los <span className="text-muted-foreground">Términos</span> y la{' '}
-          <span className="text-muted-foreground">Política de privacidad</span>
+          <Trans
+            t={t}
+            i18nKey="welcome.legal"
+            components={{
+              terms: <span className="text-muted-foreground" />,
+              privacy: <span className="text-muted-foreground" />,
+            }}
+          />
         </p>
         {status === 'error' && error ? (
           <p role="alert" className="text-center text-sm text-destructive">
-            {loginErrorCopy(error)}
+            {t(loginErrorCopy(error))}
           </p>
         ) : null}
       </div>

@@ -4,6 +4,7 @@ import { RouterProvider } from 'react-router/dom'
 import { router } from '@/router'
 import { AppLock } from '@/features/lock/AppLock'
 import { AppErrorBoundary } from '@/AppErrorBoundary'
+import '@/lib/i18n'
 import '@/styles/index.css'
 
 const rootEl = document.getElementById('root')

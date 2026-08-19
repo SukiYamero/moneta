@@ -1,0 +1,44 @@
+{
+  "common": {},
+  "auth": {
+    "welcome": {
+      "subtitleLine1": "Suas finanças, claras e privadas.",
+      "subtitleLine2": "Você é o dono dos seus dados.",
+      "googleCta": "Continuar com Google",
+      "connecting": "Conectando…",
+      "legal": "Ao continuar você aceita os <terms>Termos</terms> e a <privacy>Política de Privacidade</privacy>"
+    },
+    "errors": {
+      "missingClientId": "Erro de configuração. Tente novamente mais tarde.",
+      "gisFailedToLoad": "Não conseguimos carregar o Google. Verifique sua conexão e tente de novo.",
+      "accessDenied": "Você cancelou o login com o Google.",
+      "popupClosed": "Você fechou a janela do Google antes de terminar. Tente de novo.",
+      "popupFailedToOpen": "Seu navegador bloqueou a janela do Google. Verifique o bloqueador de pop-ups.",
+      "loginDefault": "Não foi possível entrar. Tente de novo.",
+      "driveDefault": "Não foi possível conectar ao Drive. Tente de novo."
+    }
+  },
+  "driveConsent": {
+    "title": "{{appName}} quer salvar no seu Google Drive",
+    "description": "Como não usamos servidores, suas despesas e receitas são salvas em um arquivo privado dentro do seu próprio Drive.",
+    "permissions": {
+      "createFiles": {
+        "title": "Criar e editar seus próprios arquivos",
+        "body": "{{appName}} só vai ver e modificar os arquivos que ela mesma cria."
+      },
+      "noOtherAccess": {
+        "title": "Não acessa seus outros arquivos",
+        "body": "Suas fotos, documentos e demais conteúdos continuam privados."
+      }
+    },
+    "revocable": "Você pode revogar o acesso quando quiser",
+    "allowCta": "Permitir e continuar",
+    "dismissCta": "Agora não",
+    "connecting": "Conectando ao seu Drive…"
+  },
+  "toast": {},
+  "nav": {},
+  "home": {},
+  "search": {},
+  "history": {}
+}

@@ -4,13 +4,18 @@ import userEvent from '@testing-library/user-event'
 import { WelcomeScreen } from '@/features/auth/WelcomeScreen'
 import { useAuthStore } from '@/lib/authStore'
 import { APP_NAME } from '@/lib/branding'
+import { i18next } from '@/lib/i18n'
+import { detectLocale } from '@/lib/i18n/detectLocale'
 
 beforeEach(() => {
   useAuthStore.setState({ status: 'idle', user: null, session: null, drive: null, error: null })
 })
 
 describe('WelcomeScreen', () => {
-  it('shows the brand name and the Google sign-in CTA', () => {
+  // Also proves i18next config resources are synchronous (`useSuspense:
+  // false`, `initImmediate: false`): translated copy is present on first
+  // paint, not flashed empty before rendering a second time.
+  it('shows the brand name and the Google sign-in CTA on first paint', () => {
     render(<WelcomeScreen />)
     expect(screen.getByText(APP_NAME)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /continuar con google/i })).toBeInTheDocument()
@@ -43,5 +48,13 @@ describe('WelcomeScreen', () => {
     render(<WelcomeScreen />)
     expect(screen.getByRole('alert')).toHaveTextContent(/no se pudo iniciar sesión/i)
     expect(screen.queryByText(/some_new_gis_error_code/i)).not.toBeInTheDocument()
+  })
+
+  it('renders in a different language when navigator.languages detects one', async () => {
+    vi.stubGlobal('navigator', { ...navigator, languages: ['en-US'] })
+    await i18next.changeLanguage(detectLocale())
+    render(<WelcomeScreen />)
+    expect(screen.getByRole('button', { name: /continue with google/i })).toBeInTheDocument()
+    vi.unstubAllGlobals()
   })
 })
