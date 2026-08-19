@@ -848,6 +848,75 @@ b DESC`, not a mix) and made the fast path's range-bound construction
   cases whose expectations depended on the old convention were updated to
   match (documented in their own test descriptions/comments, not just the
   diff).
+- 2026-08-18 — **`enableLock` now sets `activeDek` itself (fix, code review).**
+  Root cause of a latent bug: `enableLock` wrote the vault but never populated
+  the module-level `activeDek`, so a tab that had just turned the lock on had
+  no working `updateSession` until a separate PIN/biometric unlock happened —
+  any `syncLockedSession` call in that window threw `'lock: not unlocked'`,
+  and (before the next fix below) that error vanished into a bare `catch {}`,
+  leaving the vault holding a stale session. Fixed at the root: enabling the
+  lock is conceptually the same act as unlocking it (the user just proved
+  knowledge of the PIN by setting it), so `enableLock` now assigns the freshly
+  generated DEK to `activeDek` right after writing the vault — a freshly
+  enabled lock behaves exactly like a just-unlocked one. TDD'd in
+  `pinLock.test.ts` (`enableLock leaves the vault unlocked in this tab, no
+separate unlock needed` — failed with `Error: lock: not unlocked` pre-fix).
+- 2026-08-18 — **`syncLockedSession`'s try covers the whole body, and its
+  catch logs instead of swallowing silently (fix, code review).** Two related
+  bugs: (1) `hasVault()` sat outside the `try`, so an IndexedDB failure there
+  (Safari private mode, storage-quota errors, a blocking extension) threw
+  straight into the caller's catch and failed `login()`/`restore()`/
+  `hydrate()`/`connectDrive()` even though the identity auth itself had
+  succeeded — moved the `hasVault()` read inside the same `try` so the whole
+  function is genuinely best-effort, matching what its own comment already
+  promised. (2) With the `enableLock` root cause fixed above, a thrown
+  `'lock: not unlocked'` (or any other vault error) is now genuinely
+  unexpected rather than an every-time occurrence — a bare `catch {}` would
+  hide a real problem with no trace. Chose to keep the auth flow
+  un-breakable (never re-throw — a stale cache is a lesser bug than a broken
+  login) but log via `console.warn` so the failure is visible in devtools
+  instead of disappearing. TDD'd in `authStore.test.ts` (`does not throw or
+block login when hasVault itself fails` — failed with `status: 'error'`
+  pre-fix).
+- 2026-08-18 — **`restore()` wired into `RequireAuth` for the no-lock boot
+  path, closing the "silent re-auth while the Google session is alive"
+  promise in §5 (fix, code review).** `restore()` (identity-only, `prompt:
+''`, already implemented and unit-tested) had zero production callers —
+  every reload forced a manual "Continuar con Google" click regardless of
+  whether the Google session cookie was still alive. Wired it into
+  `RequireAuth`'s mount effect, gated to fire only once and only when
+  `status === 'idle'`. That guard is also what keeps it from racing
+  `AppLock`/`lockStore.resume()`: when a PIN lock is enabled, `AppLock`
+  withholds `RequireAuth` behind `LockScreen` until `resume()` has already
+  settled `status` to `'authenticated'` or `'error'` via `hydrate()` — it
+  never leaves `status` at `'idle'` — so by the time `RequireAuth` first
+  mounts in that path, the idle-gate is already closed and `restore()`
+  doesn't fire. Only the true cold-boot-with-no-lock case (`status` still
+  `'idle'` when `RequireAuth` mounts) triggers it, and its existing silent
+  fallback to `'idle'` on failure is unchanged, so a logged-out visitor with
+  no live Google session still lands cleanly on `WelcomeScreen`. Added a
+  second guard directly in `authStore.restore` itself (`if (get().status !==
+'idle') return`, flipping to `'authenticating'` synchronously before the
+  first `await`) as defense in depth against a double-invoke (e.g. React
+  StrictMode) firing it twice. TDD'd in both `authStore.test.ts` (`is a
+no-op when status is not idle...`) and `RequireAuth.test.tsx` (`attempts a
+silent restore once on mount while status is idle` / `does not attempt a
+silent restore when a lock-screen unlock already settled status`).
+- 2026-08-18 — **`connectDrive` now guards against a stale in-flight resolve
+  resurrecting a logged-out session (fix, code review).** Its success path
+  unconditionally `set` the resolved session/drive/driveOptIn with no check
+  that the store was still in the state it started from — a `logout()`
+  landing while the Drive-scope request was in flight would be silently
+  undone by the late resolve (not reachable today, no logout button is wired
+  anywhere yet, but latent). Fixed with a module-level `authGeneration`
+  counter that `logout()` increments; `connectDrive` snapshots it at the
+  start and checks it's unchanged before applying either the success or the
+  error branch, discarding the resolve otherwise. Chose a dedicated counter
+  over checking `status`/`session` directly because `connectDrive` doesn't
+  otherwise touch `status`, and piggybacking the guard on an unrelated field
+  would make the check fragile to reorder. TDD'd in `authStore.test.ts`
+  (`does not resurrect a logged-out session with a stale in-flight resolve`
+  — failed with the stale session/drive resurrected pre-fix).
 
 ## 12. Backlog (pending verification / deferred work)
 

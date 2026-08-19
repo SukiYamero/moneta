@@ -185,6 +185,10 @@ export async function enableLock(opts: {
   }
 
   await db.vault.put({ id: VAULT_ID, ...vault })
+  // Enabling the lock is conceptually the same act as unlocking it — the user
+  // just proved knowledge of the PIN by setting it — so this tab shouldn't need
+  // a separate unlock before updateSession works.
+  activeDek = dek
 }
 
 export async function unlockWithBiometric(): Promise<AuthSession> {

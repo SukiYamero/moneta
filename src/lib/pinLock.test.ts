@@ -66,6 +66,18 @@ test('four wrong PINs then a correct PIN still unlocks and resets the counter', 
   expect(after?.failedAttempts).toBe(1)
 })
 
+test('enableLock leaves the vault unlocked in this tab, no separate unlock needed', async () => {
+  // Start from a known no-vault, no-activeDek state — activeDek is module-level
+  // and otherwise could carry over from a DEK a previous test unlocked with.
+  await resetVault()
+  await enableLock({ pin: '1234', session })
+
+  const refreshed: AuthSession = { accessToken: 'tok-fresh', expiresAt: 1_234_567_890_000 }
+  await updateSession(refreshed)
+
+  expect(await unlockWithPin('1234')).toEqual(refreshed)
+})
+
 test('resetVault wipes the vault', async () => {
   await enableLock({ pin: '1234', session })
   await resetVault()
