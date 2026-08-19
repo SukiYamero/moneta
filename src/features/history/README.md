@@ -23,10 +23,14 @@ and the movements list for the currently viewed period.
   picker chip lists (`buildDayOptions`/`buildWeekOptions`/`buildMonthOptions`/
   `buildYearOptions`). Every chip's own bounds and "has data" flag are
   resolved via `periodRange`/`filterByRange`, never hand-rolled — a chip can
-  never disagree with the range it jumps to.
+  never disagree with the range it jumps to. `buildDayOptions`/
+  `buildWeekOptions`/`buildMonthOptions` take a required `Locale` parameter
+  (no default); `HistoryScreen` supplies it via `useLocaleFormatting()`
+  (`docs/wave-2/track-m.md`).
 - `historyPeriodLabel.ts` — pure header title/subtitle formatting
   (`getPeriodLabel`) over an already-resolved `DateRange`; never recomputes
-  boundaries.
+  boundaries. `getPeriodLabel` takes a required `Locale` parameter, same
+  no-default rule as `historyPeriodOptions.ts` above.
 - `PeriodPickerRow.tsx` — the horizontally scrollable chip strip shared by
   the day/week/month pickers (`anio` has no strip, only the year menu).
 - `YearMenu.tsx` — small inline popover (not a `BottomSheet`/`CenterModal`):
@@ -36,7 +40,8 @@ and the movements list for the currently viewed period.
 - `BreakdownCard.tsx` — balance + income/expense mini-totals + the
   gasto/ingreso `SegmentedControl` tabs and progress-bar breakdown, driven
   entirely by `breakdownBy()`'s `BreakdownEntry[]` (`share` is never
-  recomputed locally).
+  recomputed locally). Calls `useLocaleFormatting()` directly for
+  `formatMonto`.
 
 Not built: a hide/show-amounts toggle (the design draws one) — masking the
 movements list would need a prop `MovimientoRow` doesn't have, and adding

@@ -15,13 +15,17 @@ client-side from the same `Movimiento[]` those screens read.
   different empty states** — telling a new user their search matched
   nothing when they have no movements at all is the wrong message.
   A search result row has no `onClick` yet — `// STUB(trackF)`: the
-  Movement view/edit sheet doesn't exist until Wave 3.
+  Movement view/edit sheet doesn't exist until Wave 3. Calls
+  `useLocaleFormatting()` for the custom-range chip's date formatting and
+  for `MovimientoRow`'s `locale`/`dateFnsLocale` props
+  (`docs/wave-2/track-m.md`).
 - `FilterSheet.tsx` — `BottomSheet`-based date range (presets +
   `DateChipPicker` for `custom`), type (`SegmentedControl`), and tag
   (`TagChip`, multi-select) filters. No separate "apply" step: every tap
   writes straight into `useSearchFilters`'s shared state, so the result
   list and this sheet's own "Ver N resultados" button update live,
-  matching the source design.
+  matching the source design. `FilterSheetProps` takes required `locale`/
+  `dateFnsLocale`, forwarded from `SearchScreen` to `DateChipPicker`.
 - `useSearchFilters.ts` — owns every filter dimension (debounced query,
   date-range preset + custom bounds, type, tags) in one hook so
   `SearchScreen` and `FilterSheet` always read the same live state.
