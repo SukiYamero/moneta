@@ -431,6 +431,43 @@ action()` call site becomes an unhandled-rejection bug. Keep the rule
   reason — falls through to the fallback, same mechanism a `code`-keyed
   table would use.
 
+  **Message-keying's drift risk, and how the tests guard it.** A
+  `Record<message, copy>` keyed on a hand-typed literal is only as safe as
+  the guarantee that the literal still matches what the real error
+  constructs — and a naive test that also just retypes the same literal
+  (`expect(loginErrorCopy('auth: access_denied')).toBe(...)`) verifies
+  nothing about that guarantee: if `AuthError`'s `` `auth: ${reason}` ``
+  template ever changes (prefix dropped, renamed, additional context
+  added), every key in the table silently stops matching, every user
+  silently gets the generic fallback instead of the actionable line, and a
+  test built the same way keeps passing regardless — exactly the invisible
+  regression this whole document exists to prevent, just relocated into the
+  UI's own copy layer. Fixed by deriving each test's key from the real
+  construction instead of restating it:
+  `loginErrorCopy(new AuthError('access_denied').message)`, not
+  `loginErrorCopy('auth: access_denied')`. A template change in `auth.ts`/
+  `drive.ts`/`pinLock.ts` now fails the build.
+
+  This only guards the _template_ — the specific reason string passed into
+  a constructor (`'access_denied'`, `'missing VITE_GOOGLE_CLIENT_ID'`) is
+  still a literal chosen independently in two unowned files
+  (`src/lib/auth.ts`, `src/lib/lockStore.ts`) and in the copy table, and
+  nothing forces them to agree if a reason string itself gets renamed. Two
+  of the auth reasons are protected by a different mechanism: `err.type` on
+  the GIS `error_callback` is a typed union
+  (`"unknown" | "popup_closed" | "popup_failed_to_open"` in
+  `@types/google.accounts`), so renaming what `auth.ts` passes to
+  `AuthError` there is a TypeScript compile error, not a silent drift. The
+  two purely-internal ones (`'missing VITE_GOOGLE_CLIENT_ID'`,
+  `'GIS failed to load'`) and `lockStore.ts`'s two hand-thrown messages
+  (`'locked out'`, `'lock: no session to protect'`) have no such backstop —
+  a rename there degrades silently to the generic fallback (still a
+  reasonable, non-broken message, just less specific) unless whoever makes
+  that rename also greps for it. Accepted as a residual, lower-severity gap
+  rather than fixed by editing those unowned files to export named reason
+  constants — worth doing the day one of those files gets a real owner
+  making that change anyway, not on its own.
+
 ## 8. How errors get tested
 
 `AGENTS.md`'s TDD rule already names `auth.ts`, `repo.ts`, `pinLock.ts`, and

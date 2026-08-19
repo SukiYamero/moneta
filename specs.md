@@ -1495,6 +1495,29 @@ type { ComponentProps } from 'react'`, matching the type-only-import
        `bun run check` green (283 tests) throughout; `bun run build` verified
        after the router/main.tsx changes.
 
+- 2026-08-18 — **Closed a drift-guard gap in the Spanish error-copy mapping
+  (operator review of phase 2).** `errorCopy.test.ts` (both
+  `src/features/auth/` and `src/features/lock/`) previously hardcoded the
+  same literal key the copy table itself uses
+  (`loginErrorCopy('auth: access_denied')`), so a change to `AuthError`'s
+  `` `auth: ${reason}` `` message template — dropping the prefix, renaming
+  it, adding context — would make every key in the table silently stop
+  matching, every user silently get the generic fallback, and the test
+  suite keep passing regardless. Fixed by deriving each mapped-key test
+  from the real error construction instead
+  (`loginErrorCopy(new AuthError('access_denied').message)`) so a template
+  change fails the build. Verified directly: temporarily changed
+  `AuthError`'s template in `auth.ts` (`` `auth: ` `` → `` `auth failure: ` ``),
+  confirmed 6 of 9 `errorCopy.test.ts` tests failed for the expected
+  reason, reverted (`git diff` on `auth.ts` empty afterward) — same
+  sabotage-and-restore method the operator used to verify the `Repo`
+  contract suite. Two keys remain string-pinned rather than derived and are
+  documented as a residual, lower-severity gap (`docs/error-handling.md`
+  §7): `'locked out'` and `'lock: no session to protect'` are literals
+  lockStore.ts hand-throws/substitutes (not from a named `Error` subclass
+  this test file can construct), and `lockStore.ts` isn't an owned file
+  this track can refactor to expose a reusable constant instead.
+
 ## 12. Backlog (pending verification / deferred work)
 
 - ✅ **Login verified end-to-end (§10.1)** — 2026-07-02. Real OAuth ran against Google
