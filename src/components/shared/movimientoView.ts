@@ -98,15 +98,14 @@ const AMOUNT_COLOR_CLASS: Record<TipoMovimiento, string> = {
 // locales/currencies, not the number of movimientos, so the cache can't
 // grow unbounded.
 //
-// `locale` defaults to `es-CO` — this codebase has no active-locale-aware
-// formatting anywhere yet (docs/wave-2/track-e2.md "Spec deltas"); it is a
-// plain parameter, not something this module reads off i18next itself, so
-// it stays pure and independently testable (docs/error-handling.md §7's
-// "return a key, don't read global state" judgment, applied to a formatter
-// instead of a copy lookup). Callers that care about the active locale pass
-// it in; callers that don't get today's unchanged es-CO behavior.
-const DEFAULT_LOCALE = 'es-CO'
-
+// `locale` is a required parameter, not something this module reads off
+// i18next itself, so it stays pure and independently testable
+// (docs/error-handling.md §7's "return a key, don't read global state"
+// judgment, applied to a formatter instead of a copy lookup). It has no
+// default: a call site that forgets to pass the active locale
+// (`useLocaleFormatting()`) is a compile error instead of silently
+// rendering es-CO to a user who switched the app to `en`/`pt-BR`
+// (docs/wave-2/review-k.md finding 1 — the bug this track exists to close).
 const currencyFormatters = new Map<string, Intl.NumberFormat>()
 
 const getCurrencyFormatter = (moneda: Moneda, locale: string): Intl.NumberFormat => {
@@ -118,11 +117,7 @@ const getCurrencyFormatter = (moneda: Moneda, locale: string): Intl.NumberFormat
   return formatter
 }
 
-export const formatMonto = (
-  monto: number,
-  moneda: Moneda,
-  locale: string = DEFAULT_LOCALE,
-): string => {
+export const formatMonto = (monto: number, moneda: Moneda, locale: string): string => {
   return getCurrencyFormatter(moneda, locale).format(monto)
 }
 
@@ -134,7 +129,7 @@ export interface MovimientoAmountView {
 /** `monto` is always positive (schema.ts) — sign and color come from `tipo`. */
 export const getMovimientoAmountView = (
   m: Pick<Movimiento, 'monto' | 'moneda' | 'tipo'>,
-  locale: string = DEFAULT_LOCALE,
+  locale: string,
 ): MovimientoAmountView => {
   return {
     text: SIGN[m.tipo] + formatMonto(m.monto, m.moneda, locale),

@@ -23,7 +23,9 @@ describe('localeFormatting', () => {
   })
 
   it('keeps the es tag formatting amounts exactly as before any locale was wired', () => {
-    expect(formatMonto(3200, 'COP', localeFormatting('es').locale)).toBe(formatMonto(3200, 'COP'))
+    expect(formatMonto(3200, 'COP', localeFormatting('es').locale)).toBe(
+      formatMonto(3200, 'COP', 'es-CO'),
+    )
   })
 
   it('reads the active i18next locale, and follows a language change', async () => {

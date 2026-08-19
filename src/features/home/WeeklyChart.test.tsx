@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
+import { i18next } from '@/lib/i18n'
 import type { SeriesBucket } from '@/lib/movimientoStats'
 
 // jsdom has no ResizeObserver, so recharts' ResponsiveContainer always
@@ -106,5 +107,22 @@ describe('WeeklyChart', () => {
     render(<WeeklyChart chart={week()} totalGastos={0} moneda="COP" todayIso={TODAY} />)
 
     expect(screen.getByTestId('bar')).toHaveAttribute('data-animated', 'false')
+  })
+
+  // The Done-when guarantee (docs/wave-2/track-m.md): switching locale must
+  // change the currency formatting AND the day labels together — a
+  // translated chart still showing Spanish month/day names next to
+  // en-US-grouped money would be a half-translated screen, worse than the
+  // original all-Spanish bug.
+  it('renders money and day labels together in the locale passed by the caller', async () => {
+    await i18next.changeLanguage('en')
+    render(<WeeklyChart chart={week()} totalGastos={1999} moneda="USD" todayIso={TODAY} />)
+
+    expect(screen.getByText('$1,999.00')).toBeInTheDocument()
+    // 2026-08-17 (the first bucket) is a Monday: "L" in Spanish, "M" in English.
+    expect(screen.getAllByText('M', { exact: true }).length).toBeGreaterThan(0)
+    expect(screen.queryByText('L', { exact: true })).not.toBeInTheDocument()
+
+    await i18next.changeLanguage('es')
   })
 })

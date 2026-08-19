@@ -10,6 +10,7 @@ import { CONFIG_SEMILLA } from '@/lib/schema'
 import type { Repo } from '@/lib/repo'
 import { useDataStore } from '@/lib/dataStore'
 import { getRepo } from '@/lib/repoProvider'
+import { i18next } from '@/lib/i18n'
 import { SearchScreen } from '@/features/search/SearchScreen'
 
 const mGetRepo = vi.mocked(getRepo)
@@ -322,5 +323,21 @@ describe('SearchScreen', () => {
 
     expect(screen.getByText('Café de la mañana')).toBeInTheDocument()
     expect(screen.getByText('Sueldo de agosto')).toBeInTheDocument()
+  })
+
+  // The Done-when guarantee (docs/wave-2/track-m.md): switching locale must
+  // change the currency formatting AND the date labels together — a
+  // translated screen still showing an es-CO amount next to a Spanish
+  // month abbreviation would be a half-translated screen, worse than the
+  // original all-Spanish bug.
+  it('renders money and date labels together in the locale passed by the caller', async () => {
+    await i18next.changeLanguage('en')
+    setReady([movimiento({ nota: 'Coffee', monto: 1999, moneda: 'USD', fecha: '2026-08-10' })])
+    render(<SearchScreen />)
+
+    expect(screen.getByText('10 Aug')).toBeInTheDocument()
+    expect(screen.getByText('-$1,999.00')).toBeInTheDocument()
+
+    await i18next.changeLanguage('es')
   })
 })

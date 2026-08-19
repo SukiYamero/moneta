@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next'
+import type { Locale } from 'date-fns'
 import type { Categoria } from '@/lib/schema'
 import { cn } from '@/lib/utils'
 import { BottomSheet } from '@/components/shared/BottomSheet'
@@ -15,6 +16,8 @@ export interface FilterSheetProps {
   filters: UseSearchFiltersResult
   categories: Categoria[]
   firstDayOfWeek: 0 | 1
+  locale: string
+  dateFnsLocale: Locale
   resultCount: number
 }
 
@@ -34,6 +37,8 @@ export const FilterSheet = ({
   filters,
   categories,
   firstDayOfWeek,
+  locale,
+  dateFnsLocale,
   resultCount,
 }: FilterSheetProps) => {
   const { t } = useTranslation('search')
@@ -79,6 +84,8 @@ export const FilterSheet = ({
                   value={filters.customFrom}
                   onChange={filters.setCustomFrom}
                   firstDayOfWeek={firstDayOfWeek}
+                  locale={locale}
+                  dateFnsLocale={dateFnsLocale}
                 />
               </div>
               <div className="flex flex-col gap-1.5 text-xs font-bold text-fg-tertiary">
@@ -87,6 +94,8 @@ export const FilterSheet = ({
                   value={filters.customTo}
                   onChange={filters.setCustomTo}
                   firstDayOfWeek={firstDayOfWeek}
+                  locale={locale}
+                  dateFnsLocale={dateFnsLocale}
                 />
               </div>
             </div>

@@ -9,8 +9,8 @@ import {
   parseISO,
   startOfMonth,
   startOfYear,
+  type Locale,
 } from 'date-fns'
-import { es } from 'date-fns/locale'
 import type { Movimiento, Periodo } from '@/lib/schema'
 import { type DateRange, filterByRange, periodRange } from '@/lib/movimientoStats'
 
@@ -41,6 +41,7 @@ export const buildDayOptions = (
   movimientos: Movimiento[],
   anchor: string,
   currentRange: DateRange,
+  locale: Locale,
 ): PeriodOption[] => {
   const monthStart = startOfMonth(parseISO(anchor))
   return eachDayOfInterval({ start: monthStart, end: endOfMonth(monthStart) }).map((date) => {
@@ -48,7 +49,7 @@ export const buildDayOptions = (
     return {
       iso,
       label: format(date, 'd'),
-      caption: format(date, 'EEEEE', { locale: es }),
+      caption: format(date, 'EEEEE', { locale }),
       hasData: hasMovements(movimientos, { from: iso, to: iso }),
       selected: iso === currentRange.from && currentRange.to === currentRange.from,
     }
@@ -66,6 +67,7 @@ export const buildWeekOptions = (
   anchor: string,
   currentRange: DateRange,
   primerDiaSemana: 0 | 1,
+  locale: Locale,
 ): PeriodOption[] => {
   const monthStart = startOfMonth(parseISO(anchor))
   const weekStarts = eachWeekOfInterval(
@@ -76,7 +78,7 @@ export const buildWeekOptions = (
     const weekRange = periodRange('semana', toIsoDate(weekStart), primerDiaSemana)
     return {
       iso: weekRange.from,
-      label: `${format(parseISO(weekRange.from), 'd')}–${format(parseISO(weekRange.to), 'd MMM', { locale: es })}`,
+      label: `${format(parseISO(weekRange.from), 'd')}–${format(parseISO(weekRange.to), 'd MMM', { locale })}`,
       hasData: hasMovements(movimientos, weekRange),
       selected: weekRange.from === currentRange.from,
     }
@@ -89,13 +91,14 @@ export const buildMonthOptions = (
   anchor: string,
   currentRange: DateRange,
   primerDiaSemana: 0 | 1,
+  locale: Locale,
 ): PeriodOption[] => {
   const yearStart = startOfYear(parseISO(anchor))
   return eachMonthOfInterval({ start: yearStart, end: endOfYear(yearStart) }).map((date) => {
     const monthRange = periodRange('mes', toIsoDate(date), primerDiaSemana)
     return {
       iso: monthRange.from,
-      label: format(date, 'LLL', { locale: es }),
+      label: format(date, 'LLL', { locale }),
       hasData: hasMovements(movimientos, monthRange),
       selected: monthRange.from === currentRange.from,
     }

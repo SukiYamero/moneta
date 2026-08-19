@@ -2,6 +2,7 @@ import { Bar, BarChart, Cell, ResponsiveContainer } from 'recharts'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 import { formatMonto } from '@/components/shared/movimientoView'
+import { useLocaleFormatting } from '@/lib/i18n/localeFormatting'
 import { narrowDayLabel } from '@/features/home/homeView'
 import { usePrefersReducedMotion } from '@/features/home/usePrefersReducedMotion'
 import type { Moneda } from '@/lib/schema'
@@ -34,6 +35,7 @@ const barStatus = (bucket: SeriesBucket, todayIso: string): BarStatus => {
 
 export const WeeklyChart = ({ chart, totalGastos, moneda, todayIso }: WeeklyChartProps) => {
   const { t } = useTranslation('home')
+  const { locale, dateFnsLocale } = useLocaleFormatting()
   const reducedMotion = usePrefersReducedMotion()
 
   return (
@@ -43,7 +45,7 @@ export const WeeklyChart = ({ chart, totalGastos, moneda, todayIso }: WeeklyChar
           <div className="text-base font-bold">{t('chart.title')}</div>
           <div className="mt-0.75 text-xs font-medium text-fg-tertiary">{t('chart.subtitle')}</div>
         </div>
-        <div className="text-4xl font-extrabold">{formatMonto(totalGastos, moneda)}</div>
+        <div className="text-4xl font-extrabold">{formatMonto(totalGastos, moneda, locale)}</div>
       </div>
 
       <div className="mt-4.5 h-31" aria-hidden="true">
@@ -66,7 +68,7 @@ export const WeeklyChart = ({ chart, totalGastos, moneda, todayIso }: WeeklyChar
               bucket.bucketStart === todayIso ? 'text-primary' : 'text-fg-tertiary',
             )}
           >
-            {narrowDayLabel(bucket.bucketStart)}
+            {narrowDayLabel(bucket.bucketStart, dateFnsLocale)}
           </span>
         ))}
       </div>
@@ -75,7 +77,7 @@ export const WeeklyChart = ({ chart, totalGastos, moneda, todayIso }: WeeklyChar
         {chart
           .map(
             (bucket) =>
-              `${narrowDayLabel(bucket.bucketStart)}: ${formatMonto(bucket.gastos, moneda)}`,
+              `${narrowDayLabel(bucket.bucketStart, dateFnsLocale)}: ${formatMonto(bucket.gastos, moneda, locale)}`,
           )
           .join(', ')}
       </span>

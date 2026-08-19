@@ -12,8 +12,8 @@ import {
   startOfMonth,
   startOfWeek,
   subMonths,
+  type Locale,
 } from 'date-fns'
-import { es } from 'date-fns/locale'
 import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useEscapeToClose } from '@/components/shared/useOverlay'
@@ -28,6 +28,26 @@ export interface DateChipPickerProps {
    * reads the preference via the repo and passes it down.
    */
   firstDayOfWeek?: 0 | 1
+  /**
+   * BCP-47 locale for the chip's day+month label. Built with
+   * `Intl.DateTimeFormat` rather than date-fns: date-fns' `'d MMMM'`-style
+   * patterns only localize the month name, not the connector word between
+   * day and month (Spanish/Portuguese "10 de agosto" vs English "August
+   * 10") — a literal `"d 'de' MMMM"` pattern under an `enUS` `dateFnsLocale`
+   * renders the mixed-language "10 de August" (docs/wave-2/track-m.md).
+   * `Intl.DateTimeFormat`'s `{ day, month }` options localize the whole
+   * phrase correctly. Same no-default rule as `MovimientoRow`'s `locale`.
+   */
+  locale: string
+  /**
+   * date-fns `Locale` for the popover's month/weekday names, where the
+   * pattern has no embedded literal words (`'MMMM yyyy'`, `'EEEEE'`) so
+   * date-fns' own localization is correct. Same no-default rule as
+   * `MovimientoRow`'s `dateFnsLocale` (docs/wave-2/track-m.md): the calling
+   * screen reads the active locale (`useLocaleFormatting()`) and passes it
+   * down so this component stays i18n-agnostic.
+   */
+  dateFnsLocale: Locale
   className?: string
   ref?: Ref<HTMLDivElement>
 }
@@ -39,6 +59,8 @@ export const DateChipPicker = ({
   value,
   onChange,
   firstDayOfWeek = 1,
+  locale,
+  dateFnsLocale,
   className,
   ref,
 }: DateChipPickerProps) => {
@@ -66,7 +88,7 @@ export const DateChipPicker = ({
   const gridEnd = endOfWeek(endOfMonth(viewMonth), { weekStartsOn })
   const days = eachDayOfInterval({ start: gridStart, end: gridEnd })
   const weekdayLabels = WEEKDAY_SLOTS.map((offset) =>
-    format(addDays(gridStart, offset), 'EEEEE', { locale: es }),
+    format(addDays(gridStart, offset), 'EEEEE', { locale: dateFnsLocale }),
   )
 
   const handleToggle = () => {
@@ -96,7 +118,7 @@ export const DateChipPicker = ({
       >
         <span className="flex h-9 items-center gap-1.5 rounded-md border border-border-subtle bg-surface-sunken px-3.5 text-ms font-bold text-fg-secondary">
           <CalendarDays className="size-3.5 text-fg-faint" aria-hidden="true" />
-          {format(selected, "d 'de' MMMM", { locale: es })}
+          {new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long' }).format(selected)}
           <ChevronDown
             className={cn('size-2.5 text-fg-faint transition-transform', open && 'rotate-180')}
             aria-hidden="true"
@@ -122,7 +144,7 @@ export const DateChipPicker = ({
               </span>
             </button>
             <span className="text-ms font-bold capitalize">
-              {format(viewMonth, 'MMMM yyyy', { locale: es })}
+              {format(viewMonth, 'MMMM yyyy', { locale: dateFnsLocale })}
             </span>
             <button
               type="button"
@@ -152,7 +174,7 @@ export const DateChipPicker = ({
                   type="button"
                   onClick={() => handleSelect(day)}
                   aria-pressed={isSelected}
-                  aria-label={format(day, 'PPPP', { locale: es })}
+                  aria-label={format(day, 'PPPP', { locale: dateFnsLocale })}
                   className={cn(
                     'flex aspect-square items-center justify-center rounded-sm text-ms font-semibold',
                     isSelected

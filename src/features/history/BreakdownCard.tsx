@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next'
 import type { Moneda, Periodo, TipoMovimiento } from '@/lib/schema'
 import type { BreakdownEntry, Totals } from '@/lib/movimientoStats'
 import { formatMonto, getMovimientoVisual } from '@/components/shared/movimientoView'
+import { useLocaleFormatting } from '@/lib/i18n/localeFormatting'
 import { SegmentedControl, type SegmentedControlOption } from '@/components/shared/SegmentedControl'
 import type { IconAvatarTint } from '@/components/shared/IconAvatar'
 import { cn } from '@/lib/utils'
@@ -41,6 +42,7 @@ export const BreakdownCard = ({
   moneda,
 }: BreakdownCardProps) => {
   const { t } = useTranslation('history')
+  const { locale } = useLocaleFormatting()
 
   const balanceLabel: Record<Periodo, string> = {
     dia: t('balance.dia'),
@@ -72,15 +74,15 @@ export const BreakdownCard = ({
             )}
           >
             {balanceNegative ? '-' : ''}
-            {formatMonto(Math.abs(totals.balance), moneda)}
+            {formatMonto(Math.abs(totals.balance), moneda, locale)}
           </div>
         </div>
         <div className="shrink-0 pt-0.75 text-right">
           <div className="text-ms font-bold text-success">
-            +{formatMonto(totals.ingresos, moneda)}
+            +{formatMonto(totals.ingresos, moneda, locale)}
           </div>
           <div className="mt-1 text-ms font-bold text-foreground">
-            -{formatMonto(totals.gastos, moneda)}
+            -{formatMonto(totals.gastos, moneda, locale)}
           </div>
         </div>
       </div>
@@ -121,7 +123,9 @@ export const BreakdownCard = ({
                     <span className="min-w-0 flex-1 truncate text-ms font-semibold text-fg-secondary">
                       {entry.key}
                     </span>
-                    <span className="text-ms font-bold">{formatMonto(entry.total, moneda)}</span>
+                    <span className="text-ms font-bold">
+                      {formatMonto(entry.total, moneda, locale)}
+                    </span>
                     <span className="w-8.5 text-right text-xs font-semibold text-fg-faint">
                       {percent}%
                     </span>

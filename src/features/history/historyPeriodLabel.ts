@@ -1,5 +1,4 @@
-import { format, isSameDay, parseISO } from 'date-fns'
-import { es } from 'date-fns/locale'
+import { format, isSameDay, parseISO, type Locale } from 'date-fns'
 import type { Periodo } from '@/lib/schema'
 import type { DateRange } from '@/lib/movimientoStats'
 
@@ -25,26 +24,27 @@ export const getPeriodLabel = (
   range: DateRange,
   today: Date,
   strings: PeriodLabelStrings,
+  locale: Locale,
 ): PeriodLabel => {
   const from = parseISO(range.from)
   const to = parseISO(range.to)
 
   if (scope === 'dia') {
     return {
-      title: isSameDay(from, today) ? strings.today : format(from, 'EEEE d', { locale: es }),
-      subtitle: format(from, 'MMMM yyyy', { locale: es }),
+      title: isSameDay(from, today) ? strings.today : format(from, 'EEEE d', { locale }),
+      subtitle: format(from, 'MMMM yyyy', { locale }),
     }
   }
 
   if (scope === 'semana') {
     return {
-      title: `${format(from, 'd')}–${format(to, 'd MMM', { locale: es })}`,
-      subtitle: `${strings.week} · ${format(from, 'MMMM yyyy', { locale: es })}`,
+      title: `${format(from, 'd')}–${format(to, 'd MMM', { locale })}`,
+      subtitle: `${strings.week} · ${format(from, 'MMMM yyyy', { locale })}`,
     }
   }
 
   if (scope === 'mes') {
-    return { title: format(from, 'MMMM yyyy', { locale: es }), subtitle: strings.summary }
+    return { title: format(from, 'MMMM yyyy', { locale }), subtitle: strings.summary }
   }
 
   return { title: format(from, 'yyyy'), subtitle: strings.summary }

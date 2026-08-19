@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import { addDays, format, parseISO } from 'date-fns'
+import { useLocaleFormatting } from '@/lib/i18n/localeFormatting'
 import { useDataStore, type DataStatus } from '@/lib/dataStore'
 import type { RepoErrorCode } from '@/lib/repo'
 import { CONFIG_SEMILLA } from '@/lib/schema'
@@ -52,6 +53,7 @@ export const useHomeDashboard = (): HomeDashboard => {
   const movimientos = useDataStore((s) => s.movimientos)
   const config = useDataStore((s) => s.config)
   const load = useDataStore((s) => s.load)
+  const { dateFnsLocale } = useLocaleFormatting()
 
   // load() is idempotent/race-safe (dataStore.ts) — safe to call unconditionally
   // on mount, mirroring RequireAuth's own `void store.action()` pattern.
@@ -72,8 +74,8 @@ export const useHomeDashboard = (): HomeDashboard => {
   // Mid-week anchor for the month label, so a week straddling a month
   // boundary reads as the month most of it belongs to (matches the design).
   const monthLabel = useMemo(
-    () => monthYearLabel(addDays(parseISO(weekRange.from), 3)),
-    [weekRange],
+    () => monthYearLabel(addDays(parseISO(weekRange.from), 3), dateFnsLocale),
+    [weekRange, dateFnsLocale],
   )
 
   const allTotals = useMemo(() => totals(movimientos), [movimientos])
@@ -89,8 +91,8 @@ export const useHomeDashboard = (): HomeDashboard => {
   )
 
   const weekStripDays = useMemo(
-    () => buildWeekStripDays(movimientos, weekRange, todayIso),
-    [movimientos, weekRange, todayIso],
+    () => buildWeekStripDays(movimientos, weekRange, todayIso, dateFnsLocale),
+    [movimientos, weekRange, todayIso, dateFnsLocale],
   )
 
   const recent = useMemo(

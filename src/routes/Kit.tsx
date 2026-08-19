@@ -14,6 +14,7 @@ import {
 } from '@/components/shared'
 import { LockSettings } from '@/features/lock/LockSettings'
 import { ToastKitDemo } from '@/components/shared/ToastKitDemo'
+import { useLocaleFormatting } from '@/lib/i18n/localeFormatting'
 import type { Movimiento } from '@/lib/schema'
 
 const TINTS: IconAvatarTint[] = [
@@ -92,6 +93,7 @@ const Section = ({ title, children }: { title: string; children: ReactNode }) =>
 
 /** Dev-only gallery for src/components/shared/** — gated on import.meta.env.DEV in router.tsx. */
 export const Kit = () => {
+  const { locale, dateFnsLocale } = useLocaleFormatting()
   const [scope, setScope] = useState<(typeof SCOPE_OPTIONS)[number]['value']>('week')
   const [scopeWithDisabled, setScopeWithDisabled] =
     useState<(typeof SCOPE_OPTIONS_WITH_DISABLED)[number]['value']>('day')
@@ -142,9 +144,21 @@ export const Kit = () => {
       <Section title="MovimientoRow">
         <div className="flex flex-col gap-2.5">
           {SAMPLE_MOVEMENTS.map((m) => (
-            <MovimientoRow key={m.id} movimiento={m} onClick={() => {}} />
+            <MovimientoRow
+              key={m.id}
+              movimiento={m}
+              onClick={() => {}}
+              locale={locale}
+              dateFnsLocale={dateFnsLocale}
+            />
           ))}
-          <MovimientoRow movimiento={SAMPLE_MOVEMENTS[1]!} pending meta="Estimado · próx. semana" />
+          <MovimientoRow
+            movimiento={SAMPLE_MOVEMENTS[1]!}
+            pending
+            meta="Estimado · próx. semana"
+            locale={locale}
+            dateFnsLocale={dateFnsLocale}
+          />
         </div>
       </Section>
 
@@ -218,7 +232,12 @@ export const Kit = () => {
       </Section>
 
       <Section title="DateChipPicker">
-        <DateChipPicker value={date} onChange={setDate} />
+        <DateChipPicker
+          value={date}
+          onChange={setDate}
+          locale={locale}
+          dateFnsLocale={dateFnsLocale}
+        />
       </Section>
 
       <Section title="BottomSheet / CenterModal">

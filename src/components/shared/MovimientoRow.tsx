@@ -1,5 +1,4 @@
 import { format, parseISO, type Locale } from 'date-fns'
-import { es } from 'date-fns/locale'
 import { CircleHelp } from 'lucide-react'
 import type { Ref } from 'react'
 import type { Movimiento } from '@/lib/schema'
@@ -18,15 +17,17 @@ export interface MovimientoRowProps {
   ref?: Ref<HTMLDivElement>
   /**
    * BCP-47 locale for the amount's currency formatting (forwarded to
-   * `movimientoView.formatMonto`). Defaults to `movimientoView.ts`'s es-CO
-   * default — this component stays i18n-agnostic, the same way it takes
-   * `pending`/`meta` rather than reading a store itself; the calling screen
-   * reads the active i18next locale and passes it down (mirrors
-   * `DateChipPicker`'s `firstDayOfWeek` prop, specs.md §10.5).
+   * `movimientoView.formatMonto`). Required, no default — this component
+   * stays i18n-agnostic, the same way it takes `pending`/`meta` rather than
+   * reading a store itself; the calling screen reads the active i18next
+   * locale (`useLocaleFormatting()`) and passes it down (mirrors
+   * `DateChipPicker`'s `firstDayOfWeek` prop, specs.md §10.5). A missing
+   * value is a compile error rather than a silently es-CO row
+   * (docs/wave-2/track-m.md).
    */
-  locale?: string
-  /** date-fns `Locale` for the date label. Defaults to Spanish (today's only wired locale). */
-  dateFnsLocale?: Locale
+  locale: string
+  /** date-fns `Locale` for the date label — same no-default rule as `locale` above. */
+  dateFnsLocale: Locale
 }
 
 export const MovimientoRow = ({
@@ -37,7 +38,7 @@ export const MovimientoRow = ({
   className,
   ref,
   locale,
-  dateFnsLocale = es,
+  dateFnsLocale,
 }: MovimientoRowProps) => {
   const { icon, tint } = getMovimientoVisual(movimiento)
   const amount = getMovimientoAmountView(movimiento, locale)

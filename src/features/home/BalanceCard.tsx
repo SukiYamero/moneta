@@ -2,6 +2,7 @@ import { ArrowDownLeft, ArrowUpRight, Eye, EyeOff } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { formatMonto } from '@/components/shared/movimientoView'
+import { useLocaleFormatting } from '@/lib/i18n/localeFormatting'
 import type { Moneda } from '@/lib/schema'
 import type { Totals } from '@/lib/movimientoStats'
 
@@ -20,6 +21,7 @@ const HIDDEN_MASK_SMALL = '••••'
 // for the two mini stat cards.
 export const BalanceCard = ({ totals, moneda }: BalanceCardProps) => {
   const { t } = useTranslation('home')
+  const { locale } = useLocaleFormatting()
   const [hidden, setHidden] = useState(false)
 
   return (
@@ -49,7 +51,7 @@ export const BalanceCard = ({ totals, moneda }: BalanceCardProps) => {
         </button>
       </div>
       <div className="mt-1.5 min-h-9.5 text-3xl font-extrabold tracking-tight">
-        {hidden ? HIDDEN_MASK : formatMonto(totals.balance, moneda)}
+        {hidden ? HIDDEN_MASK : formatMonto(totals.balance, moneda, locale)}
       </div>
       <div className="mt-4 flex gap-2.5">
         <div className="flex-1 rounded-2xl bg-surface-sunken px-3.5 py-2.75">
@@ -60,7 +62,7 @@ export const BalanceCard = ({ totals, moneda }: BalanceCardProps) => {
             {t('balance.income')}
           </div>
           <div className="mt-1.5 text-md font-bold">
-            {hidden ? HIDDEN_MASK_SMALL : formatMonto(totals.ingresos, moneda)}
+            {hidden ? HIDDEN_MASK_SMALL : formatMonto(totals.ingresos, moneda, locale)}
           </div>
         </div>
         <div className="flex-1 rounded-2xl bg-surface-sunken px-3.5 py-2.75">
@@ -71,7 +73,7 @@ export const BalanceCard = ({ totals, moneda }: BalanceCardProps) => {
             {t('balance.expense')}
           </div>
           <div className="mt-1.5 text-md font-bold">
-            {hidden ? HIDDEN_MASK_SMALL : formatMonto(totals.gastos, moneda)}
+            {hidden ? HIDDEN_MASK_SMALL : formatMonto(totals.gastos, moneda, locale)}
           </div>
         </div>
       </div>

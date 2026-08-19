@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { format, parseISO } from 'date-fns'
-import { es } from 'date-fns/locale'
 import { ArrowUpDown, CalendarDays, Filter, Search as SearchIcon, X } from 'lucide-react'
 import { useDataStore } from '@/lib/dataStore'
 import { filterByRange } from '@/lib/movimientoStats'
+import { useLocaleFormatting } from '@/lib/i18n/localeFormatting'
 import { CONFIG_SEMILLA } from '@/lib/schema'
 import { cn } from '@/lib/utils'
 import { MovimientoRow } from '@/components/shared/MovimientoRow'
@@ -68,6 +68,7 @@ export const SearchScreen = () => {
   const movimientos = useDataStore((s) => s.movimientos)
   const config = useDataStore((s) => s.config)
   const load = useDataStore((s) => s.load)
+  const { locale, dateFnsLocale } = useLocaleFormatting()
   const [filtersOpen, setFiltersOpen] = useState(false)
 
   useEffect(() => {
@@ -118,7 +119,7 @@ export const SearchScreen = () => {
     if (filters.rangePreset !== 'all') {
       const label =
         filters.rangePreset === 'custom'
-          ? `${format(parseISO(filters.customFrom), 'd MMM', { locale: es })} – ${format(parseISO(filters.customTo), 'd MMM', { locale: es })}`
+          ? `${format(parseISO(filters.customFrom), 'd MMM', { locale: dateFnsLocale })} – ${format(parseISO(filters.customTo), 'd MMM', { locale: dateFnsLocale })}`
           : t(DATE_RANGE_LABEL_KEY[filters.rangePreset])
       chips.push({
         key: 'range',
@@ -153,6 +154,7 @@ export const SearchScreen = () => {
     filters.typeFilter,
     filters.selectedTags,
     categoryTipoByName,
+    dateFnsLocale,
     t,
   ])
 
@@ -260,7 +262,12 @@ export const SearchScreen = () => {
             {filteredMovimientos.map((movimiento) => (
               // STUB(trackF): open the Movement view/edit sheet once it exists
               // (Wave 3) — until then a search result row is display-only.
-              <MovimientoRow key={movimiento.id} movimiento={movimiento} />
+              <MovimientoRow
+                key={movimiento.id}
+                movimiento={movimiento}
+                locale={locale}
+                dateFnsLocale={dateFnsLocale}
+              />
             ))}
           </div>
         )}
@@ -274,6 +281,8 @@ export const SearchScreen = () => {
         firstDayOfWeek={
           config?.preferencias.primerDiaSemana ?? CONFIG_SEMILLA.preferencias.primerDiaSemana
         }
+        locale={locale}
+        dateFnsLocale={dateFnsLocale}
         resultCount={filteredMovimientos.length}
       />
     </main>
