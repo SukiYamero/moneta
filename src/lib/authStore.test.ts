@@ -7,10 +7,12 @@ vi.mock('@/lib/auth', () => ({
 }))
 vi.mock('@/lib/bootstrap', () => ({ bootstrap: vi.fn() }))
 vi.mock('@/lib/pinLock', () => ({ hasVault: vi.fn(), updateSession: vi.fn() }))
+vi.mock('@/lib/loginMarker', () => ({ hasLoggedInBefore: vi.fn(), markLoggedIn: vi.fn() }))
 
 import { requestAccessToken, fetchGoogleUser } from '@/lib/auth'
 import { bootstrap } from '@/lib/bootstrap'
 import { hasVault, updateSession } from '@/lib/pinLock'
+import { hasLoggedInBefore, markLoggedIn } from '@/lib/loginMarker'
 import { useAuthStore } from '@/lib/authStore'
 
 const mToken = vi.mocked(requestAccessToken)
@@ -18,10 +20,17 @@ const mUser = vi.mocked(fetchGoogleUser)
 const mBootstrap = vi.mocked(bootstrap)
 const mHasVault = vi.mocked(hasVault)
 const mUpdateSession = vi.mocked(updateSession)
+const mHasLoggedInBefore = vi.mocked(hasLoggedInBefore)
+const mMarkLoggedIn = vi.mocked(markLoggedIn)
 
 beforeEach(() => {
   vi.clearAllMocks()
   mHasVault.mockResolvedValue(false)
+  // Most tests exercise something other than the login-marker gate itself —
+  // default it to "already seen a login on this device" so restore()'s
+  // other behaviors (silent-auth success/failure) stay reachable; the
+  // marker-gating tests below override this explicitly.
+  mHasLoggedInBefore.mockResolvedValue(true)
   useAuthStore.setState({
     status: 'idle',
     user: null,
@@ -126,6 +135,26 @@ describe('useAuthStore.login', () => {
     expect(loggedText).not.toContain(secretToken)
     warn.mockRestore()
   })
+
+  // Finding 4/6 mechanism (specs.md §11, 2026-08-19): an explicit,
+  // successful login() is the only thing that should ever let a later cold
+  // start attempt a silent restore.
+  it('marks this device as having logged in before, on success', async () => {
+    mToken.mockResolvedValue({ accessToken: 'tok', expiresAt: 1 })
+    mUser.mockResolvedValue({ email: 'a@b.com', name: 'Ana' })
+
+    await useAuthStore.getState().login()
+
+    expect(mMarkLoggedIn).toHaveBeenCalled()
+  })
+
+  it('does not mark the device when login fails', async () => {
+    mToken.mockRejectedValue(new Error('access: access_denied'))
+
+    await useAuthStore.getState().login()
+
+    expect(mMarkLoggedIn).not.toHaveBeenCalled()
+  })
 })
 
 describe('useAuthStore.restore', () => {
@@ -152,6 +181,31 @@ describe('useAuthStore.restore', () => {
     await useAuthStore.getState().restore()
 
     expect(mToken).not.toHaveBeenCalled()
+  })
+
+  // Finding 6 (MEDIUM): prompt: '' is only silent when this client already
+  // holds a grant — on a genuine first-ever visit it can surface real Google
+  // UI before the user has clicked anything, contradicting specs.md §10.1's
+  // "I log in with Google" (an act, not something sprung on load). Gate the
+  // whole attempt on the login marker instead of firing it unconditionally.
+  it('does not attempt a silent restore before any login has ever succeeded on this device', async () => {
+    mHasLoggedInBefore.mockResolvedValue(false)
+
+    await useAuthStore.getState().restore()
+
+    expect(mToken).not.toHaveBeenCalled()
+    expect(useAuthStore.getState().status).toBe('idle')
+  })
+
+  it('attempts a silent restore once a login has succeeded on this device before', async () => {
+    mHasLoggedInBefore.mockResolvedValue(true)
+    mToken.mockResolvedValue({ accessToken: 'tok', expiresAt: 1 })
+    mUser.mockResolvedValue({ email: 'a@b.com', name: 'Ana' })
+
+    await useAuthStore.getState().restore()
+
+    expect(mToken).toHaveBeenCalledWith('')
+    expect(useAuthStore.getState().status).toBe('authenticated')
   })
 })
 

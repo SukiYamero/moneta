@@ -1599,6 +1599,234 @@ findDuplicateId(table, items)` (a second storage call, `table.bulkGet`)
     with `bun install` afterward reporting no further lockfile changes.
   - `bun run check` green (typecheck, lint, `no-raw-px.sh`, 32 test files /
     314 tests) after all of the above.
+- 2026-08-19 — **Lock/auth hardening pass (`fix/lock-hardening`): two
+  CRITICAL defects fixed, plus the systematic sweep for the same two bug
+  shapes across the whole layer.** A final whole-codebase review found the
+  previous fixer branches (including the phase-2 error-handling pass right
+  above) had been applied per discovered bug, not per bug-shape: the exact
+  hazard fixed in `syncLockedSession` was never swept for in its sibling
+  `lockStore.init()`, and the exact race fixed in `repo.local.ts`'s
+  `update()`/`remove()` was never ported to `pinLock.unlockWithPin`'s attempt
+  counter. This pass fixes both instances and then sweeps `lockStore.ts`,
+  `pinLock.ts`, `authStore.ts`, `auth.ts`, `src/features/lock/**`,
+  `src/features/auth/**` for every other occurrence of the same two shapes.
+  Findings below keep the operator's original numbers (1–6, 9, 10) as given
+  in the task brief; 7 and 8 were never included in this task's brief (not
+  necessarily a gap — plausibly findings the operator routed elsewhere).
+
+  1. **CRITICAL — `lockStore.init()`'s `hasVault()` was an unguarded
+     IndexedDB read.** A rejection (Safari private browsing, quota errors, a
+     blocking extension) left `phase` at `'unknown'` forever — `AppLock`
+     wraps the whole `RouterProvider` and renders `null` while `'unknown'`,
+     with no error boundary able to catch an unhandled rejection inside a
+     `useEffect`. Fixed: the whole boot-time read (including the new
+     vault-level biometric-enrollment check, finding 9) is one `try`: on
+     failure, degrade to `phase: 'unlocked', enabled: false` (the PIN lock is
+     a convenience layer on top of Google auth, not the only guard on the
+     data, specs.md §5) and `console.error` — a security-relevant swallow
+     must never be silent (`docs/error-handling.md` §2). Proven by
+     `lockStore.test.ts`: `hasVault()`/`isBiometricAvailable()` rejecting
+     both still land on `'unlocked'` with `console.error` called; watched
+     both fail first (`phase` stuck, error not yet called) before the fix.
+
+  2. **CRITICAL — `pinLock.unlockWithPin`'s `failedAttempts` counter lost
+     concurrent updates.** The catch branch wrote `vault.failedAttempts + 1`
+     from a snapshot read at the top of the function — three concurrent
+     wrong PINs each read the same stale `0` and each wrote `1`, so the
+     5-attempt throttle (specs.md §5's entire brute-force defense for a
+     4-digit PIN, alongside PBKDF2) never actually reached 5 under
+     concurrent guessing, trivial from a devtools console. Fixed with the
+     same `db.transaction('rw', db.vault, async () => {…})` pattern
+     `repo.local.ts` already uses: read the _current_ value and increment
+     inside one transaction, so concurrent transactions on the `vault` table
+     serialize instead of racing. Proven by a new `pinLock.test.ts` test
+     firing three concurrent wrong PINs via `Promise.allSettled` and
+     asserting `failedAttempts === 3`; watched it fail at `1` first with the
+     unfixed code, matching the operator's own reproduction exactly.
+     Simplified two related read-then-conditionally-write sites (the
+     `failedAttempts: 0` resets in `unlockWithPin`/`unlockWithBiometric`) to
+     unconditional writes instead — a write that doesn't derive its new
+     value from a prior read can never lose a concurrent update, so there
+     was nothing to make atomic there; simpler than wrapping them in a
+     transaction too.
+
+  3. **HIGH — `lockStore.resume()` inferred success from "didn't throw."**
+     `hydrate()` owns its own errors and resolves into `status: 'error'`
+     (the documented `docs/error-handling.md` pattern) rather than throwing,
+     so a _correct_ PIN unlocking a vault whose cached token had expired
+     still got `phase: 'unlocked', error: null` — a clean-success lie
+     (`docs/error-handling.md` §4). Fixed: check
+     `useAuthStore.getState().status` after `hydrate()` resolves; a correct
+     PIN is still honored (`phase: 'unlocked'`, no reason to re-lock) but the
+     failure is now recorded as a new `SESSION_RESTORE_ERROR` instead of
+     `null`. Proven by two new `lockStore.test.ts` tests (hydrate leaving
+     `status: 'error'` vs `'authenticated'`) driving a `status`-aware
+     `authStore` mock; watched the failure-path test fail first
+     (`error` was `null`) before the fix.
+
+  4. **HIGH — the lockout's forced re-login was invisible and separately
+     undone; combined with finding 6 under one mechanism per the operator's
+     explicit decision.** _Invisible:_ `resume()`'s `LockedOutError` branch
+     set `phase: 'unlocked'` and `error: LOCKED_OUT_ERROR` in the same
+     `set()` — `LockScreen`, the only prior consumer of `lockStore.error`,
+     unmounts in that same instant (it returns `null` once `phase !==
+'locked'`), so the message was structurally unreachable. _Undone:_ the
+     same branch called `logout()` (→ `status: 'idle'`), and
+     `RequireAuth`'s mount effect fires a silent `restore()` on `'idle'` — if
+     the browser still held a live Google session (the normal case; logout
+     never touches Google's), the same account got silently signed back in
+     within about a second with no PIN, defeating the whole point of
+     specs.md §11 (2026-06-26)'s "lockout forces a fresh Google re-login."
+     Fixed with the operator's chosen mechanism: a new, non-secret,
+     per-device "has a Google login ever succeeded here" marker, persisted
+     in a **separate Dexie database** (`src/lib/loginMarker.ts`, db name
+     `kurobello-device`) — not a table on `db.ts`'s `kurobello` (owned by
+     another in-flight track this pass must not edit; a new standalone
+     module was the operator's explicitly offered alternative). Set by
+     `authStore.login()` on explicit success only; cleared by
+     `pinLock.resetVault()` (the single choke point both the lockout branch
+     and the explicit `LockSettings` "Desactivar" call already funnel
+     through, so one change covers "the lockout/reset path" without
+     duplicating the call at each site); `authStore.restore()` now returns
+     immediately, before ever touching `status`, when the marker isn't set.
+     _Invisible_ half fixed separately: `AppLock` (which stays mounted
+     across the phase transition, unlike `LockScreen`) now renders a
+     dismissible `role="alert"` banner whenever `phase !== 'locked' &&
+error`, with a new `clearError` store action wired to its close button.
+     Proven by: `authStore.test.ts` (`login()` calls `markLoggedIn()` on
+     success only; `restore()` gated on `hasLoggedInBefore()`),
+     `pinLock.test.ts` (`resetVault()` clears the marker), `AppLock.test.tsx`
+     (the banner renders once unlocked, is absent while still `'locked'` so
+     `LockScreen`'s own alert isn't duplicated, and its close button calls
+     `clearError`).
+
+  5. **MEDIUM — `LockSettings`'s "Desactivar" called `void reset()` with no
+     local error handling.** `docs/error-handling.md` §7 permits a bare
+     `void action()` only when the action self-catches; `reset()` doesn't —
+     `resetVault()`'s `db.vault.delete` can throw under the same storage
+     conditions as finding 1, and a failure there silently did nothing.
+     Fixed by giving "Desactivar" the same local `onReset` try/catch
+     `+ setError` shape "Activar lock"'s `onEnable` already has. Proven by a
+     new `LockSettings.test.tsx` test: a rejecting `reset()` mock now renders
+     an actionable Spanish alert instead of nothing; watched it fail first
+     (no alert appeared) before the fix. A second new test confirms a
+     successful reset leaves no stale alert behind.
+
+  6. **MEDIUM — folded into finding 4 above** (the login-marker mechanism):
+     `restore()`'s `prompt: ''` is only silent when the client already holds
+     a grant; on a genuine first-ever visit it could surface real Google UI
+     before the user clicked anything, contradicting specs.md §10.1's "I log
+     in with Google" (an act, not something sprung on load). The same marker
+     gate that fixes the lockout's forced re-login also fixes this: `restore
+()` no-ops entirely on a first visit (no marker yet), so
+     `WelcomeScreen` always loads first with no popup risk.
+
+  7. **LOW — the biometric button was gated on platform capability, not
+     vault enrollment.** `LockScreen` read `biometricAvailable`
+     (`isBiometricAvailable()`, a device capability) instead of asking
+     whether _this vault_ enrolled biometrics — a user who declined
+     biometrics at enrollment still saw a button that always failed with
+     "no está disponible en este dispositivo," on a device that plainly did
+     support it. `pinLock.biometricEnabled()` already existed for exactly
+     this and was imported nowhere. Fixed: `lockStore` gained a
+     `biometricEnrolled` field (populated in `init()`'s guarded try, from
+     `biometricEnabled()`, only once a vault is confirmed to exist);
+     `LockScreen` now gates its button on that instead of
+     `biometricAvailable` (which `LockSettings` still correctly uses at
+     _enrollment_ time, when there's no vault yet to ask). Proven by two new
+     `LockScreen.test.tsx` tests (`biometricEnrolled: false` with platform
+     support hides the button; `true` shows it) and three new
+     `lockStore.test.ts` tests covering `init()`'s three cases (no vault →
+     never calls `biometricEnabled()`; vault + not enrolled; vault +
+     enrolled).
+
+  8. **LOW — `isBiometricAvailable()`'s legitimate swallow lacked the
+     standard's required comment + log.** Degrading to `false` on a probe
+     failure is correct (the PIN fallback always exists), it just didn't
+     carry the explanatory comment and `console.warn` `docs/error-handling.md`
+     §2 requires of every legitimate swallow. Fixed; proven by a new
+     `pinLock.test.ts` test asserting `console.warn` fires when the
+     platform API rejects.
+
+  **The sweep (the actual deliverable — mechanical, not just the named
+  instances), across `lockStore.ts`, `pinLock.ts`, `authStore.ts`,
+  `auth.ts`, `src/features/lock/**`, `src/features/auth/**`:**
+
+  - **Category 1 — unguarded async reads feeding a state transition.**
+    Beyond finding 1 itself: `lockStore.onVisible()`'s
+    `isBackgroundExpired()` call was the same shape — a raw IndexedDB read
+    whose rejection escaped a `void onVisible()` call site in `AppLock`'s
+    `visibilitychange` listener and silently skipped the re-lock `set()`.
+    Fixed by catching it at the call site and **failing closed** (treat an
+    unreadable background-expiry state as expired, i.e. re-lock) rather than
+    finding 1's **fail-open** default (treat an unreadable vault-existence
+    state as "no vault," i.e. unlocked) — the two defaults look
+    contradictory but aren't: finding 1 is "can we tell if a lock should
+    exist at all," where refusing to boot is strictly worse than the PIN
+    lock's own stated non-goal (it's a convenience layer, not the real
+    security boundary, specs.md §5); `onVisible`'s check is "should an
+    _already-established_ lock re-engage," where the 5-attempt throttle is
+    the real defense (specs.md §5) and an ambiguous read must not silently
+    default to leaving the app open. See the `docs/error-handling.md`
+    addition below. Also found and fixed: `resume()`'s `LockedOutError`
+    catch branch did more unguarded async work (`resetVault()`) _inside_ the
+    catch itself — if that rejected, the exception escaped `resume()`
+    entirely as an unhandled rejection from `LockScreen`'s `void
+unlockPin(pin)`. Wrapped in its own inner try/catch with a
+    `console.error`, so the lockout still lands on a renderable, logged-out
+    state even if the wipe itself fails. `auth.ts` and the remaining
+    `features/auth/**` components: nothing else found — every store action
+    there (`connectDrive`, `hydrate`, `login`) was already self-catching
+    from the phase-2 error-handling pass, and no component reads `pinLock`/
+    `db` directly.
+
+  - **Category 2 — read-modify-write without a transaction.** Swept every
+    `db.vault.update()` call site in `pinLock.ts` (4 total): the named
+    `failedAttempts` increment (finding 2, fixed transactionally) and two
+    more `failedAttempts: 0` resets of the identical shape, simplified to
+    unconditional writes instead (see finding 2 above — no read to race
+    against once the write no longer depends on one).
+    `updateSession()`/`markActive()` are absolute writes with no prior read
+    to lose, so "last write wins" is the correct, already-safe semantics for
+    concurrent calls — not a bug. Nothing else in `lockStore.ts`/
+    `authStore.ts`: their `set()` calls are synchronous zustand merges
+    derived from local variables, not a second async read of persisted
+    state, so there is no interleaving window to race in the first place.
+
+  - **Category 3 — `void someAction()` call sites whose action doesn't
+    self-catch.** Audited every `void` call across the owned files (10
+    total, `pinLock.ts:forgetDek(): void` excluded as a return-type
+    annotation, not a call). Found two: `lockStore.onHidden()`'s `void
+markActive()` (fixed by making `markActive()` self-catch internally,
+    `console.warn` on failure — a best-effort timestamp write, same
+    reasoning as `syncLockedSession`) and `LockSettings`'s `void reset()`
+    (finding 5). The rest were already safe: `LockScreen`'s `void
+unlockPin`/`void unlockBiometric` call into `resume()`, which after
+    findings 3+4's fixes never rejects; `AppLock`'s `void init()`/`void
+onVisible()` call into functions now fully self-catching (findings 1 and
+    the category-1 `onVisible` fix); `RequireAuth`'s `void restore()`,
+    `WelcomeScreen`'s `void login()`, and `DrivePermissionScreen`'s `void
+connectDrive()` were already self-catching from the phase-2 pass and are
+    unchanged here.
+
+  **`docs/error-handling.md` updated** (owned this pass): §2 gains a short
+  note under "Where to catch, and where not to" naming the fail-open
+  (finding 1) vs fail-closed (`onVisible`, category 1) distinction above as
+  a documented judgment call, not an inconsistency — the question to ask is
+  "does refusing to proceed here protect anything the feature actually
+  promises, or does it just break boot for no security benefit," matching
+  `pinLock.isBiometricAvailable()`'s existing "legitimate swallow" framing
+  in kind.
+
+  **Also closed while in the file:** `src/features/lock/errorCopy.test.ts`
+  now imports `LOCKED_OUT_ERROR`/`NO_SESSION_ERROR` from `lockStore.ts`
+  instead of restating them as string literals — closing the residual gap
+  the phase-2 entry above flagged as "underivable without owning
+  `lockStore.ts`" (this track does).
+
+  `bun run check` green (342 tests, up from 309) throughout; `bun run build`
+  verified after the `AppLock`/`lockStore` changes. Not merged/pushed per
+  the operator's instruction — stays on `fix/lock-hardening` for review.
 
 ## 12. Backlog (pending verification / deferred work)
 

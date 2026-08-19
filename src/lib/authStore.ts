@@ -8,6 +8,7 @@ import {
 } from '@/lib/auth'
 import { bootstrap, type DriveLayout } from '@/lib/bootstrap'
 import { hasVault, updateSession } from '@/lib/pinLock'
+import { hasLoggedInBefore, markLoggedIn } from '@/lib/loginMarker'
 
 export type AuthStatus = 'idle' | 'authenticating' | 'authenticated' | 'error'
 export type DriveOptIn = 'pending' | 'connected' | 'dismissed'
@@ -72,6 +73,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const { session, user } = await authenticate('consent')
       set({ status: 'authenticated', session, user, driveOptIn: 'pending' })
       await syncLockedSession(session)
+      // Explicit, user-initiated success only — the signal restore() below
+      // gates on (specs.md §11, 2026-08-19). markLoggedIn() self-catches, so
+      // this can never fail the login it rides on.
+      await markLoggedIn()
     } catch (e) {
       set({ status: 'error', session: null, user: null, drive: null, error: errorMessage(e) })
     }
@@ -81,9 +86,25 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   // enabled, lockStore.resume() already owns restoring the session on unlock —
   // it never leaves status at 'idle', so this guard also keeps the two restore
   // paths from racing each other.
+  //
+  // Also gated on hasLoggedInBefore(): prompt: '' is only silent when this
+  // client already holds a grant — on a genuine first-ever visit it can
+  // surface real Google UI before the user clicks anything, and after a
+  // lockout (pinLock.resetVault() clears the marker) it must NOT silently
+  // sign the same account back in, or the lockout's forced re-login is
+  // undone within about a second (specs.md §11, 2026-08-19, findings 4/6).
   restore: async () => {
     if (get().status !== 'idle') return
+    // Claim 'authenticating' before the async marker read, not after: two
+    // concurrent restore() calls both reading status 'idle' and only *then*
+    // awaiting the marker would otherwise both pass this guard and both fire
+    // authenticate('') — the exact race this synchronous-check-then-set
+    // pairing existed to prevent in the first place.
     set({ status: 'authenticating' })
+    if (!(await hasLoggedInBefore())) {
+      set({ status: 'idle' })
+      return
+    }
     try {
       const { session, user } = await authenticate('')
       set({ status: 'authenticated', session, user })

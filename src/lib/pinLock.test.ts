@@ -56,6 +56,19 @@ test('a correct PIN resets the failed-attempt counter', async () => {
   expect(after?.failedAttempts).toBe(1)
 })
 
+test('concurrent wrong PINs each count exactly once — no lost updates', async () => {
+  // Reproduces the operator-verified race: unlockWithPin used to read
+  // failedAttempts once at the top and write "read value + 1" back in its
+  // catch, so three concurrent wrong PINs — each reading the same stale 0 —
+  // all wrote 1, losing two attempts. Firing genuinely concurrent guesses is
+  // trivial from a devtools console, so this is the whole brute-force
+  // throttle (specs.md §5) failing silently, not a tidiness issue.
+  await enableLock({ pin: '1234', session })
+  await Promise.allSettled([unlockWithPin('0000'), unlockWithPin('0001'), unlockWithPin('0002')])
+  const after = await db.vault.get(1)
+  expect(after?.failedAttempts).toBe(3)
+})
+
 test('four wrong PINs then a correct PIN still unlocks and resets the counter', async () => {
   await enableLock({ pin: '1234', session })
   for (let i = 0; i < 4; i++) {
@@ -101,6 +114,40 @@ test('resetVault wipes the vault', async () => {
   await enableLock({ pin: '1234', session })
   await resetVault()
   expect(await hasVault()).toBe(false)
+})
+
+test("resetVault also clears this device's login marker, forcing a real re-login next time", async () => {
+  const { hasLoggedInBefore, markLoggedIn } = await import('@/lib/loginMarker')
+  await markLoggedIn()
+  await enableLock({ pin: '1234', session })
+
+  await resetVault()
+
+  expect(await hasLoggedInBefore()).toBe(false)
+})
+
+test('markActive is safe to fire-and-forget: a write failure is caught and logged, not thrown', async () => {
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  await enableLock({ pin: '1234', session })
+  const updateSpy = vi.spyOn(db.vault, 'update').mockRejectedValue(new Error('IDB write blocked'))
+
+  await expect(markActive()).resolves.toBeUndefined()
+  expect(warn).toHaveBeenCalled()
+
+  updateSpy.mockRestore()
+  warn.mockRestore()
+})
+
+test('isBiometricAvailable logs and degrades to false when the platform probe throws', async () => {
+  vi.stubGlobal('PublicKeyCredential', {
+    isUserVerifyingPlatformAuthenticatorAvailable: vi.fn().mockRejectedValue(new Error('boom')),
+  })
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+  expect(await isBiometricAvailable()).toBe(false)
+  expect(warn).toHaveBeenCalled()
+
+  warn.mockRestore()
 })
 
 test('updateSession re-encrypts a refreshed token under the same DEK', async () => {

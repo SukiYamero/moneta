@@ -1,4 +1,4 @@
-import { LOCKED_OUT_ERROR, NO_SESSION_ERROR } from '@/lib/lockStore'
+import { LOCKED_OUT_ERROR, NO_SESSION_ERROR, SESSION_RESTORE_ERROR } from '@/lib/lockStore'
 // Maps a raw pinLock.ts/lockStore.ts error message (English, developer-
 // facing) to the Spanish copy a user actually sees. docs/error-handling.md
 // §7: never render `.message` raw in the DOM. Keyed by message, not a
@@ -13,6 +13,8 @@ const UNLOCK_ERROR_COPY: Record<string, string> = {
   [LOCKED_OUT_ERROR]: 'Demasiados intentos. Inicia sesión con Google de nuevo.',
   'lock: wrong pin': 'PIN incorrecto. Intenta de nuevo.',
   'lock: biometric unavailable': 'La biometría no está disponible en este dispositivo.',
+  [SESSION_RESTORE_ERROR]:
+    'Tu PIN es correcto, pero no se pudo restaurar tu sesión. Inicia sesión con Google de nuevo.',
 }
 
 const ENABLE_ERROR_COPY: Record<string, string> = {

@@ -1,6 +1,7 @@
 import { db, VAULT_ID, type LockVault } from '@/lib/db'
 import type { AuthSession } from '@/lib/auth'
 import { APP_NAME } from '@/lib/branding'
+import { clearLoggedIn } from '@/lib/loginMarker'
 
 const PIN_ITERATIONS = 310_000
 const MAX_ATTEMPTS = 5
@@ -134,7 +135,12 @@ export async function isBiometricAvailable(): Promise<boolean> {
   if (!api?.isUserVerifyingPlatformAuthenticatorAvailable) return false
   try {
     return await api.isUserVerifyingPlatformAuthenticatorAvailable()
-  } catch {
+  } catch (e) {
+    // Legitimate swallow: a platform-capability probe failing just means
+    // "no biometrics" (the mandatory PIN fallback always exists), but per
+    // docs/error-handling.md §2 a legitimate swallow must still say why and
+    // never be silent.
+    console.warn('lock: could not probe platform authenticator availability', e)
     return false
   }
 }
@@ -206,7 +212,10 @@ export async function unlockWithBiometric(): Promise<AuthSession> {
     asBytes(vault.biometric.prfWrapIv),
     asBytes(vault.biometric.dekWrappedByPrf),
   )
-  if (vault.failedAttempts !== 0) await db.vault.update(VAULT_ID, { failedAttempts: 0 })
+  // Unconditional, not "if failedAttempts !== 0 then reset": a write that
+  // doesn't depend on a prior read can never lose a concurrent update, so
+  // there is nothing to make atomic here (unlike the increment below).
+  await db.vault.update(VAULT_ID, { failedAttempts: 0 })
   activeDek = dek
   return decryptSession(vault, dek)
 }
@@ -247,6 +256,11 @@ export function forgetDek(): void {
 export async function resetVault(): Promise<void> {
   await db.vault.delete(VAULT_ID)
   forgetDek()
+  // The vault and this device's "has logged in before" signal are wiped
+  // together: both lockStore.resume()'s lockout branch and lockStore.reset()
+  // funnel through here, and specs.md §11 (2026-08-19) requires both paths
+  // to force a genuine, non-silent Google re-login next time.
+  await clearLoggedIn()
 }
 
 export async function unlockWithPin(pin: string): Promise<AuthSession> {
@@ -258,11 +272,23 @@ export async function unlockWithPin(pin: string): Promise<AuthSession> {
   try {
     dek = await aesDecrypt(pinKey, asBytes(vault.pinWrapIv), asBytes(vault.dekWrappedByPin))
   } catch {
-    await db.vault.update(VAULT_ID, { failedAttempts: vault.failedAttempts + 1 })
+    // Atomic read -> increment, inside one Dexie 'rw' transaction: two
+    // concurrent wrong PINs must not both read the same stale failedAttempts
+    // and each write "current + 1", losing an attempt and defeating the
+    // 5-attempt throttle that is this app's entire brute-force defense for a
+    // 4-digit PIN (specs.md §5). Mirrors the transactional read-modify-write
+    // pattern already used by repo.local.ts's update()/remove() — the
+    // identical race, closed the same way.
+    await db.transaction('rw', db.vault, async () => {
+      const current = await db.vault.get(VAULT_ID)
+      await db.vault.update(VAULT_ID, { failedAttempts: (current?.failedAttempts ?? 0) + 1 })
+    })
     throw new WrongPinError()
   }
 
-  if (vault.failedAttempts !== 0) await db.vault.update(VAULT_ID, { failedAttempts: 0 })
+  // Unconditional, not "if failedAttempts !== 0 then reset": see the
+  // matching comment on unlockWithBiometric's reset above.
+  await db.vault.update(VAULT_ID, { failedAttempts: 0 })
   activeDek = dek
   return decryptSession(vault, dek)
 }
@@ -275,7 +301,18 @@ export async function updateSession(session: AuthSession): Promise<void> {
 }
 
 export async function markActive(now: number = Date.now()): Promise<void> {
-  await db.vault.update(VAULT_ID, { lastActiveAt: now })
+  try {
+    await db.vault.update(VAULT_ID, { lastActiveAt: now })
+  } catch (e) {
+    // lockStore.onHidden() calls this as `void markActive()` (docs/error-
+    // handling.md §7: a void call site is only safe when the action self-
+    // catches). Best-effort: a missed write just means the next
+    // isBackgroundExpired() check compares against a slightly stale
+    // timestamp — isBackgroundExpired's own caller (lockStore.onVisible)
+    // already fails closed (re-locks) if that read itself fails, so this
+    // side effect being lossy is not a security gap on its own.
+    console.warn('lock: failed to record last-active time', e)
+  }
 }
 
 export async function isBackgroundExpired(now: number = Date.now()): Promise<boolean> {

@@ -3,6 +3,11 @@ import { useLockStore } from '@/lib/lockStore'
 import { Button } from '@/components/ui/button'
 import { enableLockErrorCopy } from '@/features/lock/errorCopy'
 
+// resetVault() only ever fails with an opaque storage error (no named class,
+// no lookup-worthy taxonomy — unlike enable()'s NO_SESSION_ERROR) so a
+// single fixed fallback line is the whole mapping needed here.
+const DISABLE_ERROR_COPY = 'No se pudo desactivar el bloqueo. Intenta de nuevo.'
+
 export function LockSettings() {
   const enabled = useLockStore((s) => s.enabled)
   const biometricAvailable = useLockStore((s) => s.biometricAvailable)
@@ -12,6 +17,15 @@ export function LockSettings() {
   const [pin, setPin] = useState('')
   const [biometric, setBiometric] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const onReset = async () => {
+    setError(null)
+    try {
+      await reset()
+    } catch {
+      setError(DISABLE_ERROR_COPY)
+    }
+  }
 
   if (enabled) {
     return (
@@ -25,11 +39,16 @@ export function LockSettings() {
             type="button"
             variant="destructive"
             className="min-h-11"
-            onClick={() => void reset()}
+            onClick={() => void onReset()}
           >
             Desactivar
           </Button>
         </div>
+        {error && (
+          <p role="alert" className="text-destructive text-sm">
+            {error}
+          </p>
+        )}
       </div>
     )
   }

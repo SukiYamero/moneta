@@ -4,7 +4,11 @@ import { unlockErrorCopy } from '@/features/lock/errorCopy'
 
 export default function LockScreen() {
   const phase = useLockStore((s) => s.phase)
-  const biometricAvailable = useLockStore((s) => s.biometricAvailable)
+  // Gated on whether *this vault* enrolled biometrics, not just whether the
+  // platform supports it — a user who declined biometrics at enrollment
+  // must not see a button that always fails (specs.md §11, 2026-08-19,
+  // finding 9).
+  const biometricEnrolled = useLockStore((s) => s.biometricEnrolled)
   const unlockPin = useLockStore((s) => s.unlockPin)
   const unlockBiometric = useLockStore((s) => s.unlockBiometric)
   const error = useLockStore((s) => s.error)
@@ -14,7 +18,7 @@ export default function LockScreen() {
 
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center gap-4 p-6">
-      {biometricAvailable && (
+      {biometricEnrolled && (
         <button
           type="button"
           className="min-h-11 rounded-md border px-4"
