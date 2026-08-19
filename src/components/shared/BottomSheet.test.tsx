@@ -77,7 +77,7 @@ describe('BottomSheet', () => {
   it('restores focus to the trigger element on close', async () => {
     const trigger = document.createElement('button')
     trigger.textContent = 'Abrir'
-    document.body.appendChild(trigger)
+    document.body.append(trigger)
     trigger.focus()
 
     const { rerender } = render(<Harness open onClose={() => {}} />)

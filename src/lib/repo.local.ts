@@ -265,7 +265,7 @@ const hasConstraintFailure = (error: unknown): boolean => {
   if (!hasErrorName(error, 'BulkError')) return false
   const failures = (error as { failures?: Record<string, unknown> }).failures
   if (!failures) return false
-  return Object.values(failures).some(isConstraintError)
+  return Object.values(failures).some((failure) => isConstraintError(failure))
 }
 
 // Dexie's `BulkError.failures` is keyed by an internal operation index that
@@ -383,7 +383,7 @@ const createCrudRepo = <T extends { id: EntityId }>(
 
     const page = limit !== undefined ? afterCursor.slice(0, limit) : afterCursor
     const hasMore = limit !== undefined && afterCursor.length > page.length
-    const lastItem = page[page.length - 1]
+    const lastItem = page.at(-1)
 
     return {
       items: page,
@@ -439,6 +439,9 @@ const createCrudRepo = <T extends { id: EntityId }>(
 
     const fetchSize = limit + 1 + TIE_SAFETY_MARGIN
     let collection = table.where(indexName).between(lower, upper, true, true)
+    // Dexie's Collection#reverse() flips index iteration direction — not
+    // Array#reverse(); toSorted()'s array-only replacement doesn't apply.
+    // oxlint-disable-next-line unicorn/no-array-reverse
     if (sortDir === 'desc') collection = collection.reverse()
     const window = await collection.limit(fetchSize).toArray()
 
@@ -463,7 +466,7 @@ const createCrudRepo = <T extends { id: EntityId }>(
     )
     const page = filtered.slice(0, limit)
     const hasMore = filtered.length > page.length
-    const lastItem = page[page.length - 1]
+    const lastItem = page.at(-1)
 
     return {
       items: page,
@@ -517,7 +520,7 @@ const createCrudRepo = <T extends { id: EntityId }>(
 
   const addMany = async (items: T[]): Promise<T[]> => {
     await ensureReady()
-    items.forEach(validate)
+    items.forEach((item) => validate(item))
     try {
       const fresh = items.map((item) => ({ ...item }))
       // All-or-nothing: a dexie transaction throwing inside aborts every

@@ -57,7 +57,7 @@ let scrollLockCount = 0
 let previousBodyOverflow = ''
 
 const pushOverlay = (handle: OverlayHandle) => {
-  stack = [...stack, handle].sort((a, b) => a.seq - b.seq)
+  stack = [...stack, handle].toSorted((a, b) => a.seq - b.seq)
 }
 
 const popOverlay = (handle: OverlayHandle) => {
@@ -65,7 +65,7 @@ const popOverlay = (handle: OverlayHandle) => {
 }
 
 const isTopOverlay = (handle: OverlayHandle) => {
-  return stack.length > 0 && stack[stack.length - 1] === handle
+  return stack.length > 0 && stack.at(-1) === handle
 }
 
 const acquireScrollLock = () => {
@@ -154,9 +154,9 @@ export const useOverlay = <T extends HTMLElement>({
 
       const panel = panelRef.current
       if (!panel) return
-      const focusable = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR))
+      const focusable = [...panel.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)]
       const first = focusable[0]
-      const last = focusable[focusable.length - 1]
+      const last = focusable.at(-1)
       if (!first || !last) return
 
       if (event.shiftKey && document.activeElement === first) {

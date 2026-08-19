@@ -37,9 +37,11 @@ export const loadGis = (): Promise<void> => {
     const script = document.createElement('script')
     script.src = GIS_SRC
     script.async = true
-    script.onload = () => resolve()
-    script.onerror = () => reject(new AuthError('GIS failed to load'))
-    document.head.appendChild(script)
+    script.addEventListener('load', () => resolve(), { once: true })
+    script.addEventListener('error', () => reject(new AuthError('GIS failed to load')), {
+      once: true,
+    })
+    document.head.append(script)
   })
 }
 

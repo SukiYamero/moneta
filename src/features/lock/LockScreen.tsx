@@ -34,7 +34,7 @@ const LockScreen = () => {
           pattern="\d*"
           maxLength={4}
           value={pin}
-          onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+          onChange={(e) => setPin(e.target.value.replaceAll(/\D/g, '').slice(0, 4))}
           className="min-h-11 rounded-md border px-3 text-center tracking-widest"
         />
       </label>

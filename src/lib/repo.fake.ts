@@ -523,7 +523,7 @@ const createCrudRepo = <T extends { id: EntityId }>(
       return { ...fresh }
     },
     async addMany(items) {
-      items.forEach(validate)
+      items.forEach((item) => validate(item))
       // All-or-nothing, mirroring repo.local.ts's bulkAdd-inside-a-transaction
       // guarantee: every id (within the batch, and against the existing store)
       // is checked before the store is touched, so a bad row never leaves a
