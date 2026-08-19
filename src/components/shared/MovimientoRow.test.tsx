@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { enUS } from 'date-fns/locale'
 import { MovimientoRow } from '@/components/shared/MovimientoRow'
 import type { Movimiento } from '@/lib/schema'
 
@@ -52,5 +53,20 @@ describe('MovimientoRow', () => {
   it('is not a button when onClick is omitted', () => {
     render(<MovimientoRow movimiento={baseMovimiento} />)
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
+  })
+
+  it('defaults to Spanish month labels when no dateFnsLocale is passed (backward compatible)', () => {
+    render(<MovimientoRow movimiento={baseMovimiento} />)
+    expect(screen.getByText('10 ago')).toBeInTheDocument()
+  })
+
+  it('renders the date label in the locale passed by the caller', () => {
+    render(<MovimientoRow movimiento={baseMovimiento} dateFnsLocale={enUS} />)
+    expect(screen.getByText('10 Aug')).toBeInTheDocument()
+  })
+
+  it('formats the amount in the locale passed by the caller', () => {
+    render(<MovimientoRow movimiento={{ ...baseMovimiento, moneda: 'USD' }} locale="en-US" />)
+    expect(screen.getByText(/\+\$3,200\.00|\+US\$3,200\.00/)).toBeInTheDocument()
   })
 })

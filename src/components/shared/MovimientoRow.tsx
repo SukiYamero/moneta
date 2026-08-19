@@ -1,4 +1,4 @@
-import { format, parseISO } from 'date-fns'
+import { format, parseISO, type Locale } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { CircleHelp } from 'lucide-react'
 import type { Ref } from 'react'
@@ -16,6 +16,17 @@ export interface MovimientoRowProps {
   meta?: string
   className?: string
   ref?: Ref<HTMLDivElement>
+  /**
+   * BCP-47 locale for the amount's currency formatting (forwarded to
+   * `movimientoView.formatMonto`). Defaults to `movimientoView.ts`'s es-CO
+   * default — this component stays i18n-agnostic, the same way it takes
+   * `pending`/`meta` rather than reading a store itself; the calling screen
+   * reads the active i18next locale and passes it down (mirrors
+   * `DateChipPicker`'s `firstDayOfWeek` prop, specs.md §10.5).
+   */
+  locale?: string
+  /** date-fns `Locale` for the date label. Defaults to Spanish (today's only wired locale). */
+  dateFnsLocale?: Locale
 }
 
 export const MovimientoRow = ({
@@ -25,10 +36,12 @@ export const MovimientoRow = ({
   meta,
   className,
   ref,
+  locale,
+  dateFnsLocale = es,
 }: MovimientoRowProps) => {
   const { icon, tint } = getMovimientoVisual(movimiento)
-  const amount = getMovimientoAmountView(movimiento)
-  const label = meta ?? format(parseISO(movimiento.fecha), 'd MMM', { locale: es })
+  const amount = getMovimientoAmountView(movimiento, locale)
+  const label = meta ?? format(parseISO(movimiento.fecha), 'd MMM', { locale: dateFnsLocale })
   const isInteractive = onClick !== undefined
 
   return (

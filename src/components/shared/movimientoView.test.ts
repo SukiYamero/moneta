@@ -43,6 +43,29 @@ describe('formatMonto', () => {
     expect(constructorSpy).not.toHaveBeenCalled()
     constructorSpy.mockRestore()
   })
+
+  it('defaults to es-CO formatting when no locale is passed (backward compatible)', () => {
+    expect(formatMonto(1200, 'COP')).toBe(formatMonto(1200, 'COP', 'es-CO'))
+  })
+
+  it('accepts an explicit locale and formats accordingly', () => {
+    // en-US groups thousands with a comma and uses a period as the decimal
+    // separator — the opposite of es-CO's convention — so this is a real
+    // behavioral difference, not just a different currency symbol.
+    expect(formatMonto(1200, 'USD', 'en-US')).toContain('1,200')
+    expect(formatMonto(1200, 'USD', 'en-US')).not.toContain('1.200')
+  })
+
+  it('reuses one Intl.NumberFormat per (locale, currency) pair across repeat calls', () => {
+    formatMonto(500, 'COP', 'pt-BR') // warm the cache before spying, same pattern as the test above
+    const constructorSpy = vi.spyOn(Intl, 'NumberFormat')
+
+    formatMonto(1000, 'COP', 'pt-BR')
+    formatMonto(2000, 'COP', 'pt-BR')
+
+    expect(constructorSpy).not.toHaveBeenCalled()
+    constructorSpy.mockRestore()
+  })
 })
 
 describe('getMovimientoAmountView', () => {
@@ -56,5 +79,10 @@ describe('getMovimientoAmountView', () => {
     const view = getMovimientoAmountView({ monto: 50, moneda: 'COP', tipo: 'gasto' })
     expect(view.text.startsWith('-')).toBe(true)
     expect(view.colorClass).toBe('text-foreground')
+  })
+
+  it('forwards an explicit locale through to formatMonto', () => {
+    const view = getMovimientoAmountView({ monto: 1200, moneda: 'USD', tipo: 'ingreso' }, 'en-US')
+    expect(view.text).toContain('1,200')
   })
 })

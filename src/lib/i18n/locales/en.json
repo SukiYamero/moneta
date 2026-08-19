@@ -35,7 +35,16 @@
   },
   "toast": {
     "dismiss": "Dismiss",
-    "repeatSuffix": "×{{count}}"
+    "repeatSuffix": "×{{count}}",
+    "demo": {
+      "one": "Notice one",
+      "two": "Notice two",
+      "three": "Notice three",
+      "four": "Notice four",
+      "saved": "Movement saved",
+      "saveFailed": "Couldn't save the movement",
+      "syncFailed": "Sync failed"
+    }
   },
   "nav": {
     "label": "Main navigation",

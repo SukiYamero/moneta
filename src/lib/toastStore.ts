@@ -1,6 +1,25 @@
 import { create } from 'zustand'
+import { i18next } from '@/lib/i18n'
+import type es from '@/lib/i18n/locales/es.json'
 
 export type ToastVariant = 'success' | 'error'
+
+// Every leaf string across every locale namespace, addressed the way
+// i18next itself resolves a key from outside a namespace-scoped
+// useTranslation(): `namespace:dotted.path`. Typed off the same `es.json`
+// shape src/features/*/errorCopy.ts already keys off of (a typo is a
+// compile error, not a silent t() miss) — but unlike those single-namespace
+// keys, this one spans the whole resource tree, because a toast can be
+// raised by any feature's store action, not just one that already resolved
+// its own key via a component's useTranslation().
+type LeafPath<T> = T extends string
+  ? never
+  : { [K in keyof T & string]: T[K] extends string ? K : `${K}.${LeafPath<T[K]>}` }[keyof T &
+      string]
+
+export type ToastMessageKey = {
+  [NS in keyof typeof es]: `${NS}:${LeafPath<(typeof es)[NS]>}`
+}[keyof typeof es]
 
 export interface ToastItem {
   id: string
@@ -83,8 +102,18 @@ export const setToastsSuppressed = (value: boolean): void => {
   useToastStore.setState({ items: [] })
 }
 
-const raiseToast = (variant: ToastVariant, message: string): void => {
+const raiseToast = (
+  variant: ToastVariant,
+  key: ToastMessageKey,
+  values: Record<string, unknown> | undefined,
+): void => {
   if (suppressed) return
+
+  // Resolved here, not by the caller — the whole point of a key-typed
+  // public API is that nothing can hand this module a raw, untranslated
+  // string (docs/error-handling.md §5/§7's "never render error.message"
+  // rule, now enforced at the type level instead of by convention).
+  const message = i18next.t(key, values)
 
   const { items } = useToastStore.getState()
   const duplicate = items.find((item) => item.variant === variant && item.message === message)
@@ -119,11 +148,19 @@ const raiseToast = (variant: ToastVariant, message: string): void => {
 /**
  * The whole public surface: plain functions, callable from anywhere (a
  * store, an event handler, a component) with no provider and no React
- * context. Callers pass already-localized copy (`t('…')`) — this module
- * never looks up copy itself and must never be handed a raw `error.message`
- * (docs/error-handling.md §5/§7).
+ * context. Callers pass a translation key (`ToastMessageKey`, e.g.
+ * `'home:error.codes.network'`) plus optional interpolation values — this
+ * module resolves the copy itself via the shared `i18next` instance, so a
+ * caller cannot hand it a raw `error.message` or any other arbitrary
+ * string: that is a compile error, not a convention (docs/error-handling.md
+ * §5/§7). `i18next` is a leaf translation library, not a domain store —
+ * importing it here doesn't reintroduce the `lockStore` dependency problem
+ * `setToastsSuppressed` exists to avoid; see specs.md §11 (this file's
+ * decisions) for why the two aren't the same shape of coupling.
  */
 export const toast = {
-  success: (message: string): void => raiseToast('success', message),
-  error: (message: string): void => raiseToast('error', message),
+  success: (key: ToastMessageKey, values?: Record<string, unknown>): void =>
+    raiseToast('success', key, values),
+  error: (key: ToastMessageKey, values?: Record<string, unknown>): void =>
+    raiseToast('error', key, values),
 }

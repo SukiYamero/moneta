@@ -35,7 +35,16 @@
   },
   "toast": {
     "dismiss": "Dispensar",
-    "repeatSuffix": "×{{count}}"
+    "repeatSuffix": "×{{count}}",
+    "demo": {
+      "one": "Aviso um",
+      "two": "Aviso dois",
+      "three": "Aviso três",
+      "four": "Aviso quatro",
+      "saved": "Movimento salvo",
+      "saveFailed": "Não foi possível salvar o movimento",
+      "syncFailed": "Falha na sincronização"
+    }
   },
   "nav": {
     "label": "Navegação principal",

@@ -92,15 +92,38 @@ const AMOUNT_COLOR_CLASS: Record<TipoMovimiento, string> = {
 
 // Constructing an Intl.NumberFormat is expensive relative to formatting a
 // number — MovimientoRow calls this per row per render in a list the spec
-// expects to grow to years of entries, so the formatters are built once per
-// currency at module scope instead of on every call.
-const CURRENCY_FORMATTERS: Record<Moneda, Intl.NumberFormat> = {
-  COP: new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP' }),
-  USD: new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'USD' }),
+// expects to grow to years of entries, so formatters are built once per
+// (locale, currency) pair and cached at module scope instead of on every
+// call. The set of pairs actually used is bounded by the app's supported
+// locales/currencies, not the number of movimientos, so the cache can't
+// grow unbounded.
+//
+// `locale` defaults to `es-CO` — this codebase has no active-locale-aware
+// formatting anywhere yet (docs/wave-2/track-e2.md "Spec deltas"); it is a
+// plain parameter, not something this module reads off i18next itself, so
+// it stays pure and independently testable (docs/error-handling.md §7's
+// "return a key, don't read global state" judgment, applied to a formatter
+// instead of a copy lookup). Callers that care about the active locale pass
+// it in; callers that don't get today's unchanged es-CO behavior.
+const DEFAULT_LOCALE = 'es-CO'
+
+const currencyFormatters = new Map<string, Intl.NumberFormat>()
+
+const getCurrencyFormatter = (moneda: Moneda, locale: string): Intl.NumberFormat => {
+  const key = `${locale}:${moneda}`
+  const cached = currencyFormatters.get(key)
+  if (cached) return cached
+  const formatter = new Intl.NumberFormat(locale, { style: 'currency', currency: moneda })
+  currencyFormatters.set(key, formatter)
+  return formatter
 }
 
-export const formatMonto = (monto: number, moneda: Moneda): string => {
-  return CURRENCY_FORMATTERS[moneda].format(monto)
+export const formatMonto = (
+  monto: number,
+  moneda: Moneda,
+  locale: string = DEFAULT_LOCALE,
+): string => {
+  return getCurrencyFormatter(moneda, locale).format(monto)
 }
 
 export interface MovimientoAmountView {
@@ -111,9 +134,10 @@ export interface MovimientoAmountView {
 /** `monto` is always positive (schema.ts) — sign and color come from `tipo`. */
 export const getMovimientoAmountView = (
   m: Pick<Movimiento, 'monto' | 'moneda' | 'tipo'>,
+  locale: string = DEFAULT_LOCALE,
 ): MovimientoAmountView => {
   return {
-    text: SIGN[m.tipo] + formatMonto(m.monto, m.moneda),
+    text: SIGN[m.tipo] + formatMonto(m.monto, m.moneda, locale),
     colorClass: AMOUNT_COLOR_CLASS[m.tipo],
   }
 }
