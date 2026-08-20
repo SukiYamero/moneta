@@ -18,6 +18,20 @@ We follow **spec-driven development**. `specs.md` is the source of truth.
    parallel-track wave plan and worktree log live in `docs/waves.md` — pick
    up from either and keep it updated when you finish or defer something.
 
+## Open items that need the user — `docs/pendientes-usuario.md`
+
+Some work cannot be done by any agent: design in the Claude Design canvas,
+product decisions, and verification that needs a human in a browser (a real
+OAuth popup, for one). Those live in
+[docs/pendientes-usuario.md](docs/pendientes-usuario.md).
+
+**Read it at the start of a session and ask the user about every open item**,
+concretely — "did you get to the PIN unlock screen?", not "any updates?".
+**Never mark one done on your own:** an item closes only when the user says it
+does. If they don't answer, it stays open and gets asked again next session —
+silence is not confirmation. When something new turns out to need the user, add
+it there immediately rather than leaving it in a conversation that ends.
+
 ## Directory docs (agent-readable maps)
 
 - **Start here: `ARCHITECTURE.md`.** A lightweight index — one line per
