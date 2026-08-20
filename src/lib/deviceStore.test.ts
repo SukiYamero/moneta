@@ -1,8 +1,10 @@
 import { afterEach, expect, test, vi } from 'vitest'
 import {
+  __resetDeviceIdForTests,
   clearDriveDecision,
   clearLoggedIn,
   deviceDb,
+  getDeviceId,
   getDriveDecision,
   hasLoggedInBefore,
   markLoggedIn,
@@ -12,6 +14,8 @@ import {
 afterEach(async () => {
   await clearLoggedIn()
   await clearDriveDecision()
+  await deviceDb.deviceId.clear()
+  __resetDeviceIdForTests()
 })
 
 test('no marker on a fresh device', async () => {
@@ -140,6 +144,55 @@ test('clearDriveDecision is safe to fire-and-forget: a delete failure is caught 
   const spy = vi.spyOn(deviceDb.driveDecision, 'delete').mockRejectedValue(new Error('IDB blocked'))
 
   await expect(clearDriveDecision()).resolves.toBeUndefined()
+  expect(warn).toHaveBeenCalled()
+
+  spy.mockRestore()
+  warn.mockRestore()
+})
+
+test('getDeviceId mints an 8-char lowercase-alphanumeric id and persists it', async () => {
+  const id = await getDeviceId()
+
+  expect(id).toMatch(/^[0-9a-z]{8}$/)
+  expect(await deviceDb.deviceId.get(1)).toEqual({ id: 1, value: id })
+})
+
+test('getDeviceId returns the same id on every call within a session (cached)', async () => {
+  const first = await getDeviceId()
+  const second = await getDeviceId()
+
+  expect(second).toBe(first)
+  // Concurrent callers before the first resolves must also converge on one
+  // id, not a race where two mint two different ids.
+  expect(await Promise.all([getDeviceId(), getDeviceId()])).toEqual([first, first])
+})
+
+test('getDeviceId reuses a previously persisted id instead of minting a new one', async () => {
+  await deviceDb.deviceId.put({ id: 1, value: 'existing' })
+
+  expect(await getDeviceId()).toBe('existing')
+})
+
+test('getDeviceId degrades to a fresh in-memory id on a storage read failure', async () => {
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  const spy = vi.spyOn(deviceDb.deviceId, 'get').mockRejectedValue(new Error('IDB blocked'))
+
+  const id = await getDeviceId()
+
+  expect(id).toMatch(/^[0-9a-z]{8}$/)
+  expect(warn).toHaveBeenCalled()
+
+  spy.mockRestore()
+  warn.mockRestore()
+})
+
+test('getDeviceId is safe to fire-and-forget on a persist failure: still resolves with a usable id', async () => {
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  const spy = vi.spyOn(deviceDb.deviceId, 'put').mockRejectedValue(new Error('IDB blocked'))
+
+  const id = await getDeviceId()
+
+  expect(id).toMatch(/^[0-9a-z]{8}$/)
   expect(warn).toHaveBeenCalled()
 
   spy.mockRestore()

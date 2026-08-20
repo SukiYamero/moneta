@@ -35,9 +35,14 @@ export type ProfileRow = {
   createdAt: string
   lastUsedAt: string
 }
+// Short and filename-safe on purpose (specs.md §10.19: `mov-<device>-<YYYY-MM>.json`).
+export type DeviceIdRow = { id: number; value: string }
 
 const MARKER_ID = 1 as const
 const DRIVE_DECISION_ID = 1 as const
+const DEVICE_ID_ROW = 1 as const
+const DEVICE_ID_LENGTH = 8
+const DEVICE_ID_ALPHABET = '0123456789abcdefghijklmnopqrstuvwxyz'
 
 // Storage id frozen (AGENTS.md): renaming it orphans the login marker for
 // every existing user and silently forces a re-login. Only the module
@@ -53,6 +58,7 @@ export const deviceDb = new Dexie('kurobello-device') as Dexie & {
   driveDecision: EntityTable<DriveDecisionRow, 'id'>
   anchor: EntityTable<AnchorRow, 'id'>
   profiles: EntityTable<ProfileRow, 'id'>
+  deviceId: EntityTable<DeviceIdRow, 'id'>
 }
 deviceDb.version(1).stores({ marker: 'id' })
 // Additive: `marker` keeps its v1 definition unchanged — same reasoning as
@@ -69,6 +75,16 @@ deviceDb.version(3).stores({
   driveDecision: 'id',
   anchor: 'id',
   profiles: 'id, kind, lastUsedAt',
+})
+// Additive again: `deviceId` (this module, `specs.md` §10.19/§10.13) — the
+// short id every op envelope and Drive filename this device produces will
+// carry. Every earlier table restated unchanged.
+deviceDb.version(4).stores({
+  marker: 'id',
+  driveDecision: 'id',
+  anchor: 'id',
+  profiles: 'id, kind, lastUsedAt',
+  deviceId: 'id',
 })
 
 export const hasLoggedInBefore = async (): Promise<boolean> => {
@@ -131,4 +147,44 @@ export const clearDriveDecision = async (): Promise<void> => {
   } catch (e) {
     console.warn('device: could not clear the Drive decision', e)
   }
+}
+
+const generateDeviceId = (): string => {
+  const bytes = crypto.getRandomValues(new Uint8Array(DEVICE_ID_LENGTH))
+  return Array.from(bytes, (b) => DEVICE_ID_ALPHABET[b % DEVICE_ID_ALPHABET.length]).join('')
+}
+
+const resolveDeviceId = async (): Promise<string> => {
+  try {
+    const existing = await deviceDb.deviceId.get(DEVICE_ID_ROW)
+    if (existing) return existing.value
+  } catch (e) {
+    console.warn('device: could not read the device id, minting a fresh one', e)
+  }
+  const value = generateDeviceId()
+  try {
+    await deviceDb.deviceId.put({ id: DEVICE_ID_ROW, value })
+  } catch (e) {
+    // A device that can't persist its id still gets a correct id for this
+    // session's own ops — they still merge fine downstream — it just won't
+    // be the *same* id next session, splitting this device's Drive shards
+    // across an extra id. Never a reason to block a write over it.
+    console.warn('device: could not persist the device id, using an ephemeral one this session', e)
+  }
+  return value
+}
+
+let deviceIdPromise: Promise<string> | null = null
+
+// Cached for the process lifetime — minted once, reused by every caller in
+// this session (`hlc.ts`/`outbox.ts`), never re-derived per call.
+export const getDeviceId = (): Promise<string> => {
+  deviceIdPromise ??= resolveDeviceId()
+  return deviceIdPromise
+}
+
+// Test-only: forces the next getDeviceId() call to re-resolve instead of
+// reusing the cached promise, matching networkStore.ts's own reset hatch.
+export const __resetDeviceIdForTests = (): void => {
+  deviceIdPromise = null
 }

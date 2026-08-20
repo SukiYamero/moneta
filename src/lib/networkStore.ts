@@ -41,16 +41,21 @@ export type MutationKind = 'create' | 'edit' | 'delete' | 'settings'
 export type WriteRefusalReason = 'offline_mutation_restricted' | 'offline_window_expired'
 export type WriteDecision = { allowed: true } | { allowed: false; reason: WriteRefusalReason }
 
-// Appends commute, mutations don't: two devices creating movements offline
-// merge cleanly because every id is a crypto.randomUUID(); two devices
-// editing or deleting the same movement produce a genuine conflict with no
-// correct automatic answer (specs.md §10.11). So this table is a live
-// connectivity gate, independent of the 7-hour window below — it blocks
-// edit/delete/settings the instant we're offline, but never create.
+// Reconciled 2026-08-19 (specs.md §11, same date): deleting is now allowed
+// offline too, superseding half of §10.11's original restriction. An
+// operation log gives every mutation an automatic merge answer, and for a
+// delete it's unambiguous because a delete is terminal — two devices
+// deleting the same movement offline converge the same way two devices
+// creating different movements already did. Editing stays online-only:
+// record-level last-write-wins can still silently drop one of two
+// concurrent field edits, and field-level merging isn't worth building yet.
+// So this table is a live connectivity gate, independent of the 7-hour
+// window below — it blocks edit/settings the instant we're offline, but
+// never create or delete.
 const MUTATION_ALLOWED_OFFLINE: Record<MutationKind, boolean> = {
   create: true,
   edit: false,
-  delete: false,
+  delete: true,
   settings: false,
 }
 
@@ -99,9 +104,15 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
     if (!MUTATION_ALLOWED_OFFLINE[kind]) {
       return { allowed: false, reason: 'offline_mutation_restricted' }
     }
+    // The window applies equally to create and delete — both are the
+    // mutations MUTATION_ALLOWED_OFFLINE lets through, and the window's own
+    // reasoning (how long a device may act on stale session validity before
+    // being asked to reconnect) was never specific to "append"; it happened
+    // to only ever gate create because create was the only one allowed
+    // offline before the 2026-08-19 delete reconciliation above.
     // Fail open on an unknown anchor (docs/error-handling.md's fail-open/
     // fail-closed test): refusing a brand-new session's first offline
-    // create protects nothing, since there is no history yet to protect.
+    // write protects nothing, since there is no history yet to protect.
     if (lastOnlineAt !== null && now - lastOnlineAt > OFFLINE_WRITE_WINDOW_MS) {
       return { allowed: false, reason: 'offline_window_expired' }
     }
