@@ -25,4 +25,9 @@ Route-level page components, wired into `src/router.tsx`.
 
 The two screens reached from the nav live with their features, not here:
 `src/features/search/SearchScreen.tsx` and
-`src/features/history/HistoryScreen.tsx`.
+`src/features/history/HistoryScreen.tsx`. Same for `/settings` —
+`src/features/settings/SettingsScreen.tsx`, wrapped in `RequireAuth` at the
+router level (not nested under `AppShell`: it's a route, not a bottom-nav
+tab, so it doesn't carry `BottomNav`) and code-split via
+`SettingsLazy.tsx` (mirrors `KitLazy.tsx`'s `React.lazy` + the shared
+`ScreenLoading` `Suspense` fallback, specs.md §10.24).

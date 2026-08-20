@@ -2396,7 +2396,11 @@ separate operator step (§10.25).
 
 ### 10.24 "Personalizar" — the settings screen, and the four things it must decide (Track G2)
 
-Wave 4 stage 2. Written 2026-08-20. **Not implemented.**
+Wave 4 stage 2. Written 2026-08-20. **Implemented 2026-08-20** — see §11 for
+where the build diverged from this spec's reasoning (the delete/archive UX)
+and the systemic finding it produced (syncing an eager module-level side
+effect through `dataStore` breaks per-test-file mocking project-wide, not
+just here).
 
 `docs/waves.md` says this track "carries four §12 prerequisites" and must
 **decide** them rather than discover them mid-build. That is most of this
@@ -5329,6 +5333,73 @@ CategoryIconKey` (new `src/features/tags/categoryIcons.ts`, a curated
     whoever next opens `index.ts` for an unrelated reason should reconcile
     it in one pass rather than the array drifting further out of sync with
     the JSON files it's meant to describe.
+- 2026-08-20 — **Track G2 shipped: `idioma` on `Preferencias`, the `/settings`
+  screen, `PreferencesSection` as its entry point, and the lock's i18n
+  retrofit** (§10.24). Decisions that outlive the track:
+
+  - **`syncStoredLocale()` is its own module (`src/lib/i18n/syncStoredLocale.ts`),
+    called once from `main.tsx`, not a module-level side effect of
+    `src/lib/i18n/index.ts`.** It was, briefly, and broke 36 of
+    `dataStore.test.ts`'s 46 tests: every test file's `src/test/setup.ts`
+    imports `@/lib/i18n` for the shared `i18next` instance, and a static
+    `@/lib/dataStore` import at `index.ts`'s top level loads the real
+    store — and, transitively, the real `repoProvider.ts` — before that
+    test file's own `vi.mock('@/lib/repoProvider', …)` can intercept it.
+    Reproduced, not guessed. **The general shape:** any module imported by
+    `src/test/setup.ts` (today: only `@/lib/i18n`) must not eagerly import
+    a module a test file expects to mock — the failure is silent (tests
+    still run, just against real data) and shows up as confusing assertion
+    failures far from the actual cause. Worth a lint rule if this shape
+    recurs; not written here since it's only happened once.
+  - **`Preferencias.idioma`'s "undefined round-trips cleanly" edge case
+    (§10.24) is a proven property of the existing code, not a footgun that
+    needed a fix.** `dataStore.updateConfig`'s merge (`Object.fromEntries`
+    over `Object.keys(patch)`) and `repo.local.ts`'s `{ ...existing, ...patch }`
+    both preserve an explicit `idioma: undefined` key through `Object.keys`/
+    spread (confirmed empirically, not just reasoned — a key with an
+    `undefined` value survives both, unlike `JSON.stringify`, which is
+    irrelevant here since IndexedDB uses structured clone). A sentinel was
+    the spec's fallback if this didn't hold; it does, so none was added —
+    see the pressure-test answer for the full trace.
+  - **Category archive/delete UX diverges from the spec's literal "offer
+    the archive path instead of a bare no" reading.** The spec's edge case
+    was written imagining a refused delete attempt on an _active_ category.
+    Building it, that shape produces a dead end for an _archived_ one still
+    in use — "archive this already-archived category?" has no meaning.
+    Resolved by splitting the two cases at the UI level instead of routing
+    both through one refusal dialog: an active row only ever offers
+    **Archive** (always safe, one tap — this satisfies "offered instead of
+    a bare no" by making it the default action, never a fallback behind a
+    refusal); an archived row offers **Delete** only when this screen can
+    already see (via `movimientos`) that nothing references it, otherwise a
+    plain note reusing G1's own `tags:errors.categoryInUse` copy. No dialog
+    ever tells a user "no" with nothing to do about it.
+  - **`/settings` is a sibling top-level route, not nested under `AppShell`.**
+    It carries no `BottomNav` (not a tab) and its own unmount — leaving the
+    route entirely — is what closes the `ProfileSheet` that opened it, for
+    free, rather than threading an explicit `onClose` callback down through
+    `PreferencesSection`.
+  - **The lock retrofit's tests were converted to resolve expected copy
+    through `i18next.t()`** (the same `T`-helper pattern
+    `AppLock.test.tsx` already used for toast copy), not rewritten to new
+    hardcoded strings — a copy reword now fails `resources.test.ts`'s
+    key-parity check, never this suite silently.
+  - **Pressure-test answers** (`AGENTS.md`'s "question the framing"):
+    - The Profile-sheet entry point is the right home, not just operator
+      convenience — the sheet is reached from every tab via `BottomNav`,
+      and `/settings` needs exactly one door, not three duplicated ones.
+    - The lock retrofit belongs with this track for the reason §10.24
+      gives (same screen family via §10.18) and for a second, practical
+      one found while doing it: the pattern to copy
+      (`src/features/auth/errorCopy.ts` → translation keys) was already
+      fresh in scope from building `/settings`'s own copy, so the marginal
+      cost of doing both in one pass was near zero — deferring it again
+      would have meant a sixth track re-deriving the same pattern later.
+    - The blast-radius list's one gap: `src/features/tags/README.md` still
+      said `CategoryFormModal` was "not wired into a real screen yet" —
+      updated in the same change, since leaving it would have been exactly
+      the "README reads as trustworthy and is quietly wrong" failure
+      `AGENTS.md`'s review protocol warns about.
 
 ## 12. Backlog (pending verification / deferred work)
 
@@ -5362,12 +5433,14 @@ CategoryIconKey` (new `src/features/tags/categoryIcons.ts`, a curated
   `repo.drive.ts`'s actual latency characteristics once that track lands,
   not just in the abstract.
 
-- **The lock feature is not internationalised at all.** `LockScreen`,
-  `LockSettings` and `src/features/lock/errorCopy.ts` still hold hardcoded
-  Spanish, five Wave 2 tracks after `src/lib/i18n` landed. Whoever retrofits
-  it should route both the copy and the error table through the table in one
-  pass, and `errorCopy.ts` should return a translation key the way
-  `src/features/auth/errorCopy.ts` now does.
+- ✅ **The lock feature is not internationalised at all.** — closed
+  2026-08-20 (Track G2, §10.24 Prerequisite 4). `LockScreen`, `LockSettings`,
+  `AppLock` and `src/features/lock/errorCopy.ts` now route both the copy and
+  the error table through a new `lock` i18n namespace, in one pass, in all
+  four locale files; `errorCopy.ts` returns a translation key the way
+  `src/features/auth/errorCopy.ts` already did. `rg` for a bare Spanish
+  string literal under `src/features/lock` (excluding tests) returns
+  nothing.
 
 - **`authGeneration` is checked in only one of five state-setting async auth
   paths.** `connectDrive` and the silent Drive re-acquire check it; `login`,

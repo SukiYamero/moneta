@@ -387,7 +387,8 @@
       "language": {
         "device": "Seguir o dispositivo"
       }
-    }
+    },
+    "retry": "Tentar de novo"
   },
   "lock": {
     "screen": {
