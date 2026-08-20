@@ -472,7 +472,10 @@ Check this table against `git worktree list` at the start of any parallel
 session; prune anything stale (merged-but-not-removed, or on disk but
 missing/finished here).
 
-_Empty — every Wave 3 / 3.1 worktree was removed when its branch merged._
+| Path                           | Branch     | Track | Status |
+| ------------------------------ | ---------- | ----- | ------ |
+| `../moneta-worktrees/track-z`  | `track-z`  | Z     | active |
+| `../moneta-worktrees/track-g1` | `track-g1` | G1    | active |
 
 Paths are relative to the repo root (`web/moneta`), i.e. a sibling
 `web/moneta-worktrees/` directory outside the repo — deliberately not nested
