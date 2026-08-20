@@ -15,10 +15,10 @@ type DataState = {
   status: DataStatus
   error: RepoErrorCode | null
   load: () => Promise<void>
-  createMovimiento: (input: Omit<Movimiento, 'id' | 'createdAt'>) => Promise<void>
-  updateMovimiento: (id: string, patch: Partial<Omit<Movimiento, 'id'>>) => Promise<void>
-  deleteMovimiento: (id: string) => Promise<void>
-  updateConfig: (patch: Partial<Config>) => Promise<void>
+  createMovimiento: (input: Omit<Movimiento, 'id' | 'createdAt'>) => Promise<boolean>
+  updateMovimiento: (id: string, patch: Partial<Omit<Movimiento, 'id'>>) => Promise<boolean>
+  deleteMovimiento: (id: string) => Promise<boolean>
+  updateConfig: (patch: Partial<Config>) => Promise<boolean>
   /** Create (new id) or edit (existing id) — one action, matching `CategoryFormModal`'s single component for both (specs.md §10.22). */
   upsertCategoria: (categoria: Categoria) => Promise<void>
   archiveCategoria: (id: string) => Promise<void>
@@ -80,11 +80,11 @@ const runMutation = async <TResult>(
   rollback: () => void,
   write: () => Promise<TResult>,
   onSuccess: (result: TResult) => OutboxOperation,
-): Promise<void> => {
+): Promise<boolean> => {
   const decision = useNetworkStore.getState().canWrite(kind)
   if (!decision.allowed) {
     toast.error(REFUSAL_TOAST_KEY[decision.reason])
-    return
+    return false
   }
   applyOptimistic()
   let result: TResult
@@ -94,12 +94,17 @@ const runMutation = async <TResult>(
     rollback()
     const code = e instanceof RepoError ? e.code : 'unknown'
     toast.error(WRITE_ERROR_TOAST_KEY[code])
-    return
+    return false
   }
   const queued = await enqueueOperation(onSuccess(result))
   if (!queued) {
     toast.error('errors:sync.notQueued')
   }
+  // The local write committed and the user is already looking at it — a
+  // queueing failure is reported (above) but does not make this a failure
+  // from the caller's point of view, which is only ever asking "may I close
+  // the form and discard what was typed?".
+  return true
 }
 
 // Replaces the row with a matching id, or appends when there is none —
@@ -178,7 +183,7 @@ export const useDataStore = create<DataState>((set, get) => ({
       id: crypto.randomUUID(),
       createdAt: new Date().toISOString(),
     }
-    await runMutation(
+    return runMutation(
       'create',
       () => set((state) => ({ movimientos: [...state.movimientos, movimiento] })),
       () =>
@@ -199,9 +204,9 @@ export const useDataStore = create<DataState>((set, get) => ({
     const previous = get().movimientos.find((m) => m.id === id)
     if (!previous) {
       toast.error(WRITE_ERROR_TOAST_KEY.not_found)
-      return
+      return false
     }
-    await runMutation(
+    return runMutation(
       'edit',
       () =>
         set((state) => ({
@@ -225,9 +230,9 @@ export const useDataStore = create<DataState>((set, get) => ({
     const previous = get().movimientos.find((m) => m.id === id)
     if (!previous) {
       toast.error(WRITE_ERROR_TOAST_KEY.not_found)
-      return
+      return false
     }
-    await runMutation(
+    return runMutation(
       'delete',
       () => set((state) => ({ movimientos: state.movimientos.filter((m) => m.id !== id) })),
       () => set((state) => ({ movimientos: [...state.movimientos, previous] })),
@@ -238,7 +243,7 @@ export const useDataStore = create<DataState>((set, get) => ({
 
   updateConfig: async (patch) => {
     const previous = get().config
-    await runMutation(
+    return runMutation(
       'settings',
       () =>
         set((state) => ({
@@ -247,8 +252,18 @@ export const useDataStore = create<DataState>((set, get) => ({
       () => set({ config: previous }),
       () => getRepo().updateConfig(patch),
       (result) => {
-        set({ config: result })
-        return { entity: 'config', op: 'put', payload: result }
+        // Merge only the keys this call actually patched, into whatever is in
+        // the store *now* — never `set({ config: result })`. `result` is the
+        // Config as the repo saw it at this write; a concurrent write that
+        // landed in between is already in the store and is not in `result`,
+        // so a blind replace silently drops it (specs.md §12, reproduced by
+        // dataStore.test.ts's concurrent-writes case). Same rule the three
+        // category actions already follow.
+        const patched = Object.fromEntries(
+          Object.keys(patch).map((key) => [key, result[key as keyof Config]]),
+        ) as Partial<Config>
+        set((state) => ({ config: state.config ? { ...state.config, ...patched } : result }))
+        return { entity: 'config', op: 'put', payload: get().config ?? result }
       },
     )
   },

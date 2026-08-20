@@ -769,3 +769,111 @@ describe('useDataStore.deleteCategoria', () => {
     expect(mToastError).toHaveBeenCalledWith('home:error.codes.unknown')
   })
 })
+
+// --- Wave 4 stage-2 groundwork (specs.md §10.23 Decision 3, §10.24 edge cases,
+// docs/wave-4-plan.md §5). Landed before Track F and Track G2 are dispatched so
+// neither has to edit this file.
+
+/** `makeFakeRepo`'s write mocks are bare `vi.fn()`s — echo the written value back. */
+const withEchoingWrites = (repo: Repo): Repo => {
+  vi.mocked(repo.movimientos.add).mockImplementation(async (m) => m)
+  vi.mocked(repo.movimientos.update).mockImplementation(async (id, patch) => ({
+    ...movimiento({ id }),
+    ...patch,
+  }))
+  vi.mocked(repo.movimientos.remove).mockResolvedValue(undefined)
+  vi.mocked(repo.updateConfig).mockImplementation(async (patch) => ({
+    ...CONFIG_SEMILLA,
+    ...patch,
+  }))
+  return repo
+}
+
+describe('mutations report whether they committed (specs.md §10.23 Decision 3)', () => {
+  it('createMovimiento resolves true on success and false when refused offline', async () => {
+    const repo = withEchoingWrites(makeFakeRepo())
+    mGetRepo.mockReturnValue(repo)
+
+    await expect(useDataStore.getState().createMovimiento(movimiento())).resolves.toBe(true)
+
+    useNetworkStore.setState({ online: false, lastOnlineAt: 0 })
+    await expect(useDataStore.getState().createMovimiento(movimiento())).resolves.toBe(false)
+  })
+
+  it('createMovimiento resolves false when the repo write fails', async () => {
+    const repo = withEchoingWrites(makeFakeRepo())
+    mGetRepo.mockReturnValue(repo)
+    vi.mocked(repo.movimientos.add).mockRejectedValue(new RepoError('boom', 'unknown'))
+
+    await expect(useDataStore.getState().createMovimiento(movimiento())).resolves.toBe(false)
+  })
+
+  it('updateMovimiento and deleteMovimiento report the same way, including the not-found path', async () => {
+    const existing = movimiento()
+    const repo = withEchoingWrites(makeFakeRepo({ movimientos: [existing] }))
+    mGetRepo.mockReturnValue(repo)
+    await useDataStore.getState().load()
+
+    await expect(
+      useDataStore.getState().updateMovimiento(existing.id, { monto: 2000 }),
+    ).resolves.toBe(true)
+    await expect(useDataStore.getState().updateMovimiento('nope', { monto: 1 })).resolves.toBe(
+      false,
+    )
+    await expect(useDataStore.getState().deleteMovimiento(existing.id)).resolves.toBe(true)
+    await expect(useDataStore.getState().deleteMovimiento('nope')).resolves.toBe(false)
+  })
+
+  it('updateConfig reports the same way', async () => {
+    useDataStore.setState({ config: CONFIG_SEMILLA })
+    const repo = withEchoingWrites(makeFakeRepo())
+    mGetRepo.mockReturnValue(repo)
+
+    await expect(
+      useDataStore.getState().updateConfig({ preferencias: CONFIG_SEMILLA.preferencias }),
+    ).resolves.toBe(true)
+
+    useNetworkStore.setState({ online: false, lastOnlineAt: 0 })
+    await expect(
+      useDataStore.getState().updateConfig({ preferencias: CONFIG_SEMILLA.preferencias }),
+    ).resolves.toBe(false)
+  })
+})
+
+describe('useDataStore.updateConfig — concurrent writes (specs.md §12)', () => {
+  it("a slow updateConfig's success must not erase a category a concurrent write already committed", async () => {
+    useDataStore.setState({ config: CONFIG_SEMILLA })
+    const repo = makeFakeRepo()
+    mGetRepo.mockReturnValue(repo)
+    const nueva = categoria({ nombre: 'Gimnasio' })
+
+    let resolvePrefs: (config: Config) => void = () => {}
+    const pendingPrefs = new Promise<Config>((resolve) => {
+      resolvePrefs = resolve
+    })
+    vi.mocked(repo.updateConfig).mockImplementation((patch) => {
+      if (patch.preferencias) return pendingPrefs
+      return Promise.resolve({ ...CONFIG_SEMILLA, categorias: patch.categorias! })
+    })
+
+    const prefsCall = useDataStore
+      .getState()
+      .updateConfig({ preferencias: { ...CONFIG_SEMILLA.preferencias, primerDiaSemana: 0 } })
+    await useDataStore.getState().upsertCategoria(nueva)
+
+    expect(useDataStore.getState().config?.categorias.map((c) => c.nombre)).toContain('Gimnasio')
+
+    // The repo settles the preferences write with the Config as it looked
+    // *before* the category landed — the real interleaving once repo.drive.ts
+    // adds network latency.
+    resolvePrefs({
+      ...CONFIG_SEMILLA,
+      preferencias: { ...CONFIG_SEMILLA.preferencias, primerDiaSemana: 0 },
+    })
+    await prefsCall
+
+    const nombres = useDataStore.getState().config?.categorias.map((c) => c.nombre) ?? []
+    expect(nombres).toContain('Gimnasio')
+    expect(useDataStore.getState().config?.preferencias.primerDiaSemana).toBe(0)
+  })
+})

@@ -10,6 +10,8 @@ import {
   InlineErrorState,
   MovimientoRow,
   SegmentedControl,
+  Skeleton,
+  SkeletonGroup,
   usePendingDelay,
   type SegmentedControlOption,
 } from '@/components/shared'
@@ -80,6 +82,18 @@ export const HistoryScreen = () => {
 
   const pickerKind = PICKER_FOR_SCOPE[scope]
 
+  // `primerDiaSemana` is the one preference the period chrome actually
+  // depends on, and only in `semana` scope (`periodRange` ignores it for
+  // dia/mes/anio). Before `config` resolves it falls back to CONFIG_SEMILLA's
+  // Monday — so the week header used to render a guessed boundary and then
+  // visibly jump when the real value arrived (specs.md §12). A user cannot
+  // tell a guess from a fact, so the guess is not shown at all: this waits.
+  // Deliberately the narrowest possible gate — the scope tabs, the nav arrows
+  // and every other scope keep rendering immediately, because §10.9's whole
+  // point is not putting a loader in front of work that usually finishes in
+  // milliseconds.
+  const weekBoundaryUnknown = scope === 'semana' && config === null
+
   return (
     <main className="flex min-h-full animate-push-in flex-col pt-14">
       <h1 className="sr-only">{t('title')}</h1>
@@ -94,12 +108,21 @@ export const HistoryScreen = () => {
           <ChevronLeft className="size-4" />
         </button>
         <div className="min-w-0 flex-1 text-center">
-          <div className="truncate text-xl font-extrabold tracking-tight capitalize">
-            {label.title}
-          </div>
-          <div className="truncate text-xs font-medium text-fg-tertiary capitalize">
-            {label.subtitle}
-          </div>
+          {weekBoundaryUnknown ? (
+            <SkeletonGroup label={t('loading')} className="flex flex-col items-center gap-1.5">
+              <Skeleton className="h-6 w-28 rounded-lg" />
+              <Skeleton className="h-3 w-20 rounded-md" />
+            </SkeletonGroup>
+          ) : (
+            <>
+              <div className="truncate text-xl font-extrabold tracking-tight capitalize">
+                {label.title}
+              </div>
+              <div className="truncate text-xs font-medium text-fg-tertiary capitalize">
+                {label.subtitle}
+              </div>
+            </>
+          )}
         </div>
         <button
           type="button"
@@ -125,7 +148,7 @@ export const HistoryScreen = () => {
         />
       </div>
 
-      {pickerKind !== 'none' && (
+      {pickerKind !== 'none' && !weekBoundaryUnknown && (
         <div className="px-5 pb-3">
           <PeriodPickerRow
             aria-label={t(`scope.${scope}`)}

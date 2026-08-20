@@ -85,19 +85,15 @@ describe('HistoryScreen status handling', () => {
     expect(load).toHaveBeenCalled()
   })
 
-  // Reproduces the risk named in the review brief: the always-mounted chrome
-  // (period nav, picker strip) falls back to CONFIG_SEMILLA.preferencias
-  // before `config` loads. `primerDiaSemana` only feeds the rendered header
-  // in `semana` scope (movimientoStats.ts's `periodRange` ignores it for
-  // `dia`/`mes`/`anio`), so switching to `semana` while `config` is still
-  // `null` renders the week boundary CONFIG_SEMILLA assumes (Monday-start);
-  // once the real config resolves with a different `primerDiaSemana`, the
-  // header recomputes and the visible date range changes with no user
-  // action beyond having loaded. `toFake: ['Date']` pins "today" without
-  // faking `setTimeout` — the pairing that hangs with `user-event`
-  // (specs.md §11, 2026-08-19) — mirroring HistoryScreen.test.tsx's own
-  // pattern.
-  it('recomputes the semana header once config resolves with a different primerDiaSemana than the CONFIG_SEMILLA fallback', async () => {
+  // Was a characterization of the specs.md §12 bug: with `config` still
+  // null, the `semana` header rendered the week boundary CONFIG_SEMILLA
+  // assumes and then visibly jumped once the real `primerDiaSemana`
+  // resolved. Wave 4 stage-2 groundwork closed it (specs.md §10.24
+  // Prerequisite 1) — the week-derived chrome now waits for `ready` instead
+  // of guessing, so this asserts the fix rather than documenting the defect.
+  // `toFake: ['Date']` pins "today" without faking `setTimeout` — the
+  // pairing that hangs with `user-event` (specs.md §11, 2026-08-19).
+  it('never renders a guessed week boundary before config resolves — it waits, then shows the real one', async () => {
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(new Date('2026-08-19T12:00:00'))
     const user = userEvent.setup()
@@ -112,12 +108,11 @@ describe('HistoryScreen status handling', () => {
       weekStartsOn: CONFIG_SEMILLA.preferencias.primerDiaSemana,
     })
     const seedTo = endOfWeek(today, { weekStartsOn: CONFIG_SEMILLA.preferencias.primerDiaSemana })
-    // The header title and the picker strip's own selected chip both render
-    // the range in the same "d–d MMM" shape — either match proves the chrome
-    // used the seed default before config resolved.
-    expect(
-      screen.getAllByText(`${format(seedFrom, 'd')}–${format(seedTo, 'd MMM', { locale: es })}`),
-    ).not.toHaveLength(0)
+    const seedRange = `${format(seedFrom, 'd')}–${format(seedTo, 'd MMM', { locale: es })}`
+
+    // The seed's Monday-start week must never reach the screen: showing it and
+    // then changing it is the defect, and a user cannot tell a guess from a fact.
+    expect(screen.queryAllByText(seedRange)).toHaveLength(0)
 
     mockStore({
       status: 'ready',
@@ -135,5 +130,19 @@ describe('HistoryScreen status handling', () => {
     ).not.toHaveLength(0)
 
     vi.useRealTimers()
+  })
+
+  it('leaves the other scopes alone — only `semana` depends on primerDiaSemana', () => {
+    mockStore({ status: 'loading', config: null })
+    render(<HistoryScreen />)
+
+    // `dia` is the default scope and `periodRange` ignores primerDiaSemana for
+    // it, so its header renders immediately with no placeholder. The gate is
+    // scoped to the one thing that can actually be wrong, not to the whole
+    // screen (specs.md §10.9: no loader in front of work that finishes in ms).
+    expect(screen.getByRole('radio', { name: 'Día' })).toBeChecked()
+    // No placeholder in the header: `dia` does not depend on primerDiaSemana,
+    // so its label is a fact from the moment it renders.
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
   })
 })

@@ -5230,6 +5230,27 @@ CategoryIconKey` (new `src/features/tags/categoryIcons.ts`, a curated
   What is _not_ deferred is the honest empty state after the flip: that one is
   reachable by the developer on day one.
 
+- 2026-08-20 — **Stage-2 groundwork: the two files Track F and Track G2 would
+  both have edited were fixed first, by the operator, before either was
+  dispatched** (`docs/wave-4-plan.md` §5). Both changes were things the code
+  was already subtly wrong about, so neither needed its consuming track to
+  exist in order to be right:
+  - **The four `dataStore` mutations return `Promise<boolean>`** instead of
+    `Promise<void>`. `docs/error-handling.md` §4 forbids a success-shaped
+    value for a failure, and `Promise<void>` is exactly that: a refused
+    offline write was indistinguishable from a committed one at the call
+    site, so §10.23's sheet would have closed and discarded what the user
+    typed. The Toast still comes from the store; the boolean only answers
+    "may I close the form?".
+  - **`updateConfig` stopped blind-writing `set({ config: result })`.**
+    `result` is the Config as the repo saw it at that write; a concurrent
+    write that landed in between is in the store and not in `result`, so the
+    blind replace silently dropped it. Reproduced first — a slow preferences
+    write erasing a category a concurrent `upsertCategoria` had already
+    committed — then fixed by merging only the patched keys into the freshest
+    state, the same rule the three category actions already followed.
+  - **The `semana` week-boundary gate** above.
+
 ## 12. Backlog (pending verification / deferred work)
 
 - **`dataStore.updateConfig`'s `onSuccess` blindly trusts its own write's
@@ -5363,18 +5384,19 @@ CategoryIconKey` (new `src/features/tags/categoryIcons.ts`, a curated
   tab — but "logging out" plainly implies the vault re-locks, and today it
   does not. Small, self-contained fix; worth doing before any release.
 
-- **`HistoryScreen`'s `semana` scope can render the seed default's week
-  boundary and then visibly change** once the real `Config` resolves with a
-  different `primerDiaSemana`. Reproduced with a test (kept, as a
-  characterization of current behaviour). **Unreachable today**: nothing can
-  write `primerDiaSemana`, so it is always the seed's `1` for every real
-  user. It becomes reachable the moment a preferences screen lets a user
-  pick a different week start — so this is a **prerequisite of Track G**
-  (Wave 3), not free-floating debt: whoever ships the week-start preference
-  fixes this in the same change. Deliberately not fixed now — every
-  available fix (gating the week chrome behind the load, or deriving the
-  default from locale week-info) adds real UX or a second source of "what's
-  the default" for a bug that cannot currently occur.
+- ✅ **`HistoryScreen`'s `semana` scope no longer renders a guessed week
+  boundary** — closed 2026-08-20 (Wave 4 stage-2 groundwork). It used to fall
+  back to `CONFIG_SEMILLA`'s Monday before `config` resolved and then visibly
+  jump once the real `primerDiaSemana` arrived. Closed **before** Track G2
+  makes it reachable, not after: the week-derived header and picker strip now
+  wait for `config` rather than guess, and only in `semana` scope — every
+  other scope and all the other chrome still render immediately, because
+  §10.9's rule is that a loader must not stand in front of work that finishes
+  in milliseconds. The characterization test that documented the defect was
+  rewritten to assert the fix. The alternatives §12 previously weighed stay
+  rejected for their original reasons: deriving the default from locale week
+  info creates a second answer to "what is the default", and gating the whole
+  screen is the full-screen loader §10.9 forbids.
 
 - **Accepted risk: until Drive sync ships, local data can be lost with no
   recovery path.** A browser evicting IndexedDB, Safari private mode, or a
