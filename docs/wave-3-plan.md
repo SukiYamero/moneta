@@ -524,23 +524,15 @@ Never R, T, U, V or Y.
 reviewer, then one cross-track pass over the seams. All worktrees removed,
 all decisions folded into `specs.md` §11/§12 as each track closed.
 
-**Stage 2 is trimmed to Track T alone** (user decision, 2026-08-19: take only
-what is needed now). Track X (§10.17 diagnostics) is deferred — it was already
-the designated first cut, nothing depends on it, and no promise sits behind it.
+**Stage 2 is ✅ complete.** Track T merged (`0482570`) with its review
+(`fcdf9df`). Track X (§10.17 diagnostics) was cut — the designated first trim,
+nothing depended on it.
 
-Track T is the only thing on the critical path: **nothing in this app can
-write yet**, so neither the `repoProvider` flip nor any Wave 4 feature moves
-without it.
-
-### Track T's brief has one addition since the wave was planned
-
-`specs.md` §10.19 (Drive sync) was specced on 2026-08-19, after stage 1
-merged. **It is required reading for Track T, not background.** T builds the
-local write path _and the outbox that feeds sync_; if it settles its
-convention — optimistic vs. pessimistic, rollback, where an error lands —
-without knowing it is producing entries for an append-only operation log, that
-convention gets rewritten by Track Z in Wave 4. The seam is deliberate: T owns
-the local write and the outbox, Z owns the transport.
+**Stage 3 — Track Y (§10.18, the profile/account screen) is unblocked** and is
+all that remains of Wave 3. It closes two backlog items stuck purely for lack
+of a screen: the PIN lock has no production entry point (`LockSettings` lives
+on the dev-only `/kit` route), and guest mode has no exit. It also gets the
+first UI trigger for the CSV export.
 
 Stage-1 decisions and backlog are folded into `specs.md` §11/§12 as each
 track closed, per §1.2 — not batched at the end.
