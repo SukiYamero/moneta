@@ -1521,6 +1521,64 @@ honest in all three states: syncing · up to date · **pending**. The third is
 the one that earns trust, because it is the one that admits the data is not in
 the cloud yet.
 
+#### Getting your data out without the app — the plain-language file and the yearly CSV
+
+The whole architecture exists so the data is the user's. That claim is only
+true if a person can actually use it **the day the app stops existing**, so
+this is not a nicety — it is the promise being kept or not kept.
+
+**The honest starting point, stated rather than glossed over:** the data files
+are an _operation log_, not a list of movements. The same `id` can appear
+several times (a creation and its corrections) and there are `del` entries. So
+naively converting one to a spreadsheet produces **duplicated rows and
+resurrected deletions**. That is the price of choosing operations over state —
+it buys one merge rule for conflicts, edits, deletes and multi-device, and this
+is what it costs. Two cheap things pay it back.
+
+**1. A plain-language file in the folder, written for someone who is not
+technical.** `bootstrap` writes `LEEME.txt` into the `KuroBello` folder,
+content localized to the user's locale (one fixed filename so the app can find
+and rewrite it; the first line says what it is in their language). Rewritten
+whenever the format version changes, never left describing an older shape.
+
+It is written for a person, not a developer. It must say, in this order and in
+ordinary words:
+
+- what these files are, and that they are theirs;
+- **that the `.csv` files are the easy path** — double-click, they open in
+  Excel or Sheets, one per closed year;
+- that the `.json` files are the complete record including corrections, and
+  that the current year has no `.csv` yet;
+- how to turn the JSON into a table if they need to, in one sentence a person
+  can hand to an assistant or a friend: _keep the last entry for each `id`,
+  and drop the ones marked `del`_;
+- that nothing here is encrypted or locked — it is theirs to open, copy, or
+  take somewhere else.
+
+No jargon, no field-by-field schema dump. A person who has never opened a JSON
+file should finish it knowing what to do.
+
+**2. The yearly compaction also writes a flat CSV.** Compaction already
+reduces a closed year to one surviving `put` per movement, so the flat table
+already exists at that moment — writing it out is one extra file per year.
+That turns "the app is gone" into **double-click and it opens**, for
+everything except the months still open.
+
+- It goes through **Track S's existing CSV module** (§10.12), so the four
+  hazards it already solved — UTF-8 BOM, `sep=;`, the locale's decimal mark,
+  and formula-injection escaping — come along for free. **Do not write a
+  second CSV implementation.**
+- It is **derived and disposable**: if it is missing, stale or hand-deleted,
+  the JSON is authoritative and the app never reads the CSV back. Treating it
+  as a source of truth would create exactly the second source of truth
+  `AGENTS.md` forbids.
+
+**The larger hole this does not close, and it is bigger than the format:** a
+user who never connected Drive has **nothing there at all**. Portability is
+not decided by the file format — it is decided by whether the file exists.
+§12 already records that as an accepted risk and the guest copy says so out
+loud; none of the above changes it.
+
 #### Data touched
 
 Reads and writes the Drive files above. **No `schema.ts` change.** Replaces
@@ -3619,6 +3677,30 @@ lint` clean bar the one pre-existing `components/ui` warning). `AGENTS.md`
   worth making are a **test** proving no file we write ever contains the
   token, PIN or vault material (§10.12 already requires it for the CSV), and a
   size cap.
+
+- 2026-08-19 — **The Drive folder ships a plain-language `LEEME.txt` and a
+  flat CSV per closed year.** User decision, on the question "if the app
+  disappears tomorrow, can the user turn these JSONs into a spreadsheet?" The
+  honest answer was _yes, but not by double-clicking_: §10.19's files are an
+  operation log, so a naive conversion duplicates every corrected movement and
+  resurrects deleted ones. That is the cost of choosing operations over state,
+  and it is paid back by two additive, cheap things rather than by changing the
+  format:
+  - a `LEEME.txt` **written for someone who is not technical**, localized,
+    telling them the `.csv` files are the easy path, that the `.json` is the
+    complete record, and — in one sentence a person can hand to an assistant —
+    the rule to flatten it (keep the last entry per `id`, drop the `del`s);
+  - the yearly compaction also emitting a flat CSV **through Track S's
+    existing module**, so the BOM/`sep=;`/decimal/injection work is not
+    reimplemented. It is derived and disposable: the JSON stays authoritative
+    and the app never reads the CSV back, or it would become a second source
+    of truth.
+
+  Recorded because "the data is the user's" is the claim the entire no-backend
+  architecture exists to support, and a claim that only holds for someone
+  technical is a weaker claim than the one being made. **The bigger hole this
+  does not close: a user who never linked Drive has nothing there at all —
+  portability is decided by whether the file exists, not by its format.**
 
 ## 12. Backlog (pending verification / deferred work)
 
