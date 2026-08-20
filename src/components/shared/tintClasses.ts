@@ -59,3 +59,6 @@ export const TINT_CLASSES: Record<IconAvatarTint, { icon: string; badge: string;
     pill: 'border-border-strong bg-muted text-foreground',
   },
 }
+
+/** Every `IconAvatarTint`, in a stable order — derived from `TINT_CLASSES` so a consumer that needs "all nine tints" (a color grid, the least-used-tint rule) never keeps its own second copy of the enum. */
+export const ICON_AVATAR_TINTS = Object.keys(TINT_CLASSES) as IconAvatarTint[]

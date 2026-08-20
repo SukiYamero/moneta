@@ -306,6 +306,17 @@
     "errors": {
       "lastCategory": "You can't archive the last available category",
       "categoryInUse": "This category has movements and can't be deleted"
+    },
+    "colors": {
+      "emerald": "Emerald",
+      "blue": "Blue",
+      "amber": "Amber",
+      "rose": "Rose",
+      "purple": "Purple",
+      "success": "Green",
+      "danger": "Red",
+      "info": "Sky",
+      "neutral": "Gray"
     }
   }
 }

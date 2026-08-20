@@ -4311,6 +4311,48 @@ CategoryIconKey` (new `src/features/tags/categoryIcons.ts`, a curated
     to §12.
   - `bun run check` green (969 tests).
 
+- 2026-08-20 — **Track G1, stage 3: `CategoryPicker`, `CategoryFormModal`,
+  `categorySuggest.ts` built and demoed in `/kit`.** `CategoryPicker`
+  renders inline (never its own overlay), filters `archivado` itself,
+  orders `tipo`-matching categories first without hiding the rest or
+  flipping the sheet's toggle, and shows a "crear «query»" chip only when
+  nothing matches. `CategoryFormModal` is one `CenterModal` for create and
+  edit: name/section/icon-grid/color-grid + a live preview, duplicate name
+  blocked inline and scoped to section, name capped on the value (not just
+  `maxlength`), and it calls `useDataStore().upsertCategoria` directly and
+  closes immediately (optimistic, matching every other write here — Tier 3,
+  specs.md §10.9). `categorySuggest.ts` holds 34 concepts (a bit over the
+  spec's "roughly 30") each with icon/tint/one multilingual keyword bag,
+  matched on whole normalized words via `searchMatch.normalizeForSearch`
+  (no second normalizer); the no-match case falls back to
+  `leastUsedTint()`, exported alongside a new `ICON_AVATAR_TINTS` in
+  `tintClasses.ts` (derived from `TINT_CLASSES`'s own keys, replacing
+  `Kit.tsx`'s previously-separate hardcoded tint array — one enumeration,
+  not two).
+  - **Not wired into a real screen.** Track F (the movement Add/Edit sheet)
+    doesn't exist in this codebase yet, so both components are built,
+    unit/interaction-tested, and demoed in `/kit` — ready for Track F/G2
+    to consume once they land. `CategoryPicker.onSelect` hands back the
+    full `Categoria`, so a future caller derives `categoria`/`seccionId`
+    from one tap, matching the spec's "seccion is derived, never picked."
+  - **A judgment call worth flagging: the icon grid's per-button
+    accessible label is the raw icon key** (`"dumbbell"`, `"gift"`),
+    English and untranslated — unlike the color grid, which got real
+    localized names (`tags:colors.*`, all four locales) because color is
+    the more meaningful semantic quality for a screen-reader user choosing
+    a category's visual identity. Translating 34 icon names across four
+    locales for a supplementary label felt like the wrong place to spend
+    this stage's remaining scope; revisit if it's ever raised as a real
+    accessibility gap.
+  - **Pressure-tested Decision 7's "always the concept's tint, even
+    colliding" call by implementing it as specified** — no new consequence
+    surfaced beyond what the decision already named (the tenth-plus
+    category shares a color family). Confirmed by test
+    (`categorySuggest.test.ts`: a matched concept keeps its own tint even
+    when every existing category already uses it).
+  - `bun run check` green (1001 tests, typecheck/lint clean,
+    `rg 'CATEGORY_TINT' src` empty).
+
 ## 12. Backlog (pending verification / deferred work)
 
 - **`dataStore.updateConfig`'s `onSuccess` blindly trusts its own write's

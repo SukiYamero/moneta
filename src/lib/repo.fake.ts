@@ -8,7 +8,7 @@ import { RepoError } from '@/lib/repo'
 // (Comida, Transporte…) so screens built against either source render
 // consistent icon/tint via movimientoView.ts. Still the same 3 secciones.
 // icono/color port the pairings that used to live in movimientoView.ts's
-// deleted CATEGORY_ICON/CATEGORY_TINT tables (specs.md §10.22 Decision 2).
+// deleted per-category-name icon/tint lookup tables (specs.md §10.22 Decision 2).
 const FAKE_CATEGORIAS: Categoria[] = [
   ...CONFIG_SEMILLA.categorias,
   {

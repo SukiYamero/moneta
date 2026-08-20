@@ -115,7 +115,7 @@ export const CONFIG_SEMILLA: Config = {
     { id: 'sec_emprendimiento', nombre: 'Emprendimiento', orden: 2 },
   ],
   // icono/color port the pairings that used to live in movimientoView.ts's
-  // deleted CATEGORY_ICON/CATEGORY_TINT tables (specs.md §10.22 Decision 2) —
+  // deleted per-category-name icon/tint lookup tables (specs.md §10.22 Decision 2) —
   // same visual result, now a property of the category instead of a
   // Spanish-name-keyed lookup.
   categorias: [

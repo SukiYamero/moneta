@@ -306,6 +306,17 @@
     "errors": {
       "lastCategory": "Não é possível arquivar a última categoria disponível",
       "categoryInUse": "Esta categoria tem movimentos e não pode ser excluída"
+    },
+    "colors": {
+      "emerald": "Esmeralda",
+      "blue": "Azul",
+      "amber": "Âmbar",
+      "rose": "Rosa",
+      "purple": "Roxo",
+      "success": "Verde",
+      "danger": "Vermelho",
+      "info": "Azul-claro",
+      "neutral": "Cinza"
     }
   }
 }

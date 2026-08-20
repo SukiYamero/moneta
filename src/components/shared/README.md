@@ -39,7 +39,11 @@ doesn't belong to any one `src/features/**` folder. See `specs.md` §10.5.
 - `tintClasses.ts` — single source of truth for tint name → Tailwind class
   strings, in the `icon`/`badge`/`pill` shapes `IconAvatar.tsx` and
   `TagChip.tsx` each need — not part of the public barrel
-  (`docs/wave-2.1/review-o.md`).
+  (`docs/wave-2.1/review-o.md`). Also exports `ICON_AVATAR_TINTS` (every
+  `IconAvatarTint`, derived from this table's own keys) for a consumer that
+  needs "all nine tints" — `CategoryFormModal`'s color grid and
+  `categorySuggest.ts`'s least-used-tint rule (`specs.md` §10.22), and
+  `Kit.tsx`'s own tint gallery.
 - `IconAvatar.tsx` — colored rounded-square icon badge; size/tint are
   `Record` lookups onto the `chart-1..5`/status tokens, not new hex.
 - `MovimientoRow.tsx` + `movimientoView.ts` — the movement list row, and

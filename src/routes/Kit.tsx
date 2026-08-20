@@ -16,23 +16,13 @@ import {
   TagChip,
   TextField,
   Toggle,
-  type IconAvatarTint,
 } from '@/components/shared'
 import { ToastKitDemo } from '@/components/shared/ToastKitDemo'
+import { ICON_AVATAR_TINTS } from '@/components/shared/tintClasses'
+import { CategoryFormModal } from '@/features/tags/CategoryFormModal'
+import { CategoryPicker } from '@/features/tags/CategoryPicker'
 import { useLocaleFormatting } from '@/lib/i18n/localeFormatting'
-import type { Categoria, Movimiento } from '@/lib/schema'
-
-const TINTS: IconAvatarTint[] = [
-  'emerald',
-  'blue',
-  'purple',
-  'rose',
-  'amber',
-  'success',
-  'danger',
-  'info',
-  'neutral',
-]
+import type { Categoria, Movimiento, Seccion, TipoMovimiento } from '@/lib/schema'
 
 const SAMPLE_MOVEMENTS: Movimiento[] = [
   {
@@ -95,6 +85,11 @@ const SAMPLE_CATEGORIAS: Categoria[] = [
   },
 ]
 
+const SAMPLE_SECCIONES: Seccion[] = [
+  { id: 'sec_personal', nombre: 'Personal', orden: 0 },
+  { id: 'sec_emprendimiento', nombre: 'Emprendimiento', orden: 1 },
+]
+
 const SCOPE_OPTIONS = [
   { value: 'day', label: 'Día' },
   { value: 'week', label: 'Semana' },
@@ -149,6 +144,11 @@ export const Kit = () => {
   const [addSheetAmount, setAddSheetAmount] = useState('')
   const [textFieldValue, setTextFieldValue] = useState('')
   const [amountFieldValue, setAmountFieldValue] = useState('')
+  const [pickerTipo, setPickerTipo] = useState<TipoMovimiento>('gasto')
+  const [pickerSelectedId, setPickerSelectedId] = useState<string | undefined>('cat_comida')
+  const [categoryModalOpen, setCategoryModalOpen] = useState(false)
+  const [categoryModalCategoria, setCategoryModalCategoria] = useState<Categoria | undefined>()
+  const [categoryModalInitialName, setCategoryModalInitialName] = useState<string | undefined>()
 
   return (
     <main className="mx-auto flex max-w-md flex-col gap-8 p-5 pb-24">
@@ -178,7 +178,7 @@ export const Kit = () => {
 
       <Section title="IconAvatar — tints">
         <div className="flex flex-wrap gap-3">
-          {TINTS.map((tint) => (
+          {ICON_AVATAR_TINTS.map((tint) => (
             <IconAvatar key={tint} icon={Gift} tint={tint} />
           ))}
         </div>
@@ -221,6 +221,50 @@ export const Kit = () => {
           <TagChip icon={Utensils} label="Sin categoría" tint="neutral" selected />
           <TagChip icon={Utensils} label="Deshabilitado" tint="neutral" disabled />
         </div>
+      </Section>
+
+      <Section title="CategoryPicker + CategoryFormModal">
+        <SegmentedControl
+          options={[...TYPE_OPTIONS]}
+          value={pickerTipo}
+          onChange={setPickerTipo}
+          aria-label="Tipo (demo del picker)"
+        />
+        <CategoryPicker
+          categorias={SAMPLE_CATEGORIAS}
+          tipo={pickerTipo}
+          selectedId={pickerSelectedId}
+          onSelect={(c) => setPickerSelectedId(c.id)}
+          onCreateRequested={(query) => {
+            setCategoryModalCategoria(undefined)
+            setCategoryModalInitialName(query)
+            setCategoryModalOpen(true)
+          }}
+        />
+        <button
+          type="button"
+          onClick={() => {
+            setCategoryModalCategoria(SAMPLE_CATEGORIAS[0])
+            setCategoryModalInitialName(undefined)
+            setCategoryModalOpen(true)
+          }}
+          className="min-h-11 self-start rounded-md bg-secondary px-4 text-sm font-bold text-secondary-foreground"
+        >
+          Editar “Sueldo”
+        </button>
+        {/* Kit.tsx never calls dataStore.load(), so Config stays null here —
+            upsertCategoria() no-ops rather than throwing (dataStore.ts's own
+            guard). This section demos the picker/modal's UI and interaction
+            pattern, not a full write round-trip. */}
+        <CategoryFormModal
+          open={categoryModalOpen}
+          onClose={() => setCategoryModalOpen(false)}
+          tipo={pickerTipo}
+          secciones={SAMPLE_SECCIONES}
+          categorias={SAMPLE_CATEGORIAS}
+          categoria={categoryModalCategoria}
+          initialName={categoryModalInitialName}
+        />
       </Section>
 
       <Section title="SegmentedControl">

@@ -47,10 +47,12 @@ JSON resources — no `i18next-http-backend`, no CDN.
 - `locales/*.json` — one file per locale (`es`, `en`, `es-AR`, `pt-BR`), each
   with the same reserved namespace keys at the top level: `common`, `auth`,
   `driveConsent`, `toast`, `nav`, `home`, `search`, `history`, `update`,
-  `errors`, `profile` (`docs/wave-2-plan.md` §1.6; `profile` added
-  `specs.md` §10.18, Wave 3 stage 3). `es` is the source of truth for
-  shape; the other three must stay key-identical even where a namespace is
-  still `{}`.
+  `errors`, `profile`, `tags` (`docs/wave-2-plan.md` §1.6; `profile` added
+  `specs.md` §10.18, Wave 3 stage 3; `tags` added `specs.md` §10.22, Wave 4
+  Track G1 — the category picker's copy, plus a `colors.*` group of
+  localized `IconAvatarTint` names for the color grid's accessible labels).
+  `es` is the source of truth for shape; the other three must stay
+  key-identical even where a namespace is still `{}`.
 
 ## Adding a key
 
