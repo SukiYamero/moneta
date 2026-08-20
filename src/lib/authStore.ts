@@ -8,7 +8,8 @@ import {
   type GoogleUser,
 } from '@/lib/auth'
 import { bootstrap, type DriveLayout } from '@/lib/bootstrap'
-import { hasVault, updateSession } from '@/lib/pinLock'
+import { hasVault, resetVault, updateSession } from '@/lib/pinLock'
+import { resolveGoogleProfile } from '@/lib/profiles'
 import {
   clearDriveDecision,
   getDriveDecision,
@@ -94,6 +95,48 @@ const syncLockedSession = async (session: AuthSession, user: GoogleUser | null):
     await updateSession(session, user)
   } catch (e) {
     console.warn('lock: failed to sync the cached session', e)
+  }
+}
+
+// specs.md §10.20 (CONFIRMED, traced): logout() used to clear only in-memory
+// state, never the encrypted session cached inside the PIN-lock vault — a
+// correct PIN afterwards ran unlockWithPin() → resume() → hydrate() with
+// that same cached session and landed the user right back in the account
+// they just left. The vault exists to cache *this account's* token
+// (specs.md §10.2's "PIN reset = re-login with Google" precedent already
+// accepts losing the PIN as the honest cost); with no account left to
+// protect, resetVault() is the existing, already-tested operation that
+// removes it — and, as a side effect, this device's login marker and Drive
+// decision too, so a returning visit needs a real re-login rather than
+// restore()'s silent path picking the same account back up. Fire-and-forget
+// and self-catching, same posture as syncLockedSession above: logout()'s own
+// state reset already happened synchronously by the time this is called, so
+// a storage failure here must never trap the user inside the account they
+// are trying to leave (specs.md §10.20's edge cases).
+const invalidateVaultOnLogout = async (): Promise<void> => {
+  try {
+    await resetVault()
+  } catch (e) {
+    console.error('lock: failed to invalidate the vault on sign-out', e)
+  }
+}
+
+// specs.md §10.20: a `ProfileRecord` now records *whose* it is
+// (`accountKey`), not only what kind it is — this is what makes
+// getActiveProfile()'s existing recency resolution identity-aware without
+// that function needing to know about accounts at all. Whichever Google
+// account just established a session here becomes, by construction, the
+// most-recently-touched profile, so signing back in resolves to the right
+// one. Guest sessions never call this (no accountKey to key on — the
+// local/guest profile is untouched). Self-catching and never awaited by the
+// caller as a gate: a registry write failure must never fail the auth flow
+// it rides on, same posture as syncLockedSession.
+const syncProfileForAccount = async (user: GoogleUser | null): Promise<void> => {
+  if (!user) return
+  try {
+    await resolveGoogleProfile({ accountKey: user.email, label: user.name })
+  } catch (e) {
+    console.warn('profiles: failed to resolve the profile for this account', e)
   }
 }
 
@@ -249,6 +292,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (generation !== authGeneration) return
       set({ status: 'authenticated', session, user, driveOptIn })
       await syncLockedSession(session, user)
+      await syncProfileForAccount(user)
       void reacquireDriveIfNeeded(driveOptIn, set, get)
       // Explicit, user-initiated success only — the signal restore() below
       // gates on (specs.md §11, 2026-08-19). markLoggedIn() self-catches, so
@@ -313,6 +357,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (generation !== authGeneration) return
       set({ status: 'authenticated', session, user, driveOptIn })
       await syncLockedSession(session, user)
+      await syncProfileForAccount(user)
       void reacquireDriveIfNeeded(driveOptIn, set, get)
     } catch {
       // Deliberately silent, unlike syncLockedSession's console.warn
@@ -346,6 +391,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     // self-catches (docs/error-handling.md §7), and logout() itself is
     // synchronous — nothing here can fail the state reset above.
     void clearDriveDecision()
+    // specs.md §10.20: sign-out invalidates the vault (see
+    // invalidateVaultOnLogout's own comment for why). Fire-and-forget for
+    // the same reason as clearDriveDecision above.
+    void invalidateVaultOnLogout()
   },
   // No Google session exists to acquire Drive scopes for (specs.md §10.10),
   // so unlike login()/restore()/hydrate() this never touches driveOptIn's
@@ -398,6 +447,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (generation !== authGeneration) return
     set({ status: 'authenticated', session, user: cachedUser, driveOptIn, error: null })
     await syncLockedSession(session, cachedUser)
+    await syncProfileForAccount(cachedUser)
     void reacquireDriveIfNeeded(driveOptIn, set, get)
     // fetchGoogleUser() is a refresh, never a gate. Fire-and-forget, same
     // reasoning as reacquireDriveIfNeeded just above: lockStore.resume()

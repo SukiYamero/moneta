@@ -174,23 +174,30 @@ export const useLockStore = create<LockState>((set, get) => ({
   clearError: () => set({ error: null }),
 }))
 
-// A same-tab logout() must re-lock the vault (specs.md §12 backlog,
-// 2026-08-19: "logging out" plainly implies the vault re-locks, and today
-// it doesn't — the DEK stays resident in memory). authStore.ts can't import
-// this module back to call lock() directly — lockStore.ts already imports
-// authStore.ts, and a reverse import would be a genuine circular
+// A same-tab logout() must not leave this tab showing a stale lock state
+// (specs.md §12 backlog, 2026-08-19, superseded by §10.20). authStore.ts
+// can't import this module back to react directly — lockStore.ts already
+// imports authStore.ts, and a reverse import would be a genuine circular
 // dependency (docs/wave-3-plan.md §2.1(2) forbids exactly this shape for
 // networkStore/main.tsx, same reasoning applies here) — so this module
 // listens for the one transition only an explicit logout() produces
 // instead: `status` settling on 'idle' with `session` newly cleared, where
-// it previously held a real session. Both of resume()'s own logout() calls
-// (the lockout branch, reset()) already set their own final phase
-// immediately after, so this fires harmlessly alongside them and converges
-// to the same state; the case it actually changes is a *future* caller
-// (e.g. a Settings "sign out" action) invoking authStore.logout() directly
-// while the lock is still enabled and unlocked.
+// it previously held a real session.
+//
+// specs.md §10.20: authStore.logout() now invalidates the PIN-lock vault
+// itself (resetVault(), fire-and-forget) — the vault exists to cache *this
+// account's* token, and with no account left there is nothing left for a
+// re-lock to guard. Re-locking (the old behavior) would strand this tab on
+// a PIN screen backed by a vault that is being deleted, which can only ever
+// fail. Reset directly to the same end state reset() reaches after wiping
+// the vault on purpose: phase 'unlocked', disabled. forgetDek() runs here
+// synchronously and unconditionally (even if the lock was never enabled,
+// where it's a no-op) because the vault's own invalidation is
+// fire-and-forget and may not have landed yet — this is the one guarantee
+// this tab can make immediately, independent of that promise's outcome.
 useAuthStore.subscribe((state, prevState) => {
   if (state.status === 'idle' && state.session === null && prevState.session !== null) {
-    useLockStore.getState().lock()
+    forgetDek()
+    useLockStore.setState({ phase: 'unlocked', enabled: false, error: null })
   }
 })

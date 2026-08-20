@@ -380,8 +380,17 @@ describe('useLockStore', () => {
   // instead. vi.resetModules() forces the module body (and its one-time
   // subscribe() registration) to run again, since a later test's dynamic
   // import would otherwise hit the ESM cache and register nothing new.
-  describe('logout-relock subscription (specs.md §12)', () => {
-    test('re-locks when status settles on idle with a newly-cleared session', async () => {
+  describe('logout-relock subscription (specs.md §12, superseded by §10.20)', () => {
+    // specs.md §10.20: authStore.logout() now invalidates the vault itself
+    // (resetVault(), fire-and-forget from authStore.ts), so re-locking
+    // behind it — the old behavior — would strand this tab on a PIN screen
+    // that can never succeed (the vault it guards is being deleted). The
+    // listener now reflects "no account, no vault" directly: phase back to
+    // 'unlocked', enabled false, same end state reset() reaches after
+    // wiping the vault directly. forgetDek() still runs synchronously here,
+    // defensively, since the vault's own invalidation is fire-and-forget and
+    // hasn't necessarily landed yet.
+    test('resets to unlocked/disabled when status settles on idle with a newly-cleared session', async () => {
       vi.resetModules()
       const { useLockStore } = await import('@/lib/lockStore')
       useLockStore.setState({ phase: 'unlocked', enabled: true })
@@ -395,11 +404,16 @@ describe('useLockStore', () => {
         { status: 'authenticated', session: { accessToken: 'tok', expiresAt: 1 } },
       )
 
-      expect(useLockStore.getState().phase).toBe('locked')
+      expect(useLockStore.getState().phase).toBe('unlocked')
+      expect(useLockStore.getState().enabled).toBe(false)
       expect(pinLock.forgetDek).toHaveBeenCalled()
     })
 
-    test('does not re-lock when the lock was never enabled', async () => {
+    // No longer gated on "was the lock enabled" — a logout() invalidates
+    // whatever vault might exist unconditionally, so the listener resets
+    // unconditionally too. Calling forgetDek()/resetting state when there
+    // was never anything to reset is a harmless no-op.
+    test('forgets the DEK and stays unlocked/disabled even when the lock was never enabled', async () => {
       vi.resetModules()
       const { useLockStore } = await import('@/lib/lockStore')
       useLockStore.setState({ phase: 'unlocked', enabled: false })
@@ -414,7 +428,8 @@ describe('useLockStore', () => {
       )
 
       expect(useLockStore.getState().phase).toBe('unlocked')
-      expect(pinLock.forgetDek).not.toHaveBeenCalled()
+      expect(useLockStore.getState().enabled).toBe(false)
+      expect(pinLock.forgetDek).toHaveBeenCalled()
     })
 
     // restore()'s own silent-auth-failure fallback also lands on status
