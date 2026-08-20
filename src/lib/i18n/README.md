@@ -46,9 +46,11 @@ JSON resources — no `i18next-http-backend`, no CDN.
   (base and fallback), so `t('does.not.exist')` is a compile error.
 - `locales/*.json` — one file per locale (`es`, `en`, `es-AR`, `pt-BR`), each
   with the same reserved namespace keys at the top level: `common`, `auth`,
-  `driveConsent`, `toast`, `nav`, `home`, `search`, `history`
-  (`docs/wave-2-plan.md` §1.6). `es` is the source of truth for shape; the
-  other three must stay key-identical even where a namespace is still `{}`.
+  `driveConsent`, `toast`, `nav`, `home`, `search`, `history`, `update`,
+  `errors`, `profile` (`docs/wave-2-plan.md` §1.6; `profile` added
+  `specs.md` §10.18, Wave 3 stage 3). `es` is the source of truth for
+  shape; the other three must stay key-identical even where a namespace is
+  still `{}`.
 
 ## Adding a key
 
@@ -79,9 +81,11 @@ JSON resources — no `i18next-http-backend`, no CDN.
 
 ## Out of scope here (by design)
 
-No locale picker UI, no persisted locale (`Config.preferencias.idioma` is a
-`specs.md` §10.18 concern, gated on the write path), and no
-number/currency/date formatting — that's
+No locale picker UI, no persisted locale (`idioma` is not a field on
+`Preferencias` — `src/features/profile/PreferencesSection.tsx` renders the
+_detected_ `i18next` language as an inert row and says so in its own
+`STUB(wave3)` comment; a real picker needs a schema addition first, see
+`specs.md` §12), and no number/currency/date formatting — that's
 `Intl`/`date-fns` at the call site, not this table. Region _detection_ and
 the locale→tag mapping do live here (`detectRegion`, `localeFormatting.ts`);
 what stays out is the formatting itself.

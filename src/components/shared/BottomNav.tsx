@@ -34,17 +34,28 @@ const NavTab = ({ to, icon: Icon, label }: { to: string; icon: LucideIcon; label
   )
 }
 
+export interface BottomNavProps {
+  /** Whether the profile sheet the Profile slot opens is currently open — drives its active-tab styling. */
+  profileOpen: boolean
+  onOpenProfile: () => void
+}
+
 /**
  * Persistent tab bar for '/', '/search' and '/history' (mounted once by
  * AppShell, never remounted on tab change — see docs/wave-2/track-l.md for
  * why that persistence matters for the push/fade transitions to read as
  * native). Five design slots: Home/History/Search are real NavLinks
- * (`aria-current="page"` comes from NavLink itself); the centre Add button
- * and the Profile slot have no destination yet this wave and are rendered
- * disabled — visually complete, functionally inert, per the STUB convention
- * (docs/ui/implementation-plan.md) rather than silently doing nothing.
+ * (`aria-current="page"` comes from NavLink itself); the Profile slot opens
+ * the profile/account sheet (specs.md §10.18) via `onOpenProfile` — the
+ * sheet itself (and its `open` state) lives in `AppShell.tsx`, not here:
+ * `src/components/shared/**` is feature-agnostic building blocks that
+ * features/routes compose, and `ProfileSheet` is a `src/features/profile`
+ * concern, so this file takes the callback rather than importing the
+ * feature and inverting that dependency direction. The centre Add button
+ * still has no destination this wave and stays a disabled stub
+ * (`docs/ui/implementation-plan.md`).
  */
-export const BottomNav = () => {
+export const BottomNav = ({ profileOpen, onOpenProfile }: BottomNavProps) => {
   const { t } = useTranslation('nav')
 
   return (
@@ -66,13 +77,25 @@ export const BottomNav = () => {
       <NavTab to="/search" icon={Search} label={t('search')} />
       <button
         type="button"
-        disabled
         aria-label={t('profile')}
-        // STUB(trackG): opens the Profile sheet — Wave 3.
-        className="flex min-h-11 min-w-11 flex-col items-center justify-center gap-0.75 text-fg-disabled"
+        aria-haspopup="dialog"
+        aria-expanded={profileOpen}
+        onClick={onOpenProfile}
+        className="flex min-h-11 min-w-11 flex-col items-center justify-center gap-0.75"
       >
-        <User className="size-6.5" strokeWidth={INACTIVE_STROKE} aria-hidden="true" />
-        <span className="text-2xs font-semibold">{t('profile')}</span>
+        <User
+          className={cn('size-6.5', profileOpen ? 'text-primary' : 'text-fg-disabled')}
+          strokeWidth={profileOpen ? ACTIVE_STROKE : INACTIVE_STROKE}
+          aria-hidden="true"
+        />
+        <span
+          className={cn(
+            'text-2xs font-semibold',
+            profileOpen ? 'text-primary' : 'text-fg-disabled',
+          )}
+        >
+          {t('profile')}
+        </span>
       </button>
     </nav>
   )

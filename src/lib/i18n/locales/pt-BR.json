@@ -221,5 +221,55 @@
     "sync": {
       "notQueued": "Salvo neste dispositivo, mas não conseguimos colocá-lo na fila para sincronizar com sua conta."
     }
+  },
+  "profile": {
+    "sheet": {
+      "heading": "Perfil"
+    },
+    "identity": {
+      "heading": "Conta",
+      "guestLabel": "Convidado",
+      "guestDescription": "Seus dados ficam somente neste dispositivo e não são sincronizados.",
+      "loadingAccount": "Carregando conta…",
+      "signOutCta": "Sair"
+    },
+    "profiles": {
+      "heading": "Perfis",
+      "activeBadge": "Ativo",
+      "kind": {
+        "local": "Neste dispositivo",
+        "google": "Conta do Google"
+      }
+    },
+    "security": {
+      "heading": "Segurança"
+    },
+    "data": {
+      "heading": "Dados",
+      "exportCta": "Exportar movimentações (CSV)",
+      "exporting": "Exportando…",
+      "exportFailed": "Não foi possível exportar o arquivo. Tente novamente."
+    },
+    "preferences": {
+      "heading": "Preferências",
+      "readOnlyNote": "Essas configurações são exibidas, mas ainda não podem ser alteradas aqui.",
+      "theme": {
+        "label": "Tema",
+        "claro": "Claro",
+        "oscuro": "Escuro",
+        "sistema": "Sistema"
+      },
+      "currency": {
+        "label": "Moeda principal"
+      },
+      "weekStart": {
+        "label": "Primeiro dia da semana",
+        "sunday": "Domingo",
+        "monday": "Segunda-feira"
+      },
+      "language": {
+        "label": "Idioma"
+      }
+    }
   }
 }

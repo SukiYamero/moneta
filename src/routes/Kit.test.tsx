@@ -2,15 +2,15 @@ import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { Kit } from '@/routes/Kit'
 
-// LockSettings moved off Home (the only production route) onto this
-// dev-only page — it is now the sole way to enable/disable the PIN lock,
-// so its presence here is load-bearing, not decorative (docs/wave-2-plan.md
-// §3 item 1). LockSettings' own behavior is fully covered by
-// src/features/lock/LockSettings.test.tsx; this just proves it still mounts
-// and renders here.
+// LockSettings moved off this dev-only gallery onto the real profile sheet
+// (src/features/profile/SecuritySection.tsx, specs.md §10.18) — it is no
+// longer the only way to reach the PIN lock in a production build, so its
+// own behavior is fully covered by src/features/lock/LockSettings.test.tsx
+// and src/features/profile/SecuritySection.test.tsx. This just proves the
+// gallery itself still mounts and renders its heading.
 describe('Kit', () => {
-  it('renders LockSettings', () => {
+  it('renders the shared UI kit gallery', () => {
     render(<Kit />)
-    expect(screen.getByRole('button', { name: /activar lock/i })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /shared ui kit/i })).toBeInTheDocument()
   })
 })
