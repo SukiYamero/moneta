@@ -6068,6 +6068,24 @@ export/index.ts:49` all still inline `format(date, 'yyyy-MM-dd')` instead
   did nothing wrong with the evidence it had — its item-by-item verification
   of the actual track was accurate and independently valuable.
 
+- 2026-08-20 — **A guest gets no PIN. Biometrics at most** (user). Closes the
+  question raised the same day: a guest lockout has no honest recovery,
+  because re-entry cannot be "sign in with Google" when there is no Google,
+  leaving only wiping their data or letting them in anyway. Biometrics has
+  nothing to forget, so there is no lockout to recover from.
+  **Recorded with its limitation so it is not rediscovered as a bug:** for a
+  guest this is a UI gate, not a cryptographic boundary — no session means no
+  token to wrap with the WebAuthn PRF secret. And the sharper point, which
+  corrects how the trade-off was described earlier in the same session: the
+  local financial data is **not encrypted at rest for anyone**, guest or
+  signed-in (§10.2 put "encrypting the local financial-data cache" explicitly
+  out of scope). What a signed-in PIN lock protects is the **OAuth token** and
+  the forced re-auth on lockout — never the movements on disk, which any
+  holder of an unlocked device can read from IndexedDB either way. The lock's
+  real value, for both identity kinds, is defending against someone picking up
+  the phone. Closing the other gap means encrypting the local cache: separate,
+  deferred work, and the honest prerequisite to claiming anything stronger.
+
 ## 12. Backlog (pending verification / deferred work)
 
 - **The Add sheet's "gear into `/settings`" entry point was never actually

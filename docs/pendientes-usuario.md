@@ -19,19 +19,6 @@ nobody else can make, and verification that needs a human in a browser.
 
 ## Open
 
-### 1. Design the PIN screens in the canvas — `owner: user`
-
-**Nothing about the PIN lock has ever been designed.** Verified against
-`Moneta.dc.html` on 2026-08-19: there is no lock artboard anywhere. `LockScreen`
-and `LockSettings` were built in Wave 1 without a design and still look it.
-
-It is now the highest-value screen missing, because after Wave 3 it is the
-**first thing a returning user sees** when the lock is enabled, and Track Y made
-it reachable in a production build for the first time.
-
-Two states to cover: entering the PIN to unlock (including the wrong-PIN and
-locked-out states), and configuring it (set / disable / lock now).
-
 ### 2. Design the returning-user screen in the canvas — `owner: user`
 
 Spec is written: `specs.md` §10.21. A person who has used the app for months and
@@ -152,38 +139,40 @@ worth separating.
 
 The same asset closes the PWA icon item, so it is one piece of work, not two.
 
-### 9. Should a guest be able to set a PIN at all? — `owner: user`
-
-Raised 2026-08-20 by the user asking what happens when someone forgets their
-PIN. Traced through the code; the signed-in answer is sound, the guest answer
-does not exist.
-
-**Signed in:** five wrong attempts → `lockStore` wipes the vault, the device
-login marker and the Drive decision, calls `logout()`, and the user signs in
-with Google again. Their money is untouched — the vault holds the encrypted
-_token_, not the movements, which live in the profile database.
-
-**Guest:** `lockStore.enable` throws `NO_SESSION_ERROR` when there is no
-session, so a guest cannot enable the lock — but `SecuritySection` renders the
-control unconditionally, so they see it, tap it, and get an error (filed
-separately in `specs.md` §12 as a code defect).
-
-**The product question, which is yours:** if a guest _were_ allowed a PIN,
-forgetting it has no good answer. Re-entry cannot be "sign in with Google"
-because there is no Google. Either their data is wiped — the only way the PIN
-means anything, and brutal for a month of expenses lost to five mistyped
-digits — or they are let in anyway, and the PIN is decoration. A signed-in
-lockout works precisely because Google is a real second factor; a guest has
-none to demand.
-
-**The operator's reading**, offered rather than assumed: for a guest the honest
-PIN is no PIN, until the profile switcher exists and "guest" is a real identity
-rather than a transitional state. Say if you see it differently — the answer
-changes what §10.2's lock UI must cover, and therefore what item 1's design
-needs to show.
-
 ---
 
 ## Closed
 
-_Nothing yet._
+### 1. Design the PIN screens in the canvas — closed 2026-08-20 (user)
+
+The user reports the PIN design is done, covering both the unlock states and
+the forgotten-PIN path. **The canvas file (`Moneta.dc.html`) does not live in
+this repo**, so implementing it needs the artifact link or the new artboard
+names from the user — asked 2026-08-20, still needed before the track can be
+dispatched.
+
+### 9. Should a guest be able to set a PIN? — closed 2026-08-20 (user)
+
+**Decided: no PIN for a guest. Biometrics at most.** Raised the same day, from
+the user's own question about forgotten PINs, and answered the same day.
+
+The reasoning it resolves: a guest lockout has no honest recovery, because
+re-entry cannot be "sign in with Google" when there is no Google — leaving
+only "wipe their data" (brutal) or "let them in anyway" (decoration).
+Biometrics sidesteps it: there is nothing to forget, so there is no lockout to
+recover from.
+
+**What the operator told the user before they decided, recorded so the
+limitation is not rediscovered as a bug:** for a guest this is a UI gate, not
+a cryptographic boundary. There is no session, so there is no token to wrap
+with the WebAuthn PRF secret — and the local financial data is not encrypted
+at rest for anyone, guest or signed-in (§10.2 put "encrypting the local
+financial-data cache" explicitly out of scope). It genuinely defends against
+the realistic threat — someone picking up an unlocked phone — and does not
+defend against someone who knows to open IndexedDB. Closing that second gap
+means encrypting the local cache, which is separate, deferred work.
+
+**Still to build** (not a user item — filed for the implementing track): the
+guest branch of the lock UI, which today shows a control that can only fail
+(`specs.md` §12). With this decision it shows a biometric option where the
+platform supports it, and nothing where it does not — never a PIN.
