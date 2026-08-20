@@ -44,7 +44,11 @@ const LinkedRow = ({ label, value }: { label: string; value: string }) => (
  * `tema` that has no effect.
  */
 export const PreferencesSection = () => {
-  const { t, i18n } = useTranslation('profile')
+  // `settings` too — only for the theme note (§10.24 Prerequisite 3's
+  // honesty copy lives in `settings`'s own namespace, not `profile`'s: this
+  // track edits only `settings`/`lock` in the locale files, per
+  // `docs/wave-4-plan.md` §5's contended-file resolution with Track F).
+  const { t, i18n } = useTranslation(['profile', 'settings'])
   const preferencias = useDataStore((s) => s.config?.preferencias)
 
   return (
@@ -58,7 +62,9 @@ export const PreferencesSection = () => {
               shown is fixed ("Oscuro"), never `preferencias.tema` — a
               stored 'claro'/'sistema' would misdescribe a dark-only app. */}
           <InertRow label={t('preferences.theme.label')} value={t('preferences.theme.oscuro')} />
-          <p className="px-1 text-xs font-medium text-fg-tertiary">{t('preferences.theme.note')}</p>
+          <p className="px-1 text-xs font-medium text-fg-tertiary">
+            {t('settings:preferences.theme.note')}
+          </p>
         </div>
         <LinkedRow
           label={t('preferences.currency.label')}

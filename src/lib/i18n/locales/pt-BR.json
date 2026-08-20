@@ -263,10 +263,12 @@
     },
     "preferences": {
       "heading": "Preferências",
+      "readOnlyNote": "Essas configurações são exibidas, mas ainda não podem ser alteradas aqui.",
       "theme": {
         "label": "Tema",
+        "claro": "Claro",
         "oscuro": "Escuro",
-        "note": "O app é somente escuro por enquanto — o modo claro vem com seu próprio design."
+        "sistema": "Sistema"
       },
       "currency": {
         "label": "Moeda principal"
@@ -386,6 +388,9 @@
       "heading": "Preferências",
       "language": {
         "device": "Seguir o dispositivo"
+      },
+      "theme": {
+        "note": "O app é somente escuro por enquanto — o modo claro vem com seu próprio design."
       }
     },
     "retry": "Tentar de novo"

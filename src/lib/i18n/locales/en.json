@@ -263,10 +263,12 @@
     },
     "preferences": {
       "heading": "Preferences",
+      "readOnlyNote": "These settings are shown for reference — they can't be changed here yet.",
       "theme": {
         "label": "Theme",
+        "claro": "Light",
         "oscuro": "Dark",
-        "note": "The app is dark-only for now — light mode is coming with its own design."
+        "sistema": "System"
       },
       "currency": {
         "label": "Main currency"
@@ -386,6 +388,9 @@
       "heading": "Preferences",
       "language": {
         "device": "Follow the device"
+      },
+      "theme": {
+        "note": "The app is dark-only for now — light mode is coming with its own design."
       }
     },
     "retry": "Retry"
