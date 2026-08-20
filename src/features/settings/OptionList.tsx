@@ -14,14 +14,15 @@ export interface OptionListProps<T extends string> {
 }
 
 /**
- * A vertical single-select list — `SegmentedControl`'s shape (radiogroup,
- * one tab stop, arrow keys move focus+selection) doesn't fit here: it's a
- * horizontal pill row, and idioma (5 options incl. "seguir el
- * dispositivo") and moneda (6 options) both need to read as a scannable
- * list, the same shape `YearMenu.tsx`'s popover already uses for its own
- * option rows (`role="listbox"`/`role="option"`, a leading/trailing
- * `Check`). This is that shape as static, non-popover content — `/settings`
- * shows both lists inline, not behind a trigger.
+ * A vertical single-select list — `SegmentedControl`'s horizontal pill row
+ * doesn't fit here: idioma (5 options incl. "seguir el dispositivo") and
+ * moneda (6 options) both need to read as a scannable vertical list, the
+ * same layout `YearMenu.tsx`'s popover already uses for its own option rows
+ * (a leading/trailing `Check`) — but as static, non-popover content, so
+ * `/settings` shows both lists inline rather than behind a trigger. ARIA
+ * semantics follow `SegmentedControl`'s `radiogroup`/`radio` pattern, not
+ * `YearMenu`'s `listbox`/`option`: this is a persistent single-select
+ * control, not a popup menu.
  */
 export const OptionList = <T extends string>({
   items,

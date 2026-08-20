@@ -5272,52 +5272,48 @@ CategoryIconKey` (new `src/features/tags/categoryIcons.ts`, a curated
     negative number is well-formed, just not positive. With the sign
     accepted, `-5` and `0` both resolve to `not_positive`, matching what the
     three-reason split is actually for.
-  - **The four call-site pressure tests the brief asked for, answered:**
-    1. **Decision 2's "movement vanishes mid-view" is not reachable today.**
-       `repoProvider.getRepo()` still returns `fakeRepo` (an in-memory,
-       single-tab store with no cross-device or cross-tab write path,
-       §10.25 not yet flipped), and the sheet's focus-trap/backdrop make a
-       same-device concurrent delete unreachable while it has focus. The
-       guard is still built and tested (`MovimientoSheet.test.tsx` mutates
-       the store's `movimientos` directly to simulate it) because it costs
-       nothing and is exactly what deriving from an id rather than a
-       snapshot is for — but it is dormant until §10.25 (the repo flip) or
-       Track Z's sync makes the scenario real, and that should be said
-       plainly rather than left implied.
-    2. **The hook/fields/two-sheets split earned its keep.** The three
-       money-adjacent edge cases that actually bit during TDD — "a category
-       that no longer resolves must keep its raw id, not get silently
-       reassigned," "editing `tipo` must never let `monto` go negative in
-       storage," "a refused write must leave every field, including the
-       category selection, exactly as typed" — all live in
-       `useMovimientoForm.ts` alone and are each one focused unit test
-       against the hook, with no component rendering involved. Collapsing
-       the split into one `'create' | 'view' | 'edit'` component would have
-       meant asserting the same three facts through DOM queries, which is
-       exactly the deep-conditional-branching cost `AGENTS.md` flags. The
-       one place the split adds a real seam to keep straight:
-       `MovimientoSheet`'s edit sub-view is its own small component
-       (`MovimientoEditForm`) mounted only when `movimiento` is defined and
-       `mode === 'edit'`, specifically so `useMovimientoForm`'s hook call
-       stays unconditional within its own component instance rather than
-       needing an `initial: Movimiento | undefined` escape hatch.
-    3. **The blast radius list was complete for consumer sites.** `rg
+  - **The four call-site pressure tests the brief asked for, answered:** 1. **Decision 2's "movement vanishes mid-view" is not reachable today.**
+    `repoProvider.getRepo()` still returns `fakeRepo` (an in-memory,
+    single-tab store with no cross-device or cross-tab write path,
+    §10.25 not yet flipped), and the sheet's focus-trap/backdrop make a
+    same-device concurrent delete unreachable while it has focus. The
+    guard is still built and tested (`MovimientoSheet.test.tsx` mutates
+    the store's `movimientos` directly to simulate it) because it costs
+    nothing and is exactly what deriving from an id rather than a
+    snapshot is for — but it is dormant until §10.25 (the repo flip) or
+    Track Z's sync makes the scenario real, and that should be said
+    plainly rather than left implied. 2. **The hook/fields/two-sheets split earned its keep.** The three
+    money-adjacent edge cases that actually bit during TDD — "a category
+    that no longer resolves must keep its raw id, not get silently
+    reassigned," "editing `tipo` must never let `monto` go negative in
+    storage," "a refused write must leave every field, including the
+    category selection, exactly as typed" — all live in
+    `useMovimientoForm.ts` alone and are each one focused unit test
+    against the hook, with no component rendering involved. Collapsing
+    the split into one `'create' | 'view' | 'edit'` component would have
+    meant asserting the same three facts through DOM queries, which is
+    exactly the deep-conditional-branching cost `AGENTS.md` flags. The
+    one place the split adds a real seam to keep straight:
+    `MovimientoSheet`'s edit sub-view is its own small component
+    (`MovimientoEditForm`) mounted only when `movimiento` is defined and
+    `mode === 'edit'`, specifically so `useMovimientoForm`'s hook call
+    stays unconditional within its own component instance rather than
+    needing an `initial: Movimiento | undefined` escape hatch. 3. **The blast radius list was complete for consumer sites.** `rg
 '<MovimientoRow' src` (excluding tests) found exactly four
-       production render sites — `RecentMovimientos.tsx`,
-       `HistoryScreen.tsx`, `SearchScreen.tsx`, and the dev-only `/kit`
-       gallery — matching the FAB plus three list screens §10.23 already
-       named. Nothing was missed this time; Wave 4 stage 1's gap (the Home
-       dashboard) was a different shape of miss (a screen not yet reading
-       the categoria-as-id convention at all) that doesn't recur here.
-    4. **Enabling the FAB needed the same `aria-haspopup="dialog"`/
-       `aria-expanded` pattern `ProfileSheet`'s trigger already used**, plus
-       widening `BottomNav`'s props from `onOpenProfile` alone to also carry
-       `addOpen`/`onOpenAdd` — mirrored exactly rather than invented fresh,
-       since `BottomNav` stays feature-agnostic (it takes callbacks, never
-       imports `@/features/movimientos` directly, the same reasoning
-       already recorded for why it doesn't import `@/features/profile`).
-       Nothing else was missing: the 44px target, the `disabled`→enabled
-       transition, and the icon/label pair were already correct on the stub.
+    production render sites — `RecentMovimientos.tsx`,
+    `HistoryScreen.tsx`, `SearchScreen.tsx`, and the dev-only `/kit`
+    gallery — matching the FAB plus three list screens §10.23 already
+    named. Nothing was missed this time; Wave 4 stage 1's gap (the Home
+    dashboard) was a different shape of miss (a screen not yet reading
+    the categoria-as-id convention at all) that doesn't recur here. 4. **Enabling the FAB needed the same `aria-haspopup="dialog"`/
+    `aria-expanded` pattern `ProfileSheet`'s trigger already used**, plus
+    widening `BottomNav`'s props from `onOpenProfile` alone to also carry
+    `addOpen`/`onOpenAdd` — mirrored exactly rather than invented fresh,
+    since `BottomNav` stays feature-agnostic (it takes callbacks, never
+    imports `@/features/movimientos` directly, the same reasoning
+    already recorded for why it doesn't import `@/features/profile`).
+    Nothing else was missing: the 44px target, the `disabled`→enabled
+    transition, and the icon/label pair were already correct on the stub.
   - **`I18N_NAMESPACES` in `src/lib/i18n/index.ts` was not updated to add
     `'movimientos'`, and that file was correctly off-limits to this track**
     (`docs/wave-4-plan.md` §5 walls it off from both Track F and Track G2 —
@@ -5401,7 +5397,129 @@ CategoryIconKey` (new `src/features/tags/categoryIcons.ts`, a curated
       the "README reads as trustworthy and is quietly wrong" failure
       `AGENTS.md`'s review protocol warns about.
 
+- 2026-08-20 — **Track G2 review: the `idioma` round-trip claim holds, two
+  real gaps found and one applied, one filed.** `bun run check` green
+  throughout (120 files / 1262 tests).
+  - **The `idioma`-through-`undefined` round-trip is genuinely sound** —
+    verified end to end, not just at the `dataStore` mock the track's own
+    test covers. Empirically reproduced against the real local repo
+    (`createLocalRepo` → `updateConfig({ idioma: 'en' })` →
+    `updateConfig({ idioma: undefined })` → a fresh `ready()`/`getConfig()`
+    read): the key survives with value `undefined`, `hasOwnProperty` still
+    `true`. Traced (not reproduced — no live Drive account) that the JSON
+    round-trip drops the key entirely, which the track didn't check, but
+    this does **not** produce a defect: `sync/engine.ts`'s `materializeConfig`
+    is a whole-object `put`, never a per-field merge, and every reader of
+    `idioma` treats absent and explicit-`undefined` identically. See §12 for
+    the one real gap this pressure test did surface —
+    `sync/validate.ts`'s `isPreferencias` never validates `idioma` at all.
+  - **`syncStoredLocale`'s design is sound**: called once from `main.tsx`
+    (a top-level script statement, not a hook, so React's StrictMode
+    double-invocation doesn't double-subscribe it), `i18next.changeLanguage`
+    changes language in place with no remount, and the module-level
+    subscription living for the app's lifetime is correct for a singleton
+    called once — not a leak in production. (Its own test file calls
+    `syncStoredLocale()` fresh in three `it` blocks without ever
+    unsubscribing, so subscriptions accumulate across those three tests;
+    harmless today because every assertion converges to the same value
+    regardless of how many stacked subscribers fire, but worth an
+    `afterEach` unsubscribe if this pattern gets a fourth test.)
+  - **The lock retrofit changed no behaviour** — confirmed by diff, not by
+    re-running the suite and trusting green: every rewritten assertion in
+    `LockScreen.test.tsx`/`LockSettings.test.tsx`/`AppLock.test.tsx`/
+    `errorCopy.test.ts` resolves the _same_ expected string through
+    `i18next.t()`/the real error classes, never loosened to a regex or a
+    new literal. `rg` for a hardcoded Spanish string under
+    `src/features/lock` (excluding tests) returns nothing. All four locale
+    files carry identical `lock`/`settings` key sets (`en`/`es`/`es-AR`/
+    `pt-BR`), and `resources.test.ts`'s pre-existing key-parity check
+    enforces it stays that way.
+  - **Applied**: `PreferencesSection.tsx`'s language row was hand-rolling a
+    second locale resolution (`preferencias?.idioma ?? asSupportedLocale(
+i18n.resolvedLanguage ?? i18n.language)`) beside the canonical, tested
+    `resolveActiveLocale` in `localeResolution.ts` — same answer today only
+    because `syncStoredLocale` keeps them in sync, but two sources of truth
+    for the same fact is exactly what `AGENTS.md` asks reviewers to remove.
+    Replaced with `resolveActiveLocale(preferencias?.idioma)`, dropping the
+    now-unused `asSupportedLocale` helper and the `i18n` destructure
+    entirely. Also corrected `OptionList.tsx`'s docblock, which claimed to
+    reuse `YearMenu.tsx`'s `listbox`/`option` ARIA pattern but actually
+    implements `SegmentedControl`'s `radiogroup`/`radio` pattern (the
+    correct choice for a persistent control, not a popup menu) — the
+    layout borrows from `YearMenu`, the semantics from `SegmentedControl`;
+    the comment now says so.
+  - **Verified, not just trusted**: the archive/delete UX deviation from
+    §10.24's literal "offer the archive path instead of a bare no" wording
+    is the right call — an active row's Archive button is unconditionally
+    offered (never gated behind a refused delete), an archived row's Delete
+    only renders when the screen's own `movimientos` slice already shows no
+    reference (a UI pre-check backed by `dataStore.deleteCategoria`'s own
+    server-side check, not a second source of truth), and a still-referenced
+    archived row shows `tags:errors.categoryInUse` instead of a dead button.
+    `CategoryFormModal` is confirmed the only category editor in the tree
+    (`rg` for a second one turns up nothing); the `profile` namespace in all
+    four locale files is confirmed byte-identical to the pre-track baseline
+    after the contended-file self-correction (diffed, not eyeballed).
+  - **Filed to §12, not fixed here** (cross-track/out of scope for this
+    review): `sync/validate.ts`'s missing `idioma` validation (Track Z's
+    file) and the Add-sheet gear entry point into `/settings`, which
+    §10.24's own text claimed was "filed rather than forgotten" but,
+    checked against `specs.md` §12/`docs/waves.md`/
+    `docs/pendientes-usuario.md`, never actually was.
+
 ## 12. Backlog (pending verification / deferred work)
+
+- **The Add sheet's "gear into `/settings`" entry point was never actually
+  filed** (found by the Track G2 review, 2026-08-20). §10.24's own UI
+  section says that follow-up "is not built here... it is a one-line
+  follow-up once both have merged, filed rather than forgotten," but `rg`
+  across `specs.md` §12, `docs/waves.md` and `docs/pendientes-usuario.md`
+  turns up nothing — the claim itself was the only record. Today
+  `PreferencesSection`'s three rows are the sole way into `/settings`; the
+  Add sheet (Track F, now merged and reviewed) has no gear. Filed now: add
+  a gear/settings affordance to the Add sheet (`src/features/movimientos/`)
+  that navigates to `/settings`, matching the design.
+
+- **`sync/validate.ts`'s `isPreferencias` never validates `idioma`**
+  (found by the Track G2 review, 2026-08-20, while pressure-testing the
+  `idioma` round-trip through Drive). `TEMAS.has(value.tema...)`,
+  `isMoneda(value.monedaPrincipal)` and the `primerDiaSemana` check all
+  validate their field; `idioma` is added to `Preferencias` by §10.24 but
+  `isPreferencias` returns `value.preferencias` unchanged, so a malformed or
+  unrecognized `idioma` in a downloaded `config-<device>.json` (a hand-edited
+  file, or a locale a newer build added and this build doesn't know) passes
+  straight through — unlike `Categoria.icono`/`.color`, which are sanitized
+  and stripped when invalid rather than trusted. Traced, not reproduced at
+  runtime: `resolveActiveLocale`/`syncStoredLocale` do not validate their
+  input either, so the value would reach `i18next.changeLanguage(garbage)`
+  — `fallbackLng: 'es'` keeps the _copy_ correct, but
+  `document.documentElement.lang` would be set to the garbage value
+  (`src/lib/i18n/index.ts`'s `applyDocumentLang`). Low severity (no crash,
+  no data loss, no wrong-language copy shown) but the same validation gap
+  shape `sanitizeConfig`'s own comment says it closes for categories.
+  `sync/validate.ts` belongs to Track Z (merged and reviewed before G2), so
+  this is cross-track and left for whoever owns that file next — add an
+  `idioma` check to `isPreferencias` the same way `TEMAS` does, defaulting
+  to stripping rather than rejecting the whole config (matching the
+  `icono`/`color` precedent, not the whole-file-reject precedent `tema`
+  uses, since an unrecognized `idioma` is far less consequential than an
+  unrecognized `tema`/`monedaPrincipal`).
+
+  **The `undefined`-vs-JSON concern this same pressure test set out to
+  check did not pan out as a defect.** `JSON.stringify` does drop an
+  explicit `idioma: undefined` key from `config-<device>.json` (confirmed:
+  `structuredClone`/Dexie preserve the key, `JSON.stringify` does not) —
+  but every consumer of `idioma` reads it through optional chaining or
+  `??` (`resolveActiveLocale`, `syncStoredLocale`, `PreferencesSection`),
+  and `sync/engine.ts`'s `materializeConfig` does a whole-object `put`, not
+  a per-field merge — so "key absent" and "key present with value
+  `undefined`" are indistinguishable to every reader that exists today.
+  Reproduced empirically for the Dexie/local-repo half (a scratch test
+  round-tripped `updateConfig({ idioma: 'en' })` → `updateConfig({ idioma:
+undefined })` → a fresh `repo.ready()` read, and `idioma` came back
+  `undefined` with the key still present via `hasOwnProperty`); reasoned,
+  not reproduced, for the Drive/JSON half, from reading `pushConfig`/
+  `materializeConfig`/`sanitizeConfig` directly.
 
 - **`Movimiento.metodo` has no writer anywhere** (specs.md §10.23 Decision
   6, confirmed on landing the sheet, 2026-08-20). The field is optional in
