@@ -5251,7 +5251,96 @@ CategoryIconKey` (new `src/features/tags/categoryIcons.ts`, a curated
     state, the same rule the three category actions already followed.
   - **The `semana` week-boundary gate** above.
 
+- 2026-08-20 — **Track F (§10.23, the movement sheet) landed.**
+  `parseAmountForInput`/`parseAmount`, `useMovimientoForm`,
+  `MovimientoFormFields`, `AddMovimientoSheet`, `MovimientoSheet` (view ⇄
+  edit), `movimientoSheetStore`, mounted once in `AppShell`. All four entry
+  points wired: the FAB, Home's recent list, History's list, Search's
+  results. `rg 'STUB\(trackF\)' src` returns nothing outside README prose.
+  `bun run check`: 114 test files, 1226 tests, all passing; `tsc -b --noEmit`
+  clean; `oxlint` clean (the one pre-existing, unrelated warning in
+  `src/components/ui/button.tsx`); `lint:units` clean; `bun run build`
+  succeeds.
+  - **`parseAmountForInput`'s regex accepts an optional leading `-`**
+    (`/^-?\d+(\.\d+)?$/`), which §10.23 Decision 4 didn't spell out. Without
+    it, `-5` fell through to `malformed` alongside actual garbage like
+    `"abc"` — technically still rejected, but for the wrong reason: a
+    negative number is well-formed, just not positive. With the sign
+    accepted, `-5` and `0` both resolve to `not_positive`, matching what the
+    three-reason split is actually for.
+  - **The four call-site pressure tests the brief asked for, answered:**
+    1. **Decision 2's "movement vanishes mid-view" is not reachable today.**
+       `repoProvider.getRepo()` still returns `fakeRepo` (an in-memory,
+       single-tab store with no cross-device or cross-tab write path,
+       §10.25 not yet flipped), and the sheet's focus-trap/backdrop make a
+       same-device concurrent delete unreachable while it has focus. The
+       guard is still built and tested (`MovimientoSheet.test.tsx` mutates
+       the store's `movimientos` directly to simulate it) because it costs
+       nothing and is exactly what deriving from an id rather than a
+       snapshot is for — but it is dormant until §10.25 (the repo flip) or
+       Track Z's sync makes the scenario real, and that should be said
+       plainly rather than left implied.
+    2. **The hook/fields/two-sheets split earned its keep.** The three
+       money-adjacent edge cases that actually bit during TDD — "a category
+       that no longer resolves must keep its raw id, not get silently
+       reassigned," "editing `tipo` must never let `monto` go negative in
+       storage," "a refused write must leave every field, including the
+       category selection, exactly as typed" — all live in
+       `useMovimientoForm.ts` alone and are each one focused unit test
+       against the hook, with no component rendering involved. Collapsing
+       the split into one `'create' | 'view' | 'edit'` component would have
+       meant asserting the same three facts through DOM queries, which is
+       exactly the deep-conditional-branching cost `AGENTS.md` flags. The
+       one place the split adds a real seam to keep straight:
+       `MovimientoSheet`'s edit sub-view is its own small component
+       (`MovimientoEditForm`) mounted only when `movimiento` is defined and
+       `mode === 'edit'`, specifically so `useMovimientoForm`'s hook call
+       stays unconditional within its own component instance rather than
+       needing an `initial: Movimiento | undefined` escape hatch.
+    3. **The blast radius list was complete for consumer sites.** `rg
+'<MovimientoRow' src` (excluding tests) found exactly four
+       production render sites — `RecentMovimientos.tsx`,
+       `HistoryScreen.tsx`, `SearchScreen.tsx`, and the dev-only `/kit`
+       gallery — matching the FAB plus three list screens §10.23 already
+       named. Nothing was missed this time; Wave 4 stage 1's gap (the Home
+       dashboard) was a different shape of miss (a screen not yet reading
+       the categoria-as-id convention at all) that doesn't recur here.
+    4. **Enabling the FAB needed the same `aria-haspopup="dialog"`/
+       `aria-expanded` pattern `ProfileSheet`'s trigger already used**, plus
+       widening `BottomNav`'s props from `onOpenProfile` alone to also carry
+       `addOpen`/`onOpenAdd` — mirrored exactly rather than invented fresh,
+       since `BottomNav` stays feature-agnostic (it takes callbacks, never
+       imports `@/features/movimientos` directly, the same reasoning
+       already recorded for why it doesn't import `@/features/profile`).
+       Nothing else was missing: the 44px target, the `disabled`→enabled
+       transition, and the icon/label pair were already correct on the stub.
+  - **`I18N_NAMESPACES` in `src/lib/i18n/index.ts` was not updated to add
+    `'movimientos'`, and that file was correctly off-limits to this track**
+    (`docs/wave-4-plan.md` §5 walls it off from both Track F and Track G2 —
+    each would otherwise want to append its own namespace to the same
+    array). Verified rather than assumed: i18next is initialized with
+    `resources` passed inline (no backend), so `ResourceStore` is built
+    directly from the full JSON tree regardless of the `ns:` option, and
+    `useTranslation('movimientos')` resolves real keys with the namespace
+    absent from that array (confirmed with a throwaway test, since deleted,
+    asserting `i18next.t('movimientos:form.saveCta')` before writing any
+    production code). The array is now stale for real — it no longer lists
+    every namespace actually in use, and Track G2 likely adds one too — so
+    whoever next opens `index.ts` for an unrelated reason should reconcile
+    it in one pass rather than the array drifting further out of sync with
+    the JSON files it's meant to describe.
+
 ## 12. Backlog (pending verification / deferred work)
+
+- **`Movimiento.metodo` has no writer anywhere** (specs.md §10.23 Decision
+  6, confirmed on landing the sheet, 2026-08-20). The field is optional in
+  `schema.ts`, seeded by `repo.fake.ts`'s demo data, rendered nowhere, and
+  the design's Add sheet has no method control — Track F did not invent one,
+  since drawing a control the design never specified is scope nobody
+  authorized. Either a control gets designed (Personalizar or the movement
+  sheet), or the field is removed at the next structural `schema.ts` change;
+  until one of those happens, this is a schema field with no owner, which is
+  exactly the shape of thing that quietly stays broken.
 
 - **`dataStore.updateConfig`'s `onSuccess` blindly trusts its own write's
   return value (`set({ config: result })`) instead of merging into the

@@ -234,3 +234,14 @@ half-fixed by either side.
 
 The authoritative worktree log stays in `docs/waves.md`; this table is the
 per-track execution view.
+
+### Stage 2 status
+
+| Track | Status                                                                                                                                                                    |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| F     | ✅ implemented on `track-f`, not yet merged/reviewed — `bun run check` green (114 files, 1226 tests); see specs.md §11, 2026-08-20 for the four pressure-test conclusions |
+| G2    | — (running in parallel per §1)                                                                                                                                            |
+
+Track F did not merge to `main` itself, per its brief — the operator merges
+after the per-track review this wave's protocol requires (`AGENTS.md` §
+Review protocol).
