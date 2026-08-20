@@ -9,6 +9,17 @@ export interface ProfileRecord {
   databaseName: string
   createdAt: string
   lastUsedAt: string
+  // Whose the profile is, not only what kind it is (specs.md §10.20):
+  // today two Google accounts on one device are indistinguishable, so
+  // signing back in resolves by recency alone rather than identity.
+  // Additive, optional — `undefined` for a `'local'` profile (there is no
+  // account to key it by) and for every profile that predates this field
+  // (none has ever shipped: `registerProfile` had no production caller
+  // before this, so there is nothing to migrate). Set for a `'google'`
+  // profile via `resolveGoogleProfile` below, keyed on the account's email
+  // (`specs.md` §5: identity = the userinfo `email`, already fetched on
+  // every session, not a second field to request).
+  accountKey?: string
 }
 
 // Lives on src/lib/deviceStore.ts's shared `kurobello-device` connection
@@ -86,6 +97,7 @@ export interface RegisterProfileInput {
   label: string
   kind: ProfileKind
   databaseName: string
+  accountKey?: string
 }
 
 // No caller exists yet (Wave 5+ owns sign-in registering a profile) — this
@@ -121,6 +133,42 @@ export const touchLastUsed = async (id: string): Promise<void> => {
     // slightly stale next read, not that anything already saved is lost.
     console.warn(`profiles: could not update last-used for "${id}"`, e)
   }
+}
+
+export interface ResolveGoogleProfileInput {
+  accountKey: string
+  label: string
+}
+
+// specs.md §10.20: what makes getActiveProfile()'s existing recency
+// resolution identity-aware, without that function's own signature
+// changing at all — whichever account resolves here becomes, by
+// construction, the most-recently-touched profile, so signing back in
+// naturally resolves to the right one. Matched by `accountKey`, never by
+// `label`: a display name can repeat or change, an account's email doesn't.
+// Deliberately not wrapped in a self-catching swallow, same posture as
+// registerProfile above: a caller establishing a Google session needs to
+// know if this didn't happen, not have it silently degrade. The label on
+// an already-registered profile is intentionally left as first-registered
+// — updating it to track a since-renamed Google account is a real feature
+// (Wave 5+'s renaming), not a side effect of this resolution.
+export const resolveGoogleProfile = async (
+  input: ResolveGoogleProfileInput,
+): Promise<ProfileRecord> => {
+  const existing = await listProfiles()
+  const owned = existing.find((p) => p.kind === 'google' && p.accountKey === input.accountKey)
+  if (owned) {
+    await touchLastUsed(owned.id)
+    return owned
+  }
+  const id = crypto.randomUUID()
+  return registerProfile({
+    id,
+    label: input.label,
+    kind: 'google',
+    databaseName: makeProfileDatabaseName(id),
+    accountKey: input.accountKey,
+  })
 }
 
 // No switcher UI exists yet (Wave 5+, specs.md §10.15) — recency is the only

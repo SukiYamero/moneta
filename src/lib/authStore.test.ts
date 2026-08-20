@@ -15,7 +15,8 @@ vi.mock('@/lib/auth', () => {
   }
 })
 vi.mock('@/lib/bootstrap', () => ({ bootstrap: vi.fn() }))
-vi.mock('@/lib/pinLock', () => ({ hasVault: vi.fn(), updateSession: vi.fn() }))
+vi.mock('@/lib/pinLock', () => ({ hasVault: vi.fn(), updateSession: vi.fn(), resetVault: vi.fn() }))
+vi.mock('@/lib/profiles', () => ({ resolveGoogleProfile: vi.fn() }))
 vi.mock('@/lib/deviceStore', () => ({
   hasLoggedInBefore: vi.fn(),
   markLoggedIn: vi.fn(),
@@ -39,7 +40,8 @@ vi.mock('@/lib/networkStore', () => ({
 
 import { AuthError, requestAccessToken, fetchGoogleUser } from '@/lib/auth'
 import { bootstrap } from '@/lib/bootstrap'
-import { hasVault, updateSession } from '@/lib/pinLock'
+import { hasVault, resetVault, updateSession } from '@/lib/pinLock'
+import { resolveGoogleProfile } from '@/lib/profiles'
 import {
   clearDriveDecision,
   getDriveDecision,
@@ -54,6 +56,8 @@ const mUser = vi.mocked(fetchGoogleUser)
 const mBootstrap = vi.mocked(bootstrap)
 const mHasVault = vi.mocked(hasVault)
 const mUpdateSession = vi.mocked(updateSession)
+const mResetVault = vi.mocked(resetVault)
+const mResolveGoogleProfile = vi.mocked(resolveGoogleProfile)
 const mHasLoggedInBefore = vi.mocked(hasLoggedInBefore)
 const mMarkLoggedIn = vi.mocked(markLoggedIn)
 const mGetDriveDecision = vi.mocked(getDriveDecision)
@@ -64,6 +68,16 @@ beforeEach(() => {
   vi.clearAllMocks()
   networkOnline = true
   mHasVault.mockResolvedValue(false)
+  mResetVault.mockResolvedValue(undefined)
+  mResolveGoogleProfile.mockResolvedValue({
+    id: 'p1',
+    label: 'Ana',
+    kind: 'google',
+    databaseName: 'kurobello-p1',
+    accountKey: 'a@b.com',
+    createdAt: '2026-08-19T00:00:00.000Z',
+    lastUsedAt: '2026-08-19T00:00:00.000Z',
+  })
   // Most tests exercise something other than the login-marker gate itself —
   // default it to "already seen a login on this device" so restore()'s
   // other behaviors (silent-auth success/failure) stay reachable; the
@@ -191,6 +205,31 @@ describe('useAuthStore.login', () => {
     await useAuthStore.getState().login()
 
     expect(mMarkLoggedIn).toHaveBeenCalled()
+  })
+
+  // specs.md §10.20: a Google session being established is what resolves
+  // this account's profile in the registry, so getActiveProfile()'s
+  // existing recency resolution returns the right one next time.
+  it('resolves this account in the profile registry, keyed by email', async () => {
+    mToken.mockResolvedValue({ accessToken: 'tok', expiresAt: 1 })
+    mUser.mockResolvedValue({ email: 'a@b.com', name: 'Ana' })
+
+    await useAuthStore.getState().login()
+
+    expect(mResolveGoogleProfile).toHaveBeenCalledWith({ accountKey: 'a@b.com', label: 'Ana' })
+  })
+
+  it('does not fail or block login when resolving the profile itself fails', async () => {
+    mToken.mockResolvedValue({ accessToken: 'tok', expiresAt: 1 })
+    mUser.mockResolvedValue({ email: 'a@b.com', name: 'Ana' })
+    mResolveGoogleProfile.mockRejectedValue(new Error('IDB blocked'))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    await expect(useAuthStore.getState().login()).resolves.toBeUndefined()
+
+    expect(useAuthStore.getState().status).toBe('authenticated')
+    expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
   })
 
   it('does not mark the device when login fails', async () => {
@@ -413,6 +452,19 @@ describe('useAuthStore.restore', () => {
     expect(useAuthStore.getState().status).toBe('authenticated')
   })
 
+  // specs.md §10.20: a silent restore re-establishes a real Google session
+  // too — it must keep the registry's recency pointed at this account the
+  // same way an explicit login() does.
+  it('resolves this account in the profile registry on a successful silent restore', async () => {
+    mHasLoggedInBefore.mockResolvedValue(true)
+    mToken.mockResolvedValue({ accessToken: 'tok', expiresAt: 1 })
+    mUser.mockResolvedValue({ email: 'a@b.com', name: 'Ana' })
+
+    await useAuthStore.getState().restore()
+
+    expect(mResolveGoogleProfile).toHaveBeenCalledWith({ accountKey: 'a@b.com', label: 'Ana' })
+  })
+
   // Same cold-start persistence as login() above, exercised via the silent
   // restore path instead of an explicit sign-in.
   it('resolves a previously persisted Drive decision and silently re-acquires Drive access', async () => {
@@ -531,6 +583,54 @@ describe('useAuthStore.logout', () => {
     useAuthStore.getState().logout()
 
     expect(mClearDriveDecision).toHaveBeenCalledOnce()
+  })
+
+  // specs.md §10.20 (CONFIRMED, traced): logout() cleared only in-memory
+  // state — the encrypted session cached inside the PIN-lock vault was never
+  // invalidated, so a correct PIN after "signing out" ran unlockWithPin() →
+  // resume() → hydrate() with that same cached session and landed the user
+  // right back in the account they just left. The vault exists to cache
+  // *this account's* token (specs.md §10.2's "PIN reset = re-login with
+  // Google" precedent) — with no account left, resetVault() is what removes
+  // it (and, as a consequence, this device's login marker and Drive
+  // decision too, so a returning visit needs a real re-login rather than
+  // restore()'s silent path picking the same account back up).
+  it('invalidates the PIN-lock vault so a correct PIN cannot resurrect this account', () => {
+    useAuthStore.setState({
+      status: 'authenticated',
+      user: { email: 'a@b.com', name: 'Ana' },
+      session: { accessToken: 'tok', expiresAt: 1 },
+    })
+
+    useAuthStore.getState().logout()
+
+    expect(mResetVault).toHaveBeenCalledOnce()
+  })
+
+  // The edge case specs.md §10.20 names explicitly: a vault whose
+  // invalidation fails must never trap the user inside the account they are
+  // trying to leave. logout()'s own state reset is synchronous and does not
+  // wait on resetVault() at all, so this is true by construction — this
+  // test pins it down instead of leaving it an assumption, and checks the
+  // failure is logged rather than silently lost (docs/error-handling.md §2).
+  it('still completes sign-out even when vault invalidation itself fails', async () => {
+    mResetVault.mockRejectedValueOnce(new Error('IDB blocked'))
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    useAuthStore.setState({
+      status: 'authenticated',
+      user: { email: 'a@b.com', name: 'Ana' },
+      session: { accessToken: 'tok', expiresAt: 1 },
+    })
+
+    useAuthStore.getState().logout()
+
+    expect(useAuthStore.getState().status).toBe('idle')
+    expect(useAuthStore.getState().session).toBeNull()
+    // Let the fire-and-forget invalidation settle before asserting it logged.
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(error).toHaveBeenCalled()
+    error.mockRestore()
   })
 })
 
@@ -732,6 +832,29 @@ describe('useAuthStore.hydrate', () => {
     expect(s.user).toEqual(cachedUser)
     expect(s.drive).toBeNull()
     expect(mBootstrap).not.toHaveBeenCalled()
+  })
+
+  // specs.md §10.20: a PIN unlock re-establishes this account's session —
+  // touching its profile here is what keeps getActiveProfile()'s recency
+  // resolution pointed at the right account across a lock/unlock cycle.
+  it('resolves the cached profile in the registry, keyed by email', async () => {
+    const session = { accessToken: 'tok', expiresAt: Date.now() + 3_600_000 }
+    mUser.mockImplementation(() => new Promise(() => {}))
+
+    await useAuthStore.getState().hydrate(session, cachedUser)
+
+    expect(mResolveGoogleProfile).toHaveBeenCalledWith({ accountKey: 'a@b.com', label: 'Ana' })
+  })
+
+  // No cached profile is possible with no vault (specs.md §10.11's
+  // no-lock boot path) — nothing to key a registry lookup on.
+  it('does not resolve a profile when there is no cached user to key it on', async () => {
+    const session = { accessToken: 'tok', expiresAt: Date.now() + 3_600_000 }
+    mUser.mockImplementation(() => new Promise(() => {}))
+
+    await useAuthStore.getState().hydrate(session, null)
+
+    expect(mResolveGoogleProfile).not.toHaveBeenCalled()
   })
 
   // The whole point of the fix (docs/wave-3-audit-runtime.md finding 1):

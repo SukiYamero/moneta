@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Download } from 'lucide-react'
+import { Download, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { exportMovimientosToCsv } from '@/lib/export'
@@ -45,17 +45,41 @@ export const DataSection = () => {
   return (
     <section>
       <ProfileSectionHeading>{t('data.heading')}</ProfileSectionHeading>
-      <Button
-        type="button"
-        variant="outline"
-        size="touch"
-        disabled={exporting}
-        onClick={() => void onExport()}
-        className="w-full justify-center gap-2"
-      >
-        <Download aria-hidden="true" />
-        {exporting ? t('data.exporting') : t('data.exportCta')}
-      </Button>
+      <div className="flex flex-col gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="touch"
+          disabled={exporting}
+          onClick={() => void onExport()}
+          className="w-full justify-center gap-2"
+        >
+          <Download aria-hidden="true" />
+          {exporting ? t('data.exporting') : t('data.exportCta')}
+        </Button>
+        {/* STUB(wave5): the answer to the borrowed-device case (specs.md
+            §10.20) — shipped visibly inert on purpose, never wired to an
+            onClick, so it cannot be mistaken for armed. The real control
+            needs: a second confirm step naming the exact profile being
+            wiped (this is destructive and irreversible, unlike sign-out);
+            actually deleting that profile's IndexedDB database
+            (`profileDb.ts`'s `getProfileDatabase` + a delete call) and its
+            `profileRegistry.ts` row; and it must stay reachable only as an
+            explicit, secondary action here — never a side effect of
+            signing out (§10.15's "nothing is ever replaced"). */}
+        <Button
+          type="button"
+          variant="destructive"
+          size="touch"
+          disabled
+          aria-disabled="true"
+          className="w-full justify-center gap-2"
+        >
+          <Trash2 aria-hidden="true" />
+          {t('data.deleteStored.cta')}
+        </Button>
+        <p className="text-xs font-medium text-fg-tertiary">{t('data.deleteStored.note')}</p>
+      </div>
     </section>
   )
 }
