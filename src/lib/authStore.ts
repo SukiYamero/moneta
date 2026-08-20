@@ -8,6 +8,7 @@ import {
   type GoogleUser,
 } from '@/lib/auth'
 import { bootstrap, type DriveLayout } from '@/lib/bootstrap'
+import { invalidateBootForSignOut } from '@/lib/boot'
 import { hasVault, resetVault, updateSession } from '@/lib/pinLock'
 import { resolveGoogleProfile, touchLastUsed, DEFAULT_PROFILE_ID } from '@/lib/profiles'
 import {
@@ -412,6 +413,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     // invalidateVaultOnLogout's own comment for why). Fire-and-forget for
     // the same reason as clearDriveDecision above.
     void invalidateVaultOnLogout()
+    // specs.md §10.28: the next boot may resolve a different profile than
+    // this session's — a stale 'ready' left in useBootStore would let the
+    // next BootGate mount render its children before that boot has
+    // actually verified anything (invalidateBootForSignOut's own comment
+    // has the full case). Synchronous, unlike the two calls above: nothing
+    // async to wait on.
+    invalidateBootForSignOut()
   },
   // No Google session exists to acquire Drive scopes for (specs.md §10.10),
   // so unlike login()/restore()/hydrate() this never touches driveOptIn's
@@ -424,8 +432,35 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   // bumps for the same reason logout() bumps it: an in-flight
   // connectDrive()/reacquireDriveIfNeeded() from whatever session preceded
   // this guest entry must not resurrect session/drive once resolved.
-  continueAsGuest: () => {
+  // Typed `() => void` on AuthState (WelcomeScreen calls it fire-and-forget
+  // from an onClick), but the body below is async and awaits before its own
+  // `set()` — TS's void-returning-function compatibility allows a caller to
+  // ignore the returned Promise. This is not cosmetic: `status` flipping to
+  // 'guest' is what makes RequireAuth render BootGate, whose effect reads
+  // the profile registry (specs.md §10.28) practically immediately. A build
+  // that fired `touchLastUsed()` after `set()` (proven by
+  // src/features/boot/guestBootRace.test.tsx, which reproduced the loss on
+  // every run, not intermittently) let that read win the race against the
+  // write nearly every time, resolving the registry's stale most-recent
+  // profile — exactly the signed-out-Google-account scenario this touch
+  // exists to prevent — instead of the guest profile this call just chose.
+  continueAsGuest: async () => {
     authGeneration += 1
+    const generation = authGeneration
+    // specs.md §10.28: the profile registry resolves the active profile by
+    // recency alone (profiles/profileRegistry.ts's getActiveProfile()), with
+    // no notion of "guest" of its own. Without this touch, a device that
+    // signed out of a Google account and then chose to continue as guest
+    // would still resolve to that account's profile — it was touched more
+    // recently than the untouched default local one — and the boot sequence
+    // would read/write a guest's data into the signed-out account's local
+    // database. touchLastUsed() self-catches (profiles/profileRegistry.ts),
+    // so a storage failure here degrades to stale recency, never blocks
+    // entering guest mode. Awaited *before* the status flip below for the
+    // identical reason login()/restore() await syncProfileForAccount()
+    // first — see this function's own doc comment above.
+    await touchLastUsed(DEFAULT_PROFILE_ID)
+    if (generation !== authGeneration) return
     set({
       status: 'guest',
       user: null,
@@ -436,17 +471,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       driveConnecting: false,
       driveError: null,
     })
-    // specs.md §10.28: the profile registry resolves the active profile by
-    // recency alone (profiles/profileRegistry.ts's getActiveProfile()), with
-    // no notion of "guest" of its own. Without this touch, a device that
-    // signed out of a Google account and then chose to continue as guest
-    // would still resolve to that account's profile — it was touched more
-    // recently than the untouched default local one — and the boot sequence
-    // would read/write a guest's data into the signed-out account's local
-    // database. touchLastUsed() self-catches (profiles/profileRegistry.ts),
-    // so a storage failure here degrades to stale recency, never blocks
-    // entering guest mode.
-    void touchLastUsed(DEFAULT_PROFILE_ID)
   },
   // Fires on a mid-session re-lock/unlock too (Page Visibility timeout,
   // §10.2), not only on cold start — resolveDriveOptIn() only consults

@@ -510,7 +510,16 @@ Check this table against `git worktree list` at the start of any parallel
 session; prune anything stale (merged-but-not-removed, or on disk but
 missing/finished here).
 
-_Empty — every Wave 4 stage-2 worktree was removed when its branch merged._
+| Path                             | Branch       | Status   |
+| -------------------------------- | ------------ | -------- |
+| `../moneta-worktrees/track-boot` | `track-boot` | `active` |
+
+Track boot = Wave 4 stage 3, step 1: §10.28 boot sequence + §10.25 flip,
+plus its own review pass. Restored during that review (2026-08-20): the
+track's own commit had already blanked this row and marked the worktree
+removed, but `track-boot` is not merged yet (`git worktree list` still
+shows it on disk) — the row is the operator's to clear, at actual merge
+time, not before.
 
 Paths are relative to the repo root (`web/moneta`), i.e. a sibling
 `web/moneta-worktrees/` directory outside the repo — deliberately not nested

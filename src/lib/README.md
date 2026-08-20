@@ -30,7 +30,13 @@ Shared stores, helpers, and the Drive/auth/lock logic layer. No UI here.
   it also touches the default local profile's recency
   (`profiles.touchLastUsed(DEFAULT_PROFILE_ID)`), so `getActiveProfile()`'s
   purely-recency resolution can't land a guest in whatever Google account
-  was last signed out of (`specs.md` §10.28).
+  was last signed out of (`specs.md` §10.28). `continueAsGuest()` is `async`
+  internally (typed `() => void` on `AuthState` — callers stay
+  fire-and-forget) specifically to `await` that touch _before_ the `status`
+  flip, not after: `status: 'guest'` is what `RequireAuth` renders
+  `BootGate` on, and `BootGate`'s effect reads the registry close enough
+  behind it that the unawaited shape lost that race on every run (found and
+  fixed during this track's own review — see `specs.md` §11, 2026-08-20).
   `restore()`/`hydrate()` no longer gate entry on a network call
   (`specs.md` §10.11): a returning user reaches `authenticated` from local
   evidence alone (the device's login marker, or the PIN-vault's cached
@@ -43,7 +49,10 @@ Shared stores, helpers, and the Drive/auth/lock logic layer. No UI here.
   profile recency last pointed at, not the one that just signed in.
   `hydrate()` needs no equivalent reordering: `lockStore.resume()` already
   awaits its whole promise before leaving `phase: 'locked'`, so the profile
-  sync is done before anything below the lock screen can render.
+  sync is done before anything below the lock screen can render. `logout()`
+  also calls `boot.ts`'s `invalidateBootForSignOut()` — see that function's
+  own comment for why a stale `useBootStore` status is otherwise a second,
+  independent way the same class of bug resurfaces.
 - `drive.ts` — thin Drive REST client: find/create/read/write/delete a
   file or folder, `listFiles()` (paginated `files.list`, the sync engine's
   revision check), `upsertJsonFile`/`upsertTextFile` (find-or-create-then-
@@ -281,7 +290,13 @@ name>>` table (`specs.md` §10.22 Decision 6/§10.25 addendum) — ids never
   not the public `status` field — `status` only flips to `'running'` when a
   reload is actually about to happen, which is what lets
   `src/features/boot/BootGate.tsx` skip the brand screen entirely on a
-  same-profile remount. Consumed by `BootGate`, own `README.md` there.
+  same-profile remount. That same `status` is a module-global singleton,
+  though, so a stale `'ready'` left over from a _previous_ session is
+  otherwise indistinguishable from "already ready for the profile this
+  mount is about to resolve" — `invalidateBootForSignOut()` resets it back
+  to `'idle'`, and `authStore.ts`'s `logout()` is its one caller (found and
+  fixed during this track's own review, `specs.md` §11, 2026-08-20).
+  Consumed by `BootGate`, own `README.md` there.
 - `profiles/` — the device-scoped profile registry (`specs.md` §10.15). One
   dexie database per profile (via `db.ts`'s `createProfileDb()`); the
   registry itself lives in `deviceStore.ts`'s shared `kurobello-device`

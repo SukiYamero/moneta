@@ -5950,6 +5950,57 @@ i18n.resolvedLanguage ?? i18n.language)`) beside the canonical, tested
   implementing the same edge case above, not requested in the brief; same
   disclosure as above.
 
+- 2026-08-20 — **Track boot review: `continueAsGuest()`'s unawaited
+  `touchLastUsed()` did lose the race against `boot.ts`'s registry read —
+  CONFIRMED, reproduced on every run, not intermittently.** The operator's
+  suspicion going into the review. `src/features/boot/guestBootRace.test.tsx`
+  renders the real `RequireAuth`/`BootGate` tree against the real profile
+  registry (fake-indexeddb, no mocks): seed the registry so a `'google'`
+  profile is more recently touched than the default local one (simulating
+  "signed out of Google, then chose guest"), click the guest CTA, and the
+  boot sequence bound the stale Google profile every time — `set({status:
+'guest', ...})` triggers `RequireAuth` to render `BootGate` (a
+  `useSyncExternalStore` subscriber, notified synchronously) well before the
+  unawaited `touchLastUsed()`'s own Dexie transaction had actually landed
+  its write. Fixed the same shape as `login()`/`restore()`:
+  `continueAsGuest()` is now `async` internally (still typed `() => void` on
+  `AuthState` — TS's void-returning-function compatibility allows the
+  fire-and-forget `onClick={() => continueAsGuest()}` call site to stay
+  unchanged) and `await`s `touchLastUsed()` _before_ the `status` flip, with
+  the same `authGeneration` re-check every other await-then-commit point in
+  this file uses. The asymmetry the operator asked for a verdict on: it was
+  a real oversight, not a considered difference — `continueAsGuest()`'s
+  `() => void` signature is presumably why the fire-and-forget shape was
+  chosen, but nothing about that signature required flipping `status`
+  first.
+
+- 2026-08-20 — **Track boot review: a second, related bug in the same
+  boot-vs-remount seam — `BootGate`'s "already ready" fast path trusts a
+  _global_ `status`, not "ready for the profile this mount is about to
+  resolve".** CONFIRMED, reproduced directly (`BootGate.test.tsx`): mount
+  `BootGate` with `useBootStore`'s `status` left at `'ready'` from a prior
+  boot session, and it renders `children` instantly, then never re-covers
+  the screen even once `run()` detects a rebind and starts
+  `useDataStore.reset()`/`load()` underneath it — exactly the "even
+  transiently" case §10.28's rebind path exists to prevent, just moved from
+  the data layer (already correctly ordered, reset-before-load) to the
+  screen layer. Reachable in practice on `logout()` → sign in as a
+  different account (or guest): `useBootStore.status` is a module-global
+  singleton that `logout()` never touched, so the _next_ `BootGate` mount
+  inherited the _previous_ account's `'ready'`. Fixed by invalidating it at
+  the one point a stale `'ready'` can become wrong — `boot.ts` now exports
+  `invalidateBootForSignOut()` (resets `status` back to `'idle'`;
+  deliberately doesn't touch the `inFlight` module guard, since `logout()`
+  only ever fires from a screen `BootGate` itself rendered, so nothing is
+  ever in flight when it runs), and `authStore.ts`'s `logout()` calls it
+  alongside its existing `clearDriveDecision()`/`invalidateVaultOnLogout()`
+  session-teardown calls. `repoProvider.ts`'s `binding` singleton and
+  `outbox.ts`'s `entries` redirect need no equivalent reset: both are
+  unconditionally overwritten by the next successful `run()`, and nothing
+  can call `getRepo()`/enqueue an outbox operation in the gap between
+  `logout()` and the next boot (`RequireAuth` renders only `WelcomeScreen`
+  there, which touches neither).
+
 ## 12. Backlog (pending verification / deferred work)
 
 - **The Add sheet's "gear into `/settings`" entry point was never actually
@@ -6034,13 +6085,27 @@ undefined })` → a fresh `repo.ready()` read, and `idioma` came back
   string literal under `src/features/lock` (excluding tests) returns
   nothing.
 
-- **`authGeneration` is checked in only one of five state-setting async auth
-  paths.** `connectDrive` and the silent Drive re-acquire check it; `login`,
-  `restore`, `hydrate` and `syncLockedSession` do not. Pre-existing and not
-  currently reachable in a harmful way, but a generation guard that one path
-  honours and four ignore is a latent inconsistency worth closing
-  deliberately rather than incidentally. Found during the Wave 2 review of
-  Track J.
+- ✅ **`authGeneration` is checked in only one of five state-setting async
+  auth paths.** — closed 2026-08-20 (Track boot, verified during its
+  review). `connectDrive` and the silent Drive re-acquire already checked
+  it when this was filed (Wave 2 review of Track J); by the time of this
+  review, `login`, `restore`, and `hydrate` all check it too (`login`
+  and `restore` gained a second check when Track boot reordered
+  `syncProfileForAccount` before the `status` flip — see the 2026-08-20
+  entry above; `hydrate` already checked it and needed no reordering,
+  traced below). Only `syncLockedSession` still doesn't — already recorded
+  as deliberate elsewhere in this section ("`syncLockedSession` is the one
+  async auth path not gated on `authGeneration`"), not an oversight. The
+  asymmetry this entry warned about no longer exists.
+  `hydrate()`'s own race was checked, not assumed: it is called only from
+  `lockStore.resume()` (`src/lib/lockStore.ts`), which `await`s `hydrate()`'s
+  _entire_ promise — including its internal `syncProfileForAccount` call —
+  before flipping `phase` to `'unlocked'`; `AppLock.tsx` renders
+  `RequireAuth`/`BootGate` only once `phase !== 'locked'`. So `BootGate`
+  cannot mount before `syncProfileForAccount` has already resolved,
+  regardless of `authStore.status` flipping first inside `hydrate()` —
+  the outer lock-phase gate, not `authGeneration`, is what makes this path
+  safe without reordering.
 
 - **`MovimientoRow` has no amount-masking prop**, so History could not
   implement the design's hide/show-amounts toggle (Track E4, deferred — it is

@@ -15,6 +15,7 @@ vi.mock('@/lib/auth', () => {
   }
 })
 vi.mock('@/lib/bootstrap', () => ({ bootstrap: vi.fn() }))
+vi.mock('@/lib/boot', () => ({ invalidateBootForSignOut: vi.fn() }))
 vi.mock('@/lib/pinLock', () => ({ hasVault: vi.fn(), updateSession: vi.fn(), resetVault: vi.fn() }))
 vi.mock('@/lib/profiles', () => ({
   resolveGoogleProfile: vi.fn(),
@@ -44,6 +45,7 @@ vi.mock('@/lib/networkStore', () => ({
 
 import { AuthError, requestAccessToken, fetchGoogleUser } from '@/lib/auth'
 import { bootstrap } from '@/lib/bootstrap'
+import { invalidateBootForSignOut } from '@/lib/boot'
 import { hasVault, resetVault, updateSession } from '@/lib/pinLock'
 import { resolveGoogleProfile, touchLastUsed } from '@/lib/profiles'
 import {
@@ -61,6 +63,7 @@ const mBootstrap = vi.mocked(bootstrap)
 const mHasVault = vi.mocked(hasVault)
 const mUpdateSession = vi.mocked(updateSession)
 const mResetVault = vi.mocked(resetVault)
+const mInvalidateBootForSignOut = vi.mocked(invalidateBootForSignOut)
 const mResolveGoogleProfile = vi.mocked(resolveGoogleProfile)
 const mTouchLastUsed = vi.mocked(touchLastUsed)
 const mHasLoggedInBefore = vi.mocked(hasLoggedInBefore)
@@ -651,6 +654,18 @@ describe('useAuthStore.logout', () => {
     expect(mClearDriveDecision).toHaveBeenCalledOnce()
   })
 
+  // CONFIRMED (traced + reproduced in BootGate.test.tsx): without this, a
+  // stale 'ready' left in useBootStore from this session survives into the
+  // next BootGate mount (a different account, or guest, logging in next),
+  // which renders children instantly off that stale status instead of
+  // waiting for the new boot to actually verify the resolved profile —
+  // exactly the "even transiently" case the rebind path exists to prevent.
+  it('invalidates the boot store so the next sign-in cannot reuse a stale "ready" from this session', () => {
+    useAuthStore.getState().logout()
+
+    expect(mInvalidateBootForSignOut).toHaveBeenCalledOnce()
+  })
+
   // specs.md §10.20 (CONFIRMED, traced): logout() cleared only in-memory
   // state — the encrypted session cached inside the PIN-lock vault was never
   // invalidated, so a correct PIN after "signing out" ran unlockWithPin() →
@@ -1147,10 +1162,10 @@ describe('useAuthStore.hydrate', () => {
 })
 
 describe('useAuthStore.continueAsGuest', () => {
-  it('enters a distinct guest status with no user, session, or drive', () => {
+  it('enters a distinct guest status with no user, session, or drive', async () => {
     useAuthStore.setState({ status: 'error', error: 'auth: access_denied' })
 
-    useAuthStore.getState().continueAsGuest()
+    await useAuthStore.getState().continueAsGuest()
 
     const s = useAuthStore.getState()
     expect(s.status).toBe('guest')
@@ -1165,10 +1180,10 @@ describe('useAuthStore.continueAsGuest', () => {
   // down here even though RequireAuth's status === 'guest' branch already
   // never reads driveOptIn, since a future caller reading driveOptIn alone
   // (without checking status first) must not be misled into re-prompting.
-  it('resets driveOptIn away from a stale connected/dismissed value from a prior session', () => {
+  it('resets driveOptIn away from a stale connected/dismissed value from a prior session', async () => {
     useAuthStore.setState({ driveOptIn: 'connected' })
 
-    useAuthStore.getState().continueAsGuest()
+    await useAuthStore.getState().continueAsGuest()
 
     expect(useAuthStore.getState().driveOptIn).toBe('pending')
   })
@@ -1182,9 +1197,31 @@ describe('useAuthStore.continueAsGuest', () => {
   // boot sequence would read/write a guest's movements into the signed-out
   // account's local database. Mirrors `syncProfileForAccount`'s own touch
   // for the Google path, applied to the one profile guest ever uses.
-  it('touches the default local profile so recency-based resolution cannot land a guest in a stale Google profile', () => {
-    useAuthStore.getState().continueAsGuest()
+  it('touches the default local profile so recency-based resolution cannot land a guest in a stale Google profile', async () => {
+    await useAuthStore.getState().continueAsGuest()
 
     expect(mTouchLastUsed).toHaveBeenCalledWith('kurobello')
+  })
+
+  // CONFIRMED by src/features/boot/guestBootRace.test.tsx (a real-registry,
+  // real-BootGate integration test): a build that flipped `status` to
+  // 'guest' *before* this touch landed lost the race against BootGate's
+  // effect-driven registry read on every run, not intermittently — status
+  // must not flip until the touch has actually resolved.
+  it('awaits the touch before flipping status, so a reader of status cannot observe "guest" before the registry reflects it', async () => {
+    let resolveTouch: () => void = () => {}
+    mTouchLastUsed.mockReturnValue(
+      new Promise<void>((resolve) => {
+        resolveTouch = resolve
+      }),
+    )
+
+    const pending = useAuthStore.getState().continueAsGuest()
+    expect(useAuthStore.getState().status).not.toBe('guest')
+
+    resolveTouch()
+    await pending
+
+    expect(useAuthStore.getState().status).toBe('guest')
   })
 })

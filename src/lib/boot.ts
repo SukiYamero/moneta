@@ -84,6 +84,25 @@ export const useBootStore = create<BootState>((set, get) => ({
   },
 }))
 
+// Called once by authStore.ts's `logout()` (specs.md §10.28, §10.20): a
+// sign-out ends this boot session — the *next* one may resolve an entirely
+// different profile (a different Google account, or guest), so the stale
+// 'ready' this session leaves behind must not survive into the next
+// `BootGate` mount. Without this, a fresh `BootGate` mounted after
+// logout()+login() reads `alreadyReadyAtMount` off a `status` that is still
+// 'ready' from the *previous* account, renders `children` instantly, and
+// only reacts once `run()`'s async resolve finds a rebind — by then the
+// previous profile's rows (or a mid-reset empty state) have already been on
+// screen, exactly the "even transiently" case the rebind path exists to
+// prevent (confirmed via `BootGate.test.tsx`'s rebind-after-stale-ready
+// case). Reachable only *between* boots — `logout()` only ever fires from a
+// screen `BootGate` itself rendered, so no `run()` is ever in flight when
+// this runs, and resetting `status` alone is enough; `inFlight` needs no
+// attention.
+export const invalidateBootForSignOut = (): void => {
+  useBootStore.setState({ status: 'idle', error: null })
+}
+
 export const __resetBootStoreForTests = (): void => {
   inFlight = null
   useBootStore.setState({ status: 'idle', error: null })

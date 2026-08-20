@@ -21,7 +21,7 @@ import {
 import { CONFIG_SEMILLA } from '@/lib/schema'
 import { useDataStore } from '@/lib/dataStore'
 import { setOutboxDatabase } from '@/lib/outbox'
-import { __resetBootStoreForTests, useBootStore } from '@/lib/boot'
+import { __resetBootStoreForTests, invalidateBootForSignOut, useBootStore } from '@/lib/boot'
 
 const mResolveBinding = vi.mocked(resolveActiveProfileBinding)
 const mBindActiveProfile = vi.mocked(bindActiveProfile)
@@ -174,5 +174,20 @@ describe('useBootStore.run()', () => {
     await Promise.all([first, second])
 
     expect(mResolveBinding).toHaveBeenCalledOnce()
+  })
+})
+
+describe('invalidateBootForSignOut', () => {
+  // authStore.ts's logout() calls this so the next BootGate mount can't
+  // inherit this session's 'ready' and skip verifying the profile that
+  // resolves for whoever signs in next (BootGate.test.tsx has the
+  // regression this prevents).
+  it('resets status back to idle, so a later mount does not assume it is already ready', () => {
+    useBootStore.setState({ status: 'ready', error: null })
+
+    invalidateBootForSignOut()
+
+    expect(useBootStore.getState().status).toBe('idle')
+    expect(useBootStore.getState().error).toBeNull()
   })
 })
