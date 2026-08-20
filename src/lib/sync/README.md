@@ -20,7 +20,11 @@ of it.
   rejects them: a malformed _entry_ is dropped without taking the rest of a
   good file down; a malformed _file_ (wrong shape, `ops` not an array, a
   newer `v` than `OP_FORMAT_VERSION`) is skipped whole. Pure and silent by
-  design — the I/O layer that calls it is what logs a skip.
+  design — the I/O layer that calls it is what logs a skip. One exception to
+  "malformed → dropped": `Categoria.icono`/`.color` are sanitized, not
+  rejected — an invalid value there strips just that field and keeps the
+  category (specs.md §10.22's edge case), since they're presentational only
+  and every core field still rejects the whole config as before.
 - `driveFiles.ts` — where `opLog.ts`'s types and `validate.ts`'s checks meet
   `drive.ts`'s REST client: folder resolution (`FOLDER_NAME`, the frozen
   storage id, lives here), listing both spaces, downloads that degrade to

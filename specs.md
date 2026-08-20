@@ -4553,6 +4553,98 @@ CategoryIconKey` (new `src/features/tags/categoryIcons.ts`, a curated
     Escalated to the operator via the §12 entry below rather than
     reversed or left silently standing.
 
+- 2026-08-20 — **Track Z review: three fixes applied, both operator-supplied
+  leads confirmed by tracing and a reproducing test.** Review scope was
+  `git diff 1fdfeb0..498632a` (`docs/wave-4-plan.md` §1).
+  - **`LEEME.txt`/the yearly CSV were always written in English.**
+    CONFIRMED by tracing: `compactYear`'s `locale: SupportedLocale = 'en'`
+    defaulted, and its only caller (`compactClosedYearsIfNeeded`, itself
+    called from `pull()`) never passed one. Fixed by removing the default
+    everywhere in the chain — `pull()`, the new `SyncContext.locale` field,
+    `compactClosedYearsIfNeeded`, `compactYear` — so a caller that forgets
+    to supply the active locale is a compile error, the same "required, not
+    defaulted" rule `movimientoView.ts`'s own `locale` parameter already
+    follows (§11, 2026-08-19). `pull()` still has no live caller this wave
+    (`engine.ts`'s own header comment), so nothing wires `SyncContext.locale`
+    up yet — the future track that calls `startSyncTriggers` supplies it
+    (`i18next.resolvedLanguage`, the same value `detectLocale()` currently
+    resolves to, since the app has no language switcher yet — `idiomatic`
+    is a `STUB(wave3)` field on `Preferencias`, not written by any picker).
+  - **An invalid `Categoria.color`/`.icono` from a hand-edited Drive file
+    crashed the render.** CONFIRMED by tracing: `validate.ts`'s `isCategoria`
+    checked `id`/`nombre`/`seccionId`/`tipo`/`presupuesto` but not `icono`/
+    `color`, so an invalid `color` reached `getMovimientoVisual`'s
+    `categoria?.color ?? FALLBACK_TINT[tipo]` unchanged, and then
+    `IconAvatar`/`TagChip`'s `TINT_CLASSES[tint].badge` — `TINT_CLASSES` has
+    no entry for an arbitrary string, so `.badge` threw. (`icono` alone was
+    already safe: `CATEGORY_ICONS[categoria.icono] ?? FALLBACK_ICON[tipo]`
+    degrades via the `??`, since a missing key reads as `undefined` rather
+    than throwing — only `color`/`TINT_CLASSES` lacks that safety net.)
+    Decided **strip-and-keep, not reject-the-whole-categoria**, per §10.22's
+    edge case ("falls back and the record is kept; it is never dropped"):
+    `isCategoria` (a predicate) became `sanitizeCategoria`
+    (`unknown → Categoria | null`), which still rejects the whole categoria
+    on a bad core field (unchanged behavior) but strips just `icono`/`color`
+    when only those are invalid, using the type-based fallback §10.22
+    already specifies. `isValidConfig`/`isValidConfigOpEntry` became
+    `sanitizeConfig`/`sanitizeConfigOpEntry` to carry the corrected value
+    through `parseConfigOpFile`. Validated against `CATEGORY_ICON_KEYS`
+    (`src/lib/categoryIconKeys.ts`) and the `IconAvatarTint` type
+    (`src/lib/iconAvatarTint.ts`) per the Track G1 review's layering fix —
+    **worth flagging: `iconAvatarTint.ts` has no runtime companion array the
+    way `categoryIconKeys.ts` has `CATEGORY_ICON_KEYS`**, only the type, so
+    the actual runtime membership check still reads `ICON_AVATAR_TINTS` from
+    `src/components/shared/tintClasses.ts` (a type-only import chain, no
+    lucide-react/JSX pulled in, but still a `src/lib/` → `src/components/`
+    reach the G1 review's own extraction was trying to close). Not fixed
+    here — `iconAvatarTint.ts` is a Track G1 file this track may import but
+    not modify; flagged for whoever owns it next to add a
+    `ICON_AVATAR_TINTS`-equivalent const array the same way
+    `categoryIconKeys.ts` already has one.
+  - **Also found and fixed, not one of the two supplied leads:** `push()`
+    awaited the movimiento-shard and config pushes with `Promise.all` —
+    if one upload failed after the other had already succeeded, the whole
+    call rejected before `removeOperations` ran for either, so the
+    already-durably-written side stayed marked pending and the next retry
+    re-downloaded its file and appended the same entries onto it a second
+    time (a silent duplicate on Drive, not data loss, but the exact
+    unbounded-growth failure the op-log format exists to avoid). CONFIRMED
+    by a reproducing test (`engine.test.ts`: "a failure pushing one entity
+    type never causes the other, already-uploaded type to be re-pushed") —
+    written first, watched fail against the original `Promise.all`, then
+    fixed with `Promise.allSettled` so each side commits independently.
+  - **Sweep for the cross-track seam shape** (`AGENTS.md`'s "fix the shape,
+    not the instance," after commit `8806321` fixed the yearly CSV calling
+    `buildMovimientoCsvParts` without G1's taxonomy): grepped Track Z's own
+    files for `.categoria`/`.seccion` consumption and for
+    `buildMovimientoCsvParts`/`CsvTaxonomy` callers. Nothing else found —
+    `validate.ts` only ever treats `categoria`/`seccion` as opaque ids
+    (correct, no name resolution belongs there), and `engine.ts`'s
+    `compactYear` is still the only CSV-taxonomy call site in Track Z.
+  - **Pressure-test claims verified, not just trusted:** the pull-then-delete
+    false-revival fix (`sync/tip.ts` + `outbox.ts`'s `lastHlcFor` consulting
+    the greater of outbox history and the pulled tip) is covered end-to-end
+    by two passing tests, one at each layer — `outbox.test.ts` ("chains
+    `basedOn` to a tip learned from a pull") proves the stamp is now
+    correct, `opLog.test.ts` ("a delete that DID see the edit... no false
+    revival") proves the merge rule reads that stamp correctly. Compaction's
+    "upload the replacement, then delete only this device's own months"
+    ordering was confirmed by reading `compactYear`'s code directly (upload
+    awaited before the `deleteFile` calls, `ownMonths` filtered to this
+    device). A malformed entry inside an otherwise-good file (§10.19's edge
+    cases) degrades correctly (kept: rest of the file replays) but is
+    dropped with **zero trace** — no `console.warn`, no count anywhere —
+    unlike a whole-file failure, which does warn; `validate.ts`'s own header
+    comment already anticipated this ("callers are I/O code... positioned to
+    log a useful warning") but no caller was ever wired to do it. Not fixed
+    in this pass (scope discipline — the two supplied leads plus the `push()`
+    finding were already a full session), but named here rather than left
+    for a future review to rediscover: `docs/error-handling.md`'s "never be
+    silent" rule for a swallow is not met at the per-entry level today.
+  - `bun run check` real output: 110 test files, 1176 tests, all passing;
+    `tsc -b --noEmit` clean; `oxlint` clean (one pre-existing, unrelated
+    warning in `src/components/ui/button.tsx`); `lint:units` clean.
+
 ## 12. Backlog (pending verification / deferred work)
 
 - **`dataStore.updateConfig`'s `onSuccess` blindly trusts its own write's
@@ -5009,6 +5101,38 @@ engine.ts`'s pull/replay side fully supports `act-<device>.json` (reads,
   the same care `COLOR_NAME_KEY` (`CategoryFormModal.tsx`) already got for
   colors, following that file's existing `as const satisfies Record<...>`
   pattern.
+
+- **A malformed _entry_ inside an otherwise-good Drive file is dropped with
+  zero trace.** Found by the Track Z review (§11, 2026-08-20). §10.19's edge
+  cases require "skip and keep going" for this case, and `validate.ts`
+  correctly does — the rest of the file still replays — but nothing logs
+  it: `validate.ts`'s `parseMovOpFile`/`parseActOpFile`/`parseConfigOpFile`
+  silently `.filter()` out the bad entry, and the module's own header
+  comment already anticipated a caller would log it ("callers are I/O code
+  that already knows _which_ file/entry it was reading, so they are the
+  ones positioned to log a useful 'skipping X' warning") — but no caller
+  (`driveFiles.ts`'s `downloadMovFile`/`downloadActFile`/`downloadConfigFile`)
+  was ever wired to do that. This is `docs/error-handling.md`'s "never be
+  silent" swallow rule, unmet at the per-entry granularity (the _whole-file_
+  failure path does warn). Whoever picks this up should decide where the
+  count belongs — a `console.warn` alone satisfies "never silent," but a
+  count that survives into `PullSummary` is what would let a future UI
+  (Wave 5, per `docs/wave-4-plan.md`'s scoping) actually tell the user "N
+  entries were skipped," which the honest half of §10.19 also asks for.
+
+- **`iconAvatarTint.ts` has no runtime companion array**, unlike its sibling
+  `categoryIconKeys.ts` (`CATEGORY_ICON_KEYS`). Found by the Track Z review
+  (§11, 2026-08-20) while validating `Categoria.color` against it: only the
+  `IconAvatarTint` _type_ lives there, so the actual runtime membership
+  check (`sync/validate.ts`'s `isIconAvatarTint`) still reads
+  `ICON_AVATAR_TINTS` from `src/components/shared/tintClasses.ts` — a
+  type-only import chain with no `lucide-react`/JSX pulled in, but still a
+  `src/lib/` reaching into `src/components/` for a runtime value, which is
+  exactly the layering the G1 review's extraction of `iconAvatarTint.ts` was
+  meant to close. Whoever owns that file next should add a
+  `ICON_AVATAR_TINTS`-equivalent const array the same way
+  `categoryIconKeys.ts` already has one, so `sync/validate.ts` (and any
+  future `src/lib/` consumer) never has to reach past it again.
 
 ### Development waves (parallel tracks, sequencing, worktree log)
 

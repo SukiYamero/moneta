@@ -10,6 +10,15 @@ import type {
   TipoActivo,
   TipoMovimiento,
 } from '@/lib/schema'
+import { CATEGORY_ICON_KEYS, type CategoryIconKey } from '@/lib/categoryIconKeys'
+import type { IconAvatarTint } from '@/lib/iconAvatarTint'
+// No `src/lib/` runtime list of tint values exists yet (only the type,
+// iconAvatarTint.ts) — ICON_AVATAR_TINTS is `Object.keys(TINT_CLASSES)`,
+// still the single real source of truth for "every valid tint," so this
+// reads it rather than hand-writing a second copy of the nine names.
+// tintClasses.ts's only import of IconAvatar.tsx is itself `import type`
+// (erased), so this pulls in no lucide-react/JSX — just the string table.
+import { ICON_AVATAR_TINTS } from '@/components/shared/tintClasses'
 import {
   OP_FORMAT_VERSION,
   type ActOpEntry,
@@ -126,13 +135,43 @@ const isSeccion = (value: unknown): value is Seccion =>
   isNonEmptyString(value.nombre) &&
   isFiniteNumber(value.orden)
 
-const isCategoria = (value: unknown): value is Categoria =>
-  isPlainObject(value) &&
-  isNonEmptyString(value.id) &&
-  isNonEmptyString(value.nombre) &&
-  isNonEmptyString(value.seccionId) &&
-  isTipoMovimiento(value.tipo) &&
-  (value.presupuesto === undefined || isFiniteNumber(value.presupuesto))
+const CATEGORY_ICON_KEY_SET = new Set<string>(CATEGORY_ICON_KEYS)
+const isCategoryIconKey = (value: unknown): value is CategoryIconKey =>
+  typeof value === 'string' && CATEGORY_ICON_KEY_SET.has(value)
+
+const ICON_AVATAR_TINT_SET = new Set<string>(ICON_AVATAR_TINTS)
+const isIconAvatarTint = (value: unknown): value is IconAvatarTint =>
+  typeof value === 'string' && ICON_AVATAR_TINT_SET.has(value)
+
+/**
+ * A sanitizer, not a predicate, unlike every other check in this file:
+ * `id`/`nombre`/`seccionId`/`tipo`/`presupuesto` are load-bearing (a
+ * categoria failing any of those can't render or total correctly, so it's
+ * dropped like everywhere else here), but `icono`/`color` are
+ * presentational — specs.md §10.22 already defines a type-based fallback
+ * for "no icon/color chosen," and its edge case is explicit that an
+ * invalid one "falls back and the record is kept; it is never dropped."
+ * A hand-edited Drive file with `color: "purple-ish"` must not delete a
+ * category the user created — it degrades to no color chosen instead.
+ */
+const sanitizeCategoria = (value: unknown): Categoria | null => {
+  if (!isPlainObject(value)) return null
+  const { id, nombre, seccionId, tipo, presupuesto, icono, color } = value
+  if (!isNonEmptyString(id)) return null
+  if (!isNonEmptyString(nombre)) return null
+  if (!isNonEmptyString(seccionId)) return null
+  if (!isTipoMovimiento(tipo)) return null
+  if (presupuesto !== undefined && !isFiniteNumber(presupuesto)) return null
+  return {
+    id,
+    nombre,
+    seccionId,
+    tipo,
+    ...(isFiniteNumber(presupuesto) ? { presupuesto } : {}),
+    ...(isCategoryIconKey(icono) ? { icono } : {}),
+    ...(isIconAvatarTint(color) ? { color } : {}),
+  }
+}
 
 const TEMAS = new Set<Preferencias['tema']>(['claro', 'oscuro', 'sistema'])
 const isPreferencias = (value: unknown): value is Preferencias =>
@@ -141,13 +180,29 @@ const isPreferencias = (value: unknown): value is Preferencias =>
   isMoneda(value.monedaPrincipal) &&
   (value.primerDiaSemana === 0 || value.primerDiaSemana === 1)
 
-export const isValidConfig = (value: unknown): value is Config => {
-  if (!isPlainObject(value)) return false
-  if (!isFiniteNumber(value.schemaVersion)) return false
-  if (!Array.isArray(value.secciones) || !value.secciones.every(isSeccion)) return false
-  if (!Array.isArray(value.categorias) || !value.categorias.every(isCategoria)) return false
-  if (!isPreferencias(value.preferencias)) return false
-  return true
+/**
+ * Also a sanitizer rather than a predicate, but only for `icono`/`color`:
+ * a category with an invalid core field (`id`/`nombre`/`seccionId`/`tipo`/
+ * `presupuesto`) still rejects the *whole* config, exactly as before — this
+ * only spares a category whose sole defect is an invalid `icono`/`color`,
+ * which comes back with that one field stripped rather than taking the
+ * whole file down with it.
+ */
+export const sanitizeConfig = (value: unknown): Config | null => {
+  if (!isPlainObject(value)) return null
+  if (!isFiniteNumber(value.schemaVersion)) return null
+  if (!Array.isArray(value.secciones) || !value.secciones.every(isSeccion)) return null
+  if (!Array.isArray(value.categorias)) return null
+  const sanitizedCategorias = value.categorias.map(sanitizeCategoria)
+  if (sanitizedCategorias.some((c) => c === null)) return null
+  const categorias = sanitizedCategorias.filter((c): c is Categoria => c !== null)
+  if (!isPreferencias(value.preferencias)) return null
+  return {
+    schemaVersion: value.schemaVersion,
+    secciones: value.secciones,
+    categorias,
+    preferencias: value.preferencias,
+  }
 }
 
 // --- op entries --------------------------------------------------------
@@ -168,10 +223,14 @@ const isValidActOpEntry = (value: unknown): value is ActOpEntry => {
   return false
 }
 
-const isValidConfigOpEntry = (value: unknown): value is ConfigOpEntry => {
-  if (!isPlainObject(value)) return false
-  if (!isHlc(value.hlc) || !isHlcOrNull(value.basedOn)) return false
-  return value.op === 'put' && isValidConfig(value.config)
+/** Sanitizer, matching `sanitizeConfig` one level up: a `put` whose `config` has one bad category `icono`/`color` yields a corrected entry, not a dropped one. */
+const sanitizeConfigOpEntry = (value: unknown): ConfigOpEntry | null => {
+  if (!isPlainObject(value)) return null
+  if (!isHlc(value.hlc) || !isHlcOrNull(value.basedOn)) return null
+  if (value.op !== 'put') return null
+  const config = sanitizeConfig(value.config)
+  if (!config) return null
+  return { op: 'put', hlc: value.hlc, basedOn: value.basedOn, config }
 }
 
 // --- op files ------------------------------------------------------------
@@ -213,6 +272,6 @@ export const parseConfigOpFile = (value: unknown): ConfigOpFile | null => {
   if (!isFiniteNumber(value.v) || value.v > OP_FORMAT_VERSION) return null
   if (!isNonEmptyString(value.device)) return null
   if (!Array.isArray(value.ops)) return null
-  const ops = value.ops.filter(isValidConfigOpEntry)
+  const ops = value.ops.map(sanitizeConfigOpEntry).filter((op): op is ConfigOpEntry => op !== null)
   return { v: value.v, device: value.device, ops }
 }
