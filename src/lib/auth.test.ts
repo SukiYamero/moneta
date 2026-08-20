@@ -80,16 +80,34 @@ describe('fetchGoogleUser', () => {
   it('reads identity from the userinfo endpoint with a Bearer token', async () => {
     const fetchMock = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>(
       async () =>
-        new Response(JSON.stringify({ email: 'a@b.com', name: 'Ana', picture: 'p' }), {
-          status: 200,
-        }),
+        new Response(
+          JSON.stringify({ sub: 'google-sub-1', email: 'a@b.com', name: 'Ana', picture: 'p' }),
+          { status: 200 },
+        ),
     )
     vi.stubGlobal('fetch', fetchMock)
     const user = await fetchGoogleUser('tok')
-    expect(user).toEqual({ email: 'a@b.com', name: 'Ana', photoLink: 'p' })
+    expect(user).toEqual({ sub: 'google-sub-1', email: 'a@b.com', name: 'Ana', photoLink: 'p' })
     const [url, init] = fetchMock.mock.calls[0]!
     expect(url).toBe('https://www.googleapis.com/oauth2/v3/userinfo')
     expect((init as RequestInit).headers).toMatchObject({ Authorization: 'Bearer tok' })
+  })
+
+  // specs.md §11, 2026-08-19: `sub` — not `email` — is what the profile
+  // registry keys a Google account on, since it never changes.
+  it('carries the OIDC subject id through, distinct from the mutable email', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ sub: 'stable-id', email: 'renamed@b.com', name: 'Ana' }), {
+            status: 200,
+          }),
+      ),
+    )
+    const user = await fetchGoogleUser('tok')
+    expect(user.sub).toBe('stable-id')
+    expect(user.email).toBe('renamed@b.com')
   })
 
   it('throws AuthError on a non-ok response', async () => {

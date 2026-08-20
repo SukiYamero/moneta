@@ -165,6 +165,25 @@ test('signing back into a previously-used account makes it the active profile ag
   expect((await getActiveProfile()).id).toBe(ana.id)
 })
 
+// The registry has had a same-tick race fixed once already (getActiveProfile's
+// monotonic-timestamp fix, specs.md §11 2026-08-19); resolveGoogleProfile's
+// read-then-write (listProfiles(), then either touchLastUsed or
+// registerProfile, each its own separate transaction) has the identical
+// shape: login() and restore()/hydrate() can both resolve the same account
+// in the same tick (a login racing a silent restore, or two tabs restoring
+// the same account concurrently), and two calls that both read "no existing
+// profile" before either writes mint two profiles for one account.
+test('two concurrent resolveGoogleProfile calls for the same account resolve to one profile, not two', async () => {
+  const [a, b] = await Promise.all([
+    resolveGoogleProfile({ accountKey: 'ana@example.com', label: 'Ana' }),
+    resolveGoogleProfile({ accountKey: 'ana@example.com', label: 'Ana' }),
+  ])
+
+  expect(a.id).toBe(b.id)
+  const all = await listProfiles()
+  expect(all.filter((p) => p.accountKey === 'ana@example.com')).toHaveLength(1)
+})
+
 test('getActiveProfile still returns a usable default record when persisting it fails', async () => {
   const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
   const spy = vi.spyOn(deviceDb.profiles, 'put').mockRejectedValue(new Error('IDB blocked'))

@@ -131,10 +131,18 @@ const invalidateVaultOnLogout = async (): Promise<void> => {
 // local/guest profile is untouched). Self-catching and never awaited by the
 // caller as a gate: a registry write failure must never fail the auth flow
 // it rides on, same posture as syncLockedSession.
+//
+// Keyed on `user.sub` — the OIDC subject identifier, stable and never
+// reassigned — not `user.email` (specs.md §11, 2026-08-19). A Workspace
+// admin can rename a primary address; keying on email would resolve a
+// renamed account to a brand-new profile with none of its data, which
+// reads to the user as total loss. `email` is a defensive fallback only,
+// for a cached/legacy `GoogleUser` that predates this field — every live
+// `fetchGoogleUser()` response carries `sub`.
 const syncProfileForAccount = async (user: GoogleUser | null): Promise<void> => {
   if (!user) return
   try {
-    await resolveGoogleProfile({ accountKey: user.email, label: user.name })
+    await resolveGoogleProfile({ accountKey: user.sub ?? user.email, label: user.name })
   } catch (e) {
     console.warn('profiles: failed to resolve the profile for this account', e)
   }
