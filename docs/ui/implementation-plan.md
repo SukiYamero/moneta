@@ -191,9 +191,42 @@ authStore.connectDrive status once the Drive opt-in entry point lands`.
    session.
 2. Implement that screen/unit only.
 3. If implementation surfaces a visual adjustment the design should also
-   have (an empty state that wasn't designed, a responsive edge case), push
-   it back to the Claude Design project the same session via `DesignSync
-write_files` — don't defer it, that's where drift creeps in.
+   have (an empty state that wasn't designed, a responsive edge case),
+   **record it in the track's own report file** and hand it to the operator.
+   `DesignSync` is **not in a subagent's tool set** (found the hard way in
+   Wave 2, `docs/wave-2-plan.md` §1.6), so the agent that discovers a delta
+   is structurally unable to push it — this step read "push it back yourself"
+   for three waves and was silently unexecutable the whole time. The operator
+   batches the deltas and pushes them. Same shape as the `README.md` doc
+   lines: the track drafts, the operator applies.
 4. Never sync data/logic/mock wiring back to the design project — only
    visual/structural markup. The fake repo, stubs, and state wiring are
    code-only.
+
+### When the design and the code disagree, stop — never resolve it silently
+
+**Being handed a Claude Design link is not an instruction to overwrite what
+already exists.** A section of the canvas can be _older_ than the code, and
+the code can have moved on for a good reason. Both silent resolutions are
+defects, and both have the same cost — nobody notices:
+
+- Implementing the canvas faithfully and **reverting deliberate work**.
+- Assuming the code must be right and **dropping a design change the user
+  actually wanted**.
+
+**The rule:** when a design reference disagrees with what is already built,
+**ask which one is authoritative for that specific part, before writing
+code.** Say plainly what already exists and in what form, and ask whether the
+current state is the intended final result or whether it should be rebuilt to
+match the canvas. Ask about the **section**, not the whole screen — "the
+canvas's profile sheet has a Drive row we don't have; should I add it, or is
+our version current?" is answerable. "Does the design match?" is not.
+
+**The carve-out that keeps this from becoming noise** — and it matters,
+because a rule that fires constantly gets ignored: some divergences are
+**already recorded decisions and are not conflicts.** Check
+`docs/ui/design-tokens.md` and `specs.md` §11 **first**. The fluid layout
+instead of the canvas's fixed `430×844` frame, Lucide instead of CDN-loaded
+Phosphor, tokens instead of inline styles, and ≥44px touch targets are all
+deliberate rejections of prototype constraints — proceed on those without
+asking. **Only an _unrecorded_ divergence triggers the question.**

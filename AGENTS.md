@@ -280,6 +280,17 @@ These apply to any agent on this project, whatever it was asked to do.
   running it and reading its real output. A test you did not watch fail
   proves nothing — write it first, see it fail for the right reason, then
   fix.
+- **A design reference disagreeing with existing code is a question, not a
+  licence.** Being handed a Claude Design link does not mean "overwrite what
+  is there": the canvas section may be older than the code, or the code may
+  have moved on deliberately. Implementing the canvas faithfully can silently
+  revert real work; assuming the code wins can silently drop a change the user
+  wanted. **Ask which is authoritative for that specific section**, naming what
+  already exists and in what form. The exception, so this doesn't fire
+  constantly: divergences already recorded in `docs/ui/design-tokens.md` or
+  `specs.md` §11 (fluid layout over the fixed frame, Lucide over CDN Phosphor,
+  tokens over inline styles, ≥44px targets) are settled decisions — proceed.
+  Full rule in `docs/ui/implementation-plan.md`.
 - **Read the project's own rules before applying generic best practice.**
   This file, `specs.md` (the source of truth), `docs/error-handling.md`,
   `docs/waves.md`, `ARCHITECTURE.md`, and the per-directory `README.md`s.
