@@ -38,6 +38,9 @@ export interface BottomNavProps {
   /** Whether the profile sheet the Profile slot opens is currently open — drives its active-tab styling. */
   profileOpen: boolean
   onOpenProfile: () => void
+  /** Whether the Add-movimiento sheet the centre slot opens is currently open — drives its active-tab styling, same as Profile. */
+  addOpen: boolean
+  onOpenAdd: () => void
 }
 
 /**
@@ -45,17 +48,14 @@ export interface BottomNavProps {
  * AppShell, never remounted on tab change — see docs/wave-2/track-l.md for
  * why that persistence matters for the push/fade transitions to read as
  * native). Five design slots: Home/History/Search are real NavLinks
- * (`aria-current="page"` comes from NavLink itself); the Profile slot opens
- * the profile/account sheet (specs.md §10.18) via `onOpenProfile` — the
- * sheet itself (and its `open` state) lives in `AppShell.tsx`, not here:
- * `src/components/shared/**` is feature-agnostic building blocks that
- * features/routes compose, and `ProfileSheet` is a `src/features/profile`
- * concern, so this file takes the callback rather than importing the
- * feature and inverting that dependency direction. The centre Add button
- * still has no destination this wave and stays a disabled stub
- * (`docs/ui/implementation-plan.md`).
+ * (`aria-current="page"` comes from NavLink itself); Profile and the centre
+ * Add button both open a sheet that lives in `AppShell.tsx`/
+ * `src/features/**`, not here — `src/components/shared/**` is
+ * feature-agnostic building blocks that features/routes compose, so this
+ * file takes callbacks rather than importing the feature and inverting
+ * that dependency direction (specs.md §10.18, §10.23).
  */
-export const BottomNav = ({ profileOpen, onOpenProfile }: BottomNavProps) => {
+export const BottomNav = ({ profileOpen, onOpenProfile, addOpen, onOpenAdd }: BottomNavProps) => {
   const { t } = useTranslation('nav')
 
   return (
@@ -67,9 +67,10 @@ export const BottomNav = ({ profileOpen, onOpenProfile }: BottomNavProps) => {
       <NavTab to="/history" icon={History} label={t('history')} />
       <button
         type="button"
-        disabled
         aria-label={t('add')}
-        // STUB(trackF): opens the Add-movimiento sheet — Wave 3.
+        aria-haspopup="dialog"
+        aria-expanded={addOpen}
+        onClick={onOpenAdd}
         className="flex size-14.5 shrink-0 -translate-y-4.5 items-center justify-center rounded-3xl bg-[linear-gradient(135deg,var(--primary),color-mix(in_oklch,var(--primary),black_18%))] text-primary-foreground shadow-[0_8px_22px_color-mix(in_oklch,var(--primary)_35%,transparent)]"
       >
         <Plus className="size-7" strokeWidth={2.5} aria-hidden="true" />
