@@ -318,5 +318,36 @@
       "info": "Celeste",
       "neutral": "Gris"
     }
+  },
+  "movimientos": {
+    "add": { "heading": "Agregar movimiento" },
+    "view": { "heading": "Detalle del movimiento", "editCta": "Editar", "deleteCta": "Eliminar" },
+    "edit": { "heading": "Editar movimiento" },
+    "form": {
+      "type": { "gasto": "Gasto", "ingreso": "Ingreso" },
+      "typeAriaLabel": "Tipo de movimiento",
+      "amountLabel": "Monto",
+      "amount": {
+        "errors": {
+          "empty": "Ingresa un monto",
+          "malformed": "Ese monto no se entiende",
+          "notPositive": "El monto debe ser mayor a cero"
+        }
+      },
+      "dateLabel": "Fecha",
+      "categoryLabel": "Categoría",
+      "categoryError": "Elige una categoría",
+      "noteLabel": "Nota",
+      "notePlaceholder": "Agrega una nota (opcional)",
+      "saveCta": "Guardar",
+      "cancelCta": "Cancelar"
+    },
+    "deleteConfirm": {
+      "title": "¿Eliminar este movimiento?",
+      "description": "Esta acción no se puede deshacer.",
+      "confirmCta": "Eliminar",
+      "cancelCta": "Cancelar"
+    },
+    "vanished": "Este movimiento ya no existe. Puede haberse eliminado en otro dispositivo."
   }
 }

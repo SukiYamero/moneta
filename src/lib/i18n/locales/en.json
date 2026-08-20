@@ -318,5 +318,36 @@
       "info": "Sky",
       "neutral": "Gray"
     }
+  },
+  "movimientos": {
+    "add": { "heading": "Add movement" },
+    "view": { "heading": "Movement detail", "editCta": "Edit", "deleteCta": "Delete" },
+    "edit": { "heading": "Edit movement" },
+    "form": {
+      "type": { "gasto": "Expense", "ingreso": "Income" },
+      "typeAriaLabel": "Movement type",
+      "amountLabel": "Amount",
+      "amount": {
+        "errors": {
+          "empty": "Enter an amount",
+          "malformed": "That amount doesn't look right",
+          "notPositive": "The amount must be greater than zero"
+        }
+      },
+      "dateLabel": "Date",
+      "categoryLabel": "Category",
+      "categoryError": "Choose a category",
+      "noteLabel": "Note",
+      "notePlaceholder": "Add a note (optional)",
+      "saveCta": "Save",
+      "cancelCta": "Cancel"
+    },
+    "deleteConfirm": {
+      "title": "Delete this movement?",
+      "description": "This action can't be undone.",
+      "confirmCta": "Delete",
+      "cancelCta": "Cancel"
+    },
+    "vanished": "This movement no longer exists. It may have been deleted on another device."
   }
 }

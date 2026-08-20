@@ -4,30 +4,55 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { BottomNav } from '@/components/shared/BottomNav'
 
-const renderNav = (profileOpen = false) => {
+const renderNav = (profileOpen = false, addOpen = false) => {
   const onOpenProfile = vi.fn()
+  const onOpenAdd = vi.fn()
   render(
     <MemoryRouter initialEntries={['/']}>
-      <BottomNav profileOpen={profileOpen} onOpenProfile={onOpenProfile} />
+      <BottomNav
+        profileOpen={profileOpen}
+        onOpenProfile={onOpenProfile}
+        addOpen={addOpen}
+        onOpenAdd={onOpenAdd}
+      />
     </MemoryRouter>,
   )
-  return { onOpenProfile }
+  return { onOpenProfile, onOpenAdd }
 }
 
 describe('BottomNav', () => {
   it('marks the tab matching the current route active via aria-current', () => {
     render(
       <MemoryRouter initialEntries={['/history']}>
-        <BottomNav profileOpen={false} onOpenProfile={() => {}} />
+        <BottomNav
+          profileOpen={false}
+          onOpenProfile={() => {}}
+          addOpen={false}
+          onOpenAdd={() => {}}
+        />
       </MemoryRouter>,
     )
     expect(screen.getByRole('link', { name: /historial/i })).toHaveAttribute('aria-current', 'page')
     expect(screen.getByRole('link', { name: /inicio/i })).not.toHaveAttribute('aria-current')
   })
 
-  it('renders the centre Add button as a disabled stub, not a dead-but-enabled control', () => {
-    renderNav()
-    expect(screen.getByRole('button', { name: /agregar/i })).toBeDisabled()
+  // The Add slot opens the real Add-movimiento sheet now (specs.md
+  // §10.23) — it is no longer the disabled stub Wave 3 shipped.
+  it('calls onOpenAdd when the Add button is tapped', async () => {
+    const user = userEvent.setup()
+    const { onOpenAdd } = renderNav()
+    const addButton = screen.getByRole('button', { name: /agregar/i })
+    expect(addButton).not.toBeDisabled()
+    await user.click(addButton)
+    expect(onOpenAdd).toHaveBeenCalledOnce()
+  })
+
+  it('reflects addOpen in aria-expanded', () => {
+    renderNav(false, true)
+    expect(screen.getByRole('button', { name: /agregar/i })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    )
   })
 
   // The Profile slot opens the real profile sheet now (specs.md §10.18) —

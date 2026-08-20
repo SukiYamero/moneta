@@ -137,14 +137,14 @@ Categoria[]` prop (no default, same no-silent-fallback rule as
   Home, History and Search are real `NavLink`s, so `aria-current="page"`
   comes from the router rather than hand-rolled state; the active slot is
   `text-primary` plus a heavier `strokeWidth`, since Lucide has no filled
-  variant to switch to. Add has no destination yet and stays a
-  disabled stub (`// STUB(trackF)`), per the stub convention rather than a
-  dead enabled button. Profile opens the real profile/account sheet
-  (`specs.md` §10.18, `src/features/profile`) — `BottomNav` takes
-  `profileOpen`/`onOpenProfile` as props rather than owning the sheet or
-  importing the feature directly, since `src/components/shared/**` stays
-  feature-agnostic; `src/routes/AppShell.tsx` owns the `open` state and
-  renders `<ProfileSheet>`.
+  variant to switch to. Add and Profile both open a sheet that lives outside
+  this component — `BottomNav` takes `addOpen`/`onOpenAdd` and
+  `profileOpen`/`onOpenProfile` as props (the same `aria-haspopup="dialog"`/
+  `aria-expanded` pattern on both triggers) rather than owning either sheet
+  or importing the feature directly, since `src/components/shared/**` stays
+  feature-agnostic; `src/routes/AppShell.tsx` owns the open state and
+  renders `<AddMovimientoSheet>`/`<MovimientoSheet>` (`specs.md` §10.23) and
+  `<ProfileSheet>` (`specs.md` §10.18).
   Its height is `--bottom-nav-clearance` (`src/styles/index.css`); any
   screen or overlay that must sit clear of the bar pads by the same token
   instead of repeating the number.

@@ -3,6 +3,7 @@ import { Link } from 'react-router'
 import { MovimientoRow } from '@/components/shared/MovimientoRow'
 import { useLocaleFormatting } from '@/lib/i18n/localeFormatting'
 import type { Categoria, Movimiento } from '@/lib/schema'
+import { useMovimientoSheetStore } from '@/features/movimientos'
 
 export interface RecentMovimientosProps {
   movimientos: Movimiento[]
@@ -12,6 +13,7 @@ export interface RecentMovimientosProps {
 export const RecentMovimientos = ({ movimientos, categorias }: RecentMovimientosProps) => {
   const { t } = useTranslation('home')
   const { locale, dateFnsLocale } = useLocaleFormatting()
+  const openMovimiento = useMovimientoSheetStore((s) => s.openMovimiento)
 
   return (
     <section aria-labelledby="home-recent-heading">
@@ -37,6 +39,7 @@ export const RecentMovimientos = ({ movimientos, categorias }: RecentMovimientos
             categorias={categorias}
             locale={locale}
             dateFnsLocale={dateFnsLocale}
+            onClick={() => openMovimiento(m.id)}
           />
         ))}
       </div>

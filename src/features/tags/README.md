@@ -52,8 +52,11 @@ holding `Categoria.id`, resolved for display via
 `src/components/shared/movimientoView.ts`'s `resolveCategoria`) lives outside
 this folder — see `specs.md` §10.22 Decision 1 for what changed and where.
 
-**Not wired into a real screen yet.** Track F (the movement Add/Edit sheet)
-doesn't exist in this codebase — both components are built, tested, and
-demoed in `/kit` (dev-only), ready for Track F/G2 to consume. `CategoryPicker`'s
-`onSelect` hands back the full `Categoria`, so a consuming sheet derives both
-`categoria`/`seccionId` from one tap without a second lookup.
+**Wired into a real screen as of Track F.** Both `AddMovimientoSheet` and
+`MovimientoSheet`'s edit form (`src/features/movimientos`, `specs.md` §10.23)
+render `CategoryPicker` inline via `MovimientoFormFields`, and its "crear
+«query»" chip opens `CategoryFormModal` above the sheet.
+`CategoryPicker`'s `onSelect` hands back the full `Categoria`, so the
+consuming form derives both `categoria`/`seccionId` from one tap without a
+second lookup. `index.ts` (added by Track F) re-exports both components as
+this folder's public surface.

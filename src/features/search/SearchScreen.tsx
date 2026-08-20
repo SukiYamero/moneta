@@ -16,6 +16,7 @@ import { SearchLoadingState } from '@/features/search/SearchLoadingState'
 import { DATE_RANGE_LABEL_KEY } from '@/features/search/searchCopy'
 import { matchesQuery } from '@/features/search/searchMatch'
 import { useSearchFilters } from '@/features/search/useSearchFilters'
+import { useMovimientoSheetStore } from '@/features/movimientos'
 
 interface ActiveChip {
   key: string
@@ -46,6 +47,7 @@ export const SearchScreen = () => {
   const load = useDataStore((s) => s.load)
   const { locale, dateFnsLocale } = useLocaleFormatting()
   const [filtersOpen, setFiltersOpen] = useState(false)
+  const openMovimiento = useMovimientoSheetStore((s) => s.openMovimiento)
 
   useEffect(() => {
     void load()
@@ -262,14 +264,13 @@ export const SearchScreen = () => {
         {ready && filteredMovimientos.length > 0 && (
           <div className="flex flex-col gap-2.5">
             {filteredMovimientos.map((movimiento) => (
-              // STUB(trackF): open the Movement view/edit sheet once it exists
-              // (Wave 3) — until then a search result row is display-only.
               <MovimientoRow
                 key={movimiento.id}
                 movimiento={movimiento}
                 categorias={categories}
                 locale={locale}
                 dateFnsLocale={dateFnsLocale}
+                onClick={() => openMovimiento(movimiento.id)}
               />
             ))}
           </div>

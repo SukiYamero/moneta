@@ -41,7 +41,9 @@ Track L).
 - `RecentMovimientos.tsx` — most recent movements via the shared
   `MovimientoRow`, "Ver todo" linking to `/history`. Calls
   `useLocaleFormatting()` directly and forwards `locale`/`dateFnsLocale`/
-  `categorias` to each `MovimientoRow`.
+  `categorias` to each `MovimientoRow`, plus an `onClick` that opens the
+  movement sheet for that row via `useMovimientoSheetStore().openMovimiento(id)`
+  from `@/features/movimientos` (`specs.md` §10.23).
 - `HomeLoadingState.tsx` / `HomeEmptyState.tsx` / `HomeErrorState.tsx` —
   the three non-happy states `Home.tsx` switches on; the error state's
   retry button calls `useHomeDashboard`'s `retry` (re-invokes

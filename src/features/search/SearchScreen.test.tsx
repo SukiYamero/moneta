@@ -12,6 +12,7 @@ import { useDataStore } from '@/lib/dataStore'
 import { getRepo } from '@/lib/repoProvider'
 import { i18next } from '@/lib/i18n'
 import { SearchScreen } from '@/features/search/SearchScreen'
+import { useMovimientoSheetStore } from '@/features/movimientos'
 
 const mGetRepo = vi.mocked(getRepo)
 
@@ -165,6 +166,18 @@ describe('SearchScreen', () => {
     render(<SearchScreen />)
     expect(screen.getByText('Café de la mañana')).toBeInTheDocument()
     expect(screen.getByText('Uber al trabajo')).toBeInTheDocument()
+  })
+
+  it('tapping a result opens the movement sheet for that id (specs.md §10.23)', async () => {
+    const user = userEvent.setup()
+    useMovimientoSheetStore.setState({ addOpen: false, viewId: null })
+    const target = movimiento({ nota: 'Café de la mañana' })
+    setReady([target, movimiento({ nota: 'Uber al trabajo', categoria: 'cat_transporte' })])
+    render(<SearchScreen />)
+
+    await user.click(screen.getByRole('button', { name: /café de la mañana/i }))
+
+    expect(useMovimientoSheetStore.getState().viewId).toBe(target.id)
   })
 
   it('typing narrows results to matching movements (debounced)', async () => {

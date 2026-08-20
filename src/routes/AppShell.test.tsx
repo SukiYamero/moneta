@@ -1,11 +1,13 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { AppShell } from '@/routes/AppShell'
 import { Home } from '@/routes/Home'
 import { RouteErrorFallback } from '@/RouteErrorFallback'
 import { SearchScreen } from '@/features/search/SearchScreen'
 import { HistoryScreen } from '@/features/history/HistoryScreen'
+import { useMovimientoSheetStore } from '@/features/movimientos'
 
 const Bomb = () => {
   throw new Error('boom')
@@ -100,5 +102,18 @@ describe('AppShell routing', () => {
     renderAt('/history')
     expect(await screen.findByRole('heading', { name: /historial/i })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /historial/i })).toHaveAttribute('aria-current', 'page')
+  })
+})
+
+describe('AppShell — the movement sheets (specs.md §10.23)', () => {
+  it('the FAB opens AddMovimientoSheet, mounted once beside ProfileSheet', async () => {
+    const user = userEvent.setup()
+    useMovimientoSheetStore.setState({ addOpen: false, viewId: null })
+    renderAt('/')
+    await screen.findByRole('heading', { level: 1 })
+
+    await user.click(screen.getByRole('button', { name: /agregar movimiento/i }))
+
+    expect(screen.getByRole('dialog', { name: /agregar movimiento/i })).toBeInTheDocument()
   })
 })
