@@ -74,10 +74,10 @@ describe('useNetworkStore.canWrite', () => {
     })
   })
 
-  it('refuses edit/delete/settings while offline, even within the window', () => {
+  it('refuses edit/settings while offline, even within the window', () => {
     useNetworkStore.setState({ online: false, lastOnlineAt: 1_000 })
 
-    for (const kind of ['edit', 'delete', 'settings'] as const) {
+    for (const kind of ['edit', 'settings'] as const) {
       expect(useNetworkStore.getState().canWrite(kind, 1_000)).toEqual({
         allowed: false,
         reason: 'offline_mutation_restricted',
@@ -85,21 +85,34 @@ describe('useNetworkStore.canWrite', () => {
     }
   })
 
-  // appends commute, mutations don't (specs.md §10.11) — pinned down
-  // explicitly since it's the whole reason create gets a different answer.
-  it('never refuses create with the mutation-restricted reason', () => {
-    useNetworkStore.setState({ online: false, lastOnlineAt: null })
-
-    const decision = useNetworkStore.getState().canWrite('create', 10 * OFFLINE_WRITE_WINDOW_MS)
-    expect(decision).not.toMatchObject({ reason: 'offline_mutation_restricted' })
-  })
-
-  it('blocks create past the 7-hour window, but only create', () => {
+  // Deleting is allowed offline too (specs.md §11, 2026-08-19 — a delete is
+  // terminal, so it commutes the same way an append does), superseding half
+  // of §10.11's original "no delete offline" restriction.
+  it('allows delete while offline, within the window', () => {
     useNetworkStore.setState({ online: false, lastOnlineAt: 1_000 })
 
     expect(
-      useNetworkStore.getState().canWrite('create', 1_000 + OFFLINE_WRITE_WINDOW_MS + 1),
-    ).toEqual({
+      useNetworkStore.getState().canWrite('delete', 1_000 + OFFLINE_WRITE_WINDOW_MS - 1),
+    ).toEqual({ allowed: true })
+  })
+
+  // appends/deletes commute, edits don't (specs.md §10.11, §11 2026-08-19) —
+  // pinned down explicitly since it's the whole reason these two get a
+  // different answer than edit/settings.
+  it.each(['create', 'delete'] as const)(
+    'never refuses %s with the mutation-restricted reason',
+    (kind) => {
+      useNetworkStore.setState({ online: false, lastOnlineAt: null })
+
+      const decision = useNetworkStore.getState().canWrite(kind, 10 * OFFLINE_WRITE_WINDOW_MS)
+      expect(decision).not.toMatchObject({ reason: 'offline_mutation_restricted' })
+    },
+  )
+
+  it.each(['create', 'delete'] as const)('blocks %s past the 7-hour window', (kind) => {
+    useNetworkStore.setState({ online: false, lastOnlineAt: 1_000 })
+
+    expect(useNetworkStore.getState().canWrite(kind, 1_000 + OFFLINE_WRITE_WINDOW_MS + 1)).toEqual({
       allowed: false,
       reason: 'offline_window_expired',
     })

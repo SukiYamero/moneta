@@ -141,7 +141,24 @@ Shared stores, helpers, and the Drive/auth/lock logic layer. No UI here.
   site. `load()` is idempotent and race-safe (mirrors `authStore.restore()`'s
   synchronous check-then-set guard) and owns its own error handling end to
   end: a failure lands in `error` as a `RepoErrorCode`, never thrown past
+  `load()`. `createMovimiento`/`updateMovimiento`/`deleteMovimiento`/
+  `updateConfig` (`specs.md` §10.13) are the write path Wave 4 builds on, all
+  sharing one `runMutation()`: a single `networkStore.canWrite()` check (the
+  only place the offline policy is enforced), an optimistic apply in
+  zustand's updater form so concurrent mutations can't clobber each other,
+  the repo write, then the outbox enqueue — never the reverse. A repo failure
+  rolls the store back and raises a Toast (`docs/error-handling.md` §7 — a
+  store, not a form); it never throws past the action, same contract as
   `load()`.
+- `hlc.ts` — a purely local hybrid logical clock (`specs.md` §10.19).
+  `tick()` yields a strictly increasing `Hlc`, encoded so two values compare
+  correctly as plain strings. It never folds in a remote clock value on
+  purpose: a device only ever writes its own Drive file.
+- `outbox.ts` — the append-only queue of operations not yet pushed to Drive
+  (`specs.md` §10.13/§10.19) plus the `dirty` flag a future flush trigger
+  reads. Holds the op envelope (`hlc`, `basedOn`, `device`). Track Z's sync
+  engine is its first reader; nothing consumes it yet, deliberately — the
+  same bet that paid off building the Toast a wave before its first caller.
 - `repoProvider.ts` — the single swap point: `getRepo()` returns the shared
   fake `Repo` today. `// STUB(wave3)` marks the one line to change once a
   Drive-backed `Repo` exists (`specs.md` §12). `getActiveProfileRepo()`
