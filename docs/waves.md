@@ -510,7 +510,13 @@ Check this table against `git worktree list` at the start of any parallel
 session; prune anything stale (merged-but-not-removed, or on disk but
 missing/finished here).
 
-_Empty — `track-boot` was removed when its branch merged (2026-08-20)._
+| Path                           | Branch     | Status   |
+| ------------------------------ | ---------- | -------- |
+| `../moneta-worktrees/track-ab` | `track-ab` | `active` |
+| `../moneta-worktrees/track-ac` | `track-ac` | `active` |
+
+Wave 4 stage 3, step 2: AB = §10.26 sync goes live; AC = §10.27 + the review
+debt filed in §12. `track-boot` (step 1) merged and was removed 2026-08-20.
 
 Paths are relative to the repo root (`web/moneta`), i.e. a sibling
 `web/moneta-worktrees/` directory outside the repo — deliberately not nested
