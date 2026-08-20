@@ -353,6 +353,9 @@ project's most expensive lesson.
 
 ### Staging
 
+**Stage 1 — ✅ COMPLETE (merged to `main`, 2026-08-20):** Z and G1, each with
+its own code review applied, plus an operator cross-track pass over the seams.
+
 **Stage 1 — parallel (no shared files):**
 
 | Track                     | Spec              | Owns                                                                                              |
@@ -472,10 +475,7 @@ Check this table against `git worktree list` at the start of any parallel
 session; prune anything stale (merged-but-not-removed, or on disk but
 missing/finished here).
 
-| Path                           | Branch      | Track | Status                   |
-| ------------------------------ | ----------- | ----- | ------------------------ |
-| `../moneta-worktrees/track-z`  | `review-z`  | Z     | merged; review in flight |
-| `../moneta-worktrees/track-g1` | `review-g1` | G1    | merged; review in flight |
+_Empty — every Wave 4 stage-1 worktree was removed when its branch merged._
 
 Paths are relative to the repo root (`web/moneta`), i.e. a sibling
 `web/moneta-worktrees/` directory outside the repo — deliberately not nested
