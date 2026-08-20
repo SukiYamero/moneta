@@ -26,12 +26,33 @@ Shared stores, helpers, and the Drive/auth/lock logic layer. No UI here.
 - `authStore.ts` — zustand store wrapping `auth.ts`; owns session status and
   triggers `bootstrap.ts` through `connectDrive`. Also owns
   `continueAsGuest()`, the guest entry path (`status: 'guest'`, distinct
-  from `'authenticated'` — never a synthesized user, `specs.md` §10.10).
+  from `'authenticated'` — never a synthesized user, `specs.md` §10.10) —
+  it also touches the default local profile's recency
+  (`profiles.touchLastUsed(DEFAULT_PROFILE_ID)`), so `getActiveProfile()`'s
+  purely-recency resolution can't land a guest in whatever Google account
+  was last signed out of (`specs.md` §10.28). `continueAsGuest()` is `async`
+  internally (typed `() => void` on `AuthState` — callers stay
+  fire-and-forget) specifically to `await` that touch _before_ the `status`
+  flip, not after: `status: 'guest'` is what `RequireAuth` renders
+  `BootGate` on, and `BootGate`'s effect reads the registry close enough
+  behind it that the unawaited shape lost that race on every run (found and
+  fixed during this track's own review — see `specs.md` §11, 2026-08-20).
   `restore()`/`hydrate()` no longer gate entry on a network call
   (`specs.md` §10.11): a returning user reaches `authenticated` from local
   evidence alone (the device's login marker, or the PIN-vault's cached
   session/profile) when offline, with `fetchGoogleUser()` running as a
-  best-effort background refresh, never a blocking gate.
+  best-effort background refresh, never a blocking gate. `login()`/
+  `restore()`'s online branch resolve the account's profile-registry entry
+  (`syncProfileForAccount`) _before_ flipping `status` to `'authenticated'`,
+  not after (`specs.md` §10.28) — otherwise `src/lib/boot.ts` could read the
+  active-profile registry the instant `status` flips and resolve whichever
+  profile recency last pointed at, not the one that just signed in.
+  `hydrate()` needs no equivalent reordering: `lockStore.resume()` already
+  awaits its whole promise before leaving `phase: 'locked'`, so the profile
+  sync is done before anything below the lock screen can render. `logout()`
+  also calls `boot.ts`'s `invalidateBootForSignOut()` — see that function's
+  own comment for why a stale `useBootStore` status is otherwise a second,
+  independent way the same class of bug resurfaces.
 - `drive.ts` — thin Drive REST client: find/create/read/write/delete a
   file or folder, `listFiles()` (paginated `files.list`, the sync engine's
   revision check), `upsertJsonFile`/`upsertTextFile` (find-or-create-then-
@@ -50,14 +71,19 @@ Shared stores, helpers, and the Drive/auth/lock logic layer. No UI here.
   own region-based default. No longer pre-creates any op-log file itself;
   a device's own shard/config file is created lazily by `sync/engine.ts`'s
   push, the first time it has something to push.
-- `seedConfig.ts` — `buildSeedConfig(region = detectRegion())`: the
-  first-run `Config` seed, `monedaPrincipal` derived from the device region
-  via `i18n/regionCurrency.ts`. `CONFIG_SEMILLA` itself stays a **static
-  constant** — a region-dependent value computed at module-import time is a
-  defect shape this project has shipped twice (`specs.md` §11, 2026-08-19);
-  this function is what varies, not the constant. Shared by both seeding
-  paths (`repo.local.ts`, `bootstrap.ts`) so a fix to one can't drift from
-  the other (`specs.md` §10.7).
+- `seedConfig.ts` — `buildSeedConfig(region = detectRegion(), locale =
+detectLocale())`: the first-run `Config` seed. Two independent axes
+  (`specs.md` §10.7): `monedaPrincipal` derived from the device region via
+  `i18n/regionCurrency.ts`, and the seed section/category **names** derived
+  from the active copy locale via a `Record<SupportedLocale, Record<id,
+name>>` table (`specs.md` §10.22 Decision 6/§10.25 addendum) — ids never
+  change across locales, and once seeded the names are the user's own data,
+  never re-resolved at render time. `CONFIG_SEMILLA` itself stays a
+  **static constant** — a region-dependent value computed at module-import
+  time is a defect shape this project has shipped twice (`specs.md` §11,
+  2026-08-19); this function is what varies, not the constant. Shared by
+  both seeding paths (`repo.local.ts`, `bootstrap.ts`) so a fix to one can't
+  drift from the other.
 - `db.ts` — the Dexie (IndexedDB) instance. `v1` has the `LockVault` table;
   `v2` additively adds `movimientos`, `activos`, and a single-row `config`
   table (indexes chosen to serve `Repo`'s `ListQuery` — see the comment
@@ -185,7 +211,9 @@ Shared stores, helpers, and the Drive/auth/lock logic layer. No UI here.
   site. `load()` is idempotent and race-safe (mirrors `authStore.restore()`'s
   synchronous check-then-set guard) and owns its own error handling end to
   end: a failure lands in `error` as a `RepoErrorCode`, never thrown past
-  `load()`. `createMovimiento`/`updateMovimiento`/`deleteMovimiento`/
+  `load()`. `reset()` puts the store back to its pre-load shape — `boot.ts`'s
+  only caller, before re-`load()`ing on a profile rebind, so a previous
+  profile's rows are never shown even transiently under the new binding. `createMovimiento`/`updateMovimiento`/`deleteMovimiento`/
   `updateConfig` (`specs.md` §10.13) are the write path Wave 4 builds on, all
   sharing one `runMutation()`: a single `networkStore.canWrite()` check (the
   only place the offline policy is enforced), an optimistic apply in
@@ -226,8 +254,11 @@ Shared stores, helpers, and the Drive/auth/lock logic layer. No UI here.
 - `outbox.ts` — the append-only queue of operations not yet pushed to Drive
   (`specs.md` §10.13/§10.19) plus the `dirty` flag `sync/engine.ts`'s
   triggers read. Holds the op envelope (`hlc`, `basedOn`, `device`); stored
-  in `db.ts`'s `outbox` table, reached through the default `db` for now
-  since `getRepo()` is still single-profile. `enqueueOperation()` returns a
+  in `db.ts`'s `outbox` table on whichever `ProfileDb` `setOutboxDatabase()`
+  last pointed it at — `boot.ts`'s only caller, right after
+  `repoProvider.bindActiveProfile()` (`specs.md` §10.25 addendum), so the
+  outbox always tracks the same profile the repo does; starts on the frozen
+  default `db` before the first boot. `enqueueOperation()` returns a
   `boolean`, not `void` — a storage failure reaches the caller instead of
   only a log (`docs/error-handling.md` §4), so a repo write that succeeded
   but never queued cannot pass for success. `basedOn` is the greater of
@@ -237,12 +268,35 @@ Shared stores, helpers, and the Drive/auth/lock logic layer. No UI here.
   `observeRemoteHlc`/`clampOutboxClockToServer` expose the one clock
   instance this module owns to `sync/engine.ts`, since nothing else may
   mutate it directly.
-- `repoProvider.ts` — the single swap point: `getRepo()` returns the shared
-  fake `Repo` today. `// STUB(wave3)` marks the one line to change once a
-  create UI exists (`specs.md` §12) — `repo.drive.ts` is ready, but flipping
-  this before then would leave the app showing an empty screen with no way
-  to add anything. `getActiveProfileRepo()` builds the real per-profile-
-  scoped repo and is fully tested, but nothing calls it yet.
+- `repoProvider.ts` — the single swap point every screen reads through,
+  never importing `repo.fake.ts`/`repo.local.ts` directly. `getRepo(): Repo`
+  is synchronous and serves the binding `src/lib/boot.ts` establishes once
+  at boot (`specs.md` §10.25/§10.28) — it throws (never falls back to the
+  fake repo) if called before that binding exists, which every real call
+  site can't do: they all render behind `BootGate`.
+  `resolveActiveProfileBinding()` resolves the active profile, opens its
+  database and returns `{ profile, database, repo }` together
+  (`getActiveProfileRepo()` is a thin convenience wrapper around it for a
+  caller that only wants the repo); `bindActiveProfile()`/
+  `getActiveProfileBinding()` are the module-level binding `getRepo()`
+  reads and `boot.ts` writes.
+- `boot.ts` — the boot sequence (`specs.md` §10.28): `useBootStore.run()`
+  resolves the active profile, binds it (`repoProvider.bindActiveProfile()`)
+  and redirects the outbox to it (`outbox.setOutboxDatabase()`), resets and
+  reloads `dataStore` on a genuine rebind (switching accounts — never on a
+  same-profile repeat call, which is an idempotent no-op so navigating
+  between top-level routes can't re-trigger a reload), then lands in
+  `'ready'` or `'error'`. Its concurrency guard is a plain module variable,
+  not the public `status` field — `status` only flips to `'running'` when a
+  reload is actually about to happen, which is what lets
+  `src/features/boot/BootGate.tsx` skip the brand screen entirely on a
+  same-profile remount. That same `status` is a module-global singleton,
+  though, so a stale `'ready'` left over from a _previous_ session is
+  otherwise indistinguishable from "already ready for the profile this
+  mount is about to resolve" — `invalidateBootForSignOut()` resets it back
+  to `'idle'`, and `authStore.ts`'s `logout()` is its one caller (found and
+  fixed during this track's own review, `specs.md` §11, 2026-08-20).
+  Consumed by `BootGate`, own `README.md` there.
 - `profiles/` — the device-scoped profile registry (`specs.md` §10.15). One
   dexie database per profile (via `db.ts`'s `createProfileDb()`); the
   registry itself lives in `deviceStore.ts`'s shared `kurobello-device`

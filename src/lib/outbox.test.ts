@@ -1,15 +1,17 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Movimiento } from '@/lib/schema'
 import { CONFIG_SEMILLA } from '@/lib/schema'
-import { db } from '@/lib/db'
+import { createProfileDb, db } from '@/lib/db'
 import { __resetDeviceIdForTests, deviceDb } from '@/lib/deviceStore'
 import {
   __resetOutboxClockForTests,
+  __resetOutboxDatabaseForTests,
   clampOutboxClockToServer,
   enqueueOperation,
   listPendingOperations,
   observeRemoteHlc,
   removeOperations,
+  setOutboxDatabase,
   useOutboxStore,
 } from '@/lib/outbox'
 import { __clearKnownTipsForTests, recordKnownTip } from '@/lib/sync/tip'
@@ -32,6 +34,7 @@ afterEach(async () => {
   await __clearKnownTipsForTests()
   __resetDeviceIdForTests()
   __resetOutboxClockForTests()
+  __resetOutboxDatabaseForTests()
   useOutboxStore.setState({ dirty: false })
 })
 
@@ -221,5 +224,53 @@ describe('observeRemoteHlc / clampOutboxClockToServer', () => {
 
     expect(decodedMillis).toBe(1_000)
     dateNow.mockRestore()
+  })
+})
+
+// specs.md §10.25 addendum / §12 (2026-08-19): the outbox targeted the
+// default `kurobello` database, matching getRepo()'s old single-profile
+// posture. The flip makes this a real data-crossing bug unless the outbox
+// moves with it — a guest's pending operations must never queue into a
+// signed-in account's outbox, or vice versa.
+describe('setOutboxDatabase', () => {
+  const otherDbName = 'kurobello-outbox-redirect-test'
+
+  afterEach(async () => {
+    const other = createProfileDb(otherDbName)
+    await other.outbox.clear()
+    await other.delete()
+  })
+
+  it('redirects enqueueOperation/listPendingOperations to the given profile database', async () => {
+    const other = createProfileDb(otherDbName)
+    setOutboxDatabase(other)
+
+    const m = movimiento()
+    await enqueueOperation({ entity: 'movimiento', op: 'put', payload: m })
+
+    expect(await other.outbox.count()).toBe(1)
+    expect(await db.outbox.count()).toBe(0)
+    const pending = await listPendingOperations()
+    expect(pending).toHaveLength(1)
+    expect(pending[0]!.entityId).toBe(m.id)
+  })
+
+  it('refreshes the dirty flag against the newly bound database, not the one it replaced', async () => {
+    const other = createProfileDb(otherDbName)
+    await other.outbox.add({
+      id: crypto.randomUUID(),
+      entity: 'movimiento',
+      entityId: 'preexisting',
+      hlc: '000000001-0000-dev',
+      basedOn: null,
+      device: 'dev',
+      enqueuedAt: Date.now(),
+      operation: { entity: 'movimiento', op: 'del', payload: { id: 'preexisting' } },
+    })
+
+    setOutboxDatabase(other)
+    // refreshDirty() is fire-and-forget inside setOutboxDatabase — wait for
+    // the store to reflect it rather than asserting synchronously.
+    await vi.waitFor(() => expect(useOutboxStore.getState().dirty).toBe(true))
   })
 })

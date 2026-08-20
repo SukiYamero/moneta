@@ -15,8 +15,13 @@ vi.mock('@/lib/auth', () => {
   }
 })
 vi.mock('@/lib/bootstrap', () => ({ bootstrap: vi.fn() }))
+vi.mock('@/lib/boot', () => ({ invalidateBootForSignOut: vi.fn() }))
 vi.mock('@/lib/pinLock', () => ({ hasVault: vi.fn(), updateSession: vi.fn(), resetVault: vi.fn() }))
-vi.mock('@/lib/profiles', () => ({ resolveGoogleProfile: vi.fn() }))
+vi.mock('@/lib/profiles', () => ({
+  resolveGoogleProfile: vi.fn(),
+  touchLastUsed: vi.fn(),
+  DEFAULT_PROFILE_ID: 'kurobello',
+}))
 vi.mock('@/lib/deviceStore', () => ({
   hasLoggedInBefore: vi.fn(),
   markLoggedIn: vi.fn(),
@@ -40,8 +45,9 @@ vi.mock('@/lib/networkStore', () => ({
 
 import { AuthError, requestAccessToken, fetchGoogleUser } from '@/lib/auth'
 import { bootstrap } from '@/lib/bootstrap'
+import { invalidateBootForSignOut } from '@/lib/boot'
 import { hasVault, resetVault, updateSession } from '@/lib/pinLock'
-import { resolveGoogleProfile } from '@/lib/profiles'
+import { resolveGoogleProfile, touchLastUsed } from '@/lib/profiles'
 import {
   clearDriveDecision,
   getDriveDecision,
@@ -57,7 +63,9 @@ const mBootstrap = vi.mocked(bootstrap)
 const mHasVault = vi.mocked(hasVault)
 const mUpdateSession = vi.mocked(updateSession)
 const mResetVault = vi.mocked(resetVault)
+const mInvalidateBootForSignOut = vi.mocked(invalidateBootForSignOut)
 const mResolveGoogleProfile = vi.mocked(resolveGoogleProfile)
+const mTouchLastUsed = vi.mocked(touchLastUsed)
 const mHasLoggedInBefore = vi.mocked(hasLoggedInBefore)
 const mMarkLoggedIn = vi.mocked(markLoggedIn)
 const mGetDriveDecision = vi.mocked(getDriveDecision)
@@ -231,6 +239,35 @@ describe('useAuthStore.login', () => {
     await useAuthStore.getState().login()
 
     expect(mResolveGoogleProfile).toHaveBeenCalledWith({ accountKey: 'a@b.com', label: 'Ana' })
+  })
+
+  // specs.md §10.28's highest-risk edge case, closed at the source: a boot
+  // sequence that reads the active-profile registry the instant `status`
+  // flips to 'authenticated' must never race `resolveGoogleProfile`'s own
+  // write to that same registry — otherwise a fresh sign-in can render
+  // against whatever profile was *previously* most-recently-used, not the
+  // one that just signed in. Pinned down here rather than only in
+  // integration: the profile resolves and lands in the registry *before*
+  // `status` commits, not concurrently with it.
+  it('resolves the account in the profile registry before status flips to authenticated', async () => {
+    mToken.mockResolvedValue({ accessToken: 'tok', expiresAt: 1 })
+    mUser.mockResolvedValue({ sub: 'google-sub-1', email: 'a@b.com', name: 'Ana' })
+    let resolveProfile!: () => void
+    mResolveGoogleProfile.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveProfile = () => resolve({ id: 'p1' } as never)
+        }),
+    )
+
+    const pending = useAuthStore.getState().login()
+    await vi.waitFor(() => expect(mResolveGoogleProfile).toHaveBeenCalled())
+    expect(useAuthStore.getState().status).toBe('authenticating')
+
+    resolveProfile()
+    await pending
+
+    expect(useAuthStore.getState().status).toBe('authenticated')
   })
 
   it('does not fail or block login when resolving the profile itself fails', async () => {
@@ -476,6 +513,30 @@ describe('useAuthStore.restore', () => {
     expect(mResolveGoogleProfile).toHaveBeenCalledWith({ accountKey: 'a@b.com', label: 'Ana' })
   })
 
+  // Same race as login()'s own version of this test — restore()'s online
+  // branch takes the identical authenticate()-then-set() shape.
+  it('resolves the account in the profile registry before status flips to authenticated', async () => {
+    mHasLoggedInBefore.mockResolvedValue(true)
+    mToken.mockResolvedValue({ accessToken: 'tok', expiresAt: 1 })
+    mUser.mockResolvedValue({ sub: 'google-sub-1', email: 'a@b.com', name: 'Ana' })
+    let resolveProfile!: () => void
+    mResolveGoogleProfile.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveProfile = () => resolve({ id: 'p1' } as never)
+        }),
+    )
+
+    const pending = useAuthStore.getState().restore()
+    await vi.waitFor(() => expect(mResolveGoogleProfile).toHaveBeenCalled())
+    expect(useAuthStore.getState().status).toBe('authenticating')
+
+    resolveProfile()
+    await pending
+
+    expect(useAuthStore.getState().status).toBe('authenticated')
+  })
+
   // Same cold-start persistence as login() above, exercised via the silent
   // restore path instead of an explicit sign-in.
   it('resolves a previously persisted Drive decision and silently re-acquires Drive access', async () => {
@@ -591,6 +652,18 @@ describe('useAuthStore.logout', () => {
     useAuthStore.getState().logout()
 
     expect(mClearDriveDecision).toHaveBeenCalledOnce()
+  })
+
+  // CONFIRMED (traced + reproduced in BootGate.test.tsx): without this, a
+  // stale 'ready' left in useBootStore from this session survives into the
+  // next BootGate mount (a different account, or guest, logging in next),
+  // which renders children instantly off that stale status instead of
+  // waiting for the new boot to actually verify the resolved profile —
+  // exactly the "even transiently" case the rebind path exists to prevent.
+  it('invalidates the boot store so the next sign-in cannot reuse a stale "ready" from this session', () => {
+    useAuthStore.getState().logout()
+
+    expect(mInvalidateBootForSignOut).toHaveBeenCalledOnce()
   })
 
   // specs.md §10.20 (CONFIRMED, traced): logout() cleared only in-memory
@@ -1089,10 +1162,10 @@ describe('useAuthStore.hydrate', () => {
 })
 
 describe('useAuthStore.continueAsGuest', () => {
-  it('enters a distinct guest status with no user, session, or drive', () => {
+  it('enters a distinct guest status with no user, session, or drive', async () => {
     useAuthStore.setState({ status: 'error', error: 'auth: access_denied' })
 
-    useAuthStore.getState().continueAsGuest()
+    await useAuthStore.getState().continueAsGuest()
 
     const s = useAuthStore.getState()
     expect(s.status).toBe('guest')
@@ -1107,11 +1180,48 @@ describe('useAuthStore.continueAsGuest', () => {
   // down here even though RequireAuth's status === 'guest' branch already
   // never reads driveOptIn, since a future caller reading driveOptIn alone
   // (without checking status first) must not be misled into re-prompting.
-  it('resets driveOptIn away from a stale connected/dismissed value from a prior session', () => {
+  it('resets driveOptIn away from a stale connected/dismissed value from a prior session', async () => {
     useAuthStore.setState({ driveOptIn: 'connected' })
 
-    useAuthStore.getState().continueAsGuest()
+    await useAuthStore.getState().continueAsGuest()
 
     expect(useAuthStore.getState().driveOptIn).toBe('pending')
+  })
+
+  // CONFIRMED gap (specs.md §10.28): the registry resolves the active
+  // profile purely by recency (`profiles/profileRegistry.ts`'s
+  // `getActiveProfile()`) — with no account-aware signal of its own for
+  // guest. Without this, a device that signed out of a Google account and
+  // then chose "continue as guest" would still resolve to that account's
+  // profile (touched more recently than the default local one), and the
+  // boot sequence would read/write a guest's movements into the signed-out
+  // account's local database. Mirrors `syncProfileForAccount`'s own touch
+  // for the Google path, applied to the one profile guest ever uses.
+  it('touches the default local profile so recency-based resolution cannot land a guest in a stale Google profile', async () => {
+    await useAuthStore.getState().continueAsGuest()
+
+    expect(mTouchLastUsed).toHaveBeenCalledWith('kurobello')
+  })
+
+  // CONFIRMED by src/features/boot/guestBootRace.test.tsx (a real-registry,
+  // real-BootGate integration test): a build that flipped `status` to
+  // 'guest' *before* this touch landed lost the race against BootGate's
+  // effect-driven registry read on every run, not intermittently — status
+  // must not flip until the touch has actually resolved.
+  it('awaits the touch before flipping status, so a reader of status cannot observe "guest" before the registry reflects it', async () => {
+    let resolveTouch: () => void = () => {}
+    mTouchLastUsed.mockReturnValue(
+      new Promise<void>((resolve) => {
+        resolveTouch = resolve
+      }),
+    )
+
+    const pending = useAuthStore.getState().continueAsGuest()
+    expect(useAuthStore.getState().status).not.toBe('guest')
+
+    resolveTouch()
+    await pending
+
+    expect(useAuthStore.getState().status).toBe('guest')
   })
 })
