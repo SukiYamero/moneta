@@ -297,6 +297,23 @@ create UI (Wave 4, Track F) it would leave the app empty and unusable.
 
 ---
 
+## Wave 3.1 — signing out means something (2026-08-19)
+
+One track, raised by the user while reviewing Wave 3's own output. Specified in
+`specs.md` §10.20 — read the spec, not this summary.
+
+| Track                        | Scope                                                                                                                           |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| **AA — sign-out + identity** | Invalidate the vault on logout; give `ProfileRecord` an account key; the unsynced-and-unlinked confirm; an inert delete control |
+
+It exists because Track Y's review traced a confirmed defect — with a PIN set,
+"Sign out" returned the user to the account they had just left — and the user's
+own questions found the deeper gap under it: the registry records _what_ a
+profile is, never _whose_. That missing field is what makes "delete the data on
+sign out" look reasonable; the field is the fix, deleting was the workaround.
+
+---
+
 ## Wave 4 — planned (feature tracks, moved here from Wave 3 on 2026-08-19)
 
 These three were originally Wave 2, then Wave 3. They move again so a
@@ -366,9 +383,9 @@ Check this table against `git worktree list` at the start of any parallel
 session; prune anything stale (merged-but-not-removed, or on disk but
 missing/finished here).
 
-| Path                          | Branch            | Status |
-| ----------------------------- | ----------------- | ------ |
-| `../moneta-worktrees/wave3-y` | `wave3/y-profile` | active |
+| Path                            | Branch               | Status |
+| ------------------------------- | -------------------- | ------ |
+| `../moneta-worktrees/wave31-aa` | `wave3.1/aa-signout` | active |
 
 Paths are relative to the repo root (`web/moneta`), i.e. a sibling
 `web/moneta-worktrees/` directory outside the repo — deliberately not nested
