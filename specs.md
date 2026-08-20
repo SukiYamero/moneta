@@ -4840,11 +4840,16 @@ CategoryIconKey` (new `src/features/tags/categoryIcons.ts`, a curated
   code decision: the design canvas is dark-only today. Blocking for anyone
   who ships light mode; harmless until then.
 
-- **`BreakdownCard.tsx` still owns a fourth private copy of the tint → token
-  mapping** (`FILL_CLASS`, from Track E4). `tintClasses.ts` now holds the
-  single source for `IconAvatar` and `TagChip`; folding `BreakdownCard` in
-  needs a `bar`/`fill` shape added to that table. Left alone deliberately —
-  it was outside Track O's scope and its own feature was not being touched.
+- ✅ **`BreakdownCard.tsx`'s fourth private tint → token table is gone** —
+  closed 2026-08-20 (Wave 4 cross-track pass). `tintClasses.ts` gained the
+  `fill` shape this item asked for and `FILL_CLASS` was deleted. The deferral
+  reason ("its own feature was not being touched") expired the moment Wave 4's
+  taxonomy sweep edited that file. It also removed
+  `FILL_CLASS[tint].replace('bg-', 'text-')` — runtime string surgery on a
+  Tailwind class, which is both fragile and a _fifth_ derivation of a value
+  `TINT_CLASSES[tint].icon` already held. Verified visually neutral before
+  the swap: all nine `bg-*` → `text-*` rewrites matched the table's existing
+  `icon` strings exactly.
 
 - **A selected `neutral` `TagChip` is weakly distinguishable in dark mode.**
   Measured, not eyeballed: the selected and unselected backgrounds differ by

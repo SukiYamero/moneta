@@ -9,7 +9,7 @@ import {
 } from '@/components/shared/movimientoView'
 import { useLocaleFormatting } from '@/lib/i18n/localeFormatting'
 import { SegmentedControl, type SegmentedControlOption } from '@/components/shared/SegmentedControl'
-import type { IconAvatarTint } from '@/components/shared/IconAvatar'
+import { TINT_CLASSES } from '@/components/shared/tintClasses'
 import { cn } from '@/lib/utils'
 
 export interface BreakdownCardProps {
@@ -25,21 +25,6 @@ export interface BreakdownCardProps {
    * resolving it to a name/icon/color needs this in scope from the caller.
    */
   categorias: Categoria[]
-}
-
-// Presentation-only: the progress bar needs a solid fill, `IconAvatar`'s own
-// tint classes are all translucent (`bg-chart-1/15`) for the icon badge use
-// case. Maps onto the same chart/status tokens, no new hex.
-const FILL_CLASS: Record<IconAvatarTint, string> = {
-  emerald: 'bg-chart-1',
-  blue: 'bg-chart-2',
-  amber: 'bg-chart-3',
-  rose: 'bg-chart-4',
-  purple: 'bg-chart-5',
-  success: 'bg-success',
-  danger: 'bg-danger',
-  info: 'bg-info',
-  neutral: 'bg-muted-foreground',
 }
 
 const MIN_BAR_PERCENT = 3
@@ -126,7 +111,7 @@ export const BreakdownCard = ({
                 <div key={entry.key}>
                   <div className="mb-1.5 flex items-center gap-2">
                     <Icon
-                      className={cn('size-3.5 shrink-0', FILL_CLASS[tint].replace('bg-', 'text-'))}
+                      className={cn('size-3.5 shrink-0', TINT_CLASSES[tint].icon)}
                       aria-hidden="true"
                     />
                     <span className="min-w-0 flex-1 truncate text-ms font-semibold text-fg-secondary">
@@ -141,7 +126,7 @@ export const BreakdownCard = ({
                   </div>
                   <div className="h-1.5 overflow-hidden rounded-full bg-surface-sunken">
                     <div
-                      className={cn('h-full rounded-full', FILL_CLASS[tint])}
+                      className={cn('h-full rounded-full', TINT_CLASSES[tint].fill)}
                       style={{ width: `${Math.max(MIN_BAR_PERCENT, percent)}%` }}
                     />
                   </div>
