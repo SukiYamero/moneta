@@ -113,6 +113,24 @@ const upsertById = (categorias: Categoria[], next: Categoria): Categoria[] =>
     ? categorias.map((c) => (c.id === next.id ? next : c))
     : [...categorias, next]
 
+// A rollback must undo only *this* call's own change against whatever the
+// store holds when the rollback actually fires — never restore a whole
+// `previous` snapshot taken at this call's start. Two concurrent categoria
+// writes don't only interleave within one JS tick (where Promise.all
+// happens to serialize each call's optimistic apply before the next call
+// starts) — they settle on real network timing, so a slow write can still
+// be pending when an unrelated, later-started write has already fully
+// succeeded. Restoring a stale snapshot at that point would erase the
+// other write's already-committed category, the same failure class
+// `deleteMovimiento`'s rollback (re-append, not re-splice) already avoids
+// for movimientos. `prior === undefined` means this call created the
+// category, so undoing it means removing it, not restoring nothing.
+const revertOne = (
+  categorias: Categoria[],
+  id: string,
+  prior: Categoria | undefined,
+): Categoria[] => (prior ? upsertById(categorias, prior) : categorias.filter((c) => c.id !== id))
+
 // Raw entities only — no derived totals/breakdowns cached here. Screens
 // compute those from movimientoStats at the call site; caching them on the
 // store is exactly the drift specs.md §4/AGENTS.md's "single source of
@@ -238,6 +256,7 @@ export const useDataStore = create<DataState>((set, get) => ({
   upsertCategoria: async (categoria) => {
     const previous = get().config
     if (!previous) return
+    const prior = previous.categorias.find((c) => c.id === categoria.id)
     await runMutation(
       'settings',
       () =>
@@ -251,7 +270,17 @@ export const useDataStore = create<DataState>((set, get) => ({
               }
             : state,
         ),
-      () => set({ config: previous }),
+      () =>
+        set((state) =>
+          state.config
+            ? {
+                config: {
+                  ...state.config,
+                  categorias: revertOne(state.config.categorias, categoria.id, prior),
+                },
+              }
+            : state,
+        ),
       // Read fresh, right when the write fires (after the optimistic apply
       // above already ran) — never the `previous` snapshot captured before
       // it, which is exactly the stale-array read-modify-write §10.22 warns
@@ -301,7 +330,17 @@ export const useDataStore = create<DataState>((set, get) => ({
             ? { config: { ...state.config, categorias: archive(state.config.categorias) } }
             : state,
         ),
-      () => set({ config: previous }),
+      () =>
+        set((state) =>
+          state.config
+            ? {
+                config: {
+                  ...state.config,
+                  categorias: upsertById(state.config.categorias, target),
+                },
+              }
+            : state,
+        ),
       () => getRepo().updateConfig({ categorias: archive((get().config ?? previous).categorias) }),
       (result) => {
         const base = get().config ?? result
@@ -339,7 +378,17 @@ export const useDataStore = create<DataState>((set, get) => ({
             ? { config: { ...state.config, categorias: withoutTarget(state.config.categorias) } }
             : state,
         ),
-      () => set({ config: previous }),
+      () =>
+        set((state) =>
+          state.config
+            ? {
+                config: {
+                  ...state.config,
+                  categorias: upsertById(state.config.categorias, target),
+                },
+              }
+            : state,
+        ),
       () =>
         getRepo().updateConfig({
           categorias: withoutTarget((get().config ?? previous).categorias),

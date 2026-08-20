@@ -1,7 +1,7 @@
 import { Circle, type LucideIcon, TrendingUp } from 'lucide-react'
 import type { Categoria, Config, Moneda, Movimiento, TipoMovimiento } from '@/lib/schema'
 import type { IconAvatarTint } from '@/components/shared/IconAvatar'
-import { CATEGORY_ICONS } from '@/features/tags/categoryIcons'
+import { CATEGORY_ICONS } from '@/components/shared/categoryIcons'
 
 // A movement whose category id isn't in Config (a shard not pulled yet, a
 // hand-edited Drive file, a category deleted on another device) is a

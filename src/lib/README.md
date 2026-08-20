@@ -4,6 +4,19 @@ Shared stores, helpers, and the Drive/auth/lock logic layer. No UI here.
 
 - `schema.ts` — the data-model contract (`Movimiento`, `Activo`, `Config`
   types + `SCHEMA_VERSION`). Import it, never redefine the types.
+  `Categoria.icono`/`.color` type onto `CategoryIconKey`/`IconAvatarTint`
+  from the two leaf modules below, never from `src/features/tags/` or
+  `src/components/shared/IconAvatar.tsx` directly — this file is the
+  contract the rest of the app imports, so it only ever imports other
+  `src/lib/` leaves itself (`specs.md` §11, 2026-08-20).
+- `categoryIconKeys.ts` — the plain, stable-ordered `CATEGORY_ICON_KEYS`
+  list and the `CategoryIconKey` union it derives — no `lucide-react`
+  import. `src/components/shared/categoryIcons.ts` re-exports both and
+  pairs each key with its actual `LucideIcon`; a `satisfies` check there
+  keeps the two lists honest against each other.
+- `iconAvatarTint.ts` — the plain `IconAvatarTint` union (nine tint names),
+  re-exported by `src/components/shared/IconAvatar.tsx` for every existing
+  consumer of that import path.
 - `branding.ts` — `APP_NAME`, the single source for the display name.
 - `i18n/` — the translation table (`react-i18next`/`i18next`, bundled JSON,
   four locales: `es`/`en`/`es-AR`/`pt-BR`, `es` base and fallback, key parity
@@ -193,7 +206,17 @@ Shared stores, helpers, and the Drive/auth/lock logic layer. No UI here.
   when any loaded `Movimiento` still references the id. Unlike `updateConfig`'s
   own `onSuccess` (a blind `set({ config: result })` — see `specs.md` §12 for
   the gap that leaves), these three re-merge their own field into the
-  freshest `get().config` in `onSuccess` too, not just the optimistic apply.
+  freshest `get().config` in `onSuccess` too, not just the optimistic apply —
+  and their **rollback** does the same via a shared `revertOne` helper
+  (restore the prior category, or drop it if this call created it), applied
+  against `state.config` read fresh inside `set()` rather than a `previous`
+  snapshot taken at the call's start. A snapshot-based rollback is safe only
+  when concurrent writes settle in dispatch order; two categories created
+  moments apart on real, independent network timing don't, and a slow
+  failure's rollback restoring a stale snapshot would erase whatever a
+  faster concurrent write already committed in between (`dataStore.test.ts`:
+  "a slow failing upsert rolling back must not erase a concurrent one that
+  already succeeded" — caught by review, `specs.md` §11, 2026-08-20).
 - `hlc.ts` — a hybrid logical clock (`specs.md` §10.19). `tick()` yields a
   strictly increasing `Hlc`, encoded so two values compare correctly as
   plain strings. `observe(remote)`/`clampToServer(serverNow)` are the

@@ -597,6 +597,49 @@ describe('useDataStore.upsertCategoria', () => {
     expect(ids).toEqual(expect.arrayContaining([a.id, b.id]))
     expect(ids).toHaveLength(CONFIG_SEMILLA.categorias.length + 2)
   })
+
+  // A same-tick Promise.all always serializes each call's optimistic apply
+  // before the next call starts (JS runs each async function synchronously
+  // up to its first await), so a snapshot taken at a later call's start
+  // already includes an earlier call's optimistic change. That ordering
+  // quirk is not a guarantee — real writes settle on real network timing,
+  // not in dispatch order. This test forces the case Promise.all can't
+  // produce: A starts first (slow, eventually fails), B starts after A's
+  // optimistic apply and *fully succeeds and settles* before A's rejection
+  // ever arrives. A's rollback then restores the snapshot it captured at
+  // its own start — which predates B's write entirely, not just B's
+  // optimistic apply — and must not erase B's already-committed category.
+  it('a slow failing upsert rolling back must not erase a concurrent one that already succeeded', async () => {
+    useDataStore.setState({ config: CONFIG_SEMILLA })
+    const repo = makeFakeRepo()
+    mGetRepo.mockReturnValue(repo)
+    const a = categoria({ nombre: 'a' })
+    const b = categoria({ nombre: 'b' })
+
+    let rejectA: (e: unknown) => void = () => {}
+    const pendingA = new Promise<Config>((_resolve, reject) => {
+      rejectA = reject
+    })
+    let calls = 0
+    vi.mocked(repo.updateConfig).mockImplementation((patch) => {
+      calls += 1
+      if (calls === 1) return pendingA
+      return Promise.resolve({ ...CONFIG_SEMILLA, categorias: patch.categorias! })
+    })
+
+    const callA = useDataStore.getState().upsertCategoria(a)
+    const callB = useDataStore.getState().upsertCategoria(b)
+    await callB
+
+    expect(useDataStore.getState().config?.categorias.map((c) => c.nombre)).toContain('b')
+
+    rejectA(new RepoError('boom', 'unknown'))
+    await callA
+
+    const nombres = useDataStore.getState().config?.categorias.map((c) => c.nombre) ?? []
+    expect(nombres).toContain('b')
+    expect(nombres).not.toContain('a')
+  })
 })
 
 describe('useDataStore.archiveCategoria', () => {

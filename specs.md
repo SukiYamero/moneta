@@ -4456,6 +4456,103 @@ CategoryIconKey` (new `src/features/tags/categoryIcons.ts`, a curated
   new op onto the current local record," because the local record itself
   carries no hlc to compare against.
 
+- 2026-08-20 — **Track G1 review: two fixes applied, one lead confirmed a
+  planning error and corrected, one lead investigated and found not to
+  matter.** Review scope was `git diff 868bbbf..1fdfeb0` (`docs/wave-4-plan.md`
+  §4).
+  - **`upsertCategoria`/`archiveCategoria`/`deleteCategoria`'s rollback had
+    the same stale-snapshot shape their `onSuccess` was already written to
+    avoid, just one path over.** All three rolled back via
+    `set({ config: previous })`, `previous` captured at the call's own
+    start — safe only when concurrent writes settle in dispatch order.
+    Real writes settle on network timing, not dispatch order: a slow write
+    that eventually fails can still be pending after a second, later-started
+    write has fully succeeded and settled, and restoring the first call's
+    stale snapshot then erases the second call's already-committed category
+    from the store (not from the repo — the repo write for the failed call
+    never went through — so only the client-side store loses it, until the
+    next `load()`). CONFIRMED by a test that forces this exact interleaving
+    with a deferred promise rather than relying on `Promise.all`'s incidental
+    same-tick ordering, which cannot produce it (`dataStore.test.ts`: "a slow
+    failing upsert rolling back must not erase a concurrent one that already
+    succeeded" — written first, watched fail against the original rollback,
+    then fixed). Fixed with a shared `revertOne` helper: rollback now reads
+    `state.config` fresh inside `set()` and restores/removes only this call's
+    own category, mirroring `deleteMovimiento`'s existing re-append-not-
+    re-splice rollback for movimientos. `dataStore.updateConfig` itself
+    (pre-existing, unreachable today — no UI calls it yet) has the identical
+    rollback shape and is deliberately left unfixed, same reasoning the
+    track's own `onSuccess` note already gave: shared, pre-existing surface
+    outside this stage's ownership, filed to §12 below alongside the
+    existing `onSuccess` entry rather than fixed as a drive-by.
+  - **The `schema.ts` → `@/features/tags/categoryIcons` /
+    `@/components/shared/IconAvatar` imports were a real inversion, and the
+    operator's framing of it as "the operator's planning error, not the
+    track's" holds up** — §10.22 Decision 2 required `Categoria.icono`/
+    `.color` to type onto the feature's icon allowlist and the component's
+    tint union, with nowhere else specified for either to live. Both imports
+    were `import type` under `verbatimModuleSyntax`, so there was no runtime
+    cost (erased at compile time) — the problem was structural: `AGENTS.md`
+    calls `schema.ts` "the stable contract the rest of the app imports," and
+    the type graph had it importing from a feature folder and a component
+    file instead. Fixed by extracting the plain key/union types (no
+    `lucide-react`, no JSX, no styling) one layer further down: new
+    `src/lib/categoryIconKeys.ts` (`CATEGORY_ICON_KEYS`/`CategoryIconKey`)
+    and `src/lib/iconAvatarTint.ts` (`IconAvatarTint`). `schema.ts` now
+    imports both from `src/lib/`, never leaving its own layer.
+    `IconAvatar.tsx` re-exports `IconAvatarTint` from the new lib module so
+    every existing `@/components/shared/IconAvatar` import keeps working
+    unchanged. The second, related inversion the operator also named —
+    `movimientoView.ts` (shared, foundational — every movement-rendering
+    screen goes through `getMovimientoVisual`) importing the actual
+    `CATEGORY_ICONS` icon-component table from `src/features/tags/` — got the
+    same fix one layer up: `CATEGORY_ICONS`/`CATEGORY_ICON_KEYS` moved
+    wholesale from `src/features/tags/categoryIcons.ts` to
+    `src/components/shared/categoryIcons.ts` (deleting the old file), the
+    same place `tintClasses.ts` already lives for the identical reason —
+    both are shared visual-resolution tables the tags feature consumes
+    rather than owns. `src/features/tags/**` now imports both types/tables
+    from `src/lib/`/`src/components/shared/`; nothing in
+    `src/components/shared/` or `src/lib/` imports from `src/features/`
+    anywhere in this area any more. `bun run check` reverified green after
+    the move (typecheck, lint, 1002 tests).
+  - **`resolveCategoria`'s per-row linear `.find()` over `Config.categorias`
+    was investigated, not fixed.** The lead was that `MovimientoRow` calls it
+    once per row in a list expected to grow to years of entries, in a file
+    that already caches `Intl.NumberFormat` for exactly that reason, and that
+    `SearchScreen.tsx` already builds a `categoriaById` Map for its own
+    free-text filter without reusing it for the row list next to it. Both
+    are true, and the redundancy (the same lookup built two ways in one
+    screen) is real but small. What decides it: this codebase has **no list
+    virtualization anywhere** (verified — no `react-window`/`react-virtual`
+    import exists), so every row in an unbounded list is already a real DOM
+    node; that cost dominates a `.find()` over a category count that stays
+    in the tens (`Config.categorias`, not `Movimiento[]`) by orders of
+    magnitude. The two consumers that are actually uncapped today
+    (`SearchScreen`'s unfiltered result list, `HistoryScreen`'s `'anio'`
+    scope) would be janky from DOM size alone long before the `.find()` cost
+    is measurable; `BreakdownCard` and `RecentMovimientos`/Home's own list
+    are both capped (`breakdown.slice(0, 5)`, `RECENT_LIMIT`) and the cost
+    is moot there regardless. Left as-is rather than threading a `Map` prop
+    through `MovimientoRow`/`BreakdownCard`'s public contract for a saving
+    that doesn't move the actual bottleneck — revisit together with
+    virtualization if that ever lands, not before.
+  - **The icon grid's raw-English accessible labels (`"dumbbell"`, `"gift"`)
+    were reviewed against the track's own reasoning for leaving them, not
+    overturned.** The track's call ("supplementary label, translating 34
+    icon names across four locales felt like the wrong place to spend this
+    stage's scope") is defensible as a _scope_ judgment but understates the
+    audience: this app's primary demographic is Spanish/Portuguese-speaking
+    (`AGENTS.md`'s default UI language, the currencies in `schema.ts`'s
+    `Moneda` union), so a screen-reader user hitting 34 English words
+    mid-navigation is not a supplementary/niche gap for this app the way it
+    would be for an `en`-first product. Not fixed here: the 34 translations
+    are content authorship (idiomatic per-locale icon names, e.g. `dumbbell`
+    → `pesas`/`mancuernas`), which is a product/content call this review
+    should not make unilaterally the way it fixed the two items above.
+    Escalated to the operator via the §12 entry below rather than
+    reversed or left silently standing.
+
 ## 12. Backlog (pending verification / deferred work)
 
 - **`dataStore.updateConfig`'s `onSuccess` blindly trusts its own write's
@@ -4872,6 +4969,46 @@ engine.ts`'s pull/replay side fully supports `act-<device>.json` (reads,
   fetched" (§10.19's own words for this file) should hold indefinitely.
   Revisit only if a real account's config file is observed growing
   unreasonably — not a default expectation.
+- **§10.22 Decision 6 (localizing the seed category/section names) was
+  specified but never implemented, and nothing flagged it as deferred**
+  (found by the Track G1 review, 2026-08-20). `buildSeedConfig()`
+  (`src/lib/seedConfig.ts`) still only varies `monedaPrincipal` by device
+  region; `CONFIG_SEMILLA`'s Spanish category/section names (`Sueldo`,
+  `Servicios`, `Personal`, `Trabajo`, `Emprendimiento`…) pass through
+  untouched regardless of locale or region. This is exactly the failure
+  Decision 6 names ("a first run on a pt-BR device seeds a Portuguese-
+  speaking user a Spanish taxonomy") still happening. **Unreachable today**
+  — `getRepo()` still returns the fake repo, so no real first run hits this
+  path — which is presumably why it slipped past `bun run check` and every
+  stage summary without being noticed or filed; the three §11 stage entries
+  above report `seedConfig.ts` in the blast radius but never mention this
+  gap. Left unimplemented rather than fixed by this review because it needs
+  a product decision the code shouldn't make silently: translated names for
+  8 seed entries (3 secciones + 5 categorias) across `en`/`es-AR`/`pt-BR`,
+  and whether seeding keys off device region (matching `monedaForRegion`'s
+  existing pattern) or the active i18next language (which can differ from
+  region once a user changes the app's language) — Decision 6's own text
+  doesn't say which. Whoever picks this up should re-verify it's still
+  unreachable before shipping a fix with no urgency behind it, and should
+  decide the region-vs-language question explicitly rather than copy
+  `monedaForRegion`'s wiring by default.
+
+- **The category icon grid's accessible labels are raw, untranslated English
+  icon keys** (`"dumbbell"`, `"party-popper"`) — a deliberate scope call the
+  track made and documented (§11, 2026-08-20 "stage 3" entry), reviewed and
+  not overturned by the Track G1 review (§11, 2026-08-20 "review" entry)
+  because fixing it means authoring 34 idiomatic per-locale icon names
+  across `es`/`en`/`es-AR`/`pt-BR`, which is a content/product call, not a
+  code fix. Escalated rather than silently left: the track's own reasoning
+  ("supplementary label... the wrong place to spend this stage's scope")
+  reads differently once the audience is named plainly — this app defaults
+  to Spanish, ships `pt-BR`, and prices in COP/MXN/ARS/BRL/PEN, so a
+  screen-reader user hitting 34 English words while choosing a category icon
+  is a mainline experience for this app's actual users, not an edge case.
+  Whoever picks this up should decide the translated icon vocabulary with
+  the same care `COLOR_NAME_KEY` (`CategoryFormModal.tsx`) already got for
+  colors, following that file's existing `as const satisfies Record<...>`
+  pattern.
 
 ### Development waves (parallel tracks, sequencing, worktree log)
 
