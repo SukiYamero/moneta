@@ -1,0 +1,112 @@
+/* Moneta — tokens de tema
+   Uso: los estilos inline referencian var(--mn-*). Cambiar de tema = setear
+   document.documentElement.dataset.mnTheme = 'light' | 'dark'.
+   Tipografía: Manrope 400/500/600/700/800. Iconos: Phosphor 2.1.1.
+   Radios usados: 8-14 chips y botones chicos · 16-22 tarjetas y sheets · 44 marco del teléfono.
+*/
+
+:root {
+  --mn-bg: #0c0d10;
+  --mn-surface: #16181d;
+  --mn-surface2: #0f1115;
+  --mn-surface3: #1f222a;
+  --mn-surface4: #23262e;
+  --mn-surface5: #2a2d35;
+  --mn-skel: #1c1f26;
+  --mn-line: #3a3f49;
+  --mn-line2: #3a3d44;
+  --mn-text: #f4f4f5;
+  --mn-text2: #c9cbd0;
+  --mn-text3: #a8abb2;
+  --mn-muted: #85888f;
+  --mn-muted2: #6c6f76;
+  --mn-muted3: #5a5d64;
+  --mn-accent: #2fd896;
+  --mn-accent-d: #1fb37a;
+  --mn-accent-2: #5be6ae;
+  --mn-danger: #fb8989;
+  --mn-info: #7ba7f0;
+  --mn-tint12: rgba(47, 216, 150, 0.12);
+  --mn-tint14: rgba(47, 216, 150, 0.14);
+  --mn-f3: rgba(255, 255, 255, 0.03);
+  --mn-f4: rgba(255, 255, 255, 0.04);
+  --mn-f5: rgba(255, 255, 255, 0.05);
+  --mn-f55: rgba(255, 255, 255, 0.055);
+  --mn-f6: rgba(255, 255, 255, 0.06);
+  --mn-f7: rgba(255, 255, 255, 0.07);
+  --mn-f8: rgba(255, 255, 255, 0.08);
+  --mn-f9: rgba(255, 255, 255, 0.09);
+  --mn-f1: rgba(255, 255, 255, 0.1);
+  --mn-f10: rgba(255, 255, 255, 0.1);
+  --mn-f12: rgba(255, 255, 255, 0.12);
+  --mn-f14: rgba(255, 255, 255, 0.14);
+  --mn-f16: rgba(255, 255, 255, 0.16);
+  --mn-f18: rgba(255, 255, 255, 0.18);
+  --mn-f2: rgba(255, 255, 255, 0.2);
+  --mn-gpanel: #1a4437;
+  --mn-gpanel2: #14372c;
+  --mn-gchip: #245244;
+  --mn-gchip-fg: #ddf3e9;
+  --mn-gtext: #a9d9c7;
+  --mn-rchip: #40282a;
+  --mn-rtext: #e7b7b7;
+  --mn-bg-deep: #080c0a;
+  --mn-on-accent: #06231a;
+  --mn-on-accent-soft: rgba(6, 35, 26, 0.6);
+  --mn-nav-idle: #5a5d64;
+  --mn-bg92: rgba(12, 13, 16, 0.92);
+  --mn-surface92: rgba(22, 24, 29, 0.92);
+}
+
+:root[data-mn-theme='light'] {
+  --mn-bg: #f4f3ef;
+  --mn-surface: #ffffff;
+  --mn-surface2: #ffffff;
+  --mn-surface3: #f0efe9;
+  --mn-surface4: #eae9e2;
+  --mn-surface5: #e4e3da;
+  --mn-skel: #eae9e3;
+  --mn-line: #dcdbd2;
+  --mn-line2: #cfcec4;
+  --mn-text: #1b1c19;
+  --mn-text2: #3c3e39;
+  --mn-text3: #585a52;
+  --mn-muted: #71736b;
+  --mn-muted2: #8a8c83;
+  --mn-muted3: #9ea096;
+  --mn-accent: #12a873;
+  --mn-accent-d: #0c8759;
+  --mn-accent-2: #0e9765;
+  --mn-danger: #cf4b4b;
+  --mn-info: #3d74c4;
+  --mn-tint12: rgba(18, 168, 115, 0.11);
+  --mn-tint14: rgba(18, 168, 115, 0.14);
+  --mn-f3: rgba(28, 28, 20, 0.035);
+  --mn-f4: rgba(28, 28, 20, 0.045);
+  --mn-f5: rgba(28, 28, 20, 0.06);
+  --mn-f55: rgba(28, 28, 20, 0.06);
+  --mn-f6: rgba(28, 28, 20, 0.07);
+  --mn-f7: rgba(28, 28, 20, 0.08);
+  --mn-f8: rgba(28, 28, 20, 0.09);
+  --mn-f9: rgba(28, 28, 20, 0.1);
+  --mn-f1: rgba(28, 28, 20, 0.11);
+  --mn-f10: rgba(28, 28, 20, 0.11);
+  --mn-f12: rgba(28, 28, 20, 0.12);
+  --mn-f14: rgba(28, 28, 20, 0.14);
+  --mn-f16: rgba(28, 28, 20, 0.16);
+  --mn-f18: rgba(28, 28, 20, 0.18);
+  --mn-f2: rgba(28, 28, 20, 0.2);
+  --mn-gpanel: #ddefe4;
+  --mn-gpanel2: #edf6f0;
+  --mn-gchip: #c8e6d6;
+  --mn-gchip-fg: #0e4b34;
+  --mn-gtext: #2e6b52;
+  --mn-rchip: #f7dede;
+  --mn-rtext: #9c4a4a;
+  --mn-bg-deep: #efeee9;
+  --mn-on-accent: #ffffff;
+  --mn-on-accent-soft: rgba(255, 255, 255, 0.8);
+  --mn-nav-idle: #8b8d82;
+  --mn-bg92: rgba(244, 243, 239, 0.92);
+  --mn-surface92: rgba(255, 255, 255, 0.94);
+}
