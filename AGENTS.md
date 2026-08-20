@@ -180,6 +180,13 @@ it there immediately rather than leaving it in a conversation that ends.
   px length in a class — `h-[5px]`, `px-[22px]` — fails the build. Relative
   arbitrary values (`max-h-[88dvh]`) and non-length ones
   (`transition-[left]`, gradients, `data-[...]`) are fine and untouched.
+- **`src/lib/` is the bottom layer and may not import `@/components` or
+  `@/features`.** The data contract, the stores and the Drive/auth/sync logic
+  sit below the UI; when a `src/lib/` module needs a value the UI also uses,
+  **move the value down into `src/lib/`** — never import upward. Also enforced
+  by `bun run lint:units` (`scripts/no-ui-imports-in-lib.sh`); tests are
+  exempt. This exists because the inversion appeared twice in Wave 4 alone
+  from two independent tracks — see `specs.md` §11, 2026-08-20.
 - **Touch/swipe is the primary interaction model, not click/hover.** This
   app should feel like a native app, not a website with touch support
   bolted on. Concretely:

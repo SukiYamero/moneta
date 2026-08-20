@@ -1,4 +1,4 @@
-import type { IconAvatarTint } from '@/components/shared/IconAvatar'
+import type { IconAvatarTint } from '@/lib/iconAvatarTint'
 
 /**
  * Single source of truth for which chart/status token each tint name
@@ -61,4 +61,8 @@ export const TINT_CLASSES: Record<IconAvatarTint, { icon: string; badge: string;
 }
 
 /** Every `IconAvatarTint`, in a stable order — derived from `TINT_CLASSES` so a consumer that needs "all nine tints" (a color grid, the least-used-tint rule) never keeps its own second copy of the enum. */
-export const ICON_AVATAR_TINTS = Object.keys(TINT_CLASSES) as IconAvatarTint[]
+// Re-exported from its canonical home so the many existing
+// `@/components/shared/tintClasses` importers keep working; the list itself
+// lives in `src/lib/` because the sync layer validates against it and must
+// not import the UI (specs.md §11, 2026-08-20).
+export { ICON_AVATAR_TINTS } from '@/lib/iconAvatarTint'

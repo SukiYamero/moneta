@@ -17,7 +17,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "prepare": "husky",
-    "lint:units": "sh scripts/no-raw-px.sh"
+    "lint:units": "sh scripts/no-raw-px.sh && sh scripts/no-ui-imports-in-lib.sh"
   },
   "lint-staged": {
     "*.{ts,tsx}": [

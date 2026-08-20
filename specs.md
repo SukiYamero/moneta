@@ -4645,6 +4645,31 @@ CategoryIconKey` (new `src/features/tags/categoryIcons.ts`, a curated
     `tsc -b --noEmit` clean; `oxlint` clean (one pre-existing, unrelated
     warning in `src/components/ui/button.tsx`); `lint:units` clean.
 
+- 2026-08-20 — **`src/lib/` may not import `@/components` or `@/features`, and
+  a script enforces it (operator, Wave 4 cross-track pass).** The inversion
+  appeared **twice in one wave, hours apart, from two tracks that were each
+  locally reasonable**: `schema.ts` reached for a curated icon-key union that
+  §10.22 had placed in a feature folder, and `sync/validate.ts` reached for the
+  runtime tint list to check an untrusted `Categoria.color` from Drive. Both
+  were caught by review — which is exactly why catching instances was not going
+  to stop it. `scripts/no-ui-imports-in-lib.sh` now runs inside
+  `bun run lint:units`, i.e. inside `bun run check`; it was verified by
+  reintroducing the violation and watching it fail before being restored.
+  Tests are exempt (a test may legitimately render a component).
+  **The rule when this fires is one-directional: the shared value moves down
+  into `src/lib/`, never the importer up.**
+
+- 2026-08-20 — **The tint list is the source and the type is derived, not the
+  reverse.** `ICON_AVATAR_TINTS` moved from
+  `components/shared/tintClasses.ts` (where it was
+  `Object.keys(TINT_CLASSES)`) to `src/lib/iconAvatarTint.ts` as an
+  `as const` array, with `IconAvatarTint` derived from it;
+  `tintClasses.ts` re-exports it so no call site changed. This is not a
+  downgrade of the exhaustiveness guarantee — it strengthens it. `TINT_CLASSES`
+  stays `Record<IconAvatarTint, …>`, so a tint added to the list without
+  classes is a compile error **and** classes given to a tint not on the list
+  is one too; before, only the second direction was checked.
+
 ## 12. Backlog (pending verification / deferred work)
 
 - **`dataStore.updateConfig`'s `onSuccess` blindly trusts its own write's

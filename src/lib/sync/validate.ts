@@ -18,7 +18,7 @@ import type { IconAvatarTint } from '@/lib/iconAvatarTint'
 // reads it rather than hand-writing a second copy of the nine names.
 // tintClasses.ts's only import of IconAvatar.tsx is itself `import type`
 // (erased), so this pulls in no lucide-react/JSX — just the string table.
-import { ICON_AVATAR_TINTS } from '@/components/shared/tintClasses'
+import { ICON_AVATAR_TINTS } from '@/lib/iconAvatarTint'
 import {
   OP_FORMAT_VERSION,
   type ActOpEntry,
