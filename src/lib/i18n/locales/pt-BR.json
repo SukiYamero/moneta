@@ -318,5 +318,36 @@
       "info": "Azul-claro",
       "neutral": "Cinza"
     }
+  },
+  "movimientos": {
+    "add": { "heading": "Adicionar movimento" },
+    "view": { "heading": "Detalhe do movimento", "editCta": "Editar", "deleteCta": "Excluir" },
+    "edit": { "heading": "Editar movimento" },
+    "form": {
+      "type": { "gasto": "Despesa", "ingreso": "Receita" },
+      "typeAriaLabel": "Tipo de movimento",
+      "amountLabel": "Valor",
+      "amount": {
+        "errors": {
+          "empty": "Informe um valor",
+          "malformed": "Esse valor não é válido",
+          "notPositive": "O valor deve ser maior que zero"
+        }
+      },
+      "dateLabel": "Data",
+      "categoryLabel": "Categoria",
+      "categoryError": "Escolha uma categoria",
+      "noteLabel": "Nota",
+      "notePlaceholder": "Adicione uma nota (opcional)",
+      "saveCta": "Salvar",
+      "cancelCta": "Cancelar"
+    },
+    "deleteConfirm": {
+      "title": "Excluir este movimento?",
+      "description": "Esta ação não pode ser desfeita.",
+      "confirmCta": "Excluir",
+      "cancelCta": "Cancelar"
+    },
+    "vanished": "Este movimento não existe mais. Pode ter sido excluído em outro dispositivo."
   }
 }
