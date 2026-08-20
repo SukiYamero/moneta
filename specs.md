@@ -2939,6 +2939,107 @@ Concretely:
 `HistoryScreen.tsx`, `homeView.ts`), plus one i18n key. No schema change, no
 migration.
 
+### 10.28 The boot sequence — resolving the profile before anything renders
+
+Wave 4 stage 3, part of the flip (§10.25). Written 2026-08-20 with the user.
+
+Today nothing coordinates the boot. `main.tsx` renders immediately and each
+screen calls `dataStore.load()` when it mounts. That works only because
+`getRepo()` answers synchronously from memory. The moment it answers from the
+active profile's own database, "which profile am I" becomes a question with a
+latency, and it must be answered **before** any screen asks for data — not
+raced against the first render.
+
+- **Goal:** the app knows whose data it is showing before it shows anything,
+  and the user experiences that as the app opening, not as a wait.
+- **User story:** "I open the app and my money is there."
+- **Done when:** no screen can observe a repo bound to the wrong profile or to
+  no profile; a cold open on a device with local data reaches an interactive
+  Home; and switching accounts rebinds rather than serving the previous
+  account's rows.
+
+#### The order, and why it is this order
+
+1. **Lock first.** `AppLock` already wraps the router. A locked app must not
+   read or resolve anything underneath the lock screen — the boot sequence
+   belongs inside the unlocked branch, not above it.
+2. **Resolve the active profile**, open its database, `touchLastUsed`.
+3. **`dataStore.load()`** — one call, one `Promise.all`, all three collections.
+   Home, Search and History read the same store, so there is no per-screen
+   fetch to stagger. This is worth stating because the instinct to "load Home
+   first and the other views later" does not apply here: the data is already
+   one load, and the _code_ for the other tabs is already in the same bundle
+   (only `/settings` is split, `SettingsLazy.tsx`).
+4. **Render.**
+
+#### The brand moment — decided by the user, against the operator's recommendation
+
+**Decided 2026-08-20 (user): a fixed brand moment of ~800ms on every cold
+open**, not the on-demand anti-flash gate the operator recommended.
+
+The operator's argument, recorded so the trade-off stays visible rather than
+being rediscovered: local reads are milliseconds (IndexedDB on the device, not
+network), so `usePendingDelay`'s existing 150ms/350ms two-sided gate (§10.9)
+would show nothing at all on a normal open — the app would simply appear. A
+fixed floor spends real time on every open, forever, to display something the
+user did not need to see.
+
+The user's argument, which is a legitimate product call and not a
+misunderstanding: a predictable branded opening is identity, and an app that
+flickers straight to content reads as a web page rather than an app. The
+operator raised the cost, the user decided, and the decision stands. 800ms
+rather than the 1.5s originally suggested, because this is a
+check-your-balance app opened many times a day, not a game opened once an
+evening.
+
+**It is a floor, not a fixed duration.** If the boot takes longer than 800ms —
+a slow device, a large database, a first-run Drive download — the brand screen
+stays until the work is actually done. It never hides on a timer while work is
+still running, which is the failure mode that makes a splash feel like a lie.
+
+**There is no logo.** §12 has carried "App icon for the brand" since Wave 1 and
+the PWA still ships the scaffold `favicon.svg`. The screen is built from
+`APP_NAME` (`src/lib/branding.ts` — provisional by design, per `AGENTS.md`)
+and the existing type/color tokens, composed to read as deliberate rather than
+as a placeholder, and structured so a real mark drops in without a redesign.
+Filed in `docs/pendientes-usuario.md`.
+
+#### Edge cases — every one of these gets a test
+
+- **PIN set.** The boot sequence runs after unlock, never beneath the lock
+  screen. A locked app resolves nothing.
+- **Guest.** Resolves the guest profile. No Drive, no sync triggers, and no UI
+  promising either.
+- **Signed in, nothing local.** This is the first-run download view (§10.26
+  §3), with real progress — not the brand moment stretched. The 800ms floor
+  hands off to it rather than competing with it.
+- **Signed in, local data present.** Renders as soon as the local load
+  finishes; the Drive pull continues behind the rendered UI.
+- **Sign out, then sign in as a different account.** The active profile
+  changes and the binding **must be rebuilt**. A binding resolved once at boot
+  and never invalidated is the obvious bug this design invites; the rebind path
+  is the highest-risk part of this section and is written test-first.
+- **IndexedDB unavailable** — private mode, denied storage, exhausted quota.
+  An honest error using §10.11's existing taxonomy. Never a white screen, and
+  never a silent fall back to the fake repo.
+- **Two tabs open at once.** Both resolve the same profile and both
+  `touchLastUsed`. Last write wins on a timestamp nobody reads for correctness.
+- **A caller asks for the repo before the binding exists.** Throws loudly in
+  development. It must never return the fake repo as a fallback — a silent
+  fallback here writes a user's money into a store that evaporates, which is
+  precisely the failure the flip exists to end.
+- **Offline.** Local boot is unaffected; only the Drive pull waits.
+- **React `StrictMode` double-invoke** (development) and back-to-back calls.
+  The sequence is idempotent, the way `dataStore.load()` and
+  `authStore.restore()` already are.
+
+#### Blast radius
+
+`src/main.tsx`, `src/lib/repoProvider.ts`, a new boot module in `src/lib/`, a
+new brand/boot screen under `src/features/`, and the `common` i18n namespace.
+**Not** `dataStore.ts`'s mutations and **not** any screen's own loading states
+— §10.9's three tiers stay exactly as they are.
+
 ### Wave 3 — staging and dependencies
 
 Not everything runs in parallel. A track in a later stage is **blocked** until
@@ -5767,6 +5868,26 @@ i18n.resolvedLanguage ?? i18n.language)`) beside the canonical, tested
   what language you read. §10.7 already made the two axes independent, and
   copying `monedaForRegion`'s wiring by default would silently re-couple them.
   Lands with the flip, because the flip is what makes the gap reachable.
+
+- 2026-08-20 — **The boot shows a fixed ~800ms brand moment on every cold
+  open** (user, over the operator's recommendation of the on-demand gate).
+  Full reasoning on both sides in §10.28 — recorded there rather than summarized
+  here because the trade-off is the kind that gets rediscovered and
+  re-litigated by a future agent reading only the code. It is a **floor, not a
+  duration**: slower boots hold the screen until the work is genuinely done,
+  because a splash that hides on a timer while work continues is the failure
+  mode that makes the whole pattern feel dishonest.
+- 2026-08-20 — **UI language and seed-category names are different kinds of
+  thing, and conflating them caused real confusion.** Recorded because the
+  distinction is not obvious and the code gives no hint of it. UI copy is
+  looked up from the i18n table every render and follows the device language
+  (already working since Track I). The seed category/section names are
+  **written into the user's own `Config` once**, at first run, and are
+  thereafter **the user's data** — renameable, deletable, referenced by id
+  from every `Movimiento`. They therefore must not be i18n keys resolved at
+  render time: doing that would silently rewrite categories the user renamed
+  the moment they changed the app's language. Choose the names once, in the
+  detected language, then never touch them again.
 
 ## 12. Backlog (pending verification / deferred work)
 

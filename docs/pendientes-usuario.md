@@ -137,6 +137,21 @@ they were picked against a dark background, and `#f5b93f` and `#2fd896` are the
 two to look at first. Until that exists, Track G2 still ships no theme
 picker.
 
+### 8. The brand mark for the boot screen — `owner: user`
+
+Raised 2026-08-20, when the user chose a fixed brand moment at boot (§10.28).
+The screen needs a mark and there isn't one: §12 has carried "App icon for the
+brand" since Wave 1 and the PWA still ships the scaffold `favicon.svg`.
+
+Built meanwhile from `APP_NAME` and the existing type/colour tokens, composed
+to read as deliberate rather than unfinished, and structured so a real mark
+drops in without a redesign. Note `AGENTS.md`: the display name is provisional
+and lives only in `src/lib/branding.ts` — a mark that bakes the current name
+into the artwork inherits that provisionality, so a wordmark and a symbol are
+worth separating.
+
+The same asset closes the PWA icon item, so it is one piece of work, not two.
+
 ---
 
 ## Closed
