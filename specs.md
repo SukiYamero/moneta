@@ -3648,6 +3648,24 @@ lint` clean bar the one pre-existing `components/ui` warning). `AGENTS.md`
   (derived per render). That question belongs with Wave 5+'s profile
   switcher, which is what makes renaming real.
 
+- **CONFIRMED DEFECT, open: "Sign out" does not sign anyone out when the PIN
+  lock is enabled.** Traced end to end during Track Y's review.
+  `authStore.logout()` clears the in-memory session and — via `lockStore`'s
+  subscription — re-locks the vault, but **nothing invalidates the encrypted
+  session cached inside the vault**. So entering the correct PIN runs
+  `unlockWithPin` → `resume()` → `hydrate()` with that same cached session and
+  lands the user back in `status: 'authenticated'` for the exact account they
+  just tried to leave. For any user with the lock on, "Sign out" is
+  behaviourally identical to the "Lock now" button sitting a section below it.
+  The underlying gap is pre-existing (`logout()` never cleared the vault), but
+  it was **unreachable until §10.18 shipped a sign-out control**, so it is now
+  a user-visible defect and not latent debt. A guest is unaffected — the
+  control only renders for `status === 'authenticated'`. This is the same
+  class `specs.md` §11 already ruled on with the notification dot: a control
+  making a claim the app cannot keep is a defect, not a placeholder. The fix
+  is a product decision about what signing out means under an active lock,
+  pending with the user.
+
 ### Development waves (parallel tracks, sequencing, worktree log)
 
 Moved to **[`docs/waves.md`](../docs/waves.md)** — the full wave/track plan
