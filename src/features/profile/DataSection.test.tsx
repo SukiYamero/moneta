@@ -61,4 +61,31 @@ describe('DataSection', () => {
     await waitFor(() => expect(toastSpy).toHaveBeenCalledWith('profile:data.exportFailed'))
     toastSpy.mockRestore()
   })
+
+  // specs.md §10.20: the "delete stored data" control is the answer to the
+  // borrowed-device case, shipped visibly inert this wave. It must read as
+  // unavailable, not merely unimplemented — a native `disabled` control
+  // (no click handler ever fires, `aria-disabled` announced) rather than a
+  // row that only looks tappable.
+  describe('the delete-stored-data control', () => {
+    it('renders visibly disabled and stays disabled after a click attempt', async () => {
+      const user = userEvent.setup()
+      render(<DataSection />)
+
+      const button = screen.getByRole('button', { name: /eliminar datos guardados/i })
+      expect(button).toBeDisabled()
+      expect(button).toHaveAttribute('aria-disabled', 'true')
+
+      // A disabled native button never dispatches a click at all — there is
+      // no onClick here to even fire. This documents that a click attempt
+      // is a structural no-op rather than leaving it implicit.
+      await user.click(button)
+      expect(button).toBeDisabled()
+    })
+
+    it('carries a note explaining it is not available yet', () => {
+      render(<DataSection />)
+      expect(screen.getByText(/todavía no disponible/i)).toBeInTheDocument()
+    })
+  })
 })

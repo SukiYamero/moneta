@@ -19,7 +19,18 @@ directly or is a deliberately inert stub.
   mode's only exit (`specs.md` §10.10). The CTA/error copy is read from the
   `auth` namespace (`loginErrorCopy`), not duplicated — it's the same
   `authStore.login()` `WelcomeScreen` already exposes, reachable from a
-  second place.
+  second place. Sign-out itself goes through `useSignOutConfirm.ts`
+  (`specs.md` §10.20), not straight to `authStore.logout()`.
+- `useSignOutConfirm.ts` — decides whether sign-out needs the
+  `ConfirmDialog` (`specs.md` §10.20): with Drive connected, or with
+  nothing unsynced, it calls `authStore.logout()` directly; otherwise it
+  opens the dialog, naming the count of distinct movements
+  (`src/lib/outbox.ts`'s `listPendingOperations()`, deduplicated by
+  `entityId` so two queued edits to the same movement read as one) that
+  exist only on this device. The dialog's primary action signs out while
+  keeping that data — `authStore.logout()` already keeps it
+  (`specs.md` §10.15's "nothing is ever replaced"); this hook only decides
+  whether to say so first.
 - `ProfilesSection.tsx` + `useProfiles.ts` — the read-only list from
   `src/lib/profiles`'s device-scoped registry, active one marked. Renders
   even for a single profile (the point is to teach the concept exists).
@@ -37,7 +48,11 @@ directly or is a deliberately inert stub.
   (`docs/error-handling.md` §7): a `RepoError` reuses the exact copy
   Home/Search/History already show for that `RepoErrorCode`
   (`src/lib/errorCopy.ts`'s `repoErrorCopyKey`), anything else falls back
-  to one generic `profile:data.exportFailed` key.
+  to one generic `profile:data.exportFailed` key. Also carries the
+  "delete stored data" control (`specs.md` §10.20) — the borrowed-device
+  answer, shipped visibly inert: a native `disabled` destructive `Button`
+  (never wired to an `onClick`) with a `STUB(wave5)` comment on what the
+  real thing needs. Never a side effect of signing out.
 - `PreferencesSection.tsx` — read-only current values for
   `tema`/`monedaPrincipal`/`primerDiaSemana` (`Config.preferencias`) plus
   the _detected_ app language (`idioma` is not a `Preferencias` field yet).
@@ -52,7 +67,8 @@ directly or is a deliberately inert stub.
 - `index.ts` — the public barrel: `ProfileSheet` only. Sections are this
   sheet's own composition, not meant to be reused standalone.
 
-Reads `authStore`, `src/lib/profiles`, `useDataStore`'s `config`, and
+Reads `authStore`, `src/lib/profiles`, `src/lib/outbox` (read-only —
+`listPendingOperations()`), `useDataStore`'s `config`, and
 `useLocaleFormatting()`/`i18next` directly. Writes nothing to `Repo`/
 `Config` — the only state changes this feature makes are `authStore.login`/
 `logout` (identity) and whatever `LockSettings` already owned before the

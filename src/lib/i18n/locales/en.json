@@ -231,7 +231,13 @@
       "guestLabel": "Guest",
       "guestDescription": "Your data is saved only on this device and isn't synced.",
       "loadingAccount": "Loading account…",
-      "signOutCta": "Sign out"
+      "signOutCta": "Sign out",
+      "signOutConfirm": {
+        "title": "Sign out?",
+        "description_one": "{{count}} movement exists only on this device and hasn't synced to Google Drive yet. It's kept — signing out won't delete it.",
+        "description_other": "{{count}} movements exist only on this device and haven't synced to Google Drive yet. They're kept — signing out won't delete them.",
+        "cancelCta": "Cancel"
+      }
     },
     "profiles": {
       "heading": "Profiles",
@@ -249,7 +255,11 @@
       "heading": "Data",
       "exportCta": "Export movements (CSV)",
       "exporting": "Exporting…",
-      "exportFailed": "Couldn't export the file. Try again."
+      "exportFailed": "Couldn't export the file. Try again.",
+      "deleteStored": {
+        "cta": "Delete data stored on this device",
+        "note": "Not available yet. You'll be able to delete this device's local copy."
+      }
     },
     "preferences": {
       "heading": "Preferences",

@@ -231,7 +231,13 @@
       "guestLabel": "Convidado",
       "guestDescription": "Seus dados ficam somente neste dispositivo e não são sincronizados.",
       "loadingAccount": "Carregando conta…",
-      "signOutCta": "Sair"
+      "signOutCta": "Sair",
+      "signOutConfirm": {
+        "title": "Sair da conta?",
+        "description_one": "Existe {{count}} movimentação que fica somente neste dispositivo e ainda não foi sincronizada com o Google Drive. Ela é mantida — sair não a apaga.",
+        "description_other": "Existem {{count}} movimentações que ficam somente neste dispositivo e ainda não foram sincronizadas com o Google Drive. Elas são mantidas — sair não as apaga.",
+        "cancelCta": "Cancelar"
+      }
     },
     "profiles": {
       "heading": "Perfis",
@@ -249,7 +255,11 @@
       "heading": "Dados",
       "exportCta": "Exportar movimentações (CSV)",
       "exporting": "Exportando…",
-      "exportFailed": "Não foi possível exportar o arquivo. Tente novamente."
+      "exportFailed": "Não foi possível exportar o arquivo. Tente novamente.",
+      "deleteStored": {
+        "cta": "Excluir dados guardados neste dispositivo",
+        "note": "Ainda não disponível. Você vai poder apagar a cópia local deste dispositivo."
+      }
     },
     "preferences": {
       "heading": "Preferências",
