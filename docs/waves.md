@@ -513,10 +513,9 @@ missing/finished here).
 | Path                           | Branch     | Status   |
 | ------------------------------ | ---------- | -------- |
 | `../moneta-worktrees/track-ab` | `track-ab` | `active` |
-| `../moneta-worktrees/track-ac` | `track-ac` | `active` |
 
 Wave 4 stage 3, step 2: AB = §10.26 sync goes live; AC = §10.27 + the review
-debt filed in §12. `track-boot` (step 1) merged and was removed 2026-08-20.
+debt filed in §12 (merged and removed 2026-08-20, along with `track-boot`).
 
 Paths are relative to the repo root (`web/moneta`), i.e. a sibling
 `web/moneta-worktrees/` directory outside the repo — deliberately not nested

@@ -6046,6 +6046,28 @@ export/index.ts:49` all still inline `format(date, 'yyyy-MM-dd')` instead
   track's file list and widening scope to touch them risks another
   in-flight track's work.
 
+- 2026-08-20 — **A reviewer accused its own track of silently deleting the
+  operator's work, and the accusation was false — the same "review dispatch
+  races a moving `main`" defect §12 filed in Wave 2, recurring.** The Track AC
+  reviewer reported, as its headline CONFIRMED finding, that commit `81ff620`
+  had deleted a §12 backlog entry, an open user-owned item in
+  `docs/pendientes-usuario.md`, and two worktree-log rows. It had not:
+  `track-ac` branched at `8f33741`, and the operator committed all three to
+  `main` **after** creating the worktree. The track could not delete what was
+  never in its tree; the reviewer was reading a `main..track-ac` diff against
+  a `main` that had moved underneath it. Verified by the operator with
+  `git show $(git merge-base main track-ac):specs.md`.
+  **The cause is the operator's dispatch pattern, not the reviewer's care.**
+  Committing to `main` between creating a worktree and dispatching its review
+  guarantees this artifact, and it is now expensive twice over: the reviewer's
+  "restore" commit re-added content `main` already had, producing a duplicated
+  §12 entry that had to be removed by hand at merge. **Fix for next time:
+  rebase a track on `main` before dispatching its reviewer, or tell the
+  reviewer its merge-base explicitly and that deletions relative to `main` are
+  to be verified against that base before being reported.** Note the reviewer
+  did nothing wrong with the evidence it had — its item-by-item verification
+  of the actual track was accurate and independently valuable.
+
 ## 12. Backlog (pending verification / deferred work)
 
 - **The Add sheet's "gear into `/settings`" entry point was never actually
@@ -6735,24 +6757,6 @@ SupportedLocale = detectLocale()`, and looks up each section/category's
   `movimientoStats.ts`'s now-exported `toIsoDate`. Same fix shape as the
   closed entry above — swap the inline `format` call for the import — just
   needs an owner for those three files.
-
-- **A guest is shown a lock control that can only fail.** CONFIRMED by the
-  operator 2026-08-20, tracing a user question about forgotten PINs.
-  `lockStore.enable` throws `NO_SESSION_ERROR` when there is no session
-  (`lockStore.ts:137`) and a guest has none, but `SecuritySection.tsx` renders
-  `LockSettings` unconditionally inside `ProfileSheet` — no auth-status gate
-  anywhere in the chain. A guest opens their profile, sees "Seguridad", taps
-  it, and receives an error for a thing they were offered.
-  **This is the same shape the project already fixed one layer down and did
-  not sweep:** `LockScreen.tsx:11` carries an explicit comment that the user
-  "must not see a button that always fails (specs.md §11, 2026-08-19)" —
-  applied to the biometric CTA, never to the section that hosts it. Exactly
-  `AGENTS.md`'s "fix the shape, not the instance", missed by the very fix that
-  named the rule. Whoever picks this up should gate the section on auth status
-  **and** re-sweep for a third instance rather than fixing this one site.
-  Note the product question underneath is open and belongs to the user
-  (`docs/pendientes-usuario.md` item 9): whether a guest should be offered a
-  PIN at all, given that a guest lockout has no honest recovery.
 
 ### Development waves (parallel tracks, sequencing, worktree log)
 
