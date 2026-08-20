@@ -314,52 +314,80 @@ sign out" look reasonable; the field is the fix, deleting was the workaround.
 
 ---
 
-## Wave 4 — planned (feature tracks, moved here from Wave 3 on 2026-08-19)
+## Wave 4 — the app comes alive (re-scoped by priority, 2026-08-19)
 
-These three were originally Wave 2, then Wave 3. They move again so a
-foundations wave can land first; all three consume the Toast (Track K) and
-the i18n table, which is exactly why those were built a wave early.
+Re-planned with the user, who set the product priorities; the operator set the
+staging from the dependencies. **Priority, in the user's words:** operations —
+balances, expenses, creating an income or an expense — are the high one; tags
+are core because nothing can be created without them; sync matters early so it
+can be exercised; the account slide is medium and largely already shipped;
+voice is medium and near the end; groups/areas are last.
 
-**Wave 4 gains a fourth track: Z — the Drive sync engine (`specs.md`
-§10.19).** It is what finally closes the gap §12 has called "the largest
-structural gap" since Wave 2: `bootstrap.ts` creates files in Drive that
-nothing has ever read or written. Track Z owns a new `repo.drive.ts` behind
-the existing `Repo` port, the sync engine and its flush triggers, and the
-update to `bootstrap.ts`/§4's file layout. It owns **no screen** — every
-screen reads through `getRepo()` and must stay unaware the operation log
-exists.
+### What already exists, so nobody rebuilds it
 
-**Sequencing inside Wave 4 is the point:** Track F (the create UI) is what
-unblocks the `repoProvider` stub flip, and Track Z is what makes the data
-survive a lost device. F first makes the app _usable_ with real data; Z makes
-it _safe_. Neither can be skipped, and Z must not start before T's outbox
-convention has landed.
+Wave 3's foundations were spent precisely here. A create-movement sheet needs:
+`BottomSheet`, `AmountField` (locale-aware, never a hand-rolled parser),
+`TextField`, `DateChipPicker`, `SegmentedControl`, `ConfirmDialog`, the Toast,
+`MovimientoRow`, and a write path — **all of them exist**
+(`dataStore.createMovimiento` included, §10.13). The account sheet exists too
+(§10.18, Track Y): identity, profiles, the PIN lock and export are real; only
+the preferences behind it are inert.
 
-### Track F — Movement/Add sheet + Voice
+**What is actually missing is two things:** a way to _assign_ a category
+(`TagChip` renders and filters, it does not assign), and real data behind
+`getRepo()`.
 
-View/edit sheet, create sheet, delete confirm, toast, the Voice unit (Web
-Speech API + client-side regex parser — architecture resolved, `specs.md`
-§11 2026-08-18: on-device, no backend, cleared to build).
+### The dependency that sets the order
 
-Owns: `src/features/movimientos/**`
+**A movement cannot be created without assigning a category**, so tags is not
+a pleasant parallel extra — it **blocks** the create sheet. If the create
+sheet improvises its own picker, tags later replaces it and the codebase ends
+up with two conventions, which is the defect shape `AGENTS.md` names as this
+project's most expensive lesson.
 
-### Track G — Tags + Profile + Settings
+### Staging
 
-Tag picker, custom tag modal, profile sheet (including the Drive
-reconnect row Track J's copy promises), "Personalizar" settings screen.
+**Stage 1 — parallel (no shared files):**
 
-Owns: `src/features/tags/**`, `src/features/profile/**`,
-`src/features/settings/**`
+| Track                          | Spec                              | Owns                                                                                            |
+| ------------------------------ | --------------------------------- | ----------------------------------------------------------------------------------------------- |
+| **Z — Drive sync engine**      | §10.19 ✅ written                 | `repo.drive.ts`, the sync engine + flush triggers, `bootstrap.ts`, §4's layout. **No screens.** |
+| **G1 — tag / category picker** | ⚠️ **spec must be written first** | `src/features/tags/**`                                                                          |
 
-### Track H — Groups ("Áreas")
+**Stage 2 — blocked on stage 1:**
 
-List + detail + editor. Needs a schema addition first (`Grupo` type, or
-`extra` on `Categoria`) — write that `specs.md` §10 addendum before
-implementing, don't invent the shape inline.
+| Track                            | Spec                              | Owns                                                                                   |
+| -------------------------------- | --------------------------------- | -------------------------------------------------------------------------------------- |
+| **F — movement sheet**           | ⚠️ **spec must be written first** | `src/features/movimientos/**` — view/edit, create, delete. Blocked on G1.              |
+| **The `repoProvider` flip**      | operator step, not a track        | Lands with F, once creating is possible. **Gated on the guest-cliff decision in §12.** |
+| **G2 — "Personalizar" settings** | ⚠️ **spec must be written first** | `src/features/settings/**`. Blocks nothing; carries the four §12 prerequisites below.  |
 
-Owns: `src/features/groups/**`, `src/lib/schema.ts` (additive only)
+**Stage 3 — after the app is usable:**
 
----
+| Track                    | Notes                                                                                                                                                             |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Voice**                | An addition to F's sheet, so it cannot precede it. Architecture already resolved (§11, 2026-08-18): Web Speech API + a client-side parser, on-device, no backend. |
+| **H — groups / "Áreas"** | Last, per the user. Needs its schema addendum (`Grupo` type, or `extra` on `Categoria`) written **before** implementing — do not invent the shape inline.         |
+
+### Before any of this is dispatched
+
+**Only Track Z has a spec.** `AGENTS.md`'s first rule is that an unspecified
+feature gets its §10 spec written before it is built, so F, G1, G2 and H each
+need one. G2's spec in particular has to **decide** four things §12 already
+files against it, not discover them mid-build: the week-start bug that becomes
+reachable the moment a picker exists; `idioma` not being a field on
+`Preferencias`; whether `claro` is offered at all while the light palette is
+unreviewed scaffold; and the lock's still-untranslated copy.
+
+### On exercising sync early
+
+Z can be built and unit-tested immediately — it has a contract suite and needs
+no UI. But it can only be **exercised end to end** once real data exists,
+which means after the flip, which means after F. The alternative §10.15's
+staging note already names is to seed the local store and flip early; the
+operator recommends against it, because seeded movements in a money app create
+a "is this mine or sample data?" ambiguity that is worse than waiting one
+stage. Revisit if stage 2 slips.
 
 ## Not scheduled
 
