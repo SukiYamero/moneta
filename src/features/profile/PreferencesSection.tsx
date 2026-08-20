@@ -52,6 +52,11 @@ export const PreferencesSection = () => {
       <ProfileSectionHeading>{t('preferences.heading')}</ProfileSectionHeading>
       <div className="flex flex-col gap-2">
         <div className="flex flex-col gap-1">
+          {/* STUB(wave3): `tema` has no control until a light design exists
+              (specs.md §10.24 Prerequisite 3, docs/pendientes-usuario.md
+              item 7 — a design deliverable, not a code one). The value
+              shown is fixed ("Oscuro"), never `preferencias.tema` — a
+              stored 'claro'/'sistema' would misdescribe a dark-only app. */}
           <InertRow label={t('preferences.theme.label')} value={t('preferences.theme.oscuro')} />
           <p className="px-1 text-xs font-medium text-fg-tertiary">{t('preferences.theme.note')}</p>
         </div>
