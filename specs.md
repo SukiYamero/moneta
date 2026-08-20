@@ -71,10 +71,21 @@ Three stores (all JSON files in the user's Drive):
   the **appDataFolder** (syncs across devices). Location abstracted behind a single
   repo function so it could move to the visible folder later (no UI for it in v1).
 
-Storage format is **JSON files** (1:1 with the types below, only the Drive Files
-API under `drive.file`). A Google Sheets export is a possible future, not v1.
+Storage format is **JSON files** (only the Drive Files API under `drive.file`).
+A Google Sheets export is a possible future, not v1.
 
-Local cache of everything in IndexedDB (disposable; re-downloaded from Drive if cleared).
+> **The one-file-per-store layout above is superseded by §10.19** (decided
+> 2026-08-19). Each store is now a set of **per-device, append-only operation
+> logs**, movements sharded by month, because a single shared file per store
+> cannot be written by two devices without losing an update and re-uploads the
+> whole history to record one entry. The three logical stores and their types
+> are unchanged — only how they are laid out in Drive. Read §10.19 before
+> touching `bootstrap.ts` or anything that names a file.
+
+Local cache of everything in IndexedDB (disposable; re-downloaded from Drive if
+cleared). **The local database is always the merged truth**: the operation logs
+are a storage and transport format, replayed once on download, and no screen
+ever sees them.
 
 **Mandatory conventions:**
 
@@ -1293,6 +1304,189 @@ blast radius says has misunderstood the job.
 - **Out of scope, deliberately:** switching profiles, renaming, deleting,
   consolidating local into an account, and any working preference control.
   Those arrive with the write path and the account work.
+
+### 10.19 Drive sync — the file layout and the merge rule
+
+Written 2026-08-19 after a full re-evaluation of the no-backend constraint
+(§11, same date). **Not implemented.** This is the spec `specs.md` §12 has
+called "the largest structural gap" since Wave 2: `bootstrap.ts` provisions
+files in Drive and nothing ever reads or writes them again.
+
+- **Goal:** the user's data reaches their Drive and comes back, on any number
+  of devices, without a backend, without losing a record, and without
+  re-uploading their whole history to record a coffee.
+- **User story:** I record expenses on my phone all week with no signal. On
+  Sunday it reconnects, everything lands in my Drive, and my tablet sees it
+  next time I open it.
+
+#### The core idea: files hold operations, not state
+
+A data file is **an append-only list of operations**, not a list of
+`Movimiento`s:
+
+```json
+{
+  "v": 1,
+  "device": "pj7k",
+  "periodo": "2026-08",
+  "ops": [
+    { "op": "put", "hlc": "…", "basedOn": null, "mov": { "id": "3f9c…", "…": "…" } },
+    { "op": "put", "hlc": "…", "basedOn": "…", "mov": { "id": "3f9c…", "…": "…" } },
+    { "op": "del", "hlc": "…", "basedOn": "…", "id": "8b1e…" }
+  ]
+}
+```
+
+**Reading = replay every op from every file in logical order; per `id`, the
+last one wins.** One rule covers create, edit, delete and cross-device merge.
+
+Two consequences, both load-bearing:
+
+- **`schema.ts` is untouched.** The sync metadata (`hlc`, `basedOn`, `op`)
+  lives in the envelope, never on `Movimiento`. There is no `updatedAt` and
+  no `deletedAt` on the domain type, and there must not be.
+- **A `put` carries the whole record, never a diff.** An op that corrects a
+  February movement is self-sufficient in an August file: a device that never
+  downloaded February can still materialize the corrected record. A diff
+  would be an orphan. This is why the format is snapshot-per-op.
+
+#### The rule that makes conflicts impossible to construct
+
+**Exactly one device ever writes any given file.** Not "we resolve the
+race" — there is no race to resolve. No ETags, no retry-on-conflict, no
+merge on the write path.
+
+#### The files
+
+| File                          | Where              | Written by       | Holds                                                          |
+| ----------------------------- | ------------------ | ---------------- | -------------------------------------------------------------- |
+| `mov-<device>-<YYYY-MM>.json` | `KuroBello` folder | that device only | movement ops for that month — the only file written day to day |
+| `mov-<device>-<YYYY>.json`    | `KuroBello` folder | that device only | the year's months compacted into one, after the year closes    |
+| `act-<device>.json`           | `KuroBello` folder | that device only | asset ops (few, no sharding needed)                            |
+| `config-<device>.json`        | `appDataFolder`    | that device only | taxonomy + preferences; small, always fetched                  |
+
+`<device>` is a short device-scoped id, minted once and kept with the other
+device signals (`deviceStore.ts`).
+
+- **Why monthly shards:** they bound the write size **forever**. Recording a
+  coffee rewrites the current month (~60 KB under heavy use), never the 4 MB
+  history. Without this, every entry re-uploads the whole past over mobile
+  data by year three.
+- **Why that grain specifically:** the app already thinks in periods —
+  `movimientoStats.periodRange()` is día/semana/mes/año and Home renders a
+  week. Home needs one shard, not the history.
+- **A closed shard is frozen forever.** Editing an old movement does **not**
+  reopen its file; the op lands in the current shard and wins on replay.
+  Compaction folds only the closing year's own months, and **never rewrites
+  an already-closed file**. That a corrected February record ends up living
+  in an August file is cosmetically odd and functionally irrelevant, because
+  the merge is global anyway — and it buys "closed means cacheable forever",
+  which is what makes multi-year charts cheap.
+- **Deliberately NOT built: a `manifest.json`.** It looks necessary and is
+  strictly worse: it would be the one file with several writers, reintroducing
+  the exact race this design removes — and it is redundant, because
+  `files.list` already returns names and `modifiedTime` in one call. **The
+  folder listing is the manifest.**
+
+#### Ordering: a logical clock, not the device clock
+
+Wall-clock ordering has a defect no amount of care fixes: **two devices can
+compute different merge results.** UTC does not help — `Date.now()` is
+already UTC; the problem is accuracy, not timezone. Asking a time server does
+not help either, because the case that matters is offline, where there is
+nobody to ask.
+
+So ops are ordered by a **hybrid logical clock**: physical time combined with
+a counter that advances past the highest value the device has seen, tie-broken
+by device id. This yields a **total order identical on every device**, and it
+degrades gracefully under a skewed clock instead of silently reordering.
+
+Drive supplies the sanity bound: every API response carries a server `Date`
+header, so a device whose clock claims 2099 can be clamped rather than
+poisoning the maximum forever. That costs no extra request — we are already
+talking to Drive.
+
+**Two different timestamps, and only one of them is this problem:**
+`Movimiento.fecha` / `createdAt` mean "when the coffee happened" and correctly
+use the device clock — a few minutes of skew is irrelevant to a human record.
+The op's ordering metadata is the one that must not be trusted to it.
+
+#### Conflict detection, and what the user sees
+
+A conflict is **not** about simultaneity. Two edits 19 days apart conflict if
+neither device had seen the other's change; two edits 6 minutes apart do not
+conflict if the second was made on top of the first. Wall-clock timestamps
+cannot tell those apart. `basedOn` — the version an op was edited on top of —
+can: two ops sharing a `basedOn` are genuinely concurrent; a chain is not.
+
+**Decided (user, 2026-08-19): on a concurrent delete-vs-edit, the movement
+revives, and the app briefly says why.** Losing data silently is worse than a
+row the user can delete again — and the log already holds both versions, so
+reviving costs nothing. The explanation is what makes it honest rather than
+mysterious.
+
+**Nothing is ever discarded at merge time.** The merge is a projection over an
+immutable log, so the losing version is still in the file. A future "these two
+changed in two places — which one?" review screen therefore needs **no new
+storage, no conflict table and no format change**: restoring the other version
+is an ordinary `put`. That screen is deliberately **not** in scope now — with
+one device it can never fire — but the two things that keep it possible
+(immutable ops, `basedOn`) are in the format from day one, because the format
+is the expensive thing to change later.
+
+#### When it syncs
+
+- **Push** on: reconnect, return to foreground, a debounce after a burst of
+  writes, and `pagehide`. Only when something is pending — the dirty flag is
+  what keeps a reconnect free when there is nothing to send.
+- **Pull** on app open and on reconnect, as a `files.list` revision check
+  first; download only the files whose `modifiedTime` moved.
+- **Never write through on the user's action.** A delete writes locally and
+  disappears from the screen instantly; the same flush pushes it. Making the
+  UI wait on the network _adds_ friction rather than removing it, and one
+  write path beats two.
+- **"Sync after the app closes" is not possible, and this is a platform
+  limit, not a design choice.** When the page closes, JS stops. Background
+  Sync exists on Chromium but not WebKit, so it can be a bonus on Android and
+  never the plan; `fetch(keepalive)` caps the body at 64 KB, which a shard can
+  exceed. **The moment is backgrounding, not closing.** This is precisely why
+  §10.11's 7-hour window and its "saved on this device" copy exist.
+
+#### UI
+
+A non-blocking sync indicator (§10.9 Tier 3 — a notification, never a modal),
+honest in all three states: syncing · up to date · **pending**. The third is
+the one that earns trust, because it is the one that admits the data is not in
+the cloud yet.
+
+#### Data touched
+
+Reads and writes the Drive files above. **No `schema.ts` change.** Replaces
+§4's fixed three-file layout — that section and `bootstrap.ts` must be updated
+in the same change.
+
+#### Edge cases
+
+An unknown `op` or a file written by a newer version is **ignored and left
+untouched, never deleted**. A device that has not downloaded a shard yet shows
+partial history, not wrong history. Compaction writes the new file and only
+then deletes the months it replaced, and only its own. Two devices may hold
+the same movement id only if a UUID collided, which is not a case to handle.
+
+#### Done when
+
+Two devices with the same account converge on the same data without either
+losing a record; a movement created offline lands after reconnect; a delete
+survives; an edit to a movement from eight months ago applies without
+reopening its file; recording an entry uploads only the current shard.
+
+#### Blast radius
+
+A new `repo.drive.ts` behind the existing `Repo` port plus a sync engine and
+its outbox, `bootstrap.ts`, and §4. **Not the screens** — they read through
+`getRepo()` and must stay unaware that any of this exists. The op log is a
+storage and transport format; the local database is always the merged truth,
+and `movimientoStats` keeps receiving a plain `Movimiento[]`.
 
 ### Wave 3 — staging and dependencies
 
@@ -3034,6 +3228,82 @@ lint` clean bar the one pre-existing `components/ui` warning). `AGENTS.md`
   (`selectDriveSession`) whose name carries the warning a bare
   `state.session` read does not — additive, no migration, added when Track T
   first needs it rather than speculatively now.
+
+- 2026-08-19 — **The no-backend constraint was re-evaluated with real numbers
+  and reaffirmed.** User asked, directly, how viable and how expensive a
+  backend would be. The answer that came back: **money is not the obstacle.**
+  A `Movimiento` in Postgres is ~250 bytes all-in, so Supabase's 500 MB free
+  tier holds ~1.4 M movements ≈ 250–600 users; Cloudflare D1's 5 GB holds
+  thousands; past free it is $5–25/month. What actually costs:
+  - **The product's thesis.** §2 says privacy comes from the architecture,
+    not from a promise. "Your money data is in your Drive, on nobody's
+    server" is _verifiable_; with a backend it becomes "trust me", which is
+    what every competitor already says.
+  - **Becoming a data controller** for financial data (Colombia Ley 1581,
+    Brazil LGPD, Argentina 25.326): purpose, deletion, breach notification.
+    These obligations do not scale down — five users carry the same duties as
+    five thousand.
+  - **Operational duties forever**, and a one-way door: Drive → backend is
+    easy, backend → Drive needs user consent and coordination.
+  - Also recorded because it was the load-bearing correction: **a backend
+    does not remove the sync problem.** Offline-first still needs the local
+    write, the outbox, the flush triggers and the reconciliation. A backend
+    removes exactly one sub-problem — whole-file lost updates — which is
+    ~a quarter of the work, and which §10.19's per-device files remove for
+    free.
+  - Free tiers also mislead in a specific way: **Supabase pauses a free
+    project after a week of inactivity**, which for a personal-finance app
+    used by a handful of people means a dead app, and that never shows up in
+    a "how many users fit" answer.
+  - **Revisit only when a feature §6 already names needs it** — scheduled
+    reminders, anything cross-user, or hiding a third-party API key — and
+    then build the smallest thing that works: a **stateless function that
+    stores no user data**, which keeps the privacy claim essentially intact.
+
+- 2026-08-19 — **Drive layout: per-device append-only operation logs, sharded
+  by month.** Full spec in §10.19. The decisions inside it, so they are not
+  re-litigated piecemeal: files hold **operations, not state**, so one merge
+  rule (last write per `id` wins) covers create/edit/delete/multi-device;
+  **exactly one device writes any given file**, which makes the lost update
+  structurally impossible rather than merely handled; a `put` carries the
+  **whole record, not a diff**, so an op is self-sufficient in a file whose
+  period it does not belong to; a **closed shard is frozen forever**, which is
+  what makes multi-year history cacheable; and there is deliberately **no
+  manifest file**, because it would be the one multi-writer file and the
+  folder listing already carries the same information.
+
+- 2026-08-19 — **Ordering uses a hybrid logical clock, not the device clock.**
+  UTC was never the issue (`Date.now()` is already UTC); accuracy is. A time
+  server does not help because the case that matters is offline. Wall-clock
+  ordering lets two devices compute _different_ merge results — a logical
+  clock cannot. Drive's server `Date` header is the cheap sanity bound
+  against a device claiming to be in 2099. `Movimiento.fecha`/`createdAt`
+  keep using the device clock deliberately: they mean "when it happened to
+  the user", where skew is irrelevant.
+
+- 2026-08-19 — **Deleting is allowed offline; editing is not (yet).**
+  Supersedes half of §10.11's restriction. That rule existed because
+  "mutations produce a conflict with no correct automatic answer" — with an
+  operation log there _is_ an automatic answer, and for a delete it is
+  unambiguous because a delete is terminal. Editing stays online-only for
+  now: record-level last-write-wins can still silently drop one of two
+  concurrent field edits, and field-level merging is not worth building yet.
+
+- 2026-08-19 — **On a concurrent delete-vs-edit, the movement revives, and
+  the app briefly explains why.** User decision. Losing data silently is worse
+  than a row the user can delete again; the log already holds both versions,
+  so reviving costs nothing. The explanation is what separates it from a
+  mysterious resurrection. Corollary recorded in §10.19: nothing is discarded
+  at merge time, so a future "which version did you mean?" screen needs no
+  new storage and no format change — only `basedOn`, which ships now.
+
+- 2026-08-19 — **Editing data older than six months stays allowed.** The only
+  argument for a cutoff was making our own sync simpler, and §10.19 handles an
+  old edit correctly without one — so a wall there would be pushing our cost
+  onto the user. This is personal finance (§1), not bookkeeping: there is no
+  closed accounting period to protect, and people genuinely reconcile late.
+  Make it deliberate rather than casual (not the default gesture on an old
+  row); do not prohibit it.
 
 ## 12. Backlog (pending verification / deferred work)
 

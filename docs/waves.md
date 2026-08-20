@@ -42,6 +42,38 @@ not a new decision — nothing here overrides `specs.md`):
   identity is "your money, in your Drive, nobody else's server" — that's
   the thing to protect when a feature request tempts a shortcut.
 
+- **That constraint has now been stress-tested with real numbers, not
+  assumed** (`specs.md` §11, 2026-08-19). Asked directly what a backend
+  would cost, the analysis found the money is irrelevant — free tiers hold
+  hundreds of users and $5–25/month covers success. What it costs is the
+  thesis: "your data is in your Drive" is _verifiable_, "trust my server" is
+  what every competitor already says. Plus data-controller obligations for
+  financial data that do not scale down. **It is no longer an inherited
+  assumption; it is a decision someone checked.** The escape hatch stays
+  exactly where §6 put it: a stateless function that stores no user data, and
+  only for something that genuinely cannot work otherwise.
+
+## Where the codebase actually is (2026-08-19)
+
+Kept short and honest, so a fresh agent doesn't have to infer it from commits:
+
+- **What is real:** the app opens and navigates **offline**; local data is
+  **scoped per profile**, so real data has a correct home the day it arrives;
+  there are form primitives and a confirm dialog for Wave 4 to build with; a
+  deploy no longer takes over an open tab silently; CSV export works. Wave 3
+  stage 1 shipped all of that (five tracks, each reviewed, plus a cross-track
+  pass).
+- **What is not real yet, and is the whole point of what comes next:** the
+  app still reads the **fake repo** — `repoProvider.getRepo()` is a
+  deliberate stub — because flipping it without a create UI would leave a
+  correct, empty, unusable app. There is **no write path** and **no Drive
+  sync implemented**. Data lives only on the device, which `specs.md` §12
+  records as a knowingly accepted risk, not an oversight.
+- **What is decided but unbuilt:** the Drive sync architecture (§10.19) —
+  per-device append-only operation logs, sharded by month, merged by one
+  rule. Specced 2026-08-19 precisely so the write path (Track T) is built
+  against it instead of inventing a convention that contradicts it.
+
 If this reading is wrong, or the ambition is different from what the
 signals suggest, that's worth a real conversation and a `specs.md` §11
 entry — not silently building past it.
@@ -243,8 +275,19 @@ plus a staging table and a trim order at the end of that block.
 | Y     | §10.18 | Profile / account screen — the access point (lock + guest exit live here)       |
 
 **Stage 1 is ✅ complete (merged to `main`, 2026-08-19):** R, S, U, V and W,
-each with its own code review, plus a cross-track pass over the seams. Stage 2
-(T, X) is unblocked.
+each with its own code review, plus a cross-track pass over the seams.
+
+**Stage 2 is trimmed to Track T alone (user decision, 2026-08-19): take only
+what is needed now.** Track X (§10.17 diagnostics) was already the designated
+first cut and is deferred — nothing depends on it and no promise sits behind
+it. Track T is the one thing on the critical path: **nothing can write yet**,
+so neither the `repoProvider` flip nor any Wave 4 feature can move without it.
+
+**Track T is now gated on `specs.md` §10.19** (Drive sync, specced
+2026-08-19). T builds the local write path _and the outbox that feeds sync_ —
+if it settles its convention without knowing the operation-log format it
+feeds, that convention gets rewritten. Reading §10.19 is part of T's brief,
+not optional context.
 
 Tracks run in **three stages, not all in parallel** — see "Wave 3 — staging
 and dependencies" in `specs.md`. A later stage is blocked until every track
@@ -259,6 +302,21 @@ create UI (Wave 4, Track F) it would leave the app empty and unusable.
 These three were originally Wave 2, then Wave 3. They move again so a
 foundations wave can land first; all three consume the Toast (Track K) and
 the i18n table, which is exactly why those were built a wave early.
+
+**Wave 4 gains a fourth track: Z — the Drive sync engine (`specs.md`
+§10.19).** It is what finally closes the gap §12 has called "the largest
+structural gap" since Wave 2: `bootstrap.ts` creates files in Drive that
+nothing has ever read or written. Track Z owns a new `repo.drive.ts` behind
+the existing `Repo` port, the sync engine and its flush triggers, and the
+update to `bootstrap.ts`/§4's file layout. It owns **no screen** — every
+screen reads through `getRepo()` and must stay unaware the operation log
+exists.
+
+**Sequencing inside Wave 4 is the point:** Track F (the create UI) is what
+unblocks the `repoProvider` stub flip, and Track Z is what makes the data
+survive a lost device. F first makes the app _usable_ with real data; Z makes
+it _safe_. Neither can be skipped, and Z must not start before T's outbox
+convention has landed.
 
 ### Track F — Movement/Add sheet + Voice
 
