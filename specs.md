@@ -6086,6 +6086,108 @@ export/index.ts:49` all still inline `format(date, 'yyyy-MM-dd')` instead
   the phone. Closing the other gap means encrypting the local cache: separate,
   deferred work, and the honest prerequisite to claiming anything stronger.
 
+- **2026-08-20 (Track AB, §10.26 — sync goes live):** several decisions
+  made while wiring the sync engine into the running app, recorded here
+  since they extend §10.26 with shapes the spec didn't fully pin down.
+  - **The reentrancy fix is coalescing, not refusal, and it now covers
+    three call sites, not one.** `push()` and `pull()` (`sync/engine.ts`)
+    and `ensureFolder()` (`sync/driveFiles.ts`) each got a module-level
+    "if already in flight, return that promise" guard — the `boot.ts`
+    `inFlight` shape the brief pointed to. The sweep (§10.26 §1's own
+    instruction) found `ensureFolder()`'s check-then-create racing itself
+    the identical way `push()` did: a device's very first sync calls it
+    from both `pull()` and `push()`, and `onOnline` fires both without
+    awaiting either, so an unguarded version would create two different
+    `KuroBello` folders. Fixed the same way, but keyed by `token` — a
+    single shared slot would hand a concurrent call for a _second account_
+    the first account's folder id the instant their two calls overlapped,
+    which is a materially worse bug than the one being fixed (writing one
+    account's data into another's Drive folder). Not currently reachable
+    (one profile's triggers active at a time), but the fix cost nothing and
+    the guard would otherwise be a latent trap for whoever adds multi-profile
+    concurrent sync. `bootstrap.ts`'s `ensureSeedConfigQueued` was
+    re-examined per the brief's instruction and judged **not** newly
+    reachable by this track's trigger wiring: it runs once from
+    `authStore.connectDrive()`, before triggers ever start, so its
+    pre-existing (and already-documented, §12) narrow double-invocation
+    risk is unchanged.
+  - **Start/stop is a reactive `authStore` subscription
+    (`sync/syncSession.ts`), not explicit calls inside `authStore.ts`'s own
+    actions**, contrary to the brief's "authStore.ts (start/stop hookpoints
+    only)" framing. `syncSession.ts` needs `useAuthStore.getState()` to
+    build the context `startSyncTriggers()` reads on every trigger firing;
+    `authStore.ts` calling back into `syncSession.ts` to start/stop would be
+    a circular import, the exact shape `lockStore.ts`'s own bottom-of-file
+    subscription comment already documents and solves for `logout()`'s
+    relock fix. Same fix, same reasoning, applied to a second cross-module
+    reaction — `syncSession.ts` subscribes to `authStore`'s `status`/`drive`
+    transition instead. `lockStore.ts`'s `lock()` gets one direct call
+    (`stopSyncSession()`) because locking never touches `authStore` at all,
+    so the subscription structurally cannot see it — this is the one
+    genuine hookpoint, and it lives in a file the brief's blast radius
+    didn't list (`lockStore.ts`), alongside `router.tsx` (also unlisted,
+    needed to mount the first-run gate).
+  - **"Pull on app open" lives in `FirstSyncGate.tsx`
+    (`src/features/sync/`), not in `syncSession.ts`'s own start moment.**
+    An eager pull fired the instant `startSyncSession()` runs would race
+    `boot.ts`: `drive` can become non-null (via the automatic
+    `reacquireDriveIfNeeded()` path) before `boot.ts` has bound a profile,
+    since that path runs from `RequireAuth`, a sibling of `BootGate`, not a
+    child — the eager pull would then find no binding and silently no-op
+    the one thing it exists to do. `FirstSyncGate` mounts strictly after
+    `BootGate` reaches `'ready'`, which is the one place a binding is
+    guaranteed to exist; it also owns the first-run full-screen gate for a
+    profile that has never pulled (`sync/status.ts`'s `hasEverSynced`),
+    since both need the identical eligibility check.
+  - **Token refresh is proactive, not reactive-on-401.** `getSyncContext()`
+    checks `session.expiresAt` against a 60s skew and silently reacquires
+    (`requestAccessToken('', DRIVE_SCOPES)`) before handing a trigger a
+    token, rather than the transport layer catching a 401 and retrying.
+    Simpler, and covers the realistic case (token already stale when a
+    trigger fires after being backgrounded); it does **not** cover the
+    literal race of a token expiring mid-download inside one already-running
+    multi-file `pull()` call, which would need per-request retry threaded
+    through `drive.ts`. Left open — the realistic case this track's edge
+    case actually describes is closed, the theoretical one is a much larger
+    change for a rare timing window.
+  - **`validate.ts`'s `parse*OpFile` functions now return
+    `{ file, skipped }`, not a bare `T | null`** — closes §12's "a malformed
+    entry is dropped with zero trace" finding by giving the count somewhere
+    real to go (`PullSummary.skippedEntries`), not just a `console.warn`
+    (which `driveFiles.ts`'s downloads also do, satisfying the "never
+    silent" rule independently of whether a UI ever reads the count). No UI
+    surfaces this yet — deliberately: the brief's own words are "so the
+    Wave 5 notice has something real to read," not "ship that notice now."
+  - **Known residual risk, escalated rather than fixed: two tabs of the
+    same account.** Every coalescing guard added this track
+    (`push`/`pull`/`ensureFolder`) is module-level state — real within one
+    tab, invisible across two. Nothing here elects a leader or coordinates
+    across tabs (no `BroadcastChannel`/Web Locks), so two tabs can still
+    race each other at the Drive-file level the same way a single tab used
+    to race itself before this fix. Follow-up recommended: a cross-tab
+    leader election (Web Locks API) before two-tabs-open-at-once is a
+    realistic scenario for real users.
+  - **Known residual risk, escalated rather than fixed: `outbox.ts`'s
+    module-level `entries` redirect could point a completing push at the
+    wrong profile's table.** `push()` receives `token`/`profile` as
+    concrete values at call time, but its final `removeOperations(pushedIds)`
+    reads whatever `outbox.ts`'s `entries` binding currently points to — if
+    a push is still in flight when `logout()` fires and a _new_ boot's
+    `setOutboxDatabase()` redirects that binding before the old push's
+    Drive round-trip resolves, `removeOperations` would call `bulkDelete` on
+    the new profile's table with the old profile's ids (a silent no-op,
+    since ids never collide) — leaving the old profile's already-uploaded
+    ops permanently stuck "pending," which re-pushes and duplicates them
+    into Drive on the next session for that account. Requires a fast
+    logout+relogin completing before a push's network round-trip — narrow,
+    not reproduced, reasoned through the code rather than confirmed live.
+    Closing it properly means threading a profile-scoped database reference
+    through `push()`/`pull()` instead of the module-level indirection
+    `outbox.ts` currently relies on — a design change to that module's own
+    "single-profile posture," `outbox.ts`'s own README entry already flags
+    as debt to "move together the day that changes." Filed rather than
+    fixed, per this track's own scope.
+
 ## 12. Backlog (pending verification / deferred work)
 
 - **The Add sheet's "gear into `/settings`" entry point was never actually
@@ -6549,9 +6651,23 @@ undefined })` → a fresh `repo.ready()` read, and `idioma` came back
   convention rather than a type deserves either a branded type or a test that
   crosses that seam.
 
-- **The Drive sync engine (§10.19, Track Z) is built and tested but not
+- ✅ **The Drive sync engine (§10.19) is wired into the running app —
+  closed 2026-08-20 (Track AB, §10.26).** `sync/syncSession.ts` supplies
+  `startSyncTriggers()` a live context (Drive-scoped token, refreshed near
+  expiry; the active profile from `repoProvider`'s boot-time binding),
+  starts/stops it reactively off `authStore`; `src/features/sync/
+FirstSyncGate.tsx` gates a genuinely fresh Drive-linked profile behind a
+  real first-run download view and runs the "pull on app open" background
+  sync for a returning one; the revived-movement notice
+  (`PullSummary.revivedMovIds`) renders as a Toast via one subscriber on
+  `useSyncStore.lastPullSummary`. Full writeup, including two residual
+  risks escalated rather than closed (two tabs of one account; an in-flight
+  push's outbox binding during a fast logout+relogin), in §11's
+  2026-08-20 Track AB entry. Original entry kept for the record:
+
+  ~~The Drive sync engine (§10.19, Track Z) is built and tested but not
   wired into the running app — deliberately, matching `repoProvider.ts`'s
-  own stub posture.** `bootstrap()`, `sync/engine.ts`'s `pull()`/`push()`/
+  own stub posture.~~ `bootstrap()`, `sync/engine.ts`'s `pull()`/`push()`/
   `startSyncTriggers()`, and `repo.drive.ts` all exist and pass their own
   tests, but nothing in `main.tsx`/`authStore.ts` calls any of them yet —
   `getRepo()` still returns the fake repo (`AGENTS.md` forbids flipping it
@@ -6564,6 +6680,7 @@ undefined })` → a fresh `repo.ready()` read, and `idioma` came back
   where a revived movement's notice (`PullSummary.revivedMovIds`, specs.md
   §10.19: "the app briefly says why") actually renders — the data is
   returned, no screen consumes it yet.
+
 - **`Activo` has no sync write path yet, matching `outbox.ts`'s own scope
   (specs.md §10.13: Movimiento CRUD + Config only this wave).** `sync/
 engine.ts`'s pull/replay side fully supports `act-<device>.json` (reads,
@@ -6611,8 +6728,19 @@ SupportedLocale = detectLocale()`, and looks up each section/category's
   colors, following that file's existing `as const satisfies Record<...>`
   pattern.
 
-- **A malformed _entry_ inside an otherwise-good Drive file is dropped with
-  zero trace.** Found by the Track Z review (§11, 2026-08-20). §10.19's edge
+- ✅ **CLOSED 2026-08-20 (Track AB, §10.26).** `parseMovOpFile`/
+  `parseActOpFile`/`parseConfigOpFile` now return `{ file, skipped }`;
+  `driveFiles.ts`'s downloads log a `console.warn` right at the I/O layer
+  the moment `skipped > 0` and the count rides into `PullSummary.skippedEntries`
+  (accumulated across every file a pull reconciles, cache hits included —
+  `deviceStore.ts`'s `syncFileCache` row now carries `skipped` alongside the
+  parsed file so a cache hit still reports it). No UI reads the aggregate
+  yet, deliberately — the Wave 5 "N entries were skipped" notice this was
+  filed for is still that future track's to build; this closes the "zero
+  trace" gap, not the notice itself. Original entry kept for the record:
+
+  ~~A malformed _entry_ inside an otherwise-good Drive file is dropped with
+  zero trace.~~ Found by the Track Z review (§11, 2026-08-20). §10.19's edge
   cases require "skip and keep going" for this case, and `validate.ts`
   correctly does — the rest of the file still replays — but nothing logs
   it: `validate.ts`'s `parseMovOpFile`/`parseActOpFile`/`parseConfigOpFile`
@@ -6660,8 +6788,20 @@ SupportedLocale = detectLocale()`, and looks up each section/category's
   honest fix is persisting the chosen locale somewhere synchronously readable
   at boot rather than gating the render.
 
-- **`push()` has no reentrancy guard, and two concurrent pushes drop an
-  operation from Drive permanently.** CONFIRMED and **reproduced** by the
+- ✅ **CLOSED 2026-08-20 (Track AB, §10.26 §1) — fixed with a failing test
+  first**, per `AGENTS.md`'s TDD mandate for anything that can lose data:
+  `engine.test.ts` reproduced the exact drop (a second `push()` call
+  arriving before the first settles) and watched it fail with
+  `mUpsertJsonFile` called twice before the fix. `push()`/`pull()` now
+  coalesce against themselves (module-level in-flight promise, `boot.ts`'s
+  own shape); the sweep this item's own §10.26 §1 asked for also found and
+  fixed the identical race in `driveFiles.ts`'s `ensureFolder()`. Full
+  writeup in §11's 2026-08-20 Track AB entry, including two residual risks
+  (two tabs; an in-flight push's outbox binding during a fast relogin)
+  escalated rather than closed. Original entry kept for the record:
+
+  ~~`push()` has no reentrancy guard, and two concurrent pushes drop an
+  operation from Drive permanently.~~ CONFIRMED and **reproduced** by the
   general cross-wave review, 2026-08-20, against the real
   `push()`/`pushMovShard` code. Full analysis in §10.26 §1, which owns the
   fix; filed here so it is visible from the backlog and not only from a spec.
@@ -6775,6 +6915,33 @@ SupportedLocale = detectLocale()`, and looks up each section/category's
   `movimientoStats.ts`'s now-exported `toIsoDate`. Same fix shape as the
   closed entry above — swap the inline `format` call for the import — just
   needs an owner for those three files.
+- **Two tabs of the same signed-in account can still race each other's
+  Drive writes.** Found while closing §10.26's reentrancy fix, 2026-08-20
+  (Track AB): `push()`/`pull()`/`ensureFolder()`'s new in-flight coalescing
+  guards (`sync/engine.ts`, `sync/driveFiles.ts`) are plain module-level
+  state, real within one tab, invisible across two. Nothing coordinates
+  across tabs (no `BroadcastChannel`, no Web Locks leader election), so two
+  tabs open at once can still hit the exact "two writers, one Drive file"
+  shape this track closed for a single tab. Not reproduced; reasoned from
+  the code. Recommended fix: a cross-tab leader election (Web Locks API is
+  the natural primitive) gating which tab's triggers are actually allowed
+  to touch Drive.
+- **A push still in flight when a fast logout+relogin completes could drain
+  the wrong profile's outbox.** Found and escalated rather than fixed,
+  2026-08-20 (Track AB, §10.26). `push()` takes `token`/`profile` as
+  concrete values, but its final `removeOperations(pushedIds)` reads
+  whatever `outbox.ts`'s module-level `entries` binding _currently_ points
+  to — if `setOutboxDatabase()` redirects that binding (the next boot's
+  rebind) before an in-flight push's Drive round-trip resolves,
+  `removeOperations` silently no-ops against the new profile's table (ids
+  never collide) and the old profile's already-uploaded ops are stuck
+  "pending" forever, re-pushing (and duplicating in Drive) on that
+  account's next session. Narrow — needs a push in flight plus a fast
+  logout+relogin racing its network round-trip — and not reproduced.
+  Closing it properly means threading a profile-scoped database reference
+  through `push()`/`pull()` instead of `outbox.ts`'s current module-level
+  indirection, which `outbox.ts`'s own README entry already names as debt
+  ("move both together the day [the single-profile posture] changes").
 
 ### Development waves (parallel tracks, sequencing, worktree log)
 

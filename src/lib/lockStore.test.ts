@@ -34,6 +34,11 @@ vi.mock('@/lib/authStore', () => ({
     subscribe: authStoreSubscribe,
   },
 }))
+const stopSyncSession = vi.fn()
+// Isolates this suite from the real sync engine/repoProvider/i18n chain
+// `syncSession.ts` otherwise pulls in — lockStore.ts's only use of it is
+// the one call under test below (specs.md §10.26 §2's "stop on lock").
+vi.mock('@/lib/sync/syncSession', () => ({ stopSyncSession }))
 
 const session = { accessToken: 'tok', expiresAt: 9_999_999_999_000 }
 const user = { email: 'a@b.com', name: 'Ana' }
@@ -193,6 +198,17 @@ describe('useLockStore', () => {
     useLockStore.getState().lock()
     expect(useLockStore.getState().phase).toBe('locked')
     expect(pinLock.forgetDek).toHaveBeenCalledOnce()
+  })
+
+  test("lock() stops the sync session (specs.md §10.26 §2) — the one transition syncSession.ts's own authStore subscription structurally cannot see, since locking never touches authStore", async () => {
+    const { useLockStore } = await import('@/lib/lockStore')
+    useLockStore.setState({ phase: 'unlocked', enabled: false })
+    useLockStore.getState().lock() // disabled — no-op, must not stop anything
+    expect(stopSyncSession).not.toHaveBeenCalled()
+
+    useLockStore.setState({ enabled: true })
+    useLockStore.getState().lock()
+    expect(stopSyncSession).toHaveBeenCalledOnce()
   })
 
   test('reset clears the enabled flag', async () => {

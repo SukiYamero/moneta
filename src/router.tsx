@@ -4,6 +4,7 @@ import { Home } from '@/routes/Home'
 import { AppShell } from '@/routes/AppShell'
 import { RequireAuth } from '@/features/auth/RequireAuth'
 import { BootGate } from '@/features/boot/BootGate'
+import { FirstSyncGate } from '@/features/sync/FirstSyncGate'
 import { RouteErrorFallback } from '@/RouteErrorFallback'
 import { SearchScreen } from '@/features/search/SearchScreen'
 import { HistoryScreen } from '@/features/history/HistoryScreen'
@@ -39,7 +40,9 @@ export const router = createBrowserRouter([
     element: (
       <RequireAuth>
         <BootGate>
-          <AppShell />
+          <FirstSyncGate>
+            <AppShell />
+          </FirstSyncGate>
         </BootGate>
       </RequireAuth>
     ),
@@ -62,9 +65,11 @@ export const router = createBrowserRouter([
     element: (
       <RequireAuth>
         <BootGate>
-          <Suspense fallback={<ScreenLoading />}>
-            <SettingsLazy />
-          </Suspense>
+          <FirstSyncGate>
+            <Suspense fallback={<ScreenLoading />}>
+              <SettingsLazy />
+            </Suspense>
+          </FirstSyncGate>
         </BootGate>
       </RequireAuth>
     ),

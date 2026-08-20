@@ -7,6 +7,11 @@ import { AppErrorBoundary } from '@/AppErrorBoundary'
 import { initServiceWorkerUpdates } from '@/lib/swUpdate'
 import '@/lib/i18n'
 import { syncStoredLocale } from '@/lib/i18n/syncStoredLocale'
+// Side-effect import: attaches the authStore subscription that starts/stops
+// the Drive sync triggers (specs.md §10.26 §2) — see that module's own
+// comment for why this is a reactive subscription rather than explicit
+// calls inside authStore.ts's own actions.
+import '@/lib/sync/syncSession'
 import '@/styles/index.css'
 
 const rootEl = document.getElementById('root')

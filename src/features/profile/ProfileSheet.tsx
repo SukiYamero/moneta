@@ -3,6 +3,7 @@ import { BottomSheet } from '@/components/shared/BottomSheet'
 import { IdentitySection } from '@/features/profile/IdentitySection'
 import { ProfilesSection } from '@/features/profile/ProfilesSection'
 import { SecuritySection } from '@/features/profile/SecuritySection'
+import { SyncSection } from '@/features/profile/SyncSection'
 import { DataSection } from '@/features/profile/DataSection'
 import { PreferencesSection } from '@/features/profile/PreferencesSection'
 
@@ -29,6 +30,7 @@ export const ProfileSheet = ({ open, onClose }: ProfileSheetProps) => {
         <h2 className="text-lg font-extrabold">{t('sheet.heading')}</h2>
         <IdentitySection />
         <ProfilesSection />
+        <SyncSection />
         <SecuritySection />
         <DataSection />
         <PreferencesSection />

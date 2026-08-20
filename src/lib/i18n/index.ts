@@ -21,6 +21,7 @@ export const I18N_NAMESPACES = [
   'tags',
   'settings',
   'lock',
+  'sync',
 ] as const
 
 // i18next initializes synchronously whenever `resources` are passed inline

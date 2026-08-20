@@ -260,6 +260,9 @@
         "google": "Google account"
       }
     },
+    "sync": {
+      "heading": "Sync"
+    },
     "security": {
       "heading": "Security"
     },
@@ -372,6 +375,32 @@
       "cancelCta": "Cancel"
     },
     "vanished": "This movement no longer exists. It may have been deleted on another device."
+  },
+  "sync": {
+    "status": {
+      "linked": "Linked to Drive",
+      "upToDate": "Up to date",
+      "pending": "Changes pending sync",
+      "syncing": "Syncing…",
+      "offline": "Offline — will sync when reconnected",
+      "lastSync": "Last synced: {{when}}",
+      "neverSynced": "Not synced yet"
+    },
+    "notices": {
+      "revived_one": "A movement you deleted came back: another device edited it after you deleted it.",
+      "revived_other": "{{count}} movements you deleted came back: another device edited them after you deleted them."
+    },
+    "download": {
+      "title": "Bringing in your data from Drive",
+      "subtitle": "The first time can take a moment.",
+      "progress_one": "{{done}} of {{total}} file",
+      "progress_other": "{{done}} of {{total}} files",
+      "offlineTitle": "Offline",
+      "offlineBody": "You need a connection to bring in your data for the first time. Connect to the internet and try again.",
+      "failedTitle": "We couldn't bring in your data",
+      "retry": "Retry",
+      "continueLocal": "Continue without Drive for now"
+    }
   },
   "settings": {
     "title": "Customize",

@@ -260,6 +260,9 @@
         "google": "Conta do Google"
       }
     },
+    "sync": {
+      "heading": "Sincronização"
+    },
     "security": {
       "heading": "Segurança"
     },
@@ -372,6 +375,32 @@
       "cancelCta": "Cancelar"
     },
     "vanished": "Este movimento não existe mais. Pode ter sido excluído em outro dispositivo."
+  },
+  "sync": {
+    "status": {
+      "linked": "Vinculado ao Drive",
+      "upToDate": "Em dia",
+      "pending": "Alterações pendentes de sincronização",
+      "syncing": "Sincronizando…",
+      "offline": "Sem conexão — vai sincronizar ao reconectar",
+      "lastSync": "Última sincronização: {{when}}",
+      "neverSynced": "Ainda não sincronizou"
+    },
+    "notices": {
+      "revived_one": "Um lançamento que você excluiu voltou a aparecer: outro dispositivo o editou depois que você o excluiu.",
+      "revived_other": "{{count}} lançamentos que você excluiu voltaram a aparecer: outro dispositivo os editou depois que você os excluiu."
+    },
+    "download": {
+      "title": "Trazendo seus dados do Drive",
+      "subtitle": "Na primeira vez pode demorar um pouco.",
+      "progress_one": "{{done}} de {{total}} arquivo",
+      "progress_other": "{{done}} de {{total}} arquivos",
+      "offlineTitle": "Sem conexão",
+      "offlineBody": "Você precisa de conexão para trazer seus dados pela primeira vez. Conecte-se à internet e tente de novo.",
+      "failedTitle": "Não conseguimos trazer seus dados",
+      "retry": "Tentar de novo",
+      "continueLocal": "Continuar sem o Drive por enquanto"
+    }
   },
   "settings": {
     "title": "Personalizar",

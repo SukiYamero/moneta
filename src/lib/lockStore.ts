@@ -14,6 +14,7 @@ import {
   unlockWithPin,
   type VaultSession,
 } from '@/lib/pinLock'
+import { stopSyncSession } from '@/lib/sync/syncSession'
 
 // lockStore substitutes its own message strings instead of forwarding the
 // error classes' — exported so `features/lock/errorCopy` keys off these
@@ -144,6 +145,14 @@ export const useLockStore = create<LockState>((set, get) => ({
     if (!get().enabled) return
     forgetDek()
     set({ phase: 'locked' })
+    // specs.md §10.26 §2: the one transition `syncSession.ts`'s own
+    // authStore subscription structurally cannot see — locking never
+    // touches `authStore`'s `status`/`drive` (it's a lockStore-only state
+    // flip), so nothing there would ever stop the triggers on its own. An
+    // in-flight push still completes (this only removes listeners, it
+    // can't abort a fetch already sent) — restarted by `hydrate()`'s own
+    // `set()` the next time `resume()` unlocks successfully.
+    stopSyncSession()
   },
   onHidden: () => {
     if (get().phase === 'unlocked') void markActive()

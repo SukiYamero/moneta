@@ -35,6 +35,17 @@ directly or is a deliberately inert stub.
   `src/lib/profiles`'s device-scoped registry, active one marked. Renders
   even for a single profile (the point is to teach the concept exists).
   Switching/renaming/consolidating are Wave 5+.
+- `SyncSection.tsx` + `useSyncWatermark.ts` — the Drive status row
+  (`specs.md` §10.26 §4): last sync, pending/syncing/up-to-date, offline.
+  Renders nothing for a guest or a signed-in user who never connected
+  Drive — no status row promising sync where none exists. The three-state
+  indicator comes from `sync/status.ts`'s pure `deriveSyncIndicator()`
+  reading `useSyncStore`'s `phase` and `useOutboxStore`'s `dirty` directly
+  (both reactive); the watermark (`lastPullAt`/`lastPushAt`, for "last
+  synced N ago") is not reactive on its own — `ProfileRecord` lives in the
+  device-scoped registry, not a store — so `useSyncWatermark.ts` re-reads
+  it via `getProfile()` whenever `phase` cycles back to `'idle'`, the one
+  moment it could actually have changed.
 - `SecuritySection.tsx` — the real production home for `LockSettings`
   (moved off the dev-only `/kit` route, `specs.md` §10.18). Only the call
   site moved; `LockSettings` itself still lives in `src/features/lock/`,
