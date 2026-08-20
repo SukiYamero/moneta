@@ -257,7 +257,12 @@ export const pull = async (token: string, profile: ProfileRecord): Promise<PullS
     await recordSuccessfulPull(profile.id)
     useSyncStore.setState({ phase: 'idle', pullProgress: null })
 
-    void compactClosedYearsIfNeeded(token, profile, movResult.items).catch((e: unknown) =>
+    void compactClosedYearsIfNeeded(
+      token,
+      profile,
+      movResult.items,
+      csvTaxonomy(configResult.config),
+    ).catch((e: unknown) =>
       console.warn('sync: compaction check failed, will retry on the next pull', e),
     )
 
@@ -442,6 +447,20 @@ export const push = async (token: string, profile: ProfileRecord): Promise<void>
 // monthly files for the year can't be verified, the whole compaction is
 // aborted — nothing is deleted on a guess.
 //
+// The yearly CSV stores category/section *names*, not the ids a Movimiento
+// carries (specs.md §10.22) — a file whose whole reason to exist is that a
+// person can open it without the app must not hand them `cat_a1b2`. The
+// taxonomy therefore comes from the same globally-merged Config the pull
+// just replayed, never from a second read that could disagree with it. A
+// pull that found no Config at all yields empty tables, and csv.ts already
+// falls back to the raw id per column rather than dropping the row.
+type CsvTaxonomy = Pick<Config, 'secciones' | 'categorias'>
+
+const csvTaxonomy = (config: Config | undefined): CsvTaxonomy => ({
+  secciones: config?.secciones ?? [],
+  categorias: config?.categorias ?? [],
+})
+
 // The compacted *shard* is scoped to this device's own files (§10.19:
 // "exactly one device ever writes any given file") — but the yearly *CSV*
 // is not the same file per-device, and must not be built from only this
@@ -463,6 +482,7 @@ export const compactYear = async (
   profile: ProfileRecord,
   year: string,
   allMovimientos: readonly Movimiento[],
+  taxonomy: CsvTaxonomy,
   locale: SupportedLocale = 'en',
 ): Promise<boolean> => {
   const folderId = profile.driveFolderId ?? (await ensureFolder(token))
@@ -506,7 +526,7 @@ export const compactYear = async (
   await Promise.all(ownMonths.map((f) => deleteFile(token, f.id)))
 
   const yearItems = allMovimientos.filter((m) => m.fecha.startsWith(year))
-  const parts = buildMovimientoCsvParts(yearItems, { locale })
+  const parts = buildMovimientoCsvParts(yearItems, { locale, ...taxonomy })
   await writeYearlyCsv(token, folderId, year, parts)
   await writeLeeme(token, folderId, locale)
 
@@ -518,9 +538,10 @@ export const compactClosedYearsIfNeeded = async (
   token: string,
   profile: ProfileRecord,
   allMovimientos: readonly Movimiento[],
+  taxonomy: CsvTaxonomy,
 ): Promise<void> => {
   const closedYear = String(Number(currentYear()) - 1)
-  await compactYear(token, profile, closedYear, allMovimientos)
+  await compactYear(token, profile, closedYear, allMovimientos, taxonomy)
 }
 
 // --- triggers ------------------------------------------------------------

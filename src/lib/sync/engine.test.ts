@@ -63,6 +63,8 @@ const movimiento = (overrides: Partial<Movimiento> = {}): Movimiento => ({
   ...overrides,
 })
 
+const EMPTY_TAXONOMY = { secciones: [], categorias: [] }
+
 const listing = (id: string, name: string, modifiedTime = 't1') => ({ id, name, modifiedTime })
 
 let profile: ProfileRecord
@@ -314,7 +316,7 @@ describe('compactYear', () => {
     )
     mUpsertJsonFile.mockResolvedValue('yearly-id')
 
-    const compacted = await compactYear('tok', profile, '2025', [], 'en')
+    const compacted = await compactYear('tok', profile, '2025', [], EMPTY_TAXONOMY, 'en')
 
     expect(compacted).toBe(true)
     expect(mDeleteFile).toHaveBeenCalledWith('tok', 'm1')
@@ -345,7 +347,7 @@ describe('compactYear', () => {
       movimiento({ id: 'different-year', fecha: '2024-01-01' }), // must be excluded
     ]
 
-    await compactYear('tok', profile, '2025', allMovimientos, 'en')
+    await compactYear('tok', profile, '2025', allMovimientos, EMPTY_TAXONOMY, 'en')
 
     const csvCall = mUpsertTextFile.mock.calls.find(
       (call) => call[1].name === 'movimientos-2025.csv',
@@ -369,15 +371,53 @@ describe('compactYear', () => {
       fileId === 'm1' ? { not: 'valid' } : { v: 1, device, periodo: '2025-02', ops: [] },
     )
 
-    const compacted = await compactYear('tok', profile, '2025', [], 'en')
+    const compacted = await compactYear('tok', profile, '2025', [], EMPTY_TAXONOMY, 'en')
 
     expect(compacted).toBe(false)
     expect(mDeleteFile).not.toHaveBeenCalled()
   })
 
+  it('writes category and section names into the yearly CSV, never the raw ids a Movimiento carries', async () => {
+    mListFiles.mockImplementation(async (_token, opts) =>
+      opts.space === 'appDataFolder' ? [] : [listing('m1', `mov-${device}-2025-01.json`)],
+    )
+    mReadJsonFile.mockResolvedValue({
+      v: 1,
+      device,
+      periodo: '2025-01',
+      ops: [
+        { op: 'put', hlc: '000000001-0000-devicea', basedOn: null, mov: movimiento({ id: 'own' }) },
+      ],
+    })
+    mUpsertJsonFile.mockResolvedValue('yearly-id')
+
+    await compactYear(
+      'tok',
+      profile,
+      '2025',
+      [movimiento({ id: 'own', fecha: '2025-01-15' })],
+      {
+        secciones: [{ id: 'sec_personal', nombre: 'Personal', orden: 0 }],
+        categorias: [
+          { id: 'cat_sueldo', nombre: 'Sueldo', seccionId: 'sec_personal', tipo: 'ingreso' },
+        ],
+      },
+      'en',
+    )
+
+    const csvCall = mUpsertTextFile.mock.calls.find(
+      (call) => call[1].name === 'movimientos-2025.csv',
+    )
+    expect(csvCall).toBeDefined()
+    expect(csvCall![1].content).toContain('Sueldo')
+    expect(csvCall![1].content).toContain('Personal')
+    expect(csvCall![1].content).not.toContain('cat_sueldo')
+    expect(csvCall![1].content).not.toContain('sec_personal')
+  })
+
   it('is a no-op when this device has no monthly files for the year', async () => {
     mListFiles.mockResolvedValue([])
-    const compacted = await compactYear('tok', profile, '2025', [], 'en')
+    const compacted = await compactYear('tok', profile, '2025', [], EMPTY_TAXONOMY, 'en')
     expect(compacted).toBe(false)
     expect(mUpsertJsonFile).not.toHaveBeenCalled()
   })
