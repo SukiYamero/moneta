@@ -49,10 +49,32 @@ const entityIdOf = (operation: OutboxOperation): string =>
 
 let clock: LogicalClock | null = null
 
+// This module owns the one clock instance every local tick comes from, so
+// it is also the one place that can fold in what a pull/push just taught it
+// (hlc.ts's `observe`/`clampToServer` — the "hybrid" half of the clock).
+// Lazily creating it here (not just in `nextHlc`) means `sync/engine.ts`
+// can call `observeRemoteHlc`/`clampOutboxClockToServer` right after a pull,
+// before this device has ever ticked locally, and have it actually stick.
+const ensureClock = async (): Promise<LogicalClock> => {
+  clock ??= createLogicalClock(await getDeviceId())
+  return clock
+}
+
 const nextHlc = async (): Promise<{ hlc: Hlc; device: string }> => {
-  const device = await getDeviceId()
-  clock ??= createLogicalClock(device)
-  return { hlc: clock.tick(), device }
+  const [c, device] = await Promise.all([ensureClock(), getDeviceId()])
+  return { hlc: c.tick(), device }
+}
+
+/** Called by `sync/engine.ts` after a pull, once per downloaded op's hlc — so this device's next local tick sorts after everything it just learned, not just what it has ticked itself. */
+export const observeRemoteHlc = async (remote: Hlc): Promise<void> => {
+  const c = await ensureClock()
+  c.observe(remote)
+}
+
+/** Called by `sync/engine.ts` whenever a Drive response carries a server `Date` (specs.md §10.19's clock-skew clamp). */
+export const clampOutboxClockToServer = async (serverNowMs: number): Promise<void> => {
+  const c = await ensureClock()
+  c.clampToServer(serverNowMs)
 }
 
 // basedOn is the best hlc this device knows for the entity: the greater of

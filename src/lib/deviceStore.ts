@@ -55,6 +55,16 @@ export type DeviceIdRow = { id: number; value: string }
 // `${entity}:${entityId}` (e.g. `movimiento:3f9c…`, or the fixed
 // `config:config` for the whole-Config entity — specs.md §12's known gap).
 export type SyncTipRow = { id: string; hlc: string }
+// `sync/engine.ts`'s cache of a previously-downloaded op file, keyed by
+// Drive fileId. `file` is `unknown` here deliberately (this module doesn't
+// know opLog.ts's types, same posture as every other row above) — but it is
+// NOT untrusted input the way a fresh download is: by the time anything is
+// written here it has already passed validate.ts once, so a cache *read* is
+// trusted, self-produced data, never re-validated. `file: null` is a cached
+// negative — a file that failed validation last time, kept so a
+// permanently malformed file isn't re-downloaded every single pull, while
+// its `modifiedTime` still lets a later fix be noticed.
+export type SyncFileCacheRow = { id: string; modifiedTime: string; file: unknown }
 
 const MARKER_ID = 1 as const
 const DRIVE_DECISION_ID = 1 as const
@@ -78,6 +88,7 @@ export const deviceDb = new Dexie('kurobello-device') as Dexie & {
   profiles: EntityTable<ProfileRow, 'id'>
   deviceId: EntityTable<DeviceIdRow, 'id'>
   syncTips: EntityTable<SyncTipRow, 'id'>
+  syncFileCache: EntityTable<SyncFileCacheRow, 'id'>
 }
 deviceDb.version(1).stores({ marker: 'id' })
 // Additive: `marker` keeps its v1 definition unchanged — same reasoning as
@@ -121,6 +132,25 @@ deviceDb.version(5).stores({
   profiles: 'id, kind, lastUsedAt',
   deviceId: 'id',
   syncTips: 'id',
+})
+// Additive again: `syncFileCache` (`sync/engine.ts`) — the raw per-file
+// cache that makes the files.list revision check (specs.md §10.19:
+// "download only the files whose modifiedTime moved") actually safe rather
+// than merely faster. `Movimiento` deliberately carries no hlc/provenance
+// (schema.ts is frozen against it), so skipping a re-download of an
+// unchanged file would silently drop its ops from every future replay if
+// nothing else remembered their content — this table is that memory. A
+// transport-layer cache (what a past pull downloaded), not app data, so it
+// belongs beside every other device-local signal here rather than on a
+// profile's own db.ts connection. Every earlier table restated unchanged.
+deviceDb.version(6).stores({
+  marker: 'id',
+  driveDecision: 'id',
+  anchor: 'id',
+  profiles: 'id, kind, lastUsedAt',
+  deviceId: 'id',
+  syncTips: 'id',
+  syncFileCache: 'id',
 })
 
 export const hasLoggedInBefore = async (): Promise<boolean> => {
