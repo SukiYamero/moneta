@@ -152,6 +152,36 @@ worth separating.
 
 The same asset closes the PWA icon item, so it is one piece of work, not two.
 
+### 9. Should a guest be able to set a PIN at all? — `owner: user`
+
+Raised 2026-08-20 by the user asking what happens when someone forgets their
+PIN. Traced through the code; the signed-in answer is sound, the guest answer
+does not exist.
+
+**Signed in:** five wrong attempts → `lockStore` wipes the vault, the device
+login marker and the Drive decision, calls `logout()`, and the user signs in
+with Google again. Their money is untouched — the vault holds the encrypted
+_token_, not the movements, which live in the profile database.
+
+**Guest:** `lockStore.enable` throws `NO_SESSION_ERROR` when there is no
+session, so a guest cannot enable the lock — but `SecuritySection` renders the
+control unconditionally, so they see it, tap it, and get an error (filed
+separately in `specs.md` §12 as a code defect).
+
+**The product question, which is yours:** if a guest _were_ allowed a PIN,
+forgetting it has no good answer. Re-entry cannot be "sign in with Google"
+because there is no Google. Either their data is wiped — the only way the PIN
+means anything, and brutal for a month of expenses lost to five mistyped
+digits — or they are let in anyway, and the PIN is decoration. A signed-in
+lockout works precisely because Google is a real second factor; a guest has
+none to demand.
+
+**The operator's reading**, offered rather than assumed: for a guest the honest
+PIN is no PIN, until the profile switcher exists and "guest" is a real identity
+rather than a transitional state. Say if you see it differently — the answer
+changes what §10.2's lock UI must cover, and therefore what item 1's design
+needs to show.
+
 ---
 
 ## Closed
