@@ -354,9 +354,6 @@ describe('useAuthStore.login', () => {
     mGetDriveDecision.mockResolvedValue('connected')
     mBootstrap.mockResolvedValue({
       folderId: 'F',
-      movimientosFileId: 'M',
-      activosFileId: 'A',
-      configFileId: 'C',
     })
 
     await useAuthStore.getState().login()
@@ -490,9 +487,6 @@ describe('useAuthStore.restore', () => {
     mGetDriveDecision.mockResolvedValue('connected')
     mBootstrap.mockResolvedValue({
       folderId: 'F',
-      movimientosFileId: 'M',
-      activosFileId: 'A',
-      configFileId: 'C',
     })
 
     await useAuthStore.getState().restore()
@@ -569,7 +563,7 @@ describe('useAuthStore.logout', () => {
       status: 'authenticated',
       user: { email: 'a@b.com', name: 'Ana' },
       session: { accessToken: 'tok', expiresAt: 1 },
-      drive: { folderId: 'F', movimientosFileId: 'M', activosFileId: 'A', configFileId: 'C' },
+      drive: { folderId: 'F' },
       error: null,
       driveOptIn: 'connected',
       driveConnecting: true,
@@ -653,9 +647,6 @@ describe('useAuthStore.connectDrive', () => {
     mToken.mockResolvedValue({ accessToken: 'drive-tok', expiresAt: 2 })
     mBootstrap.mockResolvedValue({
       folderId: 'F',
-      movimientosFileId: 'M',
-      activosFileId: 'A',
-      configFileId: 'C',
     })
     useAuthStore.setState({
       status: 'authenticated',
@@ -681,9 +672,6 @@ describe('useAuthStore.connectDrive', () => {
     mToken.mockResolvedValue({ accessToken: 'drive-tok', expiresAt: 2 })
     mBootstrap.mockResolvedValue({
       folderId: 'F',
-      movimientosFileId: 'M',
-      activosFileId: 'A',
-      configFileId: 'C',
     })
     useAuthStore.setState({
       status: 'authenticated',
@@ -723,9 +711,6 @@ describe('useAuthStore.connectDrive', () => {
     mToken.mockResolvedValue({ accessToken: 'drive-tok', expiresAt: 2 })
     mBootstrap.mockResolvedValue({
       folderId: 'F',
-      movimientosFileId: 'M',
-      activosFileId: 'A',
-      configFileId: 'C',
     })
     mHasVault.mockResolvedValue(true)
 
@@ -770,9 +755,6 @@ describe('useAuthStore.connectDrive', () => {
     resolveToken({ accessToken: 'drive-tok', expiresAt: 2 })
     mBootstrap.mockResolvedValue({
       folderId: 'F',
-      movimientosFileId: 'M',
-      activosFileId: 'A',
-      configFileId: 'C',
     })
     await pending
     expect(useAuthStore.getState().driveConnecting).toBe(false)
@@ -799,9 +781,6 @@ describe('useAuthStore.connectDrive', () => {
     resolveToken({ accessToken: 'drive-tok', expiresAt: 2 })
     mBootstrap.mockResolvedValue({
       folderId: 'F',
-      movimientosFileId: 'M',
-      activosFileId: 'A',
-      configFileId: 'C',
     })
     await pending
 
@@ -937,7 +916,7 @@ describe('useAuthStore.hydrate', () => {
     // session) — that's what the reacquire guard actually keys on.
     useAuthStore.setState({
       driveOptIn: 'connected',
-      drive: { folderId: 'F', movimientosFileId: 'M', activosFileId: 'A', configFileId: 'C' },
+      drive: { folderId: 'F' },
     })
 
     await useAuthStore.getState().hydrate(session, cachedUser)
@@ -977,9 +956,6 @@ describe('useAuthStore.hydrate', () => {
     mToken.mockResolvedValue({ accessToken: 'drive-tok', expiresAt: 2 })
     mBootstrap.mockResolvedValue({
       folderId: 'F',
-      movimientosFileId: 'M',
-      activosFileId: 'A',
-      configFileId: 'C',
     })
     useAuthStore.setState({ driveOptIn: 'pending' })
 
@@ -1076,9 +1052,6 @@ describe('useAuthStore.hydrate', () => {
 
     mBootstrap.mockResolvedValue({
       folderId: 'F',
-      movimientosFileId: 'M',
-      activosFileId: 'A',
-      configFileId: 'C',
     })
     resolveToken({ accessToken: 'drive-tok', expiresAt: 2 })
     await hydratePromise

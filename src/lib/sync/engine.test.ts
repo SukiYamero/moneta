@@ -19,6 +19,7 @@ import {
   findFile,
   readJsonFile,
   upsertJsonFile,
+  upsertTextFile,
   listFiles,
   deleteFile,
   getLastKnownServerTime,
@@ -47,6 +48,7 @@ const mReadJsonFile = vi.mocked(readJsonFile)
 const mUpsertJsonFile = vi.mocked(upsertJsonFile)
 const mListFiles = vi.mocked(listFiles)
 const mDeleteFile = vi.mocked(deleteFile)
+const mUpsertTextFile = vi.mocked(upsertTextFile)
 const mGetLastKnownServerTime = vi.mocked(getLastKnownServerTime)
 
 const movimiento = (overrides: Partial<Movimiento> = {}): Movimiento => ({
@@ -314,13 +316,46 @@ describe('compactYear', () => {
     )
     mUpsertJsonFile.mockResolvedValue('yearly-id')
 
-    const compacted = await compactYear('tok', profile, '2025', 'en')
+    const compacted = await compactYear('tok', profile, '2025', [], 'en')
 
     expect(compacted).toBe(true)
     expect(mDeleteFile).toHaveBeenCalledWith('tok', 'm1')
     expect(mDeleteFile).toHaveBeenCalledWith('tok', 'm2')
     // uploadMovShard + writeYearlyCsv + writeLeeme all go through upsert*File
     expect(mUpsertJsonFile).toHaveBeenCalled()
+  })
+
+  it("writes the yearly CSV from the full merged movimientos, not just this device's own year — otherwise a second device compacting the same year would silently overwrite the CSV with an incomplete view", async () => {
+    mListFiles.mockImplementation(async (_token, opts) =>
+      opts.space === 'appDataFolder' ? [] : [listing('m1', `mov-${device}-2025-01.json`)],
+    )
+    mReadJsonFile.mockResolvedValue({
+      v: 1,
+      device,
+      periodo: '2025-01',
+      ops: [
+        { op: 'put', hlc: '000000001-0000-devicea', basedOn: null, mov: movimiento({ id: 'own' }) },
+      ],
+    })
+    mUpsertJsonFile.mockResolvedValue('yearly-id')
+
+    // The already-globally-merged set a pull would have computed, including
+    // a movement only *another* device ever created that year.
+    const allMovimientos = [
+      movimiento({ id: 'own', fecha: '2025-01-15' }),
+      movimiento({ id: 'from-other-device', fecha: '2025-06-01' }),
+      movimiento({ id: 'different-year', fecha: '2024-01-01' }), // must be excluded
+    ]
+
+    await compactYear('tok', profile, '2025', allMovimientos, 'en')
+
+    const csvCall = mUpsertTextFile.mock.calls.find(
+      (call) => call[1].name === 'movimientos-2025.csv',
+    )
+    expect(csvCall).toBeDefined()
+    expect(csvCall![1].content).toContain('own')
+    expect(csvCall![1].content).toContain('from-other-device')
+    expect(csvCall![1].content).not.toContain('different-year')
   })
 
   it('aborts without deleting anything if any one shard cannot be verified', async () => {
@@ -336,7 +371,7 @@ describe('compactYear', () => {
       fileId === 'm1' ? { not: 'valid' } : { v: 1, device, periodo: '2025-02', ops: [] },
     )
 
-    const compacted = await compactYear('tok', profile, '2025', 'en')
+    const compacted = await compactYear('tok', profile, '2025', [], 'en')
 
     expect(compacted).toBe(false)
     expect(mDeleteFile).not.toHaveBeenCalled()
@@ -344,7 +379,7 @@ describe('compactYear', () => {
 
   it('is a no-op when this device has no monthly files for the year', async () => {
     mListFiles.mockResolvedValue([])
-    const compacted = await compactYear('tok', profile, '2025', 'en')
+    const compacted = await compactYear('tok', profile, '2025', [], 'en')
     expect(compacted).toBe(false)
     expect(mUpsertJsonFile).not.toHaveBeenCalled()
   })

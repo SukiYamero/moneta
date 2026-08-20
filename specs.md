@@ -62,25 +62,30 @@ Source of truth for types: **`src/lib/schema.ts`** — import it, never redefine
 the types. (Domain field names stay in Spanish: they are the real Drive
 columns/contract.)
 
-Three stores (all JSON files in the user's Drive):
+Three logical stores, laid out in Drive as **per-device, append-only
+operation logs** (§10.19, implemented Wave 4/Track Z — supersedes the
+earlier one-file-per-store layout: a single shared file per store cannot be
+written by two devices without losing an update, and re-uploads the whole
+history to record one entry):
 
-- `Movimiento[]` — **flow** (in/out) → `movimientos.json` in the `KuroBello` folder.
-- `Activo[]` — **balance** (what you own and what it's worth today) → `activos.json`
-  in the same folder.
-- `Config` (sections, categories, preferences, schemaVersion) → `config.json` in
-  the **appDataFolder** (syncs across devices). Location abstracted behind a single
-  repo function so it could move to the visible folder later (no UI for it in v1).
+- `Movimiento[]` — **flow** (in/out) → `mov-<device>-<YYYY-MM>.json` in the
+  `KuroBello` folder, one shard per device per month; a closed year
+  compacts to `mov-<device>-<YYYY>.json`.
+- `Activo[]` — **balance** (what you own and what it's worth today) →
+  `act-<device>.json` in the same folder (few enough that sharding buys
+  nothing).
+- `Config` (sections, categories, preferences, schemaVersion) →
+  `config-<device>.json` in the **appDataFolder** (syncs across devices).
 
-Storage format is **JSON files** (only the Drive Files API under `drive.file`).
-A Google Sheets export is a possible future, not v1.
-
-> **The one-file-per-store layout above is superseded by §10.19** (decided
-> 2026-08-19). Each store is now a set of **per-device, append-only operation
-> logs**, movements sharded by month, because a single shared file per store
-> cannot be written by two devices without losing an update and re-uploads the
-> whole history to record one entry. The three logical stores and their types
-> are unchanged — only how they are laid out in Drive. Read §10.19 before
-> touching `bootstrap.ts` or anything that names a file.
+Storage format is **JSON files** (only the Drive Files API under
+`drive.file`); each file holds `put`/`del` operations, not the stores'
+current state — see §10.19 for the full file table, the merge/replay rule,
+and why. `LEEME.txt` (localized) and a yearly `movimientos-<YYYY>.csv` (via
+`src/lib/export/csv.ts`, written by `sync/engine.ts`'s year-close
+compaction) live alongside the `KuroBello` folder's files for anyone
+opening the folder without the app. `bootstrap.ts` provisions the folder
+and `LEEME.txt`; every op-log file itself is created lazily, on first
+write, by `sync/engine.ts`'s push path — never pre-created.
 
 Local cache of everything in IndexedDB (disposable; re-downloaded from Drive if
 cleared). **The local database is always the merged truth**: the operation logs

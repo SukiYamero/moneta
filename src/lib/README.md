@@ -19,10 +19,24 @@ Shared stores, helpers, and the Drive/auth/lock logic layer. No UI here.
   evidence alone (the device's login marker, or the PIN-vault's cached
   session/profile) when offline, with `fetchGoogleUser()` running as a
   best-effort background refresh, never a blocking gate.
-- `drive.ts` — thin Drive REST client (find/create files & folders).
-- `bootstrap.ts` — idempotent provisioning of the `KuroBello` folder + the
-  three JSON data files. Find-before-create: `config.json`'s seed is only
-  written when no file exists yet, so a stored config is never overwritten.
+- `drive.ts` — thin Drive REST client: find/create/read/write/delete a
+  file or folder, `listFiles()` (paginated `files.list`, the sync engine's
+  revision check), `upsertJsonFile`/`upsertTextFile` (find-or-create-then-
+  overwrite, distinct from `bootstrap.ts`'s own find-then-keep semantics),
+  and `getLastKnownServerTime()` — passively captures the response `Date`
+  header from every call for `hlc.ts`'s clock-skew clamp, at no extra
+  request cost.
+- `bootstrap.ts` — idempotent Drive provisioning under `specs.md` §10.19's
+  op-log layout (supersedes the old fixed three-file one): ensures the
+  `KuroBello` folder (`FOLDER_NAME`, now defined in `sync/driveFiles.ts`,
+  re-exported here for `authStore.ts`'s existing import), rewrites
+  `LEEME.txt` on every connect, and — only for a device that has never
+  pushed a config file and doesn't already have one queued — enqueues one
+  seed `Config` `put` through the normal outbox/push path, so a second
+  device linking the same account later doesn't independently derive its
+  own region-based default. No longer pre-creates any op-log file itself;
+  a device's own shard/config file is created lazily by `sync/engine.ts`'s
+  push, the first time it has something to push.
 - `seedConfig.ts` — `buildSeedConfig(region = detectRegion())`: the
   first-run `Config` seed, `monedaPrincipal` derived from the device region
   via `i18n/regionCurrency.ts`. `CONFIG_SEMILLA` itself stays a **static
@@ -68,7 +82,14 @@ Shared stores, helpers, and the Drive/auth/lock logic layer. No UI here.
   and neither had shipped, so no migration was owed. The database name is
   frozen; only the module was renamed from `loginMarker.ts`. Every function
   self-catches and degrades to "no signal recorded" — storage trouble can
-  suppress a convenience, never block boot.
+  suppress a convenience, never block boot. `v5`/`v6` add two more
+  transport-layer caches for `sync/`: `syncTips` (`sync/tip.ts` — the last
+  known hlc per entity, deliberately not app data, so it lives here rather
+  than on a profile's own `db.ts` connection) and `syncFileCache`
+  (`sync/engine.ts` — a previously-downloaded, already-validated op file
+  keyed by Drive fileId, which is what makes the `files.list` revision
+  check safe rather than merely faster, since `Movimiento` itself carries
+  no hlc/provenance by design).
 - `networkStore.ts` — a small, self-initialising zustand store (attaches
   `online`/`offline` listeners at module scope, since `main.tsx` is another
   track's file) owning the online/offline hint plus the 7-hour offline
@@ -124,11 +145,17 @@ Shared stores, helpers, and the Drive/auth/lock logic layer. No UI here.
   `CrudRepo<T>` factory (shared by `movimientos`/`activos`) with keyset
   pagination, write validation, and atomic bulk paths. Its fresh-store seed
   goes through `buildSeedConfig()`, not a raw `CONFIG_SEMILLA` copy. Tests in
-  `repo.local.test.ts`. The Drive-backed implementation is a future sibling
-  file behind the same port.
+  `repo.local.test.ts`.
 - `repo.fake.ts` — in-memory `Repo` implementation, seeded with deterministic
   Spanish sample data (`createFakeRepo()` for an isolated instance, the
   `fakeRepo` singleton for app code — see `specs.md` §10.5).
+- `repo.drive.ts` — the third `Repo` implementation (`specs.md` §10.19):
+  `createDriveRepo(database)` delegates every call straight to
+  `repo.local.ts`'s `createLocalRepo()`, deliberately — §10.19 states the
+  local database is always the merged truth, so there is no "read/write
+  Drive directly" path for `Repo` methods to take. Passes the identical
+  `repo.contract.ts` suite for exactly that reason. What actually makes a
+  profile Drive-backed lives in `sync/engine.ts`, outside the `Repo` port.
 - `movimientoStats.ts` — pure derivation of every number the Home/History/
   Search screens show, from `Movimiento[]` (`specs.md` §4: views are derived,
   never stored). `periodRange()`, `filterByRange()`, `totals()`,
@@ -167,37 +194,49 @@ Shared stores, helpers, and the Drive/auth/lock logic layer. No UI here.
   own `onSuccess` (a blind `set({ config: result })` — see `specs.md` §12 for
   the gap that leaves), these three re-merge their own field into the
   freshest `get().config` in `onSuccess` too, not just the optimistic apply.
-- `hlc.ts` — a purely local hybrid logical clock (`specs.md` §10.19).
-  `tick()` yields a strictly increasing `Hlc`, encoded so two values compare
-  correctly as plain strings. It never folds in a remote clock value on
-  purpose: a device only ever writes its own Drive file.
+- `hlc.ts` — a hybrid logical clock (`specs.md` §10.19). `tick()` yields a
+  strictly increasing `Hlc`, encoded so two values compare correctly as
+  plain strings. `observe(remote)`/`clampToServer(serverNow)` are the
+  "hybrid" half — folding in a remote hlc so future ticks sort after it,
+  and recovering from a poisoned local clock using Drive's response `Date`
+  — filled in by Track Z (`sync/`), which is the first caller of either.
 - `outbox.ts` — the append-only queue of operations not yet pushed to Drive
-  (`specs.md` §10.13/§10.19) plus the `dirty` flag a future flush trigger
-  reads. Holds the op envelope (`hlc`, `basedOn`, `device`); stored in
-  `db.ts`'s `outbox` table, reached through the default `db` for now since
-  `getRepo()` is still single-profile. `enqueueOperation()` returns a
+  (`specs.md` §10.13/§10.19) plus the `dirty` flag `sync/engine.ts`'s
+  triggers read. Holds the op envelope (`hlc`, `basedOn`, `device`); stored
+  in `db.ts`'s `outbox` table, reached through the default `db` for now
+  since `getRepo()` is still single-profile. `enqueueOperation()` returns a
   `boolean`, not `void` — a storage failure reaches the caller instead of
   only a log (`docs/error-handling.md` §4), so a repo write that succeeded
-  but never queued cannot pass for success. Track Z's sync engine is its
-  first reader; nothing consumes the queue yet, deliberately — the same bet
-  that paid off building the Toast a wave before its first caller.
+  but never queued cannot pass for success. `basedOn` is the greater of
+  this device's own outbox history and `sync/tip.ts`'s cache of what a pull
+  last taught it — not outbox history alone, which is wrong the moment a
+  pull exists (see `lastHlcFor`'s own comment for the traced bug).
+  `observeRemoteHlc`/`clampOutboxClockToServer` expose the one clock
+  instance this module owns to `sync/engine.ts`, since nothing else may
+  mutate it directly.
 - `repoProvider.ts` — the single swap point: `getRepo()` returns the shared
   fake `Repo` today. `// STUB(wave3)` marks the one line to change once a
-  Drive-backed `Repo` exists (`specs.md` §12). `getActiveProfileRepo()`
-  builds the real per-profile-scoped repo and is fully tested, but nothing
-  calls it yet — the flip is gated on Wave 4's create UI.
+  create UI exists (`specs.md` §12) — `repo.drive.ts` is ready, but flipping
+  this before then would leave the app showing an empty screen with no way
+  to add anything. `getActiveProfileRepo()` builds the real per-profile-
+  scoped repo and is fully tested, but nothing calls it yet.
 - `profiles/` — the device-scoped profile registry (`specs.md` §10.15). One
   dexie database per profile (via `db.ts`'s `createProfileDb()`); the
   registry itself lives in `deviceStore.ts`'s shared `kurobello-device`
   connection (its `profiles` table). `getActiveProfile()` resolves which one
   is active by recency, with no switcher UI yet. Own `README.md`.
 - `repo.contract.ts` — shared `Repo` behavior every implementation must
-  agree on (`testRepoContract()`), invoked from both `repo.local.test.ts`
-  and `repo.fake.test.ts` (`docs/error-handling.md` §6). A plain module, not
-  a `*.test.ts` file, so vitest doesn't collect it as its own standalone
-  suite.
+  agree on (`testRepoContract()`), invoked from `repo.local.test.ts`,
+  `repo.fake.test.ts`, and `repo.drive.test.ts` (`docs/error-handling.md`
+  §6). A plain module, not a `*.test.ts` file, so vitest doesn't collect it
+  as its own standalone suite.
 - `export/` — CSV export of the user's movements (`specs.md` §10.12): pure
   serialisation (`csv.ts`) split from platform delivery (`delivery.ts`,
   `navigator.share` with a download-link fallback), orchestrated by
   `index.ts`'s `exportMovimientosToCsv()`. Reads through `getRepo()`; no UI
-  trigger yet (`specs.md` §10.18 wires it in a later stage). Own `README.md`.
+  trigger yet (`specs.md` §10.18 wires it in a later stage). Also the yearly
+  compaction CSV's own implementation (`sync/engine.ts`'s `compactYear()`
+  imports `csv.ts` directly — no second CSV module). Own `README.md`.
+- `sync/` — the Drive sync engine (`specs.md` §10.19): op-log format,
+  replay/merge, transport, sharding/compaction, and the "when it syncs"
+  triggers. Own `README.md`.

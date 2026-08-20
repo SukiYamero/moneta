@@ -257,7 +257,7 @@ export const pull = async (token: string, profile: ProfileRecord): Promise<PullS
     await recordSuccessfulPull(profile.id)
     useSyncStore.setState({ phase: 'idle', pullProgress: null })
 
-    void compactClosedYearsIfNeeded(token, profile).catch((e: unknown) =>
+    void compactClosedYearsIfNeeded(token, profile, movResult.items).catch((e: unknown) =>
       console.warn('sync: compaction check failed, will retry on the next pull', e),
     )
 
@@ -442,11 +442,28 @@ export const push = async (token: string, profile: ProfileRecord): Promise<void>
 // file." Conservative by construction: if any one of this device's own
 // monthly files for the year can't be verified, the whole compaction is
 // aborted — nothing is deleted on a guess.
+//
+// The compacted *shard* is scoped to this device's own files (§10.19:
+// "exactly one device ever writes any given file") — but the yearly *CSV*
+// is not the same file per-device, and must not be built from only this
+// device's own year, or two devices that each touched movements in the
+// same year would silently overwrite each other's half of the picture the
+// next time either compacted (traced while pressure-testing the
+// single-writer claim against this exact file — see this track's report).
+// The CSV is instead a filtered projection of `allMovimientos` — the full,
+// already-globally-merged set `pull()` just computed — so every device
+// that happens to write it writes the *same* correct content; a second
+// device's write is a harmless, idempotent duplicate, not a conflict.
+// (`LEEME.txt` gets the identical treatment for the identical reason: its
+// content is deterministic from locale + format version, never
+// accumulated per-writer data — so it, too, is a safe exception to the
+// single-writer rule rather than a violation of it.)
 
 export const compactYear = async (
   token: string,
   profile: ProfileRecord,
   year: string,
+  allMovimientos: readonly Movimiento[],
   locale: SupportedLocale = 'en',
 ): Promise<boolean> => {
   const folderId = profile.driveFolderId ?? (await ensureFolder(token))
@@ -489,20 +506,22 @@ export const compactYear = async (
   // months it replaces — and only this device's own.
   await Promise.all(ownMonths.map((f) => deleteFile(token, f.id)))
 
-  const parts = buildMovimientoCsvParts(replayed.items, { locale })
+  const yearItems = allMovimientos.filter((m) => m.fecha.startsWith(year))
+  const parts = buildMovimientoCsvParts(yearItems, { locale })
   await writeYearlyCsv(token, folderId, year, parts)
   await writeLeeme(token, folderId, locale)
 
   return true
 }
 
-/** Compacts the year before the current one, once — a no-op once this device has no monthly files left for it. Called automatically at the end of a successful pull, best-effort. */
+/** Compacts the year before the current one, once — a no-op once this device has no monthly files left for it. Called automatically at the end of a successful pull, best-effort, with that pull's own already-merged `movimientos` (never a second, partial replay). */
 export const compactClosedYearsIfNeeded = async (
   token: string,
   profile: ProfileRecord,
+  allMovimientos: readonly Movimiento[],
 ): Promise<void> => {
   const closedYear = String(Number(currentYear()) - 1)
-  await compactYear(token, profile, closedYear)
+  await compactYear(token, profile, closedYear, allMovimientos)
 }
 
 // --- triggers ------------------------------------------------------------

@@ -3,7 +3,10 @@
 CSV export of the user's movements (`specs.md` §10.12) — "download your
 movements," not a backup and not an import path (see the spec's explicit
 rejections). No UI here; §10.18's profile sheet wires the trigger in a later
-stage.
+stage. `csv.ts` has a second caller too: `sync/engine.ts`'s `compactYear()`
+imports `buildMovimientoCsvParts` directly to write the yearly CSV a
+closed year's Drive compaction produces (`specs.md` §10.19) — "do not write
+a second CSV implementation," so this module is where both callers meet.
 
 - `csv.ts` — pure serialisation: `Movimiento[]` → CSV, as an array of string
   parts (never one big concatenated string). No repo/store/UI import.
