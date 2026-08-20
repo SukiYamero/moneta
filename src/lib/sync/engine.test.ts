@@ -108,7 +108,7 @@ describe('pull', () => {
       ops: [{ op: 'put', hlc: '000000001-0000-remdev', basedOn: null, mov: movimiento() }],
     })
 
-    const summary = await pull('tok', profile)
+    const summary = await pull('tok', profile, 'en')
 
     expect(summary.filesReconciled).toBe(1)
     const database = getProfileDatabase('kurobello-engine-test')
@@ -127,10 +127,10 @@ describe('pull', () => {
       ops: [{ op: 'put', hlc: '000000001-0000-remdev', basedOn: null, mov: movimiento() }],
     })
 
-    await pull('tok', profile)
+    await pull('tok', profile, 'en')
     expect(mReadJsonFile).toHaveBeenCalledTimes(1)
 
-    await pull('tok', profile)
+    await pull('tok', profile, 'en')
     expect(mReadJsonFile).toHaveBeenCalledTimes(1) // still 1 — the cache answered the second pull
   })
 
@@ -158,7 +158,7 @@ describe('pull', () => {
           },
     )
 
-    await expect(pull('tok', profile)).resolves.toBeDefined()
+    await expect(pull('tok', profile, 'en')).resolves.toBeDefined()
     const database = getProfileDatabase('kurobello-engine-test')
     const stored = await database.movimientos.toArray()
     expect(stored.map((m) => m.id)).toEqual(['m2'])
@@ -172,7 +172,7 @@ describe('pull', () => {
       payload: movimiento({ id: 'local-only' }),
     })
 
-    await pull('tok', profile)
+    await pull('tok', profile, 'en')
 
     const database = getProfileDatabase('kurobello-engine-test')
     const stored = await database.movimientos.toArray()
@@ -189,7 +189,7 @@ describe('pull', () => {
       ops: [{ op: 'put', hlc: '000000001-0000-remdev', basedOn: null, config: CONFIG_SEMILLA }],
     })
 
-    await pull('tok', profile)
+    await pull('tok', profile, 'en')
 
     const database = getProfileDatabase('kurobello-engine-test')
     const stored = await database.config.get(1)
@@ -256,6 +256,40 @@ describe('push', () => {
     await push('tok', profile)
     expect(mFindFile).not.toHaveBeenCalled()
     expect(mUpsertJsonFile).not.toHaveBeenCalled()
+  })
+
+  it('a failure pushing one entity type never causes the other, already-uploaded type to be re-pushed (and duplicated) on retry', async () => {
+    mFindFile.mockResolvedValue(null) // fresh shard/config, nothing to verify against
+    mUpsertJsonFile.mockImplementation(async (_token, opts) => {
+      const { name } = opts as { name: string }
+      if (name.startsWith('mov-')) return 'mov-file-id'
+      throw new Error('network blip pushing config')
+    })
+    await enqueueOperation({ entity: 'movimiento', op: 'put', payload: movimiento() })
+    await enqueueOperation({ entity: 'config', op: 'put', payload: CONFIG_SEMILLA })
+
+    await expect(push('tok', profile)).rejects.toThrow('network blip pushing config')
+
+    // The movimiento op already reached Drive — it must not still be queued.
+    const stillPending = await listPendingOperations()
+    expect(stillPending.map((e) => e.entity)).toEqual(['config'])
+
+    const movCallsSoFar = mUpsertJsonFile.mock.calls.filter((c) =>
+      (c[1] as { name: string }).name.startsWith('mov-'),
+    ).length
+    expect(movCallsSoFar).toBe(1)
+
+    // Retry with the network now healthy: only the still-pending config op
+    // gets pushed. Re-pushing the movimiento shard would append a second,
+    // duplicate copy of the same op onto the file that already has it.
+    mUpsertJsonFile.mockResolvedValue('config-file-id')
+    await push('tok', profile)
+
+    const movCallsAfterRetry = mUpsertJsonFile.mock.calls.filter((c) =>
+      (c[1] as { name: string }).name.startsWith('mov-'),
+    ).length
+    expect(movCallsAfterRetry).toBe(1) // unchanged — never pushed a second time
+    await expect(listPendingOperations()).resolves.toEqual([])
   })
 })
 
@@ -437,7 +471,7 @@ describe('startSyncTriggers', () => {
     mUpsertJsonFile.mockResolvedValue('id')
     await enqueueOperation({ entity: 'movimiento', op: 'put', payload: movimiento() })
 
-    handle = startSyncTriggers(() => ({ token: 'tok', profile }))
+    handle = startSyncTriggers(() => ({ token: 'tok', profile, locale: 'en' }))
     window.dispatchEvent(new Event('online'))
     await vi.waitFor(() => expect(mListFiles).toHaveBeenCalled()) // the pull
     await vi.waitFor(() => expect(mUpsertJsonFile).toHaveBeenCalled()) // the push, since dirty
@@ -452,7 +486,7 @@ describe('startSyncTriggers', () => {
   it('pushes on pagehide only when the outbox is dirty', async () => {
     mFindFile.mockResolvedValue(null)
     mUpsertJsonFile.mockResolvedValue('id')
-    handle = startSyncTriggers(() => ({ token: 'tok', profile }))
+    handle = startSyncTriggers(() => ({ token: 'tok', profile, locale: 'en' }))
 
     window.dispatchEvent(new Event('pagehide'))
     expect(mUpsertJsonFile).not.toHaveBeenCalled() // nothing pending yet
@@ -465,7 +499,7 @@ describe('startSyncTriggers', () => {
   it('debounces a push after the outbox goes dirty', async () => {
     mFindFile.mockResolvedValue(null)
     mUpsertJsonFile.mockResolvedValue('id')
-    handle = startSyncTriggers(() => ({ token: 'tok', profile }), { debounceMs: 20 })
+    handle = startSyncTriggers(() => ({ token: 'tok', profile, locale: 'en' }), { debounceMs: 20 })
 
     await enqueueOperation({ entity: 'movimiento', op: 'put', payload: movimiento() })
     expect(mUpsertJsonFile).not.toHaveBeenCalled() // not yet — still inside the debounce window
@@ -475,7 +509,7 @@ describe('startSyncTriggers', () => {
 
   it('stop() removes every listener — a later event fires nothing', async () => {
     mListFiles.mockResolvedValue([])
-    handle = startSyncTriggers(() => ({ token: 'tok', profile }))
+    handle = startSyncTriggers(() => ({ token: 'tok', profile, locale: 'en' }))
     handle.stop()
     handle = undefined
 

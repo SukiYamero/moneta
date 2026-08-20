@@ -184,8 +184,19 @@ const DOWNLOADABLE_KINDS = new Set(['mov-month', 'mov-year', 'act', 'config'])
  * files fill in the rest — see `deviceStore.ts`'s `syncFileCache`), replay,
  * materialize into the local db, then the watermark and the local clock
  * both learn what this pull taught them.
+ *
+ * `locale` has no default: it is only ever needed for the best-effort
+ * yearly-compaction check below (`LEEME.txt`/the yearly CSV, specs.md
+ * §10.19), but threading it as a required parameter instead of a default
+ * means a caller that forgets to pass it is a compile error, not a
+ * `LEEME.txt` silently written in English for a Spanish-reading user
+ * (specs.md §11, 2026-08-19).
  */
-export const pull = async (token: string, profile: ProfileRecord): Promise<PullSummary> => {
+export const pull = async (
+  token: string,
+  profile: ProfileRecord,
+  locale: SupportedLocale,
+): Promise<PullSummary> => {
   useSyncStore.setState({ phase: 'pulling', pullProgress: null, lastError: null })
   try {
     const folderId = profile.driveFolderId ?? (await ensureFolder(token))
@@ -262,6 +273,7 @@ export const pull = async (token: string, profile: ProfileRecord): Promise<PullS
       profile,
       movResult.items,
       csvTaxonomy(configResult.config),
+      locale,
     ).catch((e: unknown) =>
       console.warn('sync: compaction check failed, will retry on the next pull', e),
     )
@@ -396,7 +408,22 @@ const pushConfig = async (
   return entries.map((e) => e.id)
 }
 
-/** Pushes every currently-pending outbox op. A no-op when the outbox is empty — the dirty flag is what keeps a reconnect free when there is nothing to send. */
+/**
+ * Pushes every currently-pending outbox op. A no-op when the outbox is
+ * empty — the dirty flag is what keeps a reconnect free when there is
+ * nothing to send.
+ *
+ * The two entity types are pushed and settled independently
+ * (`Promise.allSettled`, not `Promise.all`): a movimiento shard write and a
+ * config write are two unrelated Drive files, so one failing must never
+ * stop the other's already-durable write from being recorded. `Promise.all`
+ * would reject as soon as either promise rejects, before `removeOperations`
+ * ever runs — the entity type that *did* upload successfully would stay
+ * marked pending, and the next retry would re-download its file and append
+ * the same entries onto it a second time (a silent duplicate, not data
+ * loss, but exactly the "grows the file forever" failure this format
+ * otherwise avoids).
+ */
 export const push = async (token: string, profile: ProfileRecord): Promise<void> => {
   const pending = await listPendingOperations()
   if (pending.length === 0) return
@@ -410,11 +437,14 @@ export const push = async (token: string, profile: ProfileRecord): Promise<void>
     const movEntries = pending.filter((e) => e.entity === 'movimiento')
     const configEntries = pending.filter((e) => e.entity === 'config')
 
-    const [pushedMovIds, pushedConfigIds] = await Promise.all([
+    const [movOutcome, configOutcome] = await Promise.allSettled([
       pushMovShard(token, folderId, device, movEntries),
       pushConfig(token, device, configEntries),
     ])
-    const pushedIds = [...pushedMovIds, ...pushedConfigIds]
+    const pushedIds = [
+      ...(movOutcome.status === 'fulfilled' ? movOutcome.value : []),
+      ...(configOutcome.status === 'fulfilled' ? configOutcome.value : []),
+    ]
 
     if (pushedIds.length > 0) {
       const pushedById = new Map(pending.map((e) => [e.id, e]))
@@ -432,6 +462,13 @@ export const push = async (token: string, profile: ProfileRecord): Promise<void>
     }
 
     if (pushedIds.length === pending.length) await recordSuccessfulPush(profile.id)
+
+    // Surface a real failure only after the side that succeeded is already
+    // durably committed above — the settled rejection here is the *other*
+    // entity type's, still queued for the next retry.
+    if (movOutcome.status === 'rejected') throw movOutcome.reason
+    if (configOutcome.status === 'rejected') throw configOutcome.reason
+
     useSyncStore.setState({ phase: 'idle' })
   } catch (e) {
     useSyncStore.setState({ phase: 'idle', lastError: e instanceof Error ? e.message : String(e) })
@@ -483,7 +520,7 @@ export const compactYear = async (
   year: string,
   allMovimientos: readonly Movimiento[],
   taxonomy: CsvTaxonomy,
-  locale: SupportedLocale = 'en',
+  locale: SupportedLocale,
 ): Promise<boolean> => {
   const folderId = profile.driveFolderId ?? (await ensureFolder(token))
   const listing = await listKuroBelloFiles(token, folderId)
@@ -539,9 +576,10 @@ export const compactClosedYearsIfNeeded = async (
   profile: ProfileRecord,
   allMovimientos: readonly Movimiento[],
   taxonomy: CsvTaxonomy,
+  locale: SupportedLocale,
 ): Promise<void> => {
   const closedYear = String(Number(currentYear()) - 1)
-  await compactYear(token, profile, closedYear, allMovimientos, taxonomy)
+  await compactYear(token, profile, closedYear, allMovimientos, taxonomy, locale)
 }
 
 // --- triggers ------------------------------------------------------------
@@ -556,6 +594,8 @@ export const compactClosedYearsIfNeeded = async (
 export interface SyncContext {
   token: string
   profile: ProfileRecord
+  /** The caller's active copy locale — no default here either, same reasoning as `pull`'s own parameter above. */
+  locale: SupportedLocale
 }
 
 const PUSH_DEBOUNCE_MS = 3_000
@@ -579,7 +619,9 @@ export const startSyncTriggers = (
   const runPull = (): void => {
     const ctx = getContext()
     if (!ctx) return
-    pull(ctx.token, ctx.profile).catch((e: unknown) => console.warn('sync: pull trigger failed', e))
+    pull(ctx.token, ctx.profile, ctx.locale).catch((e: unknown) =>
+      console.warn('sync: pull trigger failed', e),
+    )
   }
 
   const onOnline = (): void => {
