@@ -4670,6 +4670,23 @@ CategoryIconKey` (new `src/features/tags/categoryIcons.ts`, a curated
   classes is a compile error **and** classes given to a tint not on the list
   is one too; before, only the second direction was checked.
 
+- 2026-08-20 — **Localizing the seed category/section names is deferred, not
+  dropped (user decision).** §10.22 Decision 6 specified it and Track G1 never
+  implemented it; asked directly, the user judged it not needed now. So a
+  first run on a `pt-BR` or `en` device still seeds the Spanish taxonomy
+  ("Sueldo", "Impuestos"…). **This is a real gap, deliberately accepted, not
+  an oversight** — it is recorded in §12 rather than quietly deleted from
+  §10.22, because the day the app has a non-Spanish-speaking first user it
+  becomes visible immediately. `buildSeedConfig()` is still the single place
+  it would go.
+
+- 2026-08-20 — **The icon grid's accessible labels stay the raw English icon
+  keys (user decision).** `"dumbbell"`, `"utensils-crossed"`, and so on, read
+  out by a screen reader in any locale. Asked directly, the user accepted it:
+  34 icons × 4 locales is real translation surface for a control whose visual
+  affordance already carries the meaning. Worth revisiting only if the app
+  gains a screen-reader-dependent audience, which nothing currently indicates.
+
 ## 12. Backlog (pending verification / deferred work)
 
 - **`dataStore.updateConfig`'s `onSuccess` blindly trusts its own write's
