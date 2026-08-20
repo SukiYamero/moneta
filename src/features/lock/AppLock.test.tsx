@@ -26,6 +26,7 @@ import { toast, useToastStore, type ToastMessageKey } from '@/lib/toastStore'
 // until src/test/setup.ts's `beforeAll` runs, which is after this module's
 // own top-level code already evaluated.
 const T = (key: ToastMessageKey): string => i18next.t(key)
+const TLock = (key: Extract<ToastMessageKey, `lock:${string}`>): string => i18next.t(key)
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -75,7 +76,7 @@ test('surfaces a lockout/session error above the app once the phase leaves "lock
       <div>app</div>
     </AppLock>,
   )
-  expect(screen.getByRole('alert')).toHaveTextContent(/demasiados intentos/i)
+  expect(screen.getByRole('alert')).toHaveTextContent(TLock('lock:errors.lockedOut'))
   expect(screen.getByText('app')).toBeInTheDocument()
 })
 

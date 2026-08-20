@@ -877,3 +877,32 @@ describe('useDataStore.updateConfig — concurrent writes (specs.md §12)', () =
     expect(useDataStore.getState().config?.preferencias.primerDiaSemana).toBe(0)
   })
 })
+
+describe('useDataStore.updateConfig — idioma round-trips through undefined (specs.md §10.24)', () => {
+  it('"seguir el dispositivo" writes idioma: undefined, and the store ends up with no idioma — not the previous value', async () => {
+    useDataStore.setState({
+      config: { ...CONFIG_SEMILLA, preferencias: { ...CONFIG_SEMILLA.preferencias, idioma: 'en' } },
+    })
+    const repo = makeFakeRepo()
+    mGetRepo.mockReturnValue(repo)
+    // repo.updateConfig echoes back whatever the merged Config looks like —
+    // same contract repo.local.ts's `{ ...existing, ...patch }` honors, and
+    // the concrete case the round-trip must survive: a `Partial<Config>`
+    // patch whose value is `undefined` (not an absent key) all the way
+    // through the store → repo → back to the store.
+    vi.mocked(repo.updateConfig).mockImplementation((patch) =>
+      Promise.resolve({
+        ...CONFIG_SEMILLA,
+        preferencias: { ...CONFIG_SEMILLA.preferencias, ...patch.preferencias },
+      }),
+    )
+
+    await useDataStore
+      .getState()
+      .updateConfig({ preferencias: { ...CONFIG_SEMILLA.preferencias, idioma: undefined } })
+
+    const preferencias = useDataStore.getState().config?.preferencias
+    expect(preferencias?.idioma).toBeUndefined()
+    expect(preferencias && 'idioma' in preferencias).toBe(true)
+  })
+})

@@ -53,15 +53,15 @@ directly or is a deliberately inert stub.
   answer, shipped visibly inert: a native `disabled` destructive `Button`
   (never wired to an `onClick`) with a `STUB(wave5)` comment on what the
   real thing needs. Never a side effect of signing out.
-- `PreferencesSection.tsx` — read-only current values for
-  `tema`/`monedaPrincipal`/`primerDiaSemana` (`Config.preferencias`) plus
-  the _detected_ app language (`idioma` is not a `Preferencias` field yet).
-  Deliberately inert this wave — each row carries its own `STUB(wave3)`
-  comment explaining why _that_ row specifically can't write yet (three
-  different reasons, not one blanket "not built"). Rendered as plain text,
-  never a button: a disabled control with a chevron reads as a dead tap
-  target, which `specs.md` §11 already ruled out once (the Home
-  notification dot).
+- `PreferencesSection.tsx` — the entry point into `/settings`
+  (`specs.md` §10.24): the `monedaPrincipal`/`primerDiaSemana`/`idioma` rows
+  are real `Link`s to `/settings` carrying the current value (the actual
+  controls live there — `src/features/settings/`). `tema` is the one row
+  that stays inert and plain text, never a `Link` — `index.html` hardcodes
+  dark, so there's nowhere to send that tap; it always reads "Oscuro"
+  rather than repeating a stored `tema` that has no effect. Reads
+  `LOCALE_LABEL` (`src/lib/i18n/localeLabels.ts`), the one endonym table
+  this section and `/settings`'s own language picker both share.
 - `ProfileSectionHeading.tsx` — the one small heading style every section
   above shares (mirrors `FilterSheet.tsx`'s local `SectionHeading`).
 - `index.ts` — the public barrel: `ProfileSheet` only. Sections are this

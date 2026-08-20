@@ -6,12 +6,14 @@ import { AppLock } from '@/features/lock/AppLock'
 import { AppErrorBoundary } from '@/AppErrorBoundary'
 import { initServiceWorkerUpdates } from '@/lib/swUpdate'
 import '@/lib/i18n'
+import { syncStoredLocale } from '@/lib/i18n/syncStoredLocale'
 import '@/styles/index.css'
 
 const rootEl = document.getElementById('root')
 if (!rootEl) throw new Error('Root element #root not found')
 
 initServiceWorkerUpdates()
+syncStoredLocale()
 
 createRoot(rootEl).render(
   <StrictMode>

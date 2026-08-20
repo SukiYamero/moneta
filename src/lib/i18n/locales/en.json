@@ -263,12 +263,10 @@
     },
     "preferences": {
       "heading": "Preferences",
-      "readOnlyNote": "These settings are shown for reference — they can't be changed here yet.",
       "theme": {
         "label": "Theme",
-        "claro": "Light",
         "oscuro": "Dark",
-        "sistema": "System"
+        "note": "The app is dark-only for now — light mode is coming with its own design."
       },
       "currency": {
         "label": "Main currency"
@@ -320,11 +318,22 @@
     }
   },
   "movimientos": {
-    "add": { "heading": "Add movement" },
-    "view": { "heading": "Movement detail", "editCta": "Edit", "deleteCta": "Delete" },
-    "edit": { "heading": "Edit movement" },
+    "add": {
+      "heading": "Add movement"
+    },
+    "view": {
+      "heading": "Movement detail",
+      "editCta": "Edit",
+      "deleteCta": "Delete"
+    },
+    "edit": {
+      "heading": "Edit movement"
+    },
     "form": {
-      "type": { "gasto": "Expense", "ingreso": "Income" },
+      "type": {
+        "gasto": "Expense",
+        "ingreso": "Income"
+      },
       "typeAriaLabel": "Movement type",
       "amountLabel": "Amount",
       "amount": {
@@ -349,5 +358,61 @@
       "cancelCta": "Cancel"
     },
     "vanished": "This movement no longer exists. It may have been deleted on another device."
+  },
+  "settings": {
+    "title": "Customize",
+    "back": "Back",
+    "categories": {
+      "heading": "Categories",
+      "newCta": "New category",
+      "newTypeLabel": "Type for the new category",
+      "type": {
+        "gasto": "Expense",
+        "ingreso": "Income"
+      },
+      "archivedGroup": "Archived",
+      "archiveCta": "Archive",
+      "restoreCta": "Restore",
+      "deleteCta": "Delete",
+      "empty": "No categories yet.",
+      "deleteConfirm": {
+        "title": "Delete this category?",
+        "description": "This can't be undone.",
+        "cancelCta": "Cancel",
+        "confirmCta": "Delete"
+      }
+    },
+    "preferences": {
+      "heading": "Preferences",
+      "language": {
+        "device": "Follow the device"
+      }
+    }
+  },
+  "lock": {
+    "screen": {
+      "pinLabel": "PIN",
+      "biometricCta": "Unlock with biometrics",
+      "unlockCta": "Unlock"
+    },
+    "settings": {
+      "activeNote": "Lock active",
+      "lockNowCta": "Lock now",
+      "disableCta": "Disable",
+      "pinLabel": "PIN (4 digits)",
+      "biometricToggleLabel": "Use biometrics",
+      "enableCta": "Enable lock"
+    },
+    "dismiss": "Close",
+    "errors": {
+      "wrongPin": "Wrong PIN. Try again.",
+      "biometricUnavailable": "Biometrics aren't available on this device.",
+      "lockedOut": "Too many attempts. Sign in with Google again.",
+      "sessionRestoreFailed": "Your PIN was correct, but we couldn't restore your session. Sign in with Google again.",
+      "unlockDefault": "Couldn't unlock. Try again.",
+      "noSession": "You need to sign in before enabling the lock.",
+      "enableDefault": "Couldn't enable the lock. Try again.",
+      "disableDefault": "Couldn't disable the lock. Try again."
+    }
   }
 }

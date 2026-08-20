@@ -1,8 +1,10 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useLockStore } from '@/lib/lockStore'
 import { unlockErrorCopy } from '@/features/lock/errorCopy'
 
 const LockScreen = () => {
+  const { t } = useTranslation('lock')
   const phase = useLockStore((s) => s.phase)
   // Gated on whether *this vault* enrolled biometrics, not just whether the
   // platform supports it — a user who declined biometrics at enrollment
@@ -24,11 +26,11 @@ const LockScreen = () => {
           className="min-h-11 rounded-md border px-4"
           onClick={() => void unlockBiometric()}
         >
-          Unlock with biometrics
+          {t('screen.biometricCta')}
         </button>
       )}
       <label className="flex flex-col gap-1">
-        <span>PIN</span>
+        <span>{t('screen.pinLabel')}</span>
         <input
           inputMode="numeric"
           pattern="\d*"
@@ -44,9 +46,9 @@ const LockScreen = () => {
         disabled={pin.length !== 4}
         onClick={() => void unlockPin(pin)}
       >
-        Unlock
+        {t('screen.unlockCta')}
       </button>
-      {error && <p role="alert">{unlockErrorCopy(error)}</p>}
+      {error && <p role="alert">{t(unlockErrorCopy(error))}</p>}
     </div>
   )
 }

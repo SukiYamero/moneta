@@ -263,12 +263,10 @@
     },
     "preferences": {
       "heading": "Preferências",
-      "readOnlyNote": "Essas configurações são exibidas, mas ainda não podem ser alteradas aqui.",
       "theme": {
         "label": "Tema",
-        "claro": "Claro",
         "oscuro": "Escuro",
-        "sistema": "Sistema"
+        "note": "O app é somente escuro por enquanto — o modo claro vem com seu próprio design."
       },
       "currency": {
         "label": "Moeda principal"
@@ -320,11 +318,22 @@
     }
   },
   "movimientos": {
-    "add": { "heading": "Adicionar movimento" },
-    "view": { "heading": "Detalhe do movimento", "editCta": "Editar", "deleteCta": "Excluir" },
-    "edit": { "heading": "Editar movimento" },
+    "add": {
+      "heading": "Adicionar movimento"
+    },
+    "view": {
+      "heading": "Detalhe do movimento",
+      "editCta": "Editar",
+      "deleteCta": "Excluir"
+    },
+    "edit": {
+      "heading": "Editar movimento"
+    },
     "form": {
-      "type": { "gasto": "Despesa", "ingreso": "Receita" },
+      "type": {
+        "gasto": "Despesa",
+        "ingreso": "Receita"
+      },
       "typeAriaLabel": "Tipo de movimento",
       "amountLabel": "Valor",
       "amount": {
@@ -349,5 +358,61 @@
       "cancelCta": "Cancelar"
     },
     "vanished": "Este movimento não existe mais. Pode ter sido excluído em outro dispositivo."
+  },
+  "settings": {
+    "title": "Personalizar",
+    "back": "Voltar",
+    "categories": {
+      "heading": "Categorias",
+      "newCta": "Nova categoria",
+      "newTypeLabel": "Tipo da nova categoria",
+      "type": {
+        "gasto": "Despesa",
+        "ingreso": "Receita"
+      },
+      "archivedGroup": "Arquivadas",
+      "archiveCta": "Arquivar",
+      "restoreCta": "Restaurar",
+      "deleteCta": "Excluir",
+      "empty": "Ainda não há categorias.",
+      "deleteConfirm": {
+        "title": "Excluir esta categoria?",
+        "description": "Essa ação não pode ser desfeita.",
+        "cancelCta": "Cancelar",
+        "confirmCta": "Excluir"
+      }
+    },
+    "preferences": {
+      "heading": "Preferências",
+      "language": {
+        "device": "Seguir o dispositivo"
+      }
+    }
+  },
+  "lock": {
+    "screen": {
+      "pinLabel": "PIN",
+      "biometricCta": "Desbloquear com biometria",
+      "unlockCta": "Desbloquear"
+    },
+    "settings": {
+      "activeNote": "Bloqueio ativo",
+      "lockNowCta": "Bloquear agora",
+      "disableCta": "Desativar",
+      "pinLabel": "PIN (4 dígitos)",
+      "biometricToggleLabel": "Usar biometria",
+      "enableCta": "Ativar bloqueio"
+    },
+    "dismiss": "Fechar",
+    "errors": {
+      "wrongPin": "PIN incorreto. Tente de novo.",
+      "biometricUnavailable": "A biometria não está disponível neste dispositivo.",
+      "lockedOut": "Muitas tentativas. Entre com o Google novamente.",
+      "sessionRestoreFailed": "Seu PIN está correto, mas não foi possível restaurar sua sessão. Entre com o Google novamente.",
+      "unlockDefault": "Não foi possível desbloquear. Tente de novo.",
+      "noSession": "Você precisa entrar antes de ativar o bloqueio.",
+      "enableDefault": "Não foi possível ativar o bloqueio. Tente de novo.",
+      "disableDefault": "Não foi possível desativar o bloqueio. Tente de novo."
+    }
   }
 }
