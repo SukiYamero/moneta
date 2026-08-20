@@ -28,6 +28,7 @@ import { PeriodPickerRow } from '@/features/history/PeriodPickerRow'
 import { YearMenu } from '@/features/history/YearMenu'
 import { BreakdownCard } from '@/features/history/BreakdownCard'
 import { HistoryLoadingState } from '@/features/history/HistoryLoadingState'
+import { useMovimientoSheetStore } from '@/features/movimientos'
 
 const SCOPES: Periodo[] = ['dia', 'semana', 'mes', 'anio']
 
@@ -41,6 +42,7 @@ export const HistoryScreen = () => {
   const { scope, anchor, setScope, selectAnchor, step, selectYear } = useHistoryPeriod()
   const [bdType, setBdType] = useState<TipoMovimiento>('gasto')
   const { locale, dateFnsLocale } = useLocaleFormatting()
+  const openMovimiento = useMovimientoSheetStore((s) => s.openMovimiento)
 
   useEffect(() => {
     void load()
@@ -200,6 +202,7 @@ export const HistoryScreen = () => {
                   categorias={categorias}
                   locale={locale}
                   dateFnsLocale={dateFnsLocale}
+                  onClick={() => openMovimiento(movimiento.id)}
                 />
               ))}
             </div>

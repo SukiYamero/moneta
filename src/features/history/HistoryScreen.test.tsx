@@ -6,6 +6,7 @@ import { fakeRepo } from '@/lib/repo.fake'
 import { breakdownBy, filterByRange, periodRange, totals } from '@/lib/movimientoStats'
 import { formatMonto, formatMontoWithSign } from '@/components/shared/movimientoView'
 import { i18next } from '@/lib/i18n'
+import { useMovimientoSheetStore } from '@/features/movimientos'
 
 // The fake repo's seed data is pinned to a fixed clock (repo.fake.ts,
 // independent of the system clock), so pinning the system clock here to the
@@ -191,5 +192,18 @@ describe('HistoryScreen', () => {
     ).not.toHaveLength(0)
 
     await i18next.changeLanguage('es')
+  })
+
+  it('tapping a row opens the movement sheet for that id (specs.md §10.23)', async () => {
+    const user = userEvent.setup()
+    useMovimientoSheetStore.setState({ addOpen: false, viewId: null })
+    render(<HistoryScreen />)
+    const row = await screen.findByRole('button', { name: /café de la mañana/i })
+
+    await user.click(row)
+
+    const movimientos = (await fakeRepo.movimientos.list()).items
+    const clicked = movimientos.find((m) => m.nota === 'Café de la mañana')!
+    expect(useMovimientoSheetStore.getState().viewId).toBe(clicked.id)
   })
 })

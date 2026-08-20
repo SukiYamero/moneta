@@ -18,8 +18,10 @@ client-side from the same `Movimiento[]` those screens read.
   results" pair. **"No data" and "no results" are deliberately two
   different empty states** — telling a new user their search matched
   nothing when they have no movements at all is the wrong message.
-  A search result row has no `onClick` yet — `// STUB(trackF)`: the
-  Movement view/edit sheet doesn't exist until Wave 3. Free-text search
+  A search result row opens the movement sheet on tap, via
+  `useMovimientoSheetStore().openMovimiento(id)` from `@/features/movimientos`
+  (`specs.md` §10.23) — the sheet itself is mounted once in `AppShell`, not
+  here. Free-text search
   matches a movement's `nota` and its category's _resolved name_ (never the
   raw `categoria` id — `specs.md` §10.22) via `searchMatch.ts`. Calls
   `useLocaleFormatting()` for the custom-range chip's date formatting and
@@ -76,9 +78,9 @@ client-side from the same `Movimiento[]` those screens read.
 
 Filter state (query/range/type/tags) is **not** synced to the URL query
 string. Considered and rejected: this screen has no shareable destination
-downstream (opening a result is a `// STUB(trackF)` no-op until the
-Movement sheet exists in Wave 3, so there is nothing to deep-link _to_
-yet), and syncing correctly would need per-field push/replace semantics —
+downstream (opening a result opens the movement sheet in place, `specs.md`
+§10.23 — it never navigates, so there is still nothing to deep-link _to_),
+and syncing correctly would need per-field push/replace semantics —
 `replace` on every keystroke of the debounced query (or the back button
 would step through individual letters) but `push` on a discrete filter
 change — which is real complexity for a benefit (mobile back-button restoring

@@ -20,7 +20,10 @@ and the movements list for the currently viewed period.
   real content. This replaced an earlier full-screen early-return that
   swapped out the header too. Enters with `animate-push-in` (a route push, not a fade — History is a
   sibling tab under the persistent `BottomNav`, not an overlay on Home,
-  despite the design drawing it as one).
+  despite the design drawing it as one). Each row's `onClick` opens the
+  movement sheet via `useMovimientoSheetStore().openMovimiento(id)` from
+  `@/features/movimientos` (`specs.md` §10.23) — the sheet itself is
+  mounted once in `AppShell`, not here.
 - `useHistoryPeriod.ts` — owns only "which period is the user looking at":
   a `scope: Periodo` plus an `anchor` ISO date. `step()` moves the anchor by
   one calendar unit (day/week/month/year) via date-fns' `add*` functions,
