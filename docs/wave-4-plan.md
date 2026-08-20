@@ -157,7 +157,43 @@ Non-negotiable, per `AGENTS.md` § Review protocol:
    whether Z's validation and G1's fallbacks agree on what "unknown category"
    means, and whether the config-op gap got quietly half-fixed in one place.
 
-## 5. Status
+## 5. Stage 2 — the contended files, resolved before dispatch
+
+Stage 2 is Track F (§10.23), Track G2 (§10.24) and the `repoProvider` flip
+(§10.25, an operator step gated on F and on a user decision).
+
+`AGENTS.md` asks for the _unowned_ file two tracks will both want. Run for
+stage 2, it found two files both tracks legitimately need, for different
+reasons:
+
+| File                                     | Track F wants                    | Track G2 wants                     |
+| ---------------------------------------- | -------------------------------- | ---------------------------------- |
+| `src/lib/dataStore.ts`                   | three mutations return `boolean` | `updateConfig`'s blind write fixed |
+| `src/features/history/HistoryScreen.tsx` | a row handler to open the sheet  | the `semana` skeleton gate         |
+
+**Resolution: neither track edits either file. Both changes land first, in an
+operator groundwork commit on `main`, before either track is dispatched.**
+
+This is deliberately not the obvious answer, which would be "assign each file
+to one track and make the other wait." Both changes are small, both are
+independently correct, and both are things the _current_ code is already
+subtly wrong about — the `Promise<void>` mutations violate
+`docs/error-handling.md` §4 today, and `updateConfig`'s blind `set` is a §12
+item today. Neither needs its consuming track to exist in order to be right.
+
+Doing them up front means stage 2 has **zero shared writable files** and the
+two tracks run genuinely in parallel, instead of one blocking on the other for
+a five-line change. Wave 3 stage 1 learned the opposite lesson the expensive
+way: `deviceStore.ts` was assigned to nobody and three tracks each built their
+own device-scoped database (`specs.md` §11, 2026-08-19).
+
+**The groundwork commit is TDD like any other correctness change** — the
+interleaving test for `updateConfig` is the same shape Track G1's review
+already used for the three category actions, and the week-start gate has a
+characterization test in §12 that must flip from documenting the bug to
+asserting the fix.
+
+## 6. Status
 
 | Track | Status                                                      |
 | ----- | ----------------------------------------------------------- |

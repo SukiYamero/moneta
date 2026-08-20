@@ -76,6 +76,42 @@ It was left out of the 2026-08-19 split — the user took two screens, the
 operator pushed five — so it currently has no owner. Decide: user designs it, or
 the operator pushes a mock like the others.
 
+### 6. The guest cliff — decide before the `repoProvider` flip — `owner: user`
+
+`specs.md` §10.25 and §12. Someone who used the app as a guest for a month
+signs in with Google and lands in a **fresh, empty profile** — their month is
+still on the device, in a profile the UI cannot switch to, because the profile
+switcher is Wave 5+.
+
+This is not a bug to fix later: it is the moment a person concludes the app
+lost their data. §12 names two acceptable answers and one that is not:
+
+- **Bring the profile switcher forward into Wave 4.** Solves it properly. Costs
+  a screen nobody has designed.
+- **The account screen says plainly where the guest data went.** Cheap and
+  honest, but does not actually get them back to it.
+- **Ship the flip and say nothing** — ruled out.
+
+**The flip does not happen until this is answered.** Which means the app does
+not start using real data until this is answered.
+
+### 7. Light theme has no design, and that now blocks a control — `owner: user`
+
+`specs.md` §10.24 Prerequisite 3 and §12. `index.html` hardcodes
+`<html class="dark">`, and every `chart-*` token in the light palette is still
+the scaffold's zero-chroma grey — so light mode is not merely unstyled, it is
+**colorless**: every category tint, chip and breakdown bar renders grey, and
+the scan-by-colour affordance stops working entirely.
+
+Consequence: **Track G2 ships no theme picker.** Offering `claro` would ship a
+control that visibly lies when tapped; offering `sistema` is worse, since it
+hands the broken palette to anyone whose phone is on light without them
+choosing it.
+
+This needs **design values**, not a code decision. Either a light palette gets
+designed in the canvas, or we decide the app is deliberately dark-only and say
+so in the UI instead of storing a `tema` preference that has no effect.
+
 ---
 
 ## Closed

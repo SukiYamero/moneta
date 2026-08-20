@@ -2157,6 +2157,516 @@ modify** — it files the gap above to §12 instead. No shared writable file.
 (`AGENTS.md`: money-adjacent and store-mutation code) — the failing test
 first, and it must be watched failing for the right reason.
 
+### 10.23 The movement sheet — creating, viewing, editing and deleting (Track F)
+
+Wave 4 stage 2. Written 2026-08-20. **Not implemented.** This is the track
+that makes the app do the thing it exists for: until it lands, a person can
+look at data they cannot create.
+
+- **Goal:** one way to write a movement, used by every entry point, so the
+  create sheet and the edit sheet cannot drift into two different forms with
+  two different validation rules.
+- **User story:** I tap the "+" in the bottom bar, type 18.000, pick Comida,
+  and save — the expense is on Home before I put the phone down. Later I tap
+  the row and fix the amount, or delete it.
+
+#### What already exists, so nothing gets rebuilt
+
+Every primitive this needs is on `main`: `BottomSheet`, `CenterModal`,
+`AmountField` (locale-aware, §10.14), `TextField`, `DateChipPicker`,
+`SegmentedControl`, `ConfirmDialog`, `MovimientoRow`, the Toast (§10.6), the
+write path (`dataStore`, §10.13) and — since Track G1 — `CategoryPicker` and
+`CategoryFormModal` (§10.22). **Track F composes; it does not add primitives.**
+
+#### Decision 1 — one form, two sheets, and no third copy of the fields
+
+The design describes an "Add sheet" and a "Movement sheet (view/edit)" as
+separate units. They share every field. Building them as two components is
+how the same validation ends up written twice and diverging.
+
+So:
+
+| Module                     | Responsibility                                                       |
+| -------------------------- | -------------------------------------------------------------------- |
+| `useMovimientoForm.ts`     | field state, validation, submit — the only place either sheet writes |
+| `MovimientoFormFields.tsx` | the field set, presentational, driven entirely by the hook           |
+| `AddMovimientoSheet.tsx`   | `BottomSheet` + the form in create mode                              |
+| `MovimientoSheet.tsx`      | `BottomSheet` hosting **view ⇄ edit** for an existing movement       |
+| `movimientoSheetStore.ts`  | which sheet is open, and for which id                                |
+
+Not one component with a `'create' | 'view' | 'edit'` union: that is the deep
+conditional branching `AGENTS.md` § Architecture tells us to split, and view
+mode shares no field state with the other two.
+
+#### Decision 2 — the sheet is opened from a store, and it holds an **id**, never a snapshot
+
+Four call sites need to open a movement — Home's recent list, History's list,
+Search's results (its `// STUB(trackF)`), and the `BottomNav` FAB (its own
+`// STUB(trackF)`, currently `disabled`). Giving each screen its own copy of
+the open state means four wirings and four bugs.
+
+One `movimientoSheetStore` (zustand, per `AGENTS.md` § State), one instance of
+each sheet mounted in `AppShell` beside `ProfileSheet`.
+
+**It stores the movement's `id`, and the sheet derives the record from
+`dataStore` on every render.** Storing the `Movimiento` object would be a
+second copy that goes stale the moment an edit — or, once Track Z is wired, a
+sync pull — changes it underneath. That is the single-source-of-truth rule
+`AGENTS.md` states, applied to sheet state.
+
+Consequence that must be handled, not discovered: **the movement can vanish
+while the sheet is open** (deleted on another device, or removed by a pull).
+The sheet closes and says so, rather than rendering a blank or crashing on
+`undefined`.
+
+#### Decision 3 — `dataStore`'s mutations must report whether they committed
+
+Today `createMovimiento`/`updateMovimiento`/`deleteMovimiento` return
+`Promise<void>` and handle every failure internally with a Toast. For a store
+with no UI that was fine. For a form it is not, and it violates a rule this
+project already wrote down:
+
+> `docs/error-handling.md` §4 — never return a success-shaped value for a
+> failure.
+
+`Promise<void>` is success-shaped. A refused write (offline past §10.11's
+window) or a failed one is indistinguishable from a successful one at the call
+site, so the sheet would close and **discard what the user typed** on a
+refusal. From the user's side that is data loss, and re-typing it is the
+punishment.
+
+**The three mutation actions return `Promise<boolean>`** — committed or not.
+The Toast still comes from `dataStore` (it owns error surfacing, §7 of
+`docs/error-handling.md`); the boolean only tells the caller whether to close.
+
+**Track F must NOT call `canWrite` itself.** §10.13 fixes it as consulted
+exactly once, in `runMutation`. A second check at the sheet is a second policy.
+
+#### Decision 4 — amount parsing returns a reason, per a decision already recorded
+
+`docs/error-handling.md` §11 already names this exact seam:
+
+> The one place `Result` earns its keep: pure, sync, expected-to-fail-often
+> parsing at the UI edge (a future `monto` input parser, the planned
+> voice-command regex parser in Track F).
+
+`parseAmount(raw, locale)` returns `number | undefined` and its own doc says
+callers may "treat 'no value yet' and 'invalid value' as the same case." For a
+**display** that is fine. For a **form** it is wrong twice over:
+
+- The user gets one message for two different mistakes. "Ingresá un monto" and
+  "Ese monto no se entiende" are not the same sentence.
+- **`parseAmount` accepts `0`** (`value >= 0`). `schema.ts` says `monto` is
+  _always positive_; zero is not positive. Today nothing calls it from a form,
+  so a `$0` movement is unreachable — the moment this sheet exists it is one
+  keystroke away, and it would be rejected only later, by the repo, as an
+  `invalid_input` Toast after the sheet already closed.
+
+So `amountFormat.ts` gains
+`parseAmountForInput(raw, locale): { ok: true; value: number } | { ok: false; reason: 'empty' | 'malformed' | 'not_positive' }`,
+hand-rolled, no library, exactly as that doc specifies. **`parseAmount` is
+reimplemented on top of it**, not duplicated beside it — one parser, two
+shapes.
+
+#### Decision 5 — the scan and voice buttons are not rendered at all this track
+
+The design's Add sheet draws both. Receipt scan is deferred **indefinitely**
+(§11, 2026-08-18) and voice is stage 3.
+
+`specs.md` §11 already ruled, for Home's notification dot, that a control which
+looks live and is not is worse than its absence. A disabled icon button in the
+middle of a form the user is trying to complete is that, with friction on top.
+**Neither is rendered.**
+
+What Track F owes stage 3 instead of a dead button is a **seam**:
+`useMovimientoForm` exposes a single `applyParsedFields(partial)` entry point,
+so the voice track adds a button and a parser without restructuring the form.
+That is the part that would be expensive to retrofit; the button is not.
+
+#### Decision 6 — `metodo` stays unset, and that is now a recorded gap rather than an omission
+
+`Movimiento.metodo` (`efectivo | debito | credito | banco`) is optional in
+`schema.ts`, seeded by `repo.fake.ts`, rendered nowhere, and **writable by no
+UI in any planned track**. The design's Add sheet has no method control.
+
+Track F does not add one — inventing a control the design never drew is scope
+the operator did not authorize. But a schema field with no writer and no owner
+is exactly the kind of thing that quietly stays broken, so it goes to §12 as a
+decision: either a control is designed, or the field is removed at the next
+structural schema change.
+
+#### UI
+
+**Create (`AddMovimientoSheet`)** — `BottomSheet`, opened by the FAB:
+
+- Type `SegmentedControl` (gasto / ingreso), defaulting to **gasto** — the
+  common case in a spending app.
+- `AmountField`, autofocused, `inputMode="decimal"`.
+- `DateChipPicker`, defaulting to today, `firstDayOfWeek` from
+  `Config.preferencias`.
+- `CategoryPicker` inline (§10.22), single-select, with its "crear «query»"
+  chip opening `CategoryFormModal` **above** the sheet — `useOverlay`'s stack
+  already handles that nesting and is tested for it (§10.5.1).
+- `TextField` for `nota`, optional.
+- Save (primary) and Cancel.
+
+**View (`MovimientoSheet`, default mode)** — `IconAvatar` + amount + the
+category name + a meta line (date, section name, `nota`), then **Editar** and
+**Eliminar**. Names are resolved through `Config`, never rendered as ids
+(§10.22).
+
+**Edit** — the same `MovimientoFormFields`, pre-filled via
+`formatAmountForInput`, with Guardar / Cancelar. Cancel returns to view mode
+without writing.
+
+**Delete** — `ConfirmDialog`, then `dataStore.deleteMovimiento`. The row
+disappears optimistically; a failure rolls back and Toasts, which `dataStore`
+already does.
+
+All of it: ≥44px targets, the shared `animate-*` tokens, `dvh` not `vh`, no
+hover-only affordance, all copy through a new `movimientos` i18n namespace in
+**all four** locale files (`resources.test.ts` enforces parity).
+
+#### Data touched
+
+- Writes `Movimiento` through `dataStore` only. `categoria = cat.id` and
+  `seccion = cat.seccionId` come from the picker (§10.22); `moneda` from
+  `Config.preferencias.monedaPrincipal`; `monto` always positive, sign from
+  `tipo`; `fecha` ISO `yyyy-mm-dd`; `createdAt` and `id` set by `dataStore`.
+- **No `schema.ts` change.**
+- `dataStore.ts`: three return types widened to `Promise<boolean>`.
+- `amountFormat.ts`: the new Result-returning parser.
+
+#### Edge cases
+
+- **Double-tap on Save** creates two movements. The hook holds a `submitting`
+  flag and the button is disabled while a submit is in flight — this is not
+  optional, it is the single most likely real-world duplicate.
+- **A refused or failed write keeps the sheet open with the values intact**
+  (Decision 3). The user retries or copies their note out; nothing is lost.
+- **The movement is deleted underneath an open sheet** — close and say so.
+- **Amount `0`, empty, `"abc"`, `"1.2.3"`, a pasted `"1e999"`** — each an
+  inline message on the field, distinct for empty vs malformed vs
+  non-positive. `1e999` parses to `Infinity`; the regex in `amountFormat.ts`
+  already rejects it, and a test must pin that rather than assume it.
+- **No category chosen** — inline, on the picker, never a Toast: this is a
+  form error and `docs/error-handling.md` §7 rules on where it lands.
+- **The last category was archived**, so the picker is empty: offer creating
+  one directly instead of a dead end.
+- **A movement whose category id no longer resolves** renders the §10.22
+  fallback in view mode and, on edit, does not silently reassign it.
+- **Editing changes `tipo`** — the sign flips; `monto` stays positive in
+  storage. A test pins that the stored `monto` never goes negative.
+- **The sheet is open when the app is backgrounded** — nothing special;
+  §10.19's flush triggers are Track Z's and do not involve the form.
+
+#### Done when
+
+- The FAB opens the create sheet; a movement created there appears on Home,
+  History and Search without a reload.
+- A row in each of those three screens opens the view sheet; edit and delete
+  work from it.
+- `rg 'STUB\(trackF\)' src` returns nothing.
+- A refused write (simulated offline past the §10.11 window) leaves the sheet
+  open with the typed values — proven by a test.
+- Saving twice in quick succession creates one movement — proven by a test.
+- `parseAmountForInput` distinguishes empty, malformed and non-positive, and
+  `parseAmount` is built on it rather than beside it.
+- The `movimientos` namespace exists in all four locale files.
+- `bun run check` is green.
+
+#### Blast radius
+
+**Owned by Track F:** `src/features/movimientos/**` (new),
+`src/lib/dataStore.ts` (three return types), `src/lib/i18n/amountFormat.ts`
+(the new parser), `src/routes/AppShell.tsx` (mount the sheets),
+`src/components/shared/BottomNav.tsx` (enable the FAB),
+`src/features/search/SearchScreen.tsx` (its `STUB(trackF)` row handler),
+`src/features/home/RecentMovimientos.tsx`,
+`src/features/history/HistoryScreen.tsx` (row handlers),
+`src/features/tags/index.ts` (add the missing barrel), the four locale files.
+
+**Explicitly NOT touched:** `schema.ts`, `repo*.ts`, `db.ts`, `src/lib/sync/**`
+(Track Z's), `src/features/settings/**` (Track G2's, running in parallel),
+`src/features/profile/**`, and `repoProvider.getRepo()` — the flip is a
+separate operator step (§10.25).
+
+**TDD is required** for `useMovimientoForm`, the new parser and the
+`dataStore` return-type change (`AGENTS.md`: money math and store mutations).
+
+### 10.24 "Personalizar" — the settings screen, and the four things it must decide (Track G2)
+
+Wave 4 stage 2. Written 2026-08-20. **Not implemented.**
+
+`docs/waves.md` says this track "carries four §12 prerequisites" and must
+**decide** them rather than discover them mid-build. That is most of this
+spec; the screen itself is small.
+
+- **Goal:** the preferences the app already stores become editable, and the
+  category list becomes manageable, without shipping a control that lies.
+- **User story:** I open Personalizar, rename "Caja menor" to something I
+  actually say, archive one I stopped using, and set the week to start on
+  Sunday — and History's week view agrees with me immediately.
+
+#### The rule this whole track is held to
+
+**A preference control that writes a value nothing reads is worse than no
+control.** `PreferencesSection` today renders four rows as deliberately inert
+`<div>`s, each with a `STUB(wave3)` comment naming a different, already-decided
+reason — that was the honest choice. Making a row tappable is only allowed when
+the value it writes has a real effect.
+
+#### Prerequisite 1 — the week-start bug is fixed **in this change**, not after it
+
+§12 records it precisely: `HistoryScreen`'s `semana` scope can render the seed
+default's week boundary and then visibly change once the real `Config` resolves
+with a different `primerDiaSemana`. It is **unreachable today** only because
+nothing can write that field. This track is what makes it reachable.
+
+**Decision: while `dataStore.status` is not `ready`, the `semana` scope does
+not render a week range or its filtered list — it renders §10.9's Tier 2
+skeleton for those two elements.** The period chrome (scope tabs, year menu)
+still renders, as it does today.
+
+Rejected alternatives, with reasons, so this is not re-litigated:
+
+- **Deriving the default from the locale's week info.** It creates a second
+  answer to "what is the default week start" living beside
+  `CONFIG_SEMILLA.primerDiaSemana`, and the two can disagree — the exact
+  duplicate-source shape `AGENTS.md` forbids.
+- **Gating the whole screen behind the load.** §10.9 exists to stop
+  full-screen loaders for work that usually finishes in milliseconds.
+
+Only the elements that are actually wrong before `ready` wait for `ready`.
+
+#### Prerequisite 2 — `idioma` becomes a real field, and absence keeps meaning "detect"
+
+There is no language field on `Preferencias`, so `PreferencesSection`'s
+language row shows the _detected_ locale, not a stored preference — its own
+comment says so.
+
+**Decision: add `idioma?: SupportedLocale` to `Preferencias`.** Additive and
+optional ⇒ **no `SCHEMA_VERSION` bump** (`schema.ts`'s own rule).
+
+**Optional is the design, not laziness:** absent means "follow the device",
+which is the correct behaviour for a user who never opened this screen and
+who then travels or changes their phone's language. A non-optional field with
+a seeded default would freeze whatever locale the first run happened to detect,
+forever, silently. The picker offers an explicit "seguir el dispositivo"
+choice that writes `undefined` back.
+
+`src/lib/i18n` applies it at boot: a stored `idioma` wins over
+`detectLocale()`; `detectRegion()` — which drives number/currency formatting —
+is **untouched**, because §11 (2026-08-19) already decided copy language and
+formatting region are two independent axes. Changing the language must not
+silently change how money is formatted.
+
+#### Prerequisite 3 — no theme picker ships this track
+
+`index.html` hardcodes `<html class="dark">`. Every `chart-*` token in `:root`
+(light) is still the scaffold's zero-chroma grey, while `.dark` carries the
+real palette (§12). So light mode is not "unstyled" — it is **colorless**:
+every category tint, every chip, every breakdown bar renders grey, and the
+scan-by-color affordance §10.8/§10.22 exist for silently stops working.
+
+**Decision: `tema` gets no control until a light design exists.** Offering
+`claro` ships a screen that visibly lies the moment it is tapped; offering
+`sistema` is worse, because it hands the broken palette to anyone whose phone
+is on light without them choosing anything.
+
+**A second, smaller honesty problem is fixed here:** `CONFIG_SEMILLA` seeds
+`tema: 'sistema'` while the app is hardcoded dark, so the stored value already
+misdescribes reality and the read-only row repeats it to the user. The row
+either states plainly that the app is dark-only for now, or it is removed —
+what it must not do is keep reporting a preference that has no effect.
+
+This is the **only** one of the four prerequisites that stays open work rather
+than being closed, and its blocker is a **design** deliverable, not code:
+`docs/pendientes-usuario.md` is where it belongs.
+
+#### Prerequisite 4 — the lock's copy is retrofitted through i18n, in one pass
+
+§12, open since Wave 2: `LockScreen`, `LockSettings` and
+`src/features/lock/errorCopy.ts` still hold hardcoded Spanish, five tracks
+after `src/lib/i18n` landed.
+
+**Decision: both the copy and the error table move in the same pass, and
+`src/features/lock/errorCopy.ts` returns a translation key** the way
+`src/features/auth/errorCopy.ts` already does — that file is the pattern to
+copy, not a new one to invent. A new `lock` namespace in all four locale files.
+
+It rides with this track and not another because §10.18 put the lock's entry
+point in the profile/settings surface, so it is the same screen family — and
+because a copy retrofit deferred five more tracks is a copy retrofit that never
+happens.
+
+#### UI
+
+A **route**, `/settings`, not an overlay — consistent with History, which the
+design also calls "full-screen" and which ships as `/history`.
+
+**Entry point decision:** the Profile sheet's `PreferencesSection` rows stop
+being inert `<div>`s and become the way in. The design puts a gear in the Add
+sheet instead; that entry point is **not built here**, because the Add sheet is
+Track F's file and the two run in parallel — it is a one-line follow-up once
+both have merged, filed rather than forgotten.
+
+Two sections:
+
+**Categorías** — the list of `Config.categorias`, grouped by section, each row
+showing its own icon and colour. Tapping one opens `CategoryFormModal` in edit
+mode (§10.22 — **reuse it, do not build a second editor**). "Nueva" opens it
+empty. Archive/restore and delete follow §10.22 Decision 5 exactly: a category
+referenced by any movement can only be **archived**; one never used can be
+deleted. Archived categories are shown in a collapsed "Archivadas" group, not
+hidden — a user who archived something needs to find it to restore it.
+
+**Preferencias** — `primerDiaSemana` (a `SegmentedControl`, domingo/lunes),
+`idioma` (the four locales by endonym, plus "seguir el dispositivo" —
+`PreferencesSection`'s existing `LOCALE_LABEL` table is the source, moved, not
+copied), and `monedaPrincipal` (the six `Moneda` values). No theme row
+(Prerequisite 3).
+
+The design's "number-format preferences (separators, show-decimals) + live
+preview" is **deliberately not built**: separators are derived from the locale
+by `Intl` (§10.7), and a manual override would be a second source of truth for
+formatting that can contradict the locale. If it is genuinely wanted it needs
+its own decision, not an implementation.
+
+#### Data touched
+
+- `Preferencias` gains `idioma?: SupportedLocale` — additive, **no
+  `SCHEMA_VERSION` bump**.
+- All writes go through `dataStore` (§10.13) — `updateConfig` for preferences,
+  and G1's `upsertCategoria`/`archiveCategoria`/`deleteCategoria` for the list.
+  **No new write convention.**
+
+#### Edge cases
+
+- **`updateConfig`'s blind `onSuccess`.** §12 records that
+  `dataStore.updateConfig` does `set({ config: result })`, overwriting whatever
+  a concurrent write already committed — the same defect G1's review fixed in
+  the three category actions and deliberately left in this one for lack of a
+  caller. **This track is that caller.** It fixes `updateConfig` the same way:
+  merge the changed field into the freshest `get().config`, never a blind
+  replace.
+- **Changing `idioma` while an overlay is open** must not remount the tree
+  under the user's finger; i18next changes the language in place.
+- **Choosing "seguir el dispositivo"** writes `undefined`, and the very next
+  boot must resolve to the detected locale — a test, since a `Partial<Config>`
+  patch that drops an undefined key is a real footgun.
+- **Archiving the last non-archived category** is refused (§10.22 edge case) —
+  the picker cannot be left empty while movements still need one.
+- **Deleting a category that a movement references** is refused, with the
+  archive path offered instead of a bare "no".
+- **Changing `primerDiaSemana` while History is mounted** re-derives the week
+  immediately; nothing caches a boundary.
+- **The lock retrofit must not change lock behaviour** — copy and error keys
+  only. Its existing tests stay green without being rewritten to match new
+  strings; assertions move to keys.
+
+#### Done when
+
+- Week start, language and currency can be changed and each has a visible,
+  immediate effect; the week-start change does not make History flash a
+  different boundary first.
+- A category can be renamed, recoloured, archived, restored, and deleted when
+  unused — all through `CategoryFormModal`, with no second editor in the tree.
+- `rg 'STUB\(wave3\)' src/features/profile` returns only rows that are still
+  legitimately inert, and the theme row no longer claims a preference that has
+  no effect.
+- No hardcoded Spanish remains in `src/features/lock`; `errorCopy.ts` returns
+  keys.
+- `dataStore.updateConfig` no longer blind-writes — proven by the same
+  interleaving test shape G1's review used.
+- The `settings` and `lock` namespaces exist in all four locale files.
+- `bun run check` is green.
+
+#### Blast radius
+
+**Owned by Track G2:** `src/features/settings/**` (new),
+`src/features/lock/**` (the i18n retrofit),
+`src/features/profile/PreferencesSection.tsx` (becomes the entry point),
+`src/features/history/HistoryScreen.tsx` — **contended, see below** —
+`src/lib/schema.ts` (`idioma`), `src/lib/dataStore.ts` — **contended** —
+`src/lib/i18n/index.ts` (apply a stored `idioma`), `src/router.tsx`, the four
+locale files.
+
+**Two files are contended with Track F and must be resolved before dispatch,
+not during it:**
+
+- **`src/lib/dataStore.ts`** — F widens three return types; G2 fixes
+  `updateConfig`'s blind write. Different functions, same file.
+- **`src/features/history/HistoryScreen.tsx`** — F adds a row handler; G2 adds
+  the `semana` skeleton gate.
+
+The operator resolves this at planning time (`AGENTS.md`: the expensive case is
+a shared file assigned to nobody). See `docs/wave-4-plan.md` §5.
+
+**TDD is required** for the `idioma` resolution, the `updateConfig` fix and the
+week-start gate.
+
+### 10.25 The `repoProvider` flip — turning the real data on
+
+Wave 4 stage 2, an **operator step, not a track**. Written 2026-08-20.
+
+`src/lib/repoProvider.ts` has one `// STUB(wave3)` line returning
+`repo.fake.ts`. Every screen in the app reads through it. Flipping it to the
+real local repo is what turns KuroBello from a demo into an app that holds a
+person's money.
+
+- **Goal:** the app reads and writes the user's real, per-profile local
+  database, and the seeded demo data is gone.
+- **Done when:** `getRepo()` returns the profile-scoped local repo, no seeded
+  movement is reachable, and creating one through Track F's sheet survives a
+  reload.
+
+#### It is gated on Track F, and that gate is not negotiable
+
+`docs/waves.md` has said since Wave 3 that flipping without a create UI leaves
+"a correct, empty, unusable app." A dashboard of zeros with no way to add
+anything is not a milestone; it is a regression a user cannot act on.
+
+#### The seeded-data cliff, which is the real reason this needs a decision
+
+`repo.fake.ts` seeds several months of realistic movements. Today the app shows
+them. After the flip a real user sees an empty app — correct, and indis­tinguish­able
+from "it deleted everything I had." §10.19 already identified this exact
+failure shape for the first-run download view and §12 for the empty-account
+cliff. **The flip must land together with an honest empty state**, not before
+it.
+
+#### The guest cliff — the open decision, and it is the user's
+
+`specs.md` §12 records it and explicitly asks for a decision **before** the
+flip rather than a bug report after it:
+
+> A person who used the app as a guest for a month signs in and lands in a
+> fresh Google profile, with their month sitting in a profile the UI cannot
+> switch to, because the switcher is Wave 5+.
+
+§12 names two acceptable answers and one unacceptable one:
+
+1. **Bring the profile switcher forward into Wave 4.** Solves it properly —
+   the guest month is one tap away. Costs a screen nobody has designed, and
+   §10.20's profile registry work would need its UI.
+2. **The account screen says plainly where the guest data went.** Cheap and
+   honest: the person is told their guest data is still on this device and
+   how to get back to it. It does not actually get them back to it.
+3. **Ship the flip and leave someone staring at an empty account** — ruled
+   out. The conclusion they will draw is that the app lost their data.
+
+**This is a product decision and it belongs to the user, not the operator.**
+It is filed in `docs/pendientes-usuario.md`; the flip does not happen until it
+is answered.
+
+#### Blast radius
+
+One line in `src/lib/repoProvider.ts`, plus whatever the chosen guest answer
+costs, plus the empty state. **It must not land in the same commit as Track F**
+— if creating a movement breaks after the flip, the two changes must be
+separable to tell which one did it.
+
 ### Wave 3 — staging and dependencies
 
 Not everything runs in parallel. A track in a later stage is **blocked** until

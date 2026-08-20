@@ -365,11 +365,11 @@ its own code review applied, plus an operator cross-track pass over the seams.
 
 **Stage 2 — blocked on stage 1:**
 
-| Track                            | Spec                              | Owns                                                                                   |
-| -------------------------------- | --------------------------------- | -------------------------------------------------------------------------------------- |
-| **F — movement sheet**           | ⚠️ **spec must be written first** | `src/features/movimientos/**` — view/edit, create, delete. Blocked on G1.              |
-| **The `repoProvider` flip**      | operator step, not a track        | Lands with F, once creating is possible. **Gated on the guest-cliff decision in §12.** |
-| **G2 — "Personalizar" settings** | ⚠️ **spec must be written first** | `src/features/settings/**`. Blocks nothing; carries the four §12 prerequisites below.  |
+| Track                            | Spec              | Owns                                                                                                     |
+| -------------------------------- | ----------------- | -------------------------------------------------------------------------------------------------------- |
+| **F — movement sheet**           | §10.23 ✅ written | `src/features/movimientos/**` — view/edit, create, delete. G1 has merged, so unblocked.                  |
+| **The `repoProvider` flip**      | §10.25 ✅ written | Operator step. Gated on F **and** on the guest-cliff decision — now `docs/pendientes-usuario.md` item 6. |
+| **G2 — "Personalizar" settings** | §10.24 ✅ written | `src/features/settings/**` + the lock i18n retrofit. All four §12 prerequisites decided in the spec.     |
 
 **Stage 3 — after the app is usable:**
 
@@ -380,9 +380,10 @@ its own code review applied, plus an operator cross-track pass over the seams.
 
 ### Before any of this is dispatched
 
-**Z and G1 have specs (§10.19, §10.22); F, G2 and H do not.** `AGENTS.md`'s
+**Stage 1 and stage 2 are specified (§10.19, §10.22, §10.23, §10.24, §10.25);
+only Track H does not have one.** `AGENTS.md`'s
 first rule is that an unspecified feature gets its §10 spec written before it
-is built, so F, G2 and H each still need one before stage 2. G2's spec in particular has to **decide** four things §12 already
+is built, so Track H still needs one before stage 3. G2's spec in particular has to **decide** four things §12 already
 files against it, not discover them mid-build: the week-start bug that becomes
 reachable the moment a picker exists; `idioma` not being a field on
 `Preferencias`; whether `claro` is offered at all while the light palette is
