@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseAmount, formatAmountForInput } from '@/lib/i18n/amountFormat'
+import { parseAmount, parseAmountForInput, formatAmountForInput } from '@/lib/i18n/amountFormat'
 
 describe('parseAmount', () => {
   it('parses a dot-grouped, comma-decimal amount (es-CO)', () => {
@@ -60,5 +60,50 @@ describe('parseAmount', () => {
 
   it('returns undefined for a hex-looking string instead of coercing it via Number()', () => {
     expect(parseAmount('0x1a', 'en-US')).toBeUndefined()
+  })
+})
+
+describe('parseAmountForInput', () => {
+  it('distinguishes empty from malformed from non-positive (docs/error-handling.md, the seam Track F picks up)', () => {
+    expect(parseAmountForInput('', 'es-CO')).toEqual({ ok: false, reason: 'empty' })
+    expect(parseAmountForInput('   ', 'es-CO')).toEqual({ ok: false, reason: 'empty' })
+    expect(parseAmountForInput('abc', 'es-CO')).toEqual({ ok: false, reason: 'malformed' })
+    expect(parseAmountForInput('0', 'es-CO')).toEqual({ ok: false, reason: 'not_positive' })
+  })
+
+  // schema.ts: `monto` is always positive — parseAmount today wrongly lets
+  // 0 through (`value >= 0`), which is the real defect this parser closes.
+  it('rejects 0 as not_positive, not as a valid amount', () => {
+    expect(parseAmountForInput('0', 'en-US')).toEqual({ ok: false, reason: 'not_positive' })
+    expect(parseAmountForInput('0,00', 'es-CO')).toEqual({ ok: false, reason: 'not_positive' })
+  })
+
+  it('rejects a negative amount as not_positive, since it is a well-formed negative number', () => {
+    expect(parseAmountForInput('-5', 'es-CO')).toEqual({ ok: false, reason: 'not_positive' })
+    expect(parseAmountForInput('-1.234,56', 'es-CO')).toEqual({ ok: false, reason: 'not_positive' })
+  })
+
+  it('returns ok:true with the parsed value for a well-formed positive amount', () => {
+    expect(parseAmountForInput('18.000', 'es-CO')).toEqual({ ok: true, value: 18000 })
+    expect(parseAmountForInput('18,000.50', 'en-US')).toEqual({ ok: true, value: 18000.5 })
+  })
+
+  it('rejects a pasted 1e999 as malformed rather than letting it reach Infinity', () => {
+    // Number('1e999') is Infinity — the regex must reject the exponent
+    // notation outright, this must not depend on an Infinity check downstream.
+    expect(parseAmountForInput('1e999', 'en-US')).toEqual({ ok: false, reason: 'malformed' })
+  })
+
+  it('rejects a lone group/decimal separator as malformed, not empty', () => {
+    expect(parseAmountForInput('.', 'es-CO')).toEqual({ ok: false, reason: 'malformed' })
+    expect(parseAmountForInput(',', 'en-US')).toEqual({ ok: false, reason: 'malformed' })
+  })
+
+  it('parseAmount is built on parseAmountForInput, not duplicated beside it', () => {
+    const parsed = parseAmountForInput('18.000', 'es-CO')
+    expect(parsed.ok).toBe(true)
+    expect(parseAmount('18.000', 'es-CO')).toBe(parsed.ok ? parsed.value : undefined)
+    expect(parseAmount('0', 'es-CO')).toBeUndefined()
+    expect(parseAmount('abc', 'es-CO')).toBeUndefined()
   })
 })
