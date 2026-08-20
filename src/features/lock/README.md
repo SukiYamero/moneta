@@ -27,8 +27,10 @@ PIN/biometric lock UI, layered on top of auth.
   routed through `@/lib/i18n` — the lock's full i18n retrofit stays out of
   scope this track (`specs.md` §12).
 
-All screens read `useLockStore` (`@/lib/lockStore`) for state. `useLockStore`
-also listens for `useAuthStore`'s logout transition (a module-scope
-`useAuthStore.subscribe` in `@/lib/lockStore`, not an import back into
-`authStore.ts`) and re-locks the vault when a same-tab `logout()` fires
-while the lock is enabled (`specs.md` §12 backlog).
+All screens read `useLockStore` (`@/lib/lockStore`) for state.
+`useLockStore` also listens for `useAuthStore`'s logout transition (a
+module-scope `useAuthStore.subscribe` in `@/lib/lockStore`, not an import back
+into `authStore.ts`) and resets to `phase: 'unlocked'`, `enabled: false` when a
+same-tab `logout()` fires — `authStore.logout()` now invalidates the vault
+itself (`specs.md` §10.20), so re-locking behind it would strand the tab on a
+PIN screen that can never succeed.

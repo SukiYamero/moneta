@@ -297,7 +297,7 @@ create UI (Wave 4, Track F) it would leave the app empty and unusable.
 
 ---
 
-## Wave 3.1 — signing out means something (2026-08-19)
+## Wave 3.1 — ✅ COMPLETE (merged to `main`, 2026-08-19)
 
 One track, raised by the user while reviewing Wave 3's own output. Specified in
 `specs.md` §10.20 — read the spec, not this summary.
@@ -411,9 +411,7 @@ Check this table against `git worktree list` at the start of any parallel
 session; prune anything stale (merged-but-not-removed, or on disk but
 missing/finished here).
 
-| Path                            | Branch               | Status |
-| ------------------------------- | -------------------- | ------ |
-| `../moneta-worktrees/wave31-aa` | `wave3.1/aa-signout` | active |
+_Empty — every Wave 3 / 3.1 worktree was removed when its branch merged._
 
 Paths are relative to the repo root (`web/moneta`), i.e. a sibling
 `web/moneta-worktrees/` directory outside the repo — deliberately not nested

@@ -3544,6 +3544,40 @@ lint` clean bar the one pre-existing `components/ui` warning). `AGENTS.md`
   dashboard of zeros**. It must never block a profile that already has local
   data (§10.11). Spec in §10.19.
 
+- 2026-08-19 — **Signing out invalidates the vault through the existing
+  `pinLock.resetVault()`** (fire-and-forget, self-catching, called from
+  `authStore.logout()`) rather than adding a second vault-clearing path. Its
+  existing side effects are correct here too: clearing the device login marker
+  is what stops `restore()`'s silent re-auth from signing the just-left
+  account back in on the next cold boot — the same resurrection defect through
+  a different door. `lockStore`'s same-tab-logout subscription changed from
+  re-locking to resetting to `{ phase: 'unlocked', enabled: false }`, because
+  re-locking behind a vault that is being deleted can only strand the tab on a
+  PIN screen that will never succeed. Spec in §10.20.
+
+- 2026-08-19 — **A profile is keyed on the Google `sub`, not the email.** The
+  first implementation used `user.email`; the review caught it before anything
+  shipped. `sub` is OIDC's stable, never-reassigned subject identifier and the
+  `oauth2/v3/userinfo` endpoint already returns it — `auth.ts` simply did not
+  map it. An email is not stable: a Workspace admin renaming a primary address
+  would resolve the same person to a brand-new empty profile, which reads as
+  total data loss. `accountKey` is **stored**, so this was a one-line choice
+  today and a data migration in a month. `resolveGoogleProfile()` is called
+  from `login()`/`restore()`/`hydrate()` and does the find-or-create inside
+  **one** transaction — the review reproduced a same-tick race first, where a
+  login racing a silent restore minted two profiles for one account. That is
+  the same read-modify-write twin the registry had already fixed once for
+  `lastUsedAt`. `getActiveProfile()`'s pure-recency resolution is unchanged:
+  touching the right profile's `lastUsedAt` is enough to make recency
+  identity-correct.
+
+- 2026-08-19 — **The sign-out confirm counts distinct movement ids, not
+  outbox entries**, so two queued edits to one movement read as "1" — matching
+  what the copy literally claims. The "delete stored data" stub is a
+  **disabled real `Button`**, not an inert `<div>`: the `<div>` pattern is for
+  read-only _values_, and a disabled control is the right way to say "this
+  action exists and is not available yet".
+
 ## 12. Backlog (pending verification / deferred work)
 
 - **The lock feature is not internationalised at all.** `LockScreen`,
@@ -3842,23 +3876,11 @@ lint` clean bar the one pre-existing `components/ui` warning). `AGENTS.md`
   (derived per render). That question belongs with Wave 5+'s profile
   switcher, which is what makes renaming real.
 
-- **CONFIRMED DEFECT, open: "Sign out" does not sign anyone out when the PIN
-  lock is enabled.** Traced end to end during Track Y's review.
-  `authStore.logout()` clears the in-memory session and — via `lockStore`'s
-  subscription — re-locks the vault, but **nothing invalidates the encrypted
-  session cached inside the vault**. So entering the correct PIN runs
-  `unlockWithPin` → `resume()` → `hydrate()` with that same cached session and
-  lands the user back in `status: 'authenticated'` for the exact account they
-  just tried to leave. For any user with the lock on, "Sign out" is
-  behaviourally identical to the "Lock now" button sitting a section below it.
-  The underlying gap is pre-existing (`logout()` never cleared the vault), but
-  it was **unreachable until §10.18 shipped a sign-out control**, so it is now
-  a user-visible defect and not latent debt. A guest is unaffected — the
-  control only renders for `status === 'authenticated'`. This is the same
-  class `specs.md` §11 already ruled on with the notification dot: a control
-  making a claim the app cannot keep is a defect, not a placeholder. The fix
-  is a product decision about what signing out means under an active lock,
-  pending with the user.
+- ✅ **"Sign out" now signs the user out** — closed 2026-08-19 (Track AA,
+  §10.20). `logout()` invalidates the vault, so a correct PIN afterwards
+  reaches `WelcomeScreen` instead of resurrecting the account just left. The
+  defect was traced by Track Y's review and reproduced with a failing test
+  before the fix.
 
 - **Sequencing constraint for the `repoProvider` flip: a guest who signs in
   will see an empty account.** §10.15 correctly decides that a guest's local
@@ -3874,6 +3896,24 @@ lint` clean bar the one pre-existing `components/ui` warning). `AGENTS.md`
   someone staring at an empty account, because the conclusion they will draw
   is that the app lost their data. Recorded before the flip so it is a
   decision, not a bug report.
+
+- **A vault-invalidation failure on sign-out is logged, not retried.** If
+  `resetVault()` throws (storage blocked, quota), the current tab still signs
+  out cleanly — the state reset happens first, unconditionally — but the vault
+  row can survive. A later cold boot that never saw the failure could then
+  show a PIN screen for the old account. Narrow window, no retry or queue
+  today, `console.error` the only trace.
+
+- **`resolveGoogleProfile` never refreshes an existing profile's label** when
+  the Google display name changes. Deliberate: updating a stored label from
+  upstream identity is adjacent to Wave 5+'s renaming feature, not a
+  side effect to add now.
+
+- **`ConfirmDialog`'s confirm button is hardcoded `variant="destructive"`.**
+  The sign-out dialog reuses it even though signing out keeps the data and is
+  not destructive — a copy/styling mismatch, not a bug. Worth a variant when a
+  second non-destructive caller exists, not before (Track U deliberately
+  shipped without a `confirmVariant` prop for that reason).
 
 ### Development waves (parallel tracks, sequencing, worktree log)
 
