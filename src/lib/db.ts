@@ -1,5 +1,9 @@
 import Dexie, { type EntityTable } from 'dexie'
 import type { Activo, Config, Movimiento } from '@/lib/schema'
+// Type-only: outbox.ts imports the runtime `db`/`createProfileDb` below, so
+// only a type import here avoids a value-level import cycle between the two
+// modules (erased entirely by the TS compiler, never reaches the bundle).
+import type { OutboxEntry } from '@/lib/outbox'
 
 export const VAULT_ID = 1 as const
 export const CONFIG_ID = 1 as const
@@ -33,6 +37,7 @@ export type ProfileDb = Dexie & {
   movimientos: EntityTable<Movimiento, 'id'>
   activos: EntityTable<Activo, 'id'>
   config: EntityTable<ConfigRow, 'id'>
+  outbox: EntityTable<OutboxEntry, 'id'>
 }
 
 // Builds one profile's local database against an arbitrary Dexie name
@@ -70,6 +75,25 @@ export const createProfileDb = (name: string): ProfileDb => {
     activos:
       'id, fechaActualizacion, seccion, [seccion+fechaActualizacion], [fechaActualizacion+id], [seccion+fechaActualizacion+id]',
     config: 'id',
+  })
+
+  // Additive: `outbox` (specs.md §10.13/§10.19's local sync queue) is a
+  // new table on this same per-profile connection, not a database of its
+  // own (`kurobello-outbox`, as first built) — this is per-profile data
+  // (each profile's own pending operations), so it belongs beside
+  // `movimientos`/`config`, the same reasoning that folded the device-wide
+  // signals into `kurobello-device` (specs.md §11, 2026-08-19), applied to
+  // the per-profile side instead. Never shipped under the old name, so no
+  // migration is owed (verified, not assumed — same premise that
+  // consolidation checked). Every earlier table restated unchanged.
+  database.version(3).stores({
+    vault: 'id',
+    movimientos:
+      'id, fecha, seccion, [seccion+fecha], [fecha+createdAt], [seccion+fecha+createdAt]',
+    activos:
+      'id, fechaActualizacion, seccion, [seccion+fechaActualizacion], [fechaActualizacion+id], [seccion+fechaActualizacion+id]',
+    config: 'id',
+    outbox: 'id, hlc, [entity+entityId]',
   })
 
   return database

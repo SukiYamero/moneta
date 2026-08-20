@@ -1,6 +1,6 @@
-import Dexie, { type EntityTable } from 'dexie'
 import { create } from 'zustand'
 import type { Config, Movimiento } from '@/lib/schema'
+import { db } from '@/lib/db'
 import { getDeviceId } from '@/lib/deviceStore'
 import { createLogicalClock, type Hlc, type LogicalClock } from '@/lib/hlc'
 
@@ -31,17 +31,15 @@ export interface OutboxEntry {
   operation: OutboxOperation
 }
 
-type OutboxDb = Dexie & { entries: EntityTable<OutboxEntry, 'id'> }
-
-// A dedicated database, not a table on the per-profile ProfileDb
-// (`db.ts`, `specs.md` §10.15): the outbox is sync bookkeeping, not domain
-// data, and this track's blast radius doesn't touch `db.ts`. One outbox for
-// the whole device for now — `repoProvider.getRepo()` still serves a single
-// active repo (profile-scoped writes aren't wired yet), so there's exactly
-// one thing to queue for; see this track's report for the follow-up once
-// that changes.
-export const outboxDb = new Dexie('kurobello-outbox') as OutboxDb
-outboxDb.version(1).stores({ entries: 'id, hlc, [entity+entityId]' })
+// A table on the per-profile `ProfileDb` (`db.ts`'s `outbox` table, added
+// in its v3), not a database of its own: the queue is per-profile data —
+// each profile's own pending operations — the same reasoning that keeps
+// `movimientos`/`config` on this connection rather than a shared one. Reads
+// through the frozen default `db` (the `kurobello` profile) for now, matching
+// `repoProvider.getRepo()`'s own current single-profile reality — the day
+// `dataStore.ts` writes through `getActiveProfileRepo()` instead, this must
+// move with it (see specs.md §12).
+const entries = db.outbox
 
 const CONFIG_ENTITY_ID = 'config'
 
@@ -64,10 +62,7 @@ const nextHlc = async (): Promise<{ hlc: Hlc; device: string }> => {
 // whoever builds it, not something fakeable here without a merge to read.
 const lastHlcFor = async (entity: string, entityId: string): Promise<Hlc | null> => {
   try {
-    const rows = await outboxDb.entries
-      .where('[entity+entityId]')
-      .equals([entity, entityId])
-      .sortBy('hlc')
+    const rows = await entries.where('[entity+entityId]').equals([entity, entityId]).sortBy('hlc')
     return rows.at(-1)?.hlc ?? null
   } catch (e) {
     console.warn('outbox: could not read prior operations for basedOn, treating as unseen', e)
@@ -86,7 +81,7 @@ export const useOutboxStore = create<OutboxState>(() => ({ dirty: false }))
 
 const refreshDirty = async (): Promise<void> => {
   try {
-    const count = await outboxDb.entries.count()
+    const count = await entries.count()
     useOutboxStore.setState({ dirty: count > 0 })
   } catch (e) {
     console.warn('outbox: could not read the pending count', e)
@@ -100,13 +95,18 @@ void refreshDirty()
 
 // Appends one operation to the queue, stamping the envelope (hlc, basedOn,
 // device) itself so every caller produces an identically-shaped entry.
-// Best-effort and self-catching, matching every other device-local write in
-// this codebase (deviceStore.ts, networkStore.ts's anchor): by the time
-// this runs, the caller's repo write has already succeeded and the user has
-// already seen the result — a queueing failure here can only ever cost a
-// future sync, never the local data itself (this track's repo-vs-outbox
-// ordering decision; see docs/wave-3/t.md).
-export const enqueueOperation = async (operation: OutboxOperation): Promise<void> => {
+// Self-catching like every other device-local write in this codebase
+// (deviceStore.ts, networkStore.ts's anchor) — it never throws, so a
+// queueing failure can never roll back the caller's repo write, which by
+// the time this runs has already succeeded and is already what the user
+// sees. But unlike those low-stakes device-signal writes, a dropped op here
+// is not benign: it is the one and only record that this change needs to
+// reach Drive, and nothing else will ever re-derive it. Returning `false`
+// (never a bare `Promise<void>` — docs/error-handling.md §4, "never return
+// a success-shaped value for a failure") lets the caller decide what a
+// permanently-unsynced write means to the user, instead of that failure
+// living only in a console a user never opens.
+export const enqueueOperation = async (operation: OutboxOperation): Promise<boolean> => {
   const entityId = entityIdOf(operation)
   try {
     const [basedOn, { hlc, device }] = await Promise.all([
@@ -123,17 +123,19 @@ export const enqueueOperation = async (operation: OutboxOperation): Promise<void
       enqueuedAt: Date.now(),
       operation,
     }
-    await outboxDb.entries.add(entry)
+    await entries.add(entry)
     useOutboxStore.setState({ dirty: true })
+    return true
   } catch (e) {
     console.warn('outbox: could not enqueue operation, this device will not sync it', e)
+    return false
   }
 }
 
 /** In hlc order — the total order §10.19's replay rule needs. */
 export const listPendingOperations = async (): Promise<OutboxEntry[]> => {
   try {
-    return await outboxDb.entries.orderBy('hlc').toArray()
+    return await entries.orderBy('hlc').toArray()
   } catch (e) {
     console.warn('outbox: could not read pending operations', e)
     return []
@@ -143,7 +145,7 @@ export const listPendingOperations = async (): Promise<OutboxEntry[]> => {
 /** For a future flush to acknowledge a successful push. Not called by anything yet. */
 export const removeOperations = async (ids: string[]): Promise<void> => {
   try {
-    await outboxDb.entries.bulkDelete(ids)
+    await entries.bulkDelete(ids)
   } catch (e) {
     console.warn('outbox: could not clear pushed operations, they will be retried', e)
     return

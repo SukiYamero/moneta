@@ -9,9 +9,10 @@ import type { Repo } from '@/lib/repo'
 import { RepoError } from '@/lib/repo'
 import { getRepo } from '@/lib/repoProvider'
 import { toast } from '@/lib/toastStore'
+import { db } from '@/lib/db'
 import { __resetNetworkStoreForTests, useNetworkStore } from '@/lib/networkStore'
 import { __resetDeviceIdForTests, deviceDb } from '@/lib/deviceStore'
-import { __resetOutboxClockForTests, listPendingOperations, outboxDb } from '@/lib/outbox'
+import { __resetOutboxClockForTests, listPendingOperations } from '@/lib/outbox'
 import { useDataStore } from '@/lib/dataStore'
 
 const mGetRepo = vi.mocked(getRepo)
@@ -97,7 +98,7 @@ afterEach(async () => {
   __resetNetworkStoreForTests()
   __resetOutboxClockForTests()
   __resetDeviceIdForTests()
-  await outboxDb.entries.clear()
+  await db.outbox.clear()
   await deviceDb.deviceId.clear()
 })
 
@@ -226,6 +227,24 @@ describe('useDataStore.createMovimiento', () => {
       payload: s.movimientos[0],
     })
     expect(pending[0]?.basedOn).toBeNull()
+  })
+
+  it('outbox failure: a repo write that succeeds but fails to queue keeps the result and toasts a distinct "not queued" message, without rolling back', async () => {
+    const repo = makeFakeRepo()
+    mGetRepo.mockReturnValue(repo)
+    vi.mocked(repo.movimientos.add).mockImplementation((item) => Promise.resolve(item))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const addSpy = vi.spyOn(db.outbox, 'add').mockRejectedValue(new Error('IDB blocked'))
+
+    await useDataStore.getState().createMovimiento(movimiento())
+
+    // The repo write succeeded — the record must still be there, not rolled back.
+    expect(useDataStore.getState().movimientos).toHaveLength(1)
+    expect(mToastError).toHaveBeenCalledWith('errors:sync.notQueued')
+    expect(await listPendingOperations()).toEqual([])
+
+    addSpy.mockRestore()
+    warn.mockRestore()
   })
 
   it('refusal: past the offline window, refuses without touching the repo or the store', async () => {

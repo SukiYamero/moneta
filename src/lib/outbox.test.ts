@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Movimiento } from '@/lib/schema'
 import { CONFIG_SEMILLA } from '@/lib/schema'
+import { db } from '@/lib/db'
 import { __resetDeviceIdForTests, deviceDb } from '@/lib/deviceStore'
 import {
   __resetOutboxClockForTests,
   enqueueOperation,
   listPendingOperations,
-  outboxDb,
   removeOperations,
   useOutboxStore,
 } from '@/lib/outbox'
@@ -24,7 +24,7 @@ const movimiento = (overrides: Partial<Movimiento> = {}): Movimiento => ({
 })
 
 afterEach(async () => {
-  await outboxDb.entries.clear()
+  await db.outbox.clear()
   await deviceDb.deviceId.clear()
   __resetDeviceIdForTests()
   __resetOutboxClockForTests()
@@ -91,13 +91,19 @@ describe('enqueueOperation', () => {
     expect(useOutboxStore.getState().dirty).toBe(true)
   })
 
-  it('never throws on a storage failure — logs and drops the op instead', async () => {
+  it('reports success back to the caller', async () => {
+    await expect(
+      enqueueOperation({ entity: 'movimiento', op: 'put', payload: movimiento() }),
+    ).resolves.toBe(true)
+  })
+
+  it('never throws on a storage failure — logs, drops the op, and reports it as unqueued', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const spy = vi.spyOn(outboxDb.entries, 'add').mockRejectedValue(new Error('IDB blocked'))
+    const spy = vi.spyOn(db.outbox, 'add').mockRejectedValue(new Error('IDB blocked'))
 
     await expect(
       enqueueOperation({ entity: 'movimiento', op: 'put', payload: movimiento() }),
-    ).resolves.toBeUndefined()
+    ).resolves.toBe(false)
     expect(warn).toHaveBeenCalled()
     expect(await listPendingOperations()).toEqual([])
 
@@ -119,7 +125,7 @@ describe('listPendingOperations', () => {
 
   it('degrades to an empty list on a storage read failure', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const spy = vi.spyOn(outboxDb.entries, 'orderBy').mockImplementation(() => {
+    const spy = vi.spyOn(db.outbox, 'orderBy').mockImplementation(() => {
       throw new Error('IDB blocked')
     })
 
