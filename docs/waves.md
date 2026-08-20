@@ -316,6 +316,12 @@ sign out" look reasonable; the field is the fix, deleting was the workaround.
 
 ## Wave 4 — the app comes alive (re-scoped by priority, 2026-08-19)
 
+> **Execution detail lives in [`wave-4-plan.md`](wave-4-plan.md)** — the
+> operator's decomposition: file ownership, the conflicts resolved up front,
+> the per-track briefs and the live status table. This file keeps only the
+> shape of the wave. If the two disagree on execution, `wave-4-plan.md` wins;
+> on behavior, `specs.md` wins over both.
+
 Re-planned with the user, who set the product priorities; the operator set the
 staging from the dependencies. **Priority, in the user's words:** operations —
 balances, expenses, creating an income or an expense — are the high one; tags
@@ -349,10 +355,10 @@ project's most expensive lesson.
 
 **Stage 1 — parallel (no shared files):**
 
-| Track                          | Spec                              | Owns                                                                                            |
-| ------------------------------ | --------------------------------- | ----------------------------------------------------------------------------------------------- |
-| **Z — Drive sync engine**      | §10.19 ✅ written                 | `repo.drive.ts`, the sync engine + flush triggers, `bootstrap.ts`, §4's layout. **No screens.** |
-| **G1 — tag / category picker** | ⚠️ **spec must be written first** | `src/features/tags/**`                                                                          |
+| Track                     | Spec              | Owns                                                                                              |
+| ------------------------- | ----------------- | ------------------------------------------------------------------------------------------------- |
+| **Z — Drive sync engine** | §10.19 ✅ written | `repo.drive.ts`, the sync engine + flush triggers, `bootstrap.ts`, §4's layout. **No screens.**   |
+| **G1 — category picker**  | §10.22 ✅ written | `src/features/tags/**` + the taxonomy-reference sweep — see `wave-4-plan.md` §2 for the full list |
 
 **Stage 2 — blocked on stage 1:**
 
@@ -371,9 +377,9 @@ project's most expensive lesson.
 
 ### Before any of this is dispatched
 
-**Only Track Z has a spec.** `AGENTS.md`'s first rule is that an unspecified
-feature gets its §10 spec written before it is built, so F, G1, G2 and H each
-need one. G2's spec in particular has to **decide** four things §12 already
+**Z and G1 have specs (§10.19, §10.22); F, G2 and H do not.** `AGENTS.md`'s
+first rule is that an unspecified feature gets its §10 spec written before it
+is built, so F, G2 and H each still need one before stage 2. G2's spec in particular has to **decide** four things §12 already
 files against it, not discover them mid-build: the week-start bug that becomes
 reachable the moment a picker exists; `idioma` not being a field on
 `Preferencias`; whether `claro` is offered at all while the light palette is

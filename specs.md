@@ -1782,6 +1782,376 @@ data intact but invisible. §10.10 recorded that persisting guest mode was
 blocked on there being a way out of it, and §10.18 built that exit — so it is
 unblocked, and this screen is its natural home. Decide the two together.
 
+### 10.22 The category picker — assigning a category, and what a category _is_
+
+Wave 4, Track G1. Written 2026-08-19 after auditing what the codebase already
+assumes about categories; decisions confirmed with the user the same day.
+**Not implemented.**
+
+This spec is unusually decision-heavy for a picker, and that is the point: the
+picker is where four things the codebase has so far only _implied_ about the
+taxonomy become load-bearing. `AGENTS.md` says the expensive defect shape is
+two tracks inventing two conventions — Track F (movement sheet), Track G2
+(settings) and Track H (groups) all read the taxonomy, so the convention is
+settled here, once, before any of them start.
+
+- **Goal:** a movement can be given a category, and a user can create a
+  category that is genuinely theirs — with its own name, icon and color —
+  without leaving the sheet they are in.
+- **User story:** I am recording a gym payment. "Gimnasio" is not in my list,
+  so I type it, the app offers a dumbbell and a color, and I save — the
+  expense is filed and the category exists from then on, on every screen.
+
+#### The four things the codebase currently assumes, and what is actually true
+
+Audited against the code, not against the docs:
+
+1. **`Movimiento.categoria` holds a display _name_** (`'Comida'`) — required
+   by `movimientoView.ts`'s `CATEGORY_TINT`/`CATEGORY_ICON` (keyed by name),
+   `BreakdownCard` (renders `entry.key` as the visible label),
+   `SearchScreen`'s tag filter, and `MovimientoRow`'s `nota || categoria`
+   fallback. `repo.fake.ts` seeds names.
+2. **`Movimiento.seccion` holds an _id_** (`'sec_personal'`) in both
+   `repo.fake.ts` and `repo.contract.ts` — **contradicting its own comment in
+   `schema.ts`** ("valor de la taxonomía (Personal, Trabajo…)").
+3. **`repo.contract.ts` seeds `categoria: 'cat_sueldo'` — an id** — so the two
+   fixtures in the repo disagree with each other about what the field holds.
+   Nothing catches it because the contract suite never renders.
+4. **`Categoria` has no icon and no color field.** Every category color in the
+   app today comes from a hardcoded, Spanish-name-keyed table in
+   `movimientoView.ts`. A user-created category therefore _cannot_ have a
+   color — it falls back to the type tint (§10.8's edge case). The design's
+   "Custom tag modal" (`docs/ui/implementation-plan.md`) asks for an icon grid
+   and a color grid that have nowhere to be stored.
+
+Two of these are shipped defects, not just untidiness:
+
+- **The CSV export writes `seccion` raw** (`src/lib/export/csv.ts`), so a
+  user's downloaded backup today has a human-readable `categoria` column next
+  to a `sec_personal` column. §10.12's whole point is a file a person can
+  open and understand.
+- **`breakdownBy(…, 'seccion', …)` would render `sec_personal` as a visible
+  label.** No screen calls it with `'seccion'` yet; Track H ("Áreas") is the
+  one that will.
+
+#### Decision 1 — a movement references a category by **id**, and the name is resolved for display
+
+`Movimiento.categoria` stores `Categoria.id`; `Movimiento.seccion` stores
+`Seccion.id` (which it already does). Display names are resolved through
+`Config` at render time.
+
+**Why not keep storing names (the cheaper option):** a rename would leave
+every past movement filed under the old name — the breakdown would grow a
+second "Comida" bar beside "Alimentación" — and the only fix would be
+rewriting the user's whole history, which under §10.19's op log means
+re-emitting an operation per movement and re-uploading years of shards to
+rename one word. An id makes rename a one-field `Config` write.
+
+**What this costs, stated honestly, because it is the expensive half:**
+
+- Every render site that today reads `m.categoria` as a label must resolve it:
+  `movimientoView.ts`, `BreakdownCard.tsx`, `MovimientoRow.tsx`,
+  `SearchScreen.tsx` (its tag filter and its free-text match),
+  `FilterSheet.tsx`, `csv.ts`. That is a **sweep, and it is in scope** — a
+  half-migrated reference is worse than either end state.
+- `repo.contract.ts` and `repo.fake.ts` fixtures must be made consistent with
+  each other and with the decision.
+- Under §10.19, `config-<device>.json` and the movement shards are separate
+  files, so a device can hold movements whose category has not arrived yet.
+  This must degrade to the type-based fallback §10.8 already specifies, never
+  to a raw `cat_a1b2` on screen.
+
+**Why now and not later:** `repoProvider.getRepo()` still returns the fake
+repo, so **there is no real user data anywhere**. This is the last moment the
+change costs a sweep instead of a migration on someone's money.
+
+**`seccion` is not picked, it is derived.** Choosing a category sets both
+fields: `categoria = cat.id`, `seccion = cat.seccionId`. The create sheet has
+no section control (it has none in the design either), and there must not be
+two ways to set the same fact.
+
+#### Decision 2 — icon and color become real fields on `Categoria`
+
+```ts
+export interface Categoria {
+  id: string
+  nombre: string
+  seccionId: string
+  tipo: TipoMovimiento
+  icono?: CategoryIconKey // NEW — a key from a curated allowlist, never a component
+  color?: IconAvatarTint // NEW — reuses the existing tint families
+  archivado?: boolean // NEW — see Decision 5
+  presupuesto?: number
+}
+```
+
+**Additive and optional ⇒ no `SCHEMA_VERSION` bump** (`schema.ts`'s own rule:
+bump only on rename/split/delete). `AGENTS.md` says additive fields go through
+`extra` first — **that route is unavailable here**, because `Categoria` has no
+`extra` field; adding one is itself an additive change and a strictly worse
+one, since icon and color are permanent first-class attributes, not a
+migration escape hatch. Recorded as a deliberate, reasoned exception.
+
+`icono` is a **string key**, not a `LucideIcon` — it is serialized to JSON in
+Drive. A new `src/features/tags/categoryIcons.ts` owns
+`CATEGORY_ICONS: Record<CategoryIconKey, LucideIcon>`, the curated grid the
+modal renders and the only set a stored value may resolve to. An unknown key
+(hand-edited Drive file, older/newer build) falls back rather than throwing.
+
+**`CATEGORY_ICON` and `CATEGORY_TINT` in `movimientoView.ts` are deleted.**
+Their pairings move onto `CONFIG_SEMILLA.categorias` and `repo.fake.ts`'s demo
+categories as explicit `icono`/`color` values. This is the real win of the
+change, beyond the picker: today a category's color lives in a hardcoded table
+keyed by Spanish names in an app shipping `en` and `pt-BR`, and a
+user-created category can never have one. After this, color is a property of
+the category, resolution is one function, and the fallback is one rule.
+
+`getMovimientoVisual` becomes a resolution with exactly three steps, in order:
+the category's own `icono`/`color` → nothing → the `tipo`-based fallback
+(`FALLBACK_ICON`/`FALLBACK_TINT`, unchanged). No name-keyed lookup survives.
+
+#### Decision 3 — the picker orders by `tipo`, it does not filter by it, and it never changes the toggle
+
+`Categoria.tipo` is documented as "the default type when this category is
+chosen" — a default, not a constraint. So:
+
+- All non-archived categories are shown; the ones matching the sheet's current
+  `tipo` sort **first**. Nothing is hidden — a category legitimately used both
+  ways stays reachable.
+- Choosing an `ingreso` category while the sheet says `gasto` **does not flip
+  the toggle**. Flipping it changes the sign of a person's money as a side
+  effect of a tap they made for another reason; the ordering above already
+  makes that tap unlikely.
+
+#### Decision 4 — "create from query" opens the modal pre-filled; it never creates silently
+
+Typing a query with no match shows a create affordance. Tapping it opens the
+category modal with the name pre-filled and an icon/color already suggested
+(Decision 7), so saving is one tap — but both are visible and changeable
+before saving. A silent instant-create is what produces the colorless,
+wrong-section category this spec exists to prevent.
+
+The new category's `tipo` is inherited from the sheet's current toggle — the
+context is unambiguous, so it is not asked for.
+
+Its **`seccionId` is asked for** (user decision, 2026-08-19), defaulting to
+the section with the lowest `orden`, with the control hidden entirely when
+only one section exists. **This is a deliberate addition to the design
+canvas**, whose Custom tag modal has only name/icon/color: `seccionId` is
+required and silently filing a work expense under "Personal" is a false
+statement about someone's money. The canvas catches up to the code here.
+
+#### Decision 5 — a category in use is archived, never deleted
+
+Hard-deleting a category referenced by movements orphans them — the exact
+failure the id reference is meant to avoid. So `archivado?: boolean`: an
+archived category disappears from the picker, still resolves for display in
+history, and can be restored.
+
+A category **never used by any movement** may be deleted outright.
+
+Implementation of the delete/archive UI is **Track G2's** (the "Personalizar"
+settings list). The _semantics_ are fixed here so G2 does not invent a second
+answer.
+
+#### Decision 6 — the seed categories' names are localized at seed time, then they are user data
+
+`CONFIG_SEMILLA` ships "Sueldo", "Servicios", "Impuestos"… A first run on a
+`pt-BR` device seeds a Portuguese-speaking user a Spanish taxonomy. Category
+names are **user data and are never translated at render time** — but the
+_seed_ is the app's own copy, and `buildSeedConfig()` already varies by region
+for `monedaPrincipal`. It gains the same treatment for the seed category and
+section names, resolved once at seeding.
+
+#### Decision 7 — suggesting an icon and a color, offline, without translating anything
+
+**Translation is rejected, not deferred.** Translating the user's typed name so
+it can be matched needs a translation API, i.e. a third party over the network:
+it breaks §6 (no backend, and no exception covers this), breaks the offline-
+first guarantee of §3, breaks the no-CDN rule, and — decisively — would send
+the user's own category names to an outside service, which is the promise the
+entire architecture exists to keep. An on-device LLM (Chrome's Prompt API /
+Gemini Nano) is rejected for the same reason §11 (2026-08-18) rejected it for
+receipt scanning: desktop-only, missing this app's mobile target.
+
+**The problem is inverted instead: the concept table speaks every language.**
+`src/features/tags/categorySuggest.ts` holds roughly 30 concepts, each with an
+icon, a tint, and **one multilingual bag of keywords** — not one list per
+locale:
+
+```ts
+fitness: {
+  icon: 'dumbbell',
+  tint: 'rose',
+  keywords: ['gimnasio', 'gym', 'academia', 'fitness', 'entrenamiento', 'musculacion', 'crossfit', 'pilates', 'yoga'],
+}
+```
+
+Matching never needs to know which language was typed — "academia" resolves
+whether the UI is `es` or `pt-BR`, and a user who mixes languages is handled
+for free. Matching normalizes case and diacritics through
+`src/features/search/searchMatch.ts`'s existing normalizer; **do not write a
+second one**. Matching is on whole normalized words, not bare substrings, so
+`regalo` does not match inside an unrelated word.
+
+**The color is always the concept's tint (user decision, 2026-08-19), even
+when another category already uses it.** The operator raised the cost and the
+user reaffirmed the choice, so it is recorded rather than re-litigated: there
+are nine tint families and a real user will exceed nine categories, so from
+roughly the tenth onward several categories share a color and the list gets
+harder to scan by color alone. The judgment is that "Comida is amber, Salud is
+green" reading _correct_ is worth more than guaranteed distinguishability.
+If scanning turns out to suffer in real use, the fallback below is already the
+mechanism to switch to — this is a one-line change, not a redesign.
+
+**When nothing matches**, there is no semantics to respect, so the icon is the
+`tipo` fallback (§10.8's existing rule) and the color is the **least-used tint
+among the user's current categories** — deterministic given `Config`, and it
+guarantees a new unrecognized category never arrives colorless.
+
+The suggestion is always a **visible pre-selection** in the icon and color
+grids, never a silent application (Decision 4).
+
+#### UI
+
+Two pieces, both in `src/features/tags/**`, both composed from existing shared
+components — no new primitives.
+
+**`CategoryPicker`** — rendered _inline_ inside a sheet (Add/Edit movement,
+and reusable by the Filter sheet), not an overlay of its own:
+
+- A search input (`TextField`) filtering by name, accent- and
+  case-insensitively, through `searchMatch.ts`'s normalizer.
+- A wrapped grid of `TagChip`s, each with its own `icono`/`color`, ordered per
+  Decision 3. Single-select in the movement sheets.
+- A "create «query»" chip appearing only when the query is non-empty and
+  matches nothing.
+- Touch targets ≥44px come from `TagChip` unchanged (§10.5.1); the grid
+  scrolls vertically inside the sheet, never horizontally.
+
+**`CategoryFormModal`** — a `CenterModal` (per the design), create and edit in
+one component:
+
+- Name (`TextField`, autofocused), section (`SegmentedControl`, conditional
+  per Decision 4), an icon grid from `CATEGORY_ICONS`, a color grid over the
+  nine `IconAvatarTint` families.
+- Live preview: a `TagChip` showing exactly what the category will look like.
+- Save is disabled while the name is empty or a duplicate (see Edge cases).
+- Uses `useOverlay`'s stack via `CenterModal` — never its own Escape/focus
+  handling — and stacks correctly above the `BottomSheet` that opened it
+  (§10.5.1's overlay stack is already tested for this).
+
+Both follow the shared `animate-*` tokens; no hover-only affordance; all copy
+through a new `tags` i18n namespace added to **all four** locale files
+(`resources.test.ts` enforces key parity — an `es`-only namespace fails
+`bun run check`).
+
+#### Data touched
+
+- `Categoria` gains `icono?`, `color?`, `archivado?` — additive, **no
+  `SCHEMA_VERSION` bump**.
+- `CONFIG_SEMILLA.categorias` and `repo.fake.ts`'s demo categories gain
+  explicit `icono`/`color`.
+- `Movimiento.categoria` changes **meaning** (name → id) with no type change.
+  `schema.ts`'s comments on both `categoria` and `seccion` are corrected in
+  the same change — the current `seccion` comment is already wrong.
+- Writes go through **`dataStore`**, never `repo.updateConfig` directly
+  (§10.13 is the one write path). `dataStore` gains `upsertCategoria` /
+  `archiveCategoria` / `deleteCategoria`, built on the existing `runMutation`
+  convention — see the first edge case for why these are actions and not
+  `updateConfig({ categorias: [...] })` at the call site.
+
+#### Edge cases
+
+- **Two categories created in the same tick.** `updateConfig({ categorias:
+[...config.categorias, nueva] })` computed at a call site is a
+  read-modify-write on a stale array — the exact race §11 (2026-08-18) already
+  recorded and fixed inside `repo.local.update()`, reappearing one layer up.
+  The new `dataStore` actions must build the array from the freshest store
+  state _inside_ the `set`, not from a value captured before an `await`.
+- **A movement whose category id is not in `Config`** (config shard not pulled
+  yet, hand-edited Drive file, a category deleted on another device): renders
+  the `tipo` fallback icon/tint and a neutral "sin categoría" label — never a
+  raw id, never a blank, never a crash.
+- **Duplicate name.** Compared trimmed, case- and accent-insensitively,
+  **scoped to the section** — "Transporte" may legitimately exist in both
+  Personal and Trabajo. Blocked inline in the modal (`aria-describedby`, per
+  §10.14), never as a toast.
+- **Empty / whitespace-only name**, and a name long enough to break the chip:
+  trimmed; length capped, with the cap enforced on the value, not just the
+  input's `maxlength`.
+- **A category with no `icono`/`color`** (every seed category before this
+  change, and anything a future import produces) resolves through the
+  `tipo` fallback — this is §10.8's existing rule, unchanged.
+- **An unknown `icono` key or an invalid `color`** read from Drive falls back
+  and the record is kept; it is never dropped and never written back
+  "corrected" (§10.19: unknown input is ignored and left untouched).
+- **Creating a category while offline**: it is a `Config` write, so it goes
+  through the same §10.11 window policy as any other mutation — no special
+  case, no second policy.
+- **The last category cannot be archived** if it would leave the picker empty
+  and a movement uncreatable.
+
+#### Known gap this spec surfaces but does not close
+
+**Under §10.19, a `config` operation carries the _whole_ `Config` as one
+payload** (`outbox.ts`'s `{ entity: 'config'; op: 'put'; payload: Config }`).
+Two devices each adding a category while offline will therefore replay as two
+whole-config `put`s and the later one wins — **silently losing the other
+device's category.** Movements do not have this problem, because each one is
+its own op.
+
+This is unreachable today (no sync engine exists) and it is **Track Z's or a
+follow-up's problem, not G1's** — solving it means a finer-grained config op,
+which is a change to the sync format. Filed to §12 rather than fixed here.
+
+#### Done when
+
+- A movement can be given a category from the picker, and the created
+  `Movimiento` carries `categoria = cat.id` and `seccion = cat.seccionId`.
+- A category created from the picker appears immediately in the picker, on
+  `MovimientoRow`, in the History breakdown and in the Search filter, **in its
+  own icon and color** — not the type fallback.
+- Typing "gimnasio", "gym" or "academia" all pre-select the same icon and
+  color, with the app in any supported locale.
+- Renaming a category in `Config` changes its label everywhere in history,
+  with no movement rewritten.
+- A movement referencing a missing category renders the fallback and a
+  "sin categoría" label — proven by a test, not by inspection.
+- `CATEGORY_ICON`/`CATEGORY_TINT` no longer exist; `rg 'CATEGORY_TINT' src`
+  returns nothing.
+- The exported CSV shows category and section **names**, not ids.
+- The `tags` namespace exists in all four locale files.
+- `bun run check` is green.
+
+#### Blast radius
+
+Wider than a picker, and deliberately so — the reference migration cannot be
+half-done.
+
+**Owned by Track G1:** `src/features/tags/**` (new), `src/lib/schema.ts`
+(additive fields + the two corrected comments), `src/lib/dataStore.ts` (three
+new actions), `src/components/shared/movimientoView.ts`,
+`src/components/shared/MovimientoRow.tsx`,
+`src/features/history/BreakdownCard.tsx`,
+`src/features/search/SearchScreen.tsx`, `src/features/search/FilterSheet.tsx`,
+`src/lib/export/csv.ts`, `src/lib/repo.fake.ts`, `src/lib/repo.contract.ts`,
+`src/lib/seedConfig.ts`, the four locale files, `src/routes/Kit.tsx`.
+
+**Explicitly NOT touched:** `repo.ts` / `repo.local.ts` / `db.ts` (no storage
+shape change — `[seccion+fecha]` indexes keep working, the values are still
+strings), `bootstrap.ts`, `drive.ts`, anything under `src/features/auth`,
+`lock` or `profile`, and `repoProvider.getRepo()`'s stub, which stays a stub.
+
+**Conflict check against Track Z (the other stage-1 track):** Z owns
+`repo.drive.ts` (new), the sync engine, `bootstrap.ts` and §4. The only
+overlap is `outbox.ts`'s config-op shape, which G1 reads and **does not
+modify** — it files the gap above to §12 instead. No shared writable file.
+
+**TDD is required** for the resolver and the `dataStore` actions
+(`AGENTS.md`: money-adjacent and store-mutation code) — the failing test
+first, and it must be watched failing for the right reason.
+
 ### Wave 3 — staging and dependencies
 
 Not everything runs in parallel. A track in a later stage is **blocked** until
@@ -3784,6 +4154,66 @@ lint` clean bar the one pre-existing `components/ui` warning). `AGENTS.md`
   inferred from a session having once existed. `AGENTS.md` § "How every agent
   works" already asks for the process finding over the instance; this is one.
 
+- 2026-08-19 — **A movement references its category by id, not by name
+  (§10.22).** Audited state before the decision: `Movimiento.categoria` held a
+  display _name_, `Movimiento.seccion` held an _id_ contradicting its own
+  `schema.ts` comment, and the two fixtures disagreed with each other
+  (`repo.fake.ts` seeded `'Comida'`, `repo.contract.ts` seeded
+  `'cat_sueldo'`) — invisible because the contract suite never renders. Two
+  shipped consequences: the exported CSV carries a raw `sec_personal` column
+  next to a readable `categoria` one, and `breakdownBy(…, 'seccion', …)` would
+  render an id as a visible label the day Track H calls it. Chosen so a rename
+  is a one-field `Config` write instead of re-emitting an operation per
+  movement and re-uploading years of §10.19 shards to change one word. Timed
+  deliberately: `repoProvider.getRepo()` still returns the fake repo, so there
+  is no real user data and the change costs a render-site sweep rather than a
+  migration on someone's money.
+
+- 2026-08-19 — **Category icon and color become optional fields on
+  `Categoria`, not an `extra` bag (§10.22).** `AGENTS.md` routes additive
+  fields through `extra` first, but `Categoria` has no `extra` field — adding
+  one is itself additive and strictly worse, since icon and color are
+  permanent first-class attributes rather than a migration escape hatch.
+  Additive and optional, so **no `SCHEMA_VERSION` bump** per `schema.ts`'s own
+  rule. This deletes `movimientoView.ts`'s `CATEGORY_ICON`/`CATEGORY_TINT` —
+  a hardcoded table keyed by **Spanish category names** in an app already
+  shipping `en` and `pt-BR`, and the structural reason a user-created category
+  could never have a color at all.
+
+- 2026-08-19 — **Icon/color suggestion inverts the translation problem: the
+  concept table speaks every language (§10.22 Decision 7).** Translating the
+  user's typed category name to match it would need a translation API — a
+  third party over the network — breaking §6, the offline-first guarantee, the
+  no-CDN rule, and the promise that the user's own data never leaves their
+  Drive. An on-device LLM is rejected for the reason §11 (2026-08-18) already
+  rejected it for receipt scanning: desktop-only, missing the mobile target.
+  Instead each concept carries **one multilingual keyword bag**, so "gimnasio"
+  / "gym" / "academia" all resolve without knowing which language was typed.
+  Offline, deterministic, testable, and it reuses `searchMatch.ts`'s
+  normalizer rather than growing a second one.
+
+- 2026-08-19 — **Suggested category color stays semantic even when it
+  collides (user decision).** The operator raised the cost — nine tint
+  families against a real user's more-than-nine categories means several
+  categories share a color from roughly the tenth onward, weakening exactly
+  the scan-by-color affordance the tint exists for — and the user reaffirmed
+  the choice: "Comida is amber, Salud is green" reading correct is worth more
+  than guaranteed distinguishability. Recorded so it is not re-litigated. The
+  least-used-tint rule survives only for the no-match case, where there is no
+  semantics to respect, which also guarantees a new category is never
+  colorless.
+
+- 2026-08-19 — **The create-category modal asks for a section, diverging from
+  the design canvas (user decision).** The canvas's Custom tag modal has only
+  name/icon/color, but `Categoria.seccionId` is required — so the canvas
+  version can only work by silently filing every new category under the
+  lowest-`orden` section. Filing a work expense under "Personal" without
+  saying so is a false statement about someone's money, so the code is
+  authoritative here and the canvas catches up. The control is hidden when
+  only one section exists, keeping the simple case as simple as the canvas
+  drew it. Resolved under `AGENTS.md`'s canvas-vs-code rule by asking, not by
+  assuming.
+
 ## 12. Backlog (pending verification / deferred work)
 
 - **The lock feature is not internationalised at all.** `LockScreen`,
@@ -4120,6 +4550,29 @@ lint` clean bar the one pre-existing `components/ui` warning). `AGENTS.md`
   not destructive — a copy/styling mismatch, not a bug. Worth a variant when a
   second non-destructive caller exists, not before (Track U deliberately
   shipped without a `confirmVariant` prop for that reason).
+
+- **A `config` operation carries the whole `Config`, so two devices can lose a
+  category (found while specifying §10.22, 2026-08-19).** `outbox.ts`'s
+  `{ entity: 'config'; op: 'put'; payload: Config }` means two devices each
+  adding a category while offline replay as two whole-config `put`s, and the
+  later one silently wins — the earlier device's category is gone with nothing
+  reporting it. `Movimiento` ops do not have this shape because each movement
+  is its own operation. **Unreachable today** (no sync engine exists) and
+  deliberately not fixed in §10.22, because the fix is a finer-grained config
+  operation, i.e. a change to §10.19's sync format. Belongs to Track Z or a
+  follow-up; whoever takes it should check whether `Preferencias` needs the
+  same treatment or whether last-writer-wins is genuinely correct there.
+
+- **`schema.ts`'s `Movimiento.seccion` comment was wrong before §10.22 and
+  nothing caught it.** The comment claimed a taxonomy _value_ ("Personal,
+  Trabajo…") while every fixture stored an id. The process finding, which is
+  worth more than the comment: **a field whose stored form is only asserted by
+  fixtures has no enforcement at all** — `repo.contract.ts` and `repo.fake.ts`
+  disagreed with each other for two waves and the full suite stayed green,
+  because the contract suite never renders and the render sites never run
+  against the contract fixtures. Any future field whose meaning is a
+  convention rather than a type deserves either a branded type or a test that
+  crosses that seam.
 
 ### Development waves (parallel tracks, sequencing, worktree log)
 
