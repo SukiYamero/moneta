@@ -10,7 +10,7 @@ import type { Categoria } from '@/lib/schema'
 import type { IconAvatarTint } from '@/components/shared/IconAvatar'
 import { ICON_AVATAR_TINTS } from '@/components/shared/tintClasses'
 import { normalizeForSearch } from '@/features/search/searchMatch'
-import type { CategoryIconKey } from '@/features/tags/categoryIcons'
+import type { CategoryIconKey } from '@/components/shared/categoryIcons'
 
 interface CategoryConcept {
   icon: CategoryIconKey

@@ -17,7 +17,7 @@ import {
   CATEGORY_ICONS,
   CATEGORY_ICON_KEYS,
   type CategoryIconKey,
-} from '@/features/tags/categoryIcons'
+} from '@/components/shared/categoryIcons'
 import { suggestCategoryVisual } from '@/features/tags/categorySuggest'
 
 export interface CategoryFormModalProps {

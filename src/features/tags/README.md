@@ -2,11 +2,17 @@
 
 The category picker and taxonomy — spec: `specs.md` §10.22.
 
-- `categoryIcons.ts` — the curated `CATEGORY_ICONS` allowlist (`CategoryIconKey`
-  → `LucideIcon`, ~34 icons) and `CATEGORY_ICON_KEYS` (its stable iteration
-  order). This is the only set a `Categoria.icono` value may resolve to; an
-  unknown key (older/newer build, hand-edited Drive file) falls back rather
-  than throwing, via `movimientoView.ts`'s `getMovimientoVisual`.
+The curated `CATEGORY_ICONS` allowlist (`CategoryIconKey` → `LucideIcon`,
+~34 icons) and `CATEGORY_ICON_KEYS` live in
+`src/components/shared/categoryIcons.ts`, not in this folder: it's what
+`movimientoView.ts`'s `getMovimientoVisual` resolves a `Categoria.icono`
+through, and that module is shared by every movement-rendering screen, not
+just this feature — a shared, foundational module can't depend on one
+feature's folder without inverting `ARCHITECTURE.md`'s layering (specs.md
+§11, 2026-08-20). The plain key type/list one layer further down, in
+`src/lib/categoryIconKeys.ts`, is what `schema.ts` itself depends on. This
+folder imports both rather than owning either.
+
 - `categorySuggest.ts` — offline icon/color suggestion for a typed category
   name (Decision 7). `suggestCategoryVisual(query, existingCategorias)`
   matches whole normalized words (via `searchMatch.normalizeForSearch`, never

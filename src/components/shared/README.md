@@ -46,6 +46,19 @@ doesn't belong to any one `src/features/**` folder. See `specs.md` §10.5.
   `Kit.tsx`'s own tint gallery.
 - `IconAvatar.tsx` — colored rounded-square icon badge; size/tint are
   `Record` lookups onto the `chart-1..5`/status tokens, not new hex.
+  Re-exports `IconAvatarTint` from `@/lib/iconAvatarTint` rather than
+  declaring it, so `schema.ts` can depend on the plain type without
+  depending on this component file (`specs.md` §11, 2026-08-20).
+- `categoryIcons.ts` — the curated `CATEGORY_ICONS` allowlist
+  (`CategoryIconKey` → `LucideIcon`, ~34 icons) and `CATEGORY_ICON_KEYS`
+  (its stable iteration order). Lives here, not in
+  `src/features/tags/`, because `movimientoView.ts`'s `getMovimientoVisual`
+  resolves every category's icon through it and every movement-rendering
+  screen goes through that — `src/features/tags/CategoryFormModal.tsx`
+  imports this table rather than owning it. The key union itself is one
+  layer further down, in `src/lib/categoryIconKeys.ts` (`schema.ts` depends
+  on it there); a `satisfies` check keeps the two lists in sync at compile
+  time. An unknown key falls back rather than throwing (`specs.md` §10.22).
 - `MovimientoRow.tsx` + `movimientoView.ts` — the movement list row, and
   the single source of truth for category → icon/tint and signed-amount
   formatting. `Movimiento.categoria` stores a `Categoria.id` (`specs.md`

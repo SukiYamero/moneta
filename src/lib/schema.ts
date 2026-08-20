@@ -4,11 +4,15 @@
 // Regla de oro: subí SCHEMA_VERSION solo ante cambios ESTRUCTURALES (renombrar,
 // partir o borrar un campo). Agregar algo opcional o meterlo en `extra` no cuenta.
 
-// Type-only imports (erased at compile time, verbatimModuleSyntax): `Categoria.icono`/
-// `.color` reuse the tag feature's curated icon allowlist and the shared tint
-// families rather than redeclaring either union here (specs.md §10.22 Decision 2).
-import type { CategoryIconKey } from '@/features/tags/categoryIcons'
-import type { IconAvatarTint } from '@/components/shared/IconAvatar'
+// Type-only imports (erased at compile time, verbatimModuleSyntax) from two
+// lib-level leaves — never from a feature or component file, which would
+// invert this module's own "the rest of the app imports schema.ts, not the
+// other way around" rule (AGENTS.md). `@/components/shared/categoryIcons`
+// pairs `CategoryIconKey` with its actual `LucideIcon`s and re-exports the
+// type from here; `IconAvatar.tsx` does the same for `IconAvatarTint`
+// (specs.md §10.22 Decision 2, corrected §11 2026-08-20).
+import type { CategoryIconKey } from '@/lib/categoryIconKeys'
+import type { IconAvatarTint } from '@/lib/iconAvatarTint'
 
 export const SCHEMA_VERSION = 1
 

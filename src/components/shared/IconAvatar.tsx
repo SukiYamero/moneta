@@ -1,24 +1,14 @@
 import type { LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { TINT_CLASSES } from '@/components/shared/tintClasses'
+// Re-exported (not declared here) so schema.ts can depend on the plain
+// tint-name union without depending on a component file — every existing
+// `@/components/shared/IconAvatar` import of `IconAvatarTint` keeps working
+// unchanged (specs.md §11, 2026-08-20).
+import type { IconAvatarTint } from '@/lib/iconAvatarTint'
+export type { IconAvatarTint } from '@/lib/iconAvatarTint'
 
 export type IconAvatarSize = 'sm' | 'md' | 'lg'
-
-/**
- * Tint families map onto the existing chart-* and status tokens
- * (see src/styles/index.css) instead of introducing new hex values —
- * category color is presentation, not a new brand color.
- */
-export type IconAvatarTint =
-  | 'emerald'
-  | 'blue'
-  | 'purple'
-  | 'rose'
-  | 'amber'
-  | 'success'
-  | 'danger'
-  | 'info'
-  | 'neutral'
 
 const SIZE_CLASSES: Record<IconAvatarSize, string> = {
   sm: 'size-8 rounded-sm [&_svg]:size-4',
