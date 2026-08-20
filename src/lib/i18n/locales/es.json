@@ -235,6 +235,7 @@
     },
     "profiles": {
       "heading": "Perfiles",
+      "loading": "Cargando perfiles…",
       "activeBadge": "Activo",
       "kind": {
         "local": "En este dispositivo",
