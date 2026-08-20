@@ -3389,12 +3389,13 @@ lint` clean bar the one pre-existing `components/ui` warning). `AGENTS.md`
   implementation cannot ship without its error behavior being exercised) plus
   a sync/conflict story that does not exist yet.
 
-- **The PIN lock has no production entry point once Home is rebuilt (Wave 2,
-  Track L).** `LockSettings` — the only UI that enables, disables, or
-  manually re-locks the vault — lived on `Home` as a dev harness. Track L
-  moves it to the dev-only `/kit` route so rebuilding Home does not silently
-  delete the feature. The real Settings entry is Track G's job (Wave 3);
-  until it lands, the lock is only configurable at `/kit` in dev.
+- ✅ **The PIN lock has a production entry point** — closed 2026-08-19
+  (Track Y). `LockSettings` moved off the dev-only `/kit` route into
+  `src/features/profile/SecuritySection.tsx`, reachable from `BottomNav`'s
+  Profile slot in every build. Verified by running the app, not only by
+  reading the code. Its own copy is still hardcoded Spanish (the lock-i18n
+  item above, unchanged) — moving it into an otherwise-translated sheet made
+  that gap **more** visible, not less.
 
 - **Toast (§10.6) blocks Wave 2 — build it before the screen tracks, not
   inside one of them.** `docs/ui/implementation-plan.md` files it under the
@@ -3582,11 +3583,11 @@ lint` clean bar the one pre-existing `components/ui` warning). `AGENTS.md`
   rather than under `components/`, where they had landed only because that
   was the directory one track happened to own.
 
-- **CSV export has no caller-visible error surface yet.**
-  `exportMovimientosToCsv()` can reject (a failing `repo.ready()`/`list()`),
-  and nothing catches it because nothing calls it. §10.18's button must route
-  that to the toast per `docs/error-handling.md` §7. Noted so it is not
-  rediscovered as a gap when the button is wired.
+- ✅ **CSV export has a caller-visible error surface** — closed 2026-08-19
+  (Track Y). `src/features/profile/DataSection.tsx` is the button; it catches
+  `exportMovimientosToCsv()`'s rejection and routes a `RepoError` through the
+  existing `home:error.codes.*` copy, anything else through one generic
+  `profile:data.exportFailed` toast (`docs/error-handling.md` §7).
 
 - **No `Activo` export.** §10.12's title and user story are scoped to
   movements only. Asset export would be a new §10.x, not implicit in that one.
@@ -3637,6 +3638,15 @@ lint` clean bar the one pre-existing `components/ui` warning). `AGENTS.md`
   now lives on the per-profile database, so this closes itself the day
   `dataStore` writes through `getActiveProfileRepo()`. Listed so that day
   does not arrive silently.
+
+- **The default profile's label is hardcoded `'Local'`, not localized.**
+  `src/lib/profiles/profileRegistry.ts` mints it regardless of the active
+  app language — confirmed by Track Y while running the app in English, and
+  correctly left alone as another track's file. It is a stored value, not a
+  render-time one, so localizing it means deciding whether the label is data
+  (stored, editable by the user once renaming exists) or presentation
+  (derived per render). That question belongs with Wave 5+'s profile
+  switcher, which is what makes renaming real.
 
 ### Development waves (parallel tracks, sequencing, worktree log)
 

@@ -221,5 +221,55 @@
     "sync": {
       "notQueued": "Se guardó en este dispositivo, pero no se pudo poner en la cola para sincronizar con tu cuenta."
     }
+  },
+  "profile": {
+    "sheet": {
+      "heading": "Perfil"
+    },
+    "identity": {
+      "heading": "Cuenta",
+      "guestLabel": "Invitado",
+      "guestDescription": "Tus datos se guardan solo en este dispositivo y no se sincronizan.",
+      "loadingAccount": "Cargando cuenta…",
+      "signOutCta": "Cerrar sesión"
+    },
+    "profiles": {
+      "heading": "Perfiles",
+      "activeBadge": "Activo",
+      "kind": {
+        "local": "En este dispositivo",
+        "google": "Cuenta de Google"
+      }
+    },
+    "security": {
+      "heading": "Seguridad"
+    },
+    "data": {
+      "heading": "Datos",
+      "exportCta": "Exportar movimientos (CSV)",
+      "exporting": "Exportando…",
+      "exportFailed": "No se pudo exportar el archivo. Intenta de nuevo."
+    },
+    "preferences": {
+      "heading": "Preferencias",
+      "readOnlyNote": "Estos ajustes se muestran, pero todavía no se pueden cambiar aquí.",
+      "theme": {
+        "label": "Tema",
+        "claro": "Claro",
+        "oscuro": "Oscuro",
+        "sistema": "Sistema"
+      },
+      "currency": {
+        "label": "Moneda principal"
+      },
+      "weekStart": {
+        "label": "Primer día de la semana",
+        "sunday": "Domingo",
+        "monday": "Lunes"
+      },
+      "language": {
+        "label": "Idioma"
+      }
+    }
   }
 }

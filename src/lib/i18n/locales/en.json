@@ -221,5 +221,55 @@
     "sync": {
       "notQueued": "Saved on this device, but we couldn't queue it to sync with your account."
     }
+  },
+  "profile": {
+    "sheet": {
+      "heading": "Profile"
+    },
+    "identity": {
+      "heading": "Account",
+      "guestLabel": "Guest",
+      "guestDescription": "Your data is saved only on this device and isn't synced.",
+      "loadingAccount": "Loading account…",
+      "signOutCta": "Sign out"
+    },
+    "profiles": {
+      "heading": "Profiles",
+      "activeBadge": "Active",
+      "kind": {
+        "local": "On this device",
+        "google": "Google account"
+      }
+    },
+    "security": {
+      "heading": "Security"
+    },
+    "data": {
+      "heading": "Data",
+      "exportCta": "Export movements (CSV)",
+      "exporting": "Exporting…",
+      "exportFailed": "Couldn't export the file. Try again."
+    },
+    "preferences": {
+      "heading": "Preferences",
+      "readOnlyNote": "These settings are shown for reference — they can't be changed here yet.",
+      "theme": {
+        "label": "Theme",
+        "claro": "Light",
+        "oscuro": "Dark",
+        "sistema": "System"
+      },
+      "currency": {
+        "label": "Main currency"
+      },
+      "weekStart": {
+        "label": "First day of the week",
+        "sunday": "Sunday",
+        "monday": "Monday"
+      },
+      "language": {
+        "label": "Language"
+      }
+    }
   }
 }

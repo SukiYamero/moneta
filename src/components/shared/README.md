@@ -111,9 +111,14 @@ doesn't belong to any one `src/features/**` folder. See `specs.md` §10.5.
   Home, History and Search are real `NavLink`s, so `aria-current="page"`
   comes from the router rather than hand-rolled state; the active slot is
   `text-primary` plus a heavier `strokeWidth`, since Lucide has no filled
-  variant to switch to. Add and Profile have no destination until Wave 3 —
-  rendered `disabled` with an `aria-label` and a `// STUB(trackF|trackG)`
-  marker, per the stub convention, rather than as dead enabled buttons.
+  variant to switch to. Add has no destination yet and stays a
+  disabled stub (`// STUB(trackF)`), per the stub convention rather than a
+  dead enabled button. Profile opens the real profile/account sheet
+  (`specs.md` §10.18, `src/features/profile`) — `BottomNav` takes
+  `profileOpen`/`onOpenProfile` as props rather than owning the sheet or
+  importing the feature directly, since `src/components/shared/**` stays
+  feature-agnostic; `src/routes/AppShell.tsx` owns the `open` state and
+  renders `<ProfileSheet>`.
   Its height is `--bottom-nav-clearance` (`src/styles/index.css`); any
   screen or overlay that must sit clear of the bar pads by the same token
   instead of repeating the number.
