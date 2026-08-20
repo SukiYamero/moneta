@@ -18,6 +18,7 @@ export const I18N_NAMESPACES = [
   'update',
   'errors',
   'profile',
+  'tags',
 ] as const
 
 // i18next initializes synchronously whenever `resources` are passed inline

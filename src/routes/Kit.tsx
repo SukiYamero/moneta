@@ -16,30 +16,20 @@ import {
   TagChip,
   TextField,
   Toggle,
-  type IconAvatarTint,
 } from '@/components/shared'
 import { ToastKitDemo } from '@/components/shared/ToastKitDemo'
+import { ICON_AVATAR_TINTS } from '@/components/shared/tintClasses'
+import { CategoryFormModal } from '@/features/tags/CategoryFormModal'
+import { CategoryPicker } from '@/features/tags/CategoryPicker'
 import { useLocaleFormatting } from '@/lib/i18n/localeFormatting'
-import type { Movimiento } from '@/lib/schema'
-
-const TINTS: IconAvatarTint[] = [
-  'emerald',
-  'blue',
-  'purple',
-  'rose',
-  'amber',
-  'success',
-  'danger',
-  'info',
-  'neutral',
-]
+import type { Categoria, Movimiento, Seccion, TipoMovimiento } from '@/lib/schema'
 
 const SAMPLE_MOVEMENTS: Movimiento[] = [
   {
     id: 'kit_1',
     fecha: '2026-08-18',
     seccion: 'sec_personal',
-    categoria: 'Sueldo',
+    categoria: 'cat_sueldo',
     tipo: 'ingreso',
     monto: 4200000,
     moneda: 'COP',
@@ -50,7 +40,7 @@ const SAMPLE_MOVEMENTS: Movimiento[] = [
     id: 'kit_2',
     fecha: '2026-08-17',
     seccion: 'sec_personal',
-    categoria: 'Comida',
+    categoria: 'cat_comida',
     tipo: 'gasto',
     monto: 18000,
     moneda: 'COP',
@@ -60,12 +50,44 @@ const SAMPLE_MOVEMENTS: Movimiento[] = [
     id: 'kit_3',
     fecha: '2026-08-10',
     seccion: 'sec_emprendimiento',
-    categoria: 'Ventas',
+    categoria: 'cat_ventas',
     tipo: 'ingreso',
     monto: 1800000,
     moneda: 'COP',
     createdAt: '2026-08-10T14:30:00.000Z',
   },
+]
+
+const SAMPLE_CATEGORIAS: Categoria[] = [
+  {
+    id: 'cat_sueldo',
+    nombre: 'Sueldo',
+    seccionId: 'sec_personal',
+    tipo: 'ingreso',
+    icono: 'briefcase',
+    color: 'emerald',
+  },
+  {
+    id: 'cat_comida',
+    nombre: 'Comida',
+    seccionId: 'sec_personal',
+    tipo: 'gasto',
+    icono: 'utensils',
+    color: 'amber',
+  },
+  {
+    id: 'cat_ventas',
+    nombre: 'Ventas',
+    seccionId: 'sec_emprendimiento',
+    tipo: 'ingreso',
+    icono: 'trending-up',
+    color: 'emerald',
+  },
+]
+
+const SAMPLE_SECCIONES: Seccion[] = [
+  { id: 'sec_personal', nombre: 'Personal', orden: 0 },
+  { id: 'sec_emprendimiento', nombre: 'Emprendimiento', orden: 1 },
 ]
 
 const SCOPE_OPTIONS = [
@@ -122,6 +144,11 @@ export const Kit = () => {
   const [addSheetAmount, setAddSheetAmount] = useState('')
   const [textFieldValue, setTextFieldValue] = useState('')
   const [amountFieldValue, setAmountFieldValue] = useState('')
+  const [pickerTipo, setPickerTipo] = useState<TipoMovimiento>('gasto')
+  const [pickerSelectedId, setPickerSelectedId] = useState<string | undefined>('cat_comida')
+  const [categoryModalOpen, setCategoryModalOpen] = useState(false)
+  const [categoryModalCategoria, setCategoryModalCategoria] = useState<Categoria | undefined>()
+  const [categoryModalInitialName, setCategoryModalInitialName] = useState<string | undefined>()
 
   return (
     <main className="mx-auto flex max-w-md flex-col gap-8 p-5 pb-24">
@@ -151,7 +178,7 @@ export const Kit = () => {
 
       <Section title="IconAvatar — tints">
         <div className="flex flex-wrap gap-3">
-          {TINTS.map((tint) => (
+          {ICON_AVATAR_TINTS.map((tint) => (
             <IconAvatar key={tint} icon={Gift} tint={tint} />
           ))}
         </div>
@@ -163,6 +190,7 @@ export const Kit = () => {
             <MovimientoRow
               key={m.id}
               movimiento={m}
+              categorias={SAMPLE_CATEGORIAS}
               onClick={() => {}}
               locale={locale}
               dateFnsLocale={dateFnsLocale}
@@ -170,6 +198,7 @@ export const Kit = () => {
           ))}
           <MovimientoRow
             movimiento={SAMPLE_MOVEMENTS[1]!}
+            categorias={SAMPLE_CATEGORIAS}
             pending
             meta="Estimado · próx. semana"
             locale={locale}
@@ -192,6 +221,50 @@ export const Kit = () => {
           <TagChip icon={Utensils} label="Sin categoría" tint="neutral" selected />
           <TagChip icon={Utensils} label="Deshabilitado" tint="neutral" disabled />
         </div>
+      </Section>
+
+      <Section title="CategoryPicker + CategoryFormModal">
+        <SegmentedControl
+          options={[...TYPE_OPTIONS]}
+          value={pickerTipo}
+          onChange={setPickerTipo}
+          aria-label="Tipo (demo del picker)"
+        />
+        <CategoryPicker
+          categorias={SAMPLE_CATEGORIAS}
+          tipo={pickerTipo}
+          selectedId={pickerSelectedId}
+          onSelect={(c) => setPickerSelectedId(c.id)}
+          onCreateRequested={(query) => {
+            setCategoryModalCategoria(undefined)
+            setCategoryModalInitialName(query)
+            setCategoryModalOpen(true)
+          }}
+        />
+        <button
+          type="button"
+          onClick={() => {
+            setCategoryModalCategoria(SAMPLE_CATEGORIAS[0])
+            setCategoryModalInitialName(undefined)
+            setCategoryModalOpen(true)
+          }}
+          className="min-h-11 self-start rounded-md bg-secondary px-4 text-sm font-bold text-secondary-foreground"
+        >
+          Editar “Sueldo”
+        </button>
+        {/* Kit.tsx never calls dataStore.load(), so Config stays null here —
+            upsertCategoria() no-ops rather than throwing (dataStore.ts's own
+            guard). This section demos the picker/modal's UI and interaction
+            pattern, not a full write round-trip. */}
+        <CategoryFormModal
+          open={categoryModalOpen}
+          onClose={() => setCategoryModalOpen(false)}
+          tipo={pickerTipo}
+          secciones={SAMPLE_SECCIONES}
+          categorias={SAMPLE_CATEGORIAS}
+          categoria={categoryModalCategoria}
+          initialName={categoryModalInitialName}
+        />
       </Section>
 
       <Section title="SegmentedControl">

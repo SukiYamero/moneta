@@ -6,8 +6,23 @@ import { FilterSheet } from '@/features/search/FilterSheet'
 import type { UseSearchFiltersResult } from '@/features/search/useSearchFilters'
 
 const categories: Categoria[] = [
-  { id: 'cat_comida', nombre: 'Comida', seccionId: 'sec_personal', tipo: 'gasto' },
-  { id: 'cat_sueldo', nombre: 'Sueldo', seccionId: 'sec_personal', tipo: 'ingreso' },
+  {
+    id: 'cat_comida',
+    nombre: 'Comida',
+    seccionId: 'sec_personal',
+    tipo: 'gasto',
+    icono: 'utensils',
+    color: 'amber',
+  },
+  {
+    id: 'cat_sueldo',
+    nombre: 'Sueldo',
+    seccionId: 'sec_personal',
+    tipo: 'ingreso',
+    icono: 'briefcase',
+    color: 'emerald',
+  },
+  // No icono/color: exercises the tipo-based fallback (specs.md §10.8/§10.22).
   { id: 'cat_custom', nombre: 'Etiqueta inventada', seccionId: 'sec_personal', tipo: 'gasto' },
 ]
 
@@ -38,7 +53,7 @@ describe('FilterSheet tag chips', () => {
       <FilterSheet
         open
         onClose={vi.fn()}
-        filters={makeFilters({ selectedTags: ['Comida'] })}
+        filters={makeFilters({ selectedTags: ['cat_comida'] })}
         categories={categories}
         firstDayOfWeek={1}
         locale="es-CO"
@@ -49,19 +64,19 @@ describe('FilterSheet tag chips', () => {
 
     const dialog = screen.getByRole('dialog')
     const chip = within(dialog).getByRole('button', { name: 'Comida' })
-    // Comida -> 'amber' in movimientoView's CATEGORY_TINT -> chart-3.
+    // Comida's own color: 'amber' -> chart-3.
     expect(chip.firstElementChild).toHaveClass('border-chart-3/40', 'bg-chart-3/15', 'text-chart-3')
     expect(chip.querySelector('svg')).toHaveClass('text-chart-3')
     // never the old uniform-primary selected treatment.
     expect(chip.firstElementChild).not.toHaveClass('border-primary/40')
   })
 
-  it('falls back to the type-based tint for a selected chip with no CATEGORY_TINT entry', () => {
+  it('falls back to the type-based tint for a selected chip with no icono/color', () => {
     render(
       <FilterSheet
         open
         onClose={vi.fn()}
-        filters={makeFilters({ selectedTags: ['Etiqueta inventada'] })}
+        filters={makeFilters({ selectedTags: ['cat_custom'] })}
         categories={categories}
         firstDayOfWeek={1}
         locale="es-CO"
@@ -72,7 +87,7 @@ describe('FilterSheet tag chips', () => {
 
     const dialog = screen.getByRole('dialog')
     const chip = within(dialog).getByRole('button', { name: 'Etiqueta inventada' })
-    // unmapped category, tipo: 'gasto' -> FALLBACK_TINT.gasto -> 'neutral'.
+    // no color set, tipo: 'gasto' -> FALLBACK_TINT.gasto -> 'neutral'.
     expect(chip.firstElementChild).toHaveClass(
       'border-border-strong',
       'bg-muted',
@@ -96,7 +111,7 @@ describe('FilterSheet tag chips', () => {
 
     const dialog = screen.getByRole('dialog')
     const chip = within(dialog).getByRole('button', { name: 'Sueldo' })
-    // Sueldo -> 'emerald' -> chart-1, unselected pill stays neutral.
+    // Sueldo's own color: 'emerald' -> chart-1, unselected pill stays neutral.
     expect(chip.querySelector('svg')).toHaveClass('text-chart-1')
     expect(chip.firstElementChild).toHaveClass(
       'border-border-subtle',

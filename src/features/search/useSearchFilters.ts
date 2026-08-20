@@ -23,8 +23,9 @@ export interface UseSearchFiltersResult {
   setCustomTo: (value: string) => void
   typeFilter: MovementTypeFilter
   setTypeFilter: (value: MovementTypeFilter) => void
+  /** Category ids (specs.md §10.22) — never display names. */
   selectedTags: string[]
-  toggleTag: (name: string) => void
+  toggleTag: (id: string) => void
   /** Resolved bounds for `movimientoStats.filterByRange`, or `null` for no date filter. */
   dateRange: DateRange | null
   /** Any filter (date range, type, tags) narrows the set — independent of the search query. */
@@ -56,10 +57,8 @@ export const useSearchFilters = (): UseSearchFiltersResult => {
 
   const clearSearch = () => setQuery('')
 
-  const toggleTag = (name: string) =>
-    setSelectedTags((tags) =>
-      tags.includes(name) ? tags.filter((t) => t !== name) : [...tags, name],
-    )
+  const toggleTag = (id: string) =>
+    setSelectedTags((tags) => (tags.includes(id) ? tags.filter((t) => t !== id) : [...tags, id]))
 
   const clearFilters = () => {
     setRangePreset('all')

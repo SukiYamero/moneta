@@ -156,6 +156,17 @@ Shared stores, helpers, and the Drive/auth/lock logic layer. No UI here.
   enqueue failure never rolls back a repo write that already succeeded but
   raises its own `errors:sync.notQueued` Toast rather than staying silent.
   It never throws past the action, same contract as `load()`.
+  `upsertCategoria`/`archiveCategoria`/`deleteCategoria` (`specs.md` §10.22)
+  are the same convention applied to one `Categoria` inside `Config.categorias`:
+  a shared `upsertById` helper merges by id from `state`/`get()` read fresh at
+  the moment each step runs (never a value captured earlier), which is what
+  keeps two categories created in the same tick from losing one to the
+  other's stale array. `archiveCategoria` refuses (toast, no repo call) when
+  it would leave zero non-archived categories; `deleteCategoria` refuses
+  when any loaded `Movimiento` still references the id. Unlike `updateConfig`'s
+  own `onSuccess` (a blind `set({ config: result })` — see `specs.md` §12 for
+  the gap that leaves), these three re-merge their own field into the
+  freshest `get().config` in `onSuccess` too, not just the optimistic apply.
 - `hlc.ts` — a purely local hybrid logical clock (`specs.md` §10.19).
   `tick()` yields a strictly increasing `Hlc`, encoded so two values compare
   correctly as plain strings. It never folds in a remote clock value on

@@ -282,5 +282,41 @@
         "label": "Idioma"
       }
     }
+  },
+  "tags": {
+    "unknownCategory": "Sem categoria",
+    "picker": {
+      "searchLabel": "Buscar categoria",
+      "searchPlaceholder": "Buscar categoria",
+      "createOption": "Criar «{{query}}»"
+    },
+    "form": {
+      "createTitle": "Nova categoria",
+      "editTitle": "Editar categoria",
+      "nameLabel": "Nome",
+      "namePlaceholder": "Ex: Academia",
+      "nameDuplicateError": "Já existe uma categoria com esse nome nesta seção",
+      "nameRequiredError": "Digite um nome",
+      "sectionLabel": "Seção",
+      "iconLabel": "Ícone",
+      "colorLabel": "Cor",
+      "saveCta": "Salvar",
+      "cancelCta": "Cancelar"
+    },
+    "errors": {
+      "lastCategory": "Não é possível arquivar a última categoria disponível",
+      "categoryInUse": "Esta categoria tem movimentos e não pode ser excluída"
+    },
+    "colors": {
+      "emerald": "Esmeralda",
+      "blue": "Azul",
+      "amber": "Âmbar",
+      "rose": "Rosa",
+      "purple": "Roxo",
+      "success": "Verde",
+      "danger": "Vermelho",
+      "info": "Azul-claro",
+      "neutral": "Cinza"
+    }
   }
 }

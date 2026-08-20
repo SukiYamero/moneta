@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('@/lib/repoProvider', () => ({ getRepo: vi.fn() }))
 vi.mock('@/lib/toastStore', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
-import type { Activo, Config, Movimiento } from '@/lib/schema'
+import type { Activo, Categoria, Config, Movimiento } from '@/lib/schema'
 import { CONFIG_SEMILLA } from '@/lib/schema'
 import type { Repo } from '@/lib/repo'
 import { RepoError } from '@/lib/repo'
@@ -37,6 +37,16 @@ const activo = (overrides: Partial<Activo> = {}): Activo => ({
   valorActual: 1000,
   moneda: 'COP',
   fechaActualizacion: '2026-08-15',
+  ...overrides,
+})
+
+const categoria = (overrides: Partial<Categoria> = {}): Categoria => ({
+  id: crypto.randomUUID(),
+  nombre: 'Gimnasio',
+  seccionId: 'sec_personal',
+  tipo: 'gasto',
+  icono: 'dumbbell',
+  color: 'rose',
   ...overrides,
 })
 
@@ -490,5 +500,229 @@ describe('useDataStore — concurrent mutations', () => {
 
     const notas = useDataStore.getState().movimientos.map((m) => m.nota)
     expect(notas).toEqual(['ok'])
+  })
+})
+
+describe('useDataStore.upsertCategoria', () => {
+  it('create: adds the category optimistically, persists via the repo, and enqueues a config put', async () => {
+    useDataStore.setState({ config: CONFIG_SEMILLA })
+    const repo = makeFakeRepo()
+    mGetRepo.mockReturnValue(repo)
+    const nueva = categoria({ nombre: 'Gimnasio' })
+    const merged: Config = { ...CONFIG_SEMILLA, categorias: [...CONFIG_SEMILLA.categorias, nueva] }
+    vi.mocked(repo.updateConfig).mockResolvedValue(merged)
+
+    await useDataStore.getState().upsertCategoria(nueva)
+
+    expect(useDataStore.getState().config?.categorias).toContainEqual(nueva)
+    expect(repo.updateConfig).toHaveBeenCalledWith({ categorias: merged.categorias })
+    expect(mToastError).not.toHaveBeenCalled()
+
+    const pending = await listPendingOperations()
+    expect(pending).toHaveLength(1)
+    expect(pending[0]?.operation.entity).toBe('config')
+    expect(pending[0]?.operation.op).toBe('put')
+  })
+
+  it('edit: replaces the existing category by id rather than appending a duplicate', async () => {
+    const existing = categoria({ id: 'cat_x', nombre: 'Gimnasio' })
+    useDataStore.setState({
+      config: { ...CONFIG_SEMILLA, categorias: [...CONFIG_SEMILLA.categorias, existing] },
+    })
+    const repo = makeFakeRepo()
+    mGetRepo.mockReturnValue(repo)
+    const renamed = { ...existing, nombre: 'Crossfit' }
+    vi.mocked(repo.updateConfig).mockImplementation((patch) =>
+      Promise.resolve({ ...CONFIG_SEMILLA, categorias: patch.categorias! }),
+    )
+
+    await useDataStore.getState().upsertCategoria(renamed)
+
+    const categorias = useDataStore.getState().config?.categorias ?? []
+    expect(categorias.filter((c) => c.id === 'cat_x')).toEqual([renamed])
+    expect(categorias).toHaveLength(CONFIG_SEMILLA.categorias.length + 1)
+  })
+
+  it('refusal: settings changes are refused offline', async () => {
+    useDataStore.setState({ config: CONFIG_SEMILLA })
+    useNetworkStore.setState({ online: false, lastOnlineAt: Date.now() })
+    const repo = makeFakeRepo()
+    mGetRepo.mockReturnValue(repo)
+
+    await useDataStore.getState().upsertCategoria(categoria())
+
+    expect(useDataStore.getState().config).toEqual(CONFIG_SEMILLA)
+    expect(repo.updateConfig).not.toHaveBeenCalled()
+    expect(mToastError).toHaveBeenCalledWith('errors:offline.mutationRestricted')
+  })
+
+  it('failure + rollback: reverts to the exact prior config and toasts the mapped code', async () => {
+    useDataStore.setState({ config: CONFIG_SEMILLA })
+    const repo = makeFakeRepo()
+    mGetRepo.mockReturnValue(repo)
+    vi.mocked(repo.updateConfig).mockRejectedValue(new RepoError('boom', 'unknown'))
+
+    await useDataStore.getState().upsertCategoria(categoria())
+
+    expect(useDataStore.getState().config).toEqual(CONFIG_SEMILLA)
+    expect(mToastError).toHaveBeenCalledWith('home:error.codes.unknown')
+    expect(await listPendingOperations()).toEqual([])
+  })
+
+  // specs.md §10.22's first edge case, verbatim: "Two categories created in
+  // the same tick... The new dataStore actions must build the array from
+  // the freshest store state inside the set, not from a value captured
+  // before an await." The repo mock below performs a real shallow merge
+  // (mirroring repo.fake.ts's updateConfig), so an implementation that
+  // captured a stale `categorias` array before its own `await` would lose
+  // whichever category's write settles first.
+  it('two categories created in the same tick both land: no lost update', async () => {
+    useDataStore.setState({ config: CONFIG_SEMILLA })
+    const repo = makeFakeRepo()
+    mGetRepo.mockReturnValue(repo)
+    let serverConfig: Config = CONFIG_SEMILLA
+    vi.mocked(repo.updateConfig).mockImplementation((patch) => {
+      serverConfig = { ...serverConfig, ...patch }
+      return Promise.resolve(serverConfig)
+    })
+    const a = categoria({ nombre: 'a' })
+    const b = categoria({ nombre: 'b' })
+
+    await Promise.all([
+      useDataStore.getState().upsertCategoria(a),
+      useDataStore.getState().upsertCategoria(b),
+    ])
+
+    const ids = useDataStore.getState().config?.categorias.map((c) => c.id) ?? []
+    expect(ids).toEqual(expect.arrayContaining([a.id, b.id]))
+    expect(ids).toHaveLength(CONFIG_SEMILLA.categorias.length + 2)
+  })
+})
+
+describe('useDataStore.archiveCategoria', () => {
+  it('not found: toasts and never calls the repo', async () => {
+    useDataStore.setState({ config: CONFIG_SEMILLA })
+    const repo = makeFakeRepo()
+    mGetRepo.mockReturnValue(repo)
+
+    await useDataStore.getState().archiveCategoria('missing')
+
+    expect(repo.updateConfig).not.toHaveBeenCalled()
+    expect(mToastError).toHaveBeenCalledWith('home:error.codes.notFound')
+  })
+
+  it('refuses to archive the last non-archived category, leaving the picker empty', async () => {
+    const onlyOne: Config = {
+      ...CONFIG_SEMILLA,
+      categorias: [categoria({ id: 'cat_only' })],
+    }
+    useDataStore.setState({ config: onlyOne })
+    const repo = makeFakeRepo()
+    mGetRepo.mockReturnValue(repo)
+
+    await useDataStore.getState().archiveCategoria('cat_only')
+
+    expect(repo.updateConfig).not.toHaveBeenCalled()
+    expect(mToastError).toHaveBeenCalledWith('tags:errors.lastCategory')
+    expect(useDataStore.getState().config?.categorias[0]?.archivado).not.toBe(true)
+  })
+
+  it('allows archiving when another non-archived category remains', async () => {
+    const config: Config = {
+      ...CONFIG_SEMILLA,
+      categorias: [categoria({ id: 'cat_a' }), categoria({ id: 'cat_b' })],
+    }
+    useDataStore.setState({ config })
+    const repo = makeFakeRepo()
+    mGetRepo.mockReturnValue(repo)
+    vi.mocked(repo.updateConfig).mockImplementation((patch) =>
+      Promise.resolve({ ...config, categorias: patch.categorias! }),
+    )
+
+    await useDataStore.getState().archiveCategoria('cat_a')
+
+    const categorias = useDataStore.getState().config?.categorias ?? []
+    expect(categorias.find((c) => c.id === 'cat_a')?.archivado).toBe(true)
+    expect(categorias.find((c) => c.id === 'cat_b')?.archivado).not.toBe(true)
+    expect(mToastError).not.toHaveBeenCalled()
+  })
+
+  it('failure + rollback: reverts to the exact prior config and toasts the mapped code', async () => {
+    const config: Config = {
+      ...CONFIG_SEMILLA,
+      categorias: [categoria({ id: 'cat_a' }), categoria({ id: 'cat_b' })],
+    }
+    useDataStore.setState({ config })
+    const repo = makeFakeRepo()
+    mGetRepo.mockReturnValue(repo)
+    vi.mocked(repo.updateConfig).mockRejectedValue(new RepoError('down', 'network'))
+
+    await useDataStore.getState().archiveCategoria('cat_a')
+
+    expect(useDataStore.getState().config).toEqual(config)
+    expect(mToastError).toHaveBeenCalledWith('home:error.codes.network')
+  })
+})
+
+describe('useDataStore.deleteCategoria', () => {
+  it('not found: toasts and never calls the repo', async () => {
+    useDataStore.setState({ config: CONFIG_SEMILLA, movimientos: [] })
+    const repo = makeFakeRepo()
+    mGetRepo.mockReturnValue(repo)
+
+    await useDataStore.getState().deleteCategoria('missing')
+
+    expect(repo.updateConfig).not.toHaveBeenCalled()
+    expect(mToastError).toHaveBeenCalledWith('home:error.codes.notFound')
+  })
+
+  it('refuses to delete a category referenced by a movimiento', async () => {
+    const target = categoria({ id: 'cat_used' })
+    useDataStore.setState({
+      config: { ...CONFIG_SEMILLA, categorias: [target] },
+      movimientos: [movimiento({ categoria: 'cat_used' })],
+    })
+    const repo = makeFakeRepo()
+    mGetRepo.mockReturnValue(repo)
+
+    await useDataStore.getState().deleteCategoria('cat_used')
+
+    expect(repo.updateConfig).not.toHaveBeenCalled()
+    expect(mToastError).toHaveBeenCalledWith('tags:errors.categoryInUse')
+    expect(useDataStore.getState().config?.categorias).toContainEqual(target)
+  })
+
+  it('deletes a category never used by any movimiento', async () => {
+    const target = categoria({ id: 'cat_unused' })
+    const config: Config = { ...CONFIG_SEMILLA, categorias: [target] }
+    useDataStore.setState({ config, movimientos: [] })
+    const repo = makeFakeRepo()
+    mGetRepo.mockReturnValue(repo)
+    vi.mocked(repo.updateConfig).mockImplementation((patch) =>
+      Promise.resolve({ ...config, categorias: patch.categorias! }),
+    )
+
+    await useDataStore.getState().deleteCategoria('cat_unused')
+
+    expect(useDataStore.getState().config?.categorias).toEqual([])
+    expect(mToastError).not.toHaveBeenCalled()
+
+    const pending = await listPendingOperations()
+    expect(pending).toHaveLength(1)
+    expect(pending[0]?.operation.entity).toBe('config')
+  })
+
+  it('failure + rollback: reverts to the exact prior config and toasts the mapped code', async () => {
+    const target = categoria({ id: 'cat_unused' })
+    const config: Config = { ...CONFIG_SEMILLA, categorias: [target] }
+    useDataStore.setState({ config, movimientos: [] })
+    const repo = makeFakeRepo()
+    mGetRepo.mockReturnValue(repo)
+    vi.mocked(repo.updateConfig).mockRejectedValue(new RepoError('boom', 'unknown'))
+
+    await useDataStore.getState().deleteCategoria('cat_unused')
+
+    expect(useDataStore.getState().config).toEqual(config)
+    expect(mToastError).toHaveBeenCalledWith('home:error.codes.unknown')
   })
 })

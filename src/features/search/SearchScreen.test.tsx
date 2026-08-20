@@ -19,7 +19,7 @@ const movimiento = (overrides: Partial<Movimiento> = {}): Movimiento => ({
   id: crypto.randomUUID(),
   fecha: '2026-08-15',
   seccion: 'sec_personal',
-  categoria: 'Comida',
+  categoria: 'cat_comida',
   tipo: 'gasto',
   monto: 18_000,
   moneda: 'COP',
@@ -160,7 +160,7 @@ describe('SearchScreen', () => {
   it('lists every movement with no query or filters', () => {
     setReady([
       movimiento({ nota: 'Café de la mañana' }),
-      movimiento({ nota: 'Uber al trabajo', categoria: 'Transporte' }),
+      movimiento({ nota: 'Uber al trabajo', categoria: 'cat_transporte' }),
     ])
     render(<SearchScreen />)
     expect(screen.getByText('Café de la mañana')).toBeInTheDocument()
@@ -171,7 +171,7 @@ describe('SearchScreen', () => {
     const user = userEvent.setup()
     setReady([
       movimiento({ nota: 'Café de la mañana' }),
-      movimiento({ nota: 'Uber al trabajo', categoria: 'Transporte' }),
+      movimiento({ nota: 'Uber al trabajo', categoria: 'cat_transporte' }),
     ])
     render(<SearchScreen />)
 
@@ -188,7 +188,7 @@ describe('SearchScreen', () => {
   it('search is accent- and case-insensitive', async () => {
     const user = userEvent.setup()
     setReady([
-      movimiento({ nota: 'Viaje en camión', categoria: 'Transporte' }),
+      movimiento({ nota: 'Viaje en camión', categoria: 'cat_transporte' }),
       movimiento({ nota: 'Café de la mañana' }),
     ])
     render(<SearchScreen />)
@@ -199,6 +199,25 @@ describe('SearchScreen', () => {
       expect(screen.queryByText('Café de la mañana')).not.toBeInTheDocument()
     })
     expect(screen.getByText('Viaje en camión')).toBeInTheDocument()
+  })
+
+  // `Movimiento.categoria` is a category id (specs.md §10.22) — free-text
+  // search must match the category's resolved *name*, not the id, and
+  // never accidentally match the raw id string either.
+  it('matches a movement by its resolved category name, not the raw category id', async () => {
+    const user = userEvent.setup()
+    setReady([
+      movimiento({ nota: 'Almuerzo', categoria: 'cat_comida' }),
+      movimiento({ nota: 'Uber al trabajo', categoria: 'cat_transporte' }),
+    ])
+    render(<SearchScreen />)
+
+    await user.type(screen.getByRole('textbox', { name: /descripción o etiqueta/i }), 'comida')
+
+    await waitFor(() => {
+      expect(screen.queryByText('Uber al trabajo')).not.toBeInTheDocument()
+    })
+    expect(screen.getByText('Almuerzo')).toBeInTheDocument()
   })
 
   it('the "no results" message names the query that actually produced zero results, not one still pending debounce', async () => {
@@ -243,9 +262,9 @@ describe('SearchScreen', () => {
   it('the type filter narrows to one tipo and combines with the tag filter', async () => {
     const user = userEvent.setup()
     setReady([
-      movimiento({ nota: 'Café de la mañana', categoria: 'Comida', tipo: 'gasto' }),
-      movimiento({ nota: 'Uber al trabajo', categoria: 'Transporte', tipo: 'gasto' }),
-      movimiento({ nota: 'Sueldo de agosto', categoria: 'Sueldo', tipo: 'ingreso' }),
+      movimiento({ nota: 'Café de la mañana', categoria: 'cat_comida', tipo: 'gasto' }),
+      movimiento({ nota: 'Uber al trabajo', categoria: 'cat_transporte', tipo: 'gasto' }),
+      movimiento({ nota: 'Sueldo de agosto', categoria: 'cat_sueldo', tipo: 'ingreso' }),
     ])
     render(<SearchScreen />)
 
@@ -259,6 +278,24 @@ describe('SearchScreen', () => {
     expect(screen.getByText('Café de la mañana')).toBeInTheDocument()
     expect(screen.queryByText('Uber al trabajo')).not.toBeInTheDocument()
     expect(screen.queryByText('Sueldo de agosto')).not.toBeInTheDocument()
+  })
+
+  // `filters.selectedTags` holds category ids (specs.md §10.22); the active
+  // chip rendered above the results must show the resolved *name*, never
+  // the raw id — the exact bug shape the reference-migration sweep exists
+  // to close.
+  it('the active tag chip shows the category name, never the raw category id', async () => {
+    const user = userEvent.setup()
+    setReady([movimiento({ nota: 'Café de la mañana', categoria: 'cat_comida' })])
+    render(<SearchScreen />)
+
+    await user.click(screen.getByRole('button', { name: /^filtros$/i }))
+    const dialog = screen.getByRole('dialog')
+    await user.click(within(dialog).getByRole('button', { name: 'Comida' }))
+    await user.click(within(dialog).getByRole('button', { name: /^ver \d+ resultados?$/i }))
+
+    expect(screen.getByRole('button', { name: 'Comida' })).toBeInTheDocument()
+    expect(screen.queryByText('cat_comida')).not.toBeInTheDocument()
   })
 
   it('the date range preset narrows to movements inside the range', async () => {
@@ -282,7 +319,7 @@ describe('SearchScreen', () => {
     const user = userEvent.setup()
     setReady([
       movimiento({ nota: 'Café de la mañana', tipo: 'gasto' }),
-      movimiento({ nota: 'Sueldo de agosto', categoria: 'Sueldo', tipo: 'ingreso' }),
+      movimiento({ nota: 'Sueldo de agosto', categoria: 'cat_sueldo', tipo: 'ingreso' }),
     ])
     render(<SearchScreen />)
 
@@ -335,7 +372,7 @@ describe('SearchScreen', () => {
     const user = userEvent.setup()
     setReady([
       movimiento({ nota: 'Café de la mañana', tipo: 'gasto' }),
-      movimiento({ nota: 'Sueldo de agosto', categoria: 'Sueldo', tipo: 'ingreso' }),
+      movimiento({ nota: 'Sueldo de agosto', categoria: 'cat_sueldo', tipo: 'ingreso' }),
     ])
     render(<SearchScreen />)
 

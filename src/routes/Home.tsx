@@ -57,7 +57,7 @@ export const Home = () => {
             todayIso={dashboard.todayIso}
           />
           <AreasBanner />
-          <RecentMovimientos movimientos={dashboard.recent} />
+          <RecentMovimientos movimientos={dashboard.recent} categorias={dashboard.categorias} />
         </div>
       )}
     </main>

@@ -1,4 +1,4 @@
-import type { Movimiento } from '@/lib/schema'
+import type { Categoria, Movimiento, Seccion } from '@/lib/schema'
 
 // Header row is the schema field names, not localized labels (AGENTS.md:
 // they're the real Drive column contract) — stable across locales, and a
@@ -66,12 +66,25 @@ const encodeField = (value: string): string => quoteIfNeeded(escapeFormulaInject
 const createMontoFormatter = (locale: string): Intl.NumberFormat =>
   new Intl.NumberFormat(locale, { useGrouping: false, maximumFractionDigits: 20 })
 
-const buildRow = (movimiento: Movimiento, formatMonto: (value: number) => string): string => {
+/**
+ * `seccion`/`categoria` are ids (specs.md §10.22) — the exported file is for
+ * a person, not a developer, so the column shows the resolved *name*.
+ * Falls back to the raw id when it isn't in `Config` (an unsynced shard, a
+ * category deleted elsewhere): still more useful in a data export a person
+ * can cross-reference against the JSON than a blank or a generic label
+ * would be, unlike a screen where a raw id is never acceptable.
+ */
+const buildRow = (
+  movimiento: Movimiento,
+  formatMonto: (value: number) => string,
+  seccionNameById: Map<string, string>,
+  categoriaNameById: Map<string, string>,
+): string => {
   const values: Record<Column, string> = {
     id: movimiento.id,
     fecha: movimiento.fecha,
-    seccion: movimiento.seccion,
-    categoria: movimiento.categoria,
+    seccion: seccionNameById.get(movimiento.seccion) ?? movimiento.seccion,
+    categoria: categoriaNameById.get(movimiento.categoria) ?? movimiento.categoria,
     tipo: movimiento.tipo,
     monto: formatMonto(movimiento.monto),
     moneda: movimiento.moneda,
@@ -93,6 +106,9 @@ const chunk = <T>(items: readonly T[], size: number): T[][] => {
 export interface CsvExportOptions {
   /** Intl tag, e.g. `useLocaleFormatting().locale` — never a hand-rolled default. */
   locale: string
+  /** `Config.secciones`/`Config.categorias` — resolves `seccion`/`categoria` ids to names. */
+  secciones: readonly Pick<Seccion, 'id' | 'nombre'>[]
+  categorias: readonly Pick<Categoria, 'id' | 'nombre'>[]
 }
 
 /**
@@ -104,13 +120,18 @@ export interface CsvExportOptions {
  */
 export const buildMovimientoCsvParts = (
   movimientos: readonly Movimiento[],
-  { locale }: CsvExportOptions,
+  { locale, secciones, categorias }: CsvExportOptions,
 ): string[] => {
   const formatMonto = createMontoFormatter(locale).format
+  const seccionNameById = new Map(secciones.map((s) => [s.id, s.nombre]))
+  const categoriaNameById = new Map(categorias.map((c) => [c.id, c.nombre]))
   const header = COLUMNS.map((column) => encodeField(column)).join(FIELD_SEPARATOR)
   const preamble = `${BOM}${SEP_HINT_LINE}${ROW_SEPARATOR}${header}${ROW_SEPARATOR}`
   const rowChunks = chunk(movimientos, CHUNK_SIZE).map(
-    (batch) => batch.map((item) => buildRow(item, formatMonto)).join(ROW_SEPARATOR) + ROW_SEPARATOR,
+    (batch) =>
+      batch
+        .map((item) => buildRow(item, formatMonto, seccionNameById, categoriaNameById))
+        .join(ROW_SEPARATOR) + ROW_SEPARATOR,
   )
   return [preamble, ...rowChunks]
 }

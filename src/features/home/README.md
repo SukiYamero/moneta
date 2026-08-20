@@ -8,7 +8,10 @@ Track L).
   `src/lib/dataStore.ts`, triggers `load()` on mount, and derives every
   figure through `src/lib/movimientoStats.ts`'s pure functions (never a
   local sum/aggregation). Returns render-ready data plus `status`/`error`/
-  `retry` for the three non-happy states.
+  `retry` for the three non-happy states, and `categorias` (`Config.categorias`,
+  falling back to `CONFIG_SEMILLA.categorias` before load) — `Movimiento.categoria`
+  is an id (`specs.md` §10.22), and `RecentMovimientos`/`MovimientoRow` need
+  this to resolve it.
 - `homeView.ts` — pure, data-free presentation helpers: greeting bucket
   (morning/afternoon/evening), initials from a display name, weekday
   labels, and the week-strip's 7-day scaffold (which days have a real
@@ -37,8 +40,8 @@ Track L).
   like `BottomNav`'s own stub slots, not a full-color dead link.
 - `RecentMovimientos.tsx` — most recent movements via the shared
   `MovimientoRow`, "Ver todo" linking to `/history`. Calls
-  `useLocaleFormatting()` directly and forwards `locale`/`dateFnsLocale`
-  to each `MovimientoRow`.
+  `useLocaleFormatting()` directly and forwards `locale`/`dateFnsLocale`/
+  `categorias` to each `MovimientoRow`.
 - `HomeLoadingState.tsx` / `HomeEmptyState.tsx` / `HomeErrorState.tsx` —
   the three non-happy states `Home.tsx` switches on; the error state's
   retry button calls `useHomeDashboard`'s `retry` (re-invokes

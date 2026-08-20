@@ -282,5 +282,41 @@
         "label": "Language"
       }
     }
+  },
+  "tags": {
+    "unknownCategory": "No category",
+    "picker": {
+      "searchLabel": "Search category",
+      "searchPlaceholder": "Search category",
+      "createOption": "Create “{{query}}”"
+    },
+    "form": {
+      "createTitle": "New category",
+      "editTitle": "Edit category",
+      "nameLabel": "Name",
+      "namePlaceholder": "E.g. Gym",
+      "nameDuplicateError": "A category with that name already exists in this section",
+      "nameRequiredError": "Enter a name",
+      "sectionLabel": "Section",
+      "iconLabel": "Icon",
+      "colorLabel": "Color",
+      "saveCta": "Save",
+      "cancelCta": "Cancel"
+    },
+    "errors": {
+      "lastCategory": "You can't archive the last available category",
+      "categoryInUse": "This category has movements and can't be deleted"
+    },
+    "colors": {
+      "emerald": "Emerald",
+      "blue": "Blue",
+      "amber": "Amber",
+      "rose": "Rose",
+      "purple": "Purple",
+      "success": "Green",
+      "danger": "Red",
+      "info": "Sky",
+      "neutral": "Gray"
+    }
   }
 }

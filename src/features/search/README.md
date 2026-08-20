@@ -19,7 +19,9 @@ client-side from the same `Movimiento[]` those screens read.
   different empty states** — telling a new user their search matched
   nothing when they have no movements at all is the wrong message.
   A search result row has no `onClick` yet — `// STUB(trackF)`: the
-  Movement view/edit sheet doesn't exist until Wave 3. Calls
+  Movement view/edit sheet doesn't exist until Wave 3. Free-text search
+  matches a movement's `nota` and its category's _resolved name_ (never the
+  raw `categoria` id — `specs.md` §10.22) via `searchMatch.ts`. Calls
   `useLocaleFormatting()` for the custom-range chip's date formatting and
   for `MovimientoRow`'s `locale`/`dateFnsLocale` props
   (`docs/wave-2/track-m.md`). Its loading state is `SearchLoadingState.tsx`
@@ -33,12 +35,17 @@ client-side from the same `Movimiento[]` those screens read.
   writes straight into `useSearchFilters`'s shared state, so the result
   list and this sheet's own "Ver N resultados" button update live,
   matching the source design. `FilterSheetProps` takes required `locale`/
-  `dateFnsLocale`, forwarded from `SearchScreen` to `DateChipPicker`.
+  `dateFnsLocale`, forwarded from `SearchScreen` to `DateChipPicker`. Tag
+  chips render from `categories: Categoria[]` directly (each already
+  carries its own `icono`/`color`), and `selectedTags` holds category
+  **ids**, not names (`specs.md` §10.22).
 - `useSearchFilters.ts` — owns every filter dimension (debounced query,
   date-range preset + custom bounds, type, tags) in one hook so
   `SearchScreen` and `FilterSheet` always read the same live state.
   `isFilterActive` and `dateRange` (resolved via `dateRangePresets.ts`) are
-  derived, not stored twice.
+  derived, not stored twice. `selectedTags`/`toggleTag` are id-agnostic —
+  they toggle whatever string identity `FilterSheet` passes in, which is
+  now a category id rather than a name.
 - `dateRangePresets.ts` — pure preset → `DateRange` resolution
   (`movimientoStats.DateRange`) for `all`/`7d`/`30d`/`month`/`year`/
   `custom`. `all` resolves to `null` (no filter), not a sentinel range. A

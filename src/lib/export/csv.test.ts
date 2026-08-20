@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Movimiento } from '@/lib/schema'
-import { buildMovimientoCsvParts } from '@/lib/export/csv'
+import { buildMovimientoCsvParts, type CsvExportOptions } from '@/lib/export/csv'
 
 const movimiento = (overrides: Partial<Movimiento> = {}): Movimiento => ({
   id: crypto.randomUUID(),
@@ -14,8 +14,25 @@ const movimiento = (overrides: Partial<Movimiento> = {}): Movimiento => ({
   ...overrides,
 })
 
-const buildCsv = (movimientos: readonly Movimiento[], locale = 'es-CO'): string =>
-  buildMovimientoCsvParts(movimientos, { locale }).join('')
+// `seccion`/`categoria` are ids (specs.md §10.22) — most tests below only
+// care about separator/quoting/injection behavior, so these resolve the
+// default fixtures' ids to real names, matching real usage.
+const DEFAULT_SECCIONES: CsvExportOptions['secciones'] = [
+  { id: 'sec_personal', nombre: 'Personal' },
+]
+const DEFAULT_CATEGORIAS: CsvExportOptions['categorias'] = [{ id: 'cat_sueldo', nombre: 'Sueldo' }]
+
+const buildCsv = (
+  movimientos: readonly Movimiento[],
+  locale = 'es-CO',
+  overrides: Partial<Pick<CsvExportOptions, 'secciones' | 'categorias'>> = {},
+): string =>
+  buildMovimientoCsvParts(movimientos, {
+    locale,
+    secciones: DEFAULT_SECCIONES,
+    categorias: DEFAULT_CATEGORIAS,
+    ...overrides,
+  }).join('')
 
 const lines = (csv: string): string[] => csv.split('\r\n')
 
@@ -46,8 +63,17 @@ describe('buildMovimientoCsvParts()', () => {
     ])
   })
 
-  it('separates fields with ; and rows with CRLF', () => {
+  it('separates fields with ; and rows with CRLF, showing category/section names, not ids', () => {
     const csv = buildCsv([movimiento({ id: 'm1', monto: 500 })])
+    const row = lines(csv)[2]
+    expect(row).toBe('m1;2026-08-15;Personal;Sueldo;ingreso;500;COP;;;2026-08-15T00:00:00.000Z')
+  })
+
+  it('falls back to the raw id when the section/category is not in Config (unsynced shard, deleted elsewhere)', () => {
+    const csv = buildCsv([movimiento({ id: 'm1', monto: 500 })], 'es-CO', {
+      secciones: [],
+      categorias: [],
+    })
     const row = lines(csv)[2]
     expect(row).toBe(
       'm1;2026-08-15;sec_personal;cat_sueldo;ingreso;500;COP;;;2026-08-15T00:00:00.000Z',
@@ -120,8 +146,13 @@ describe('buildMovimientoCsvParts()', () => {
       },
     )
 
-    it('escapes a category/section name the same way, since both are user-editable free text', () => {
-      const csv = buildCsv([movimiento({ categoria: '=HYPERLINK("evil")', seccion: '@import' })])
+    it("escapes a category/section's resolved *name* the same way, since both are user-editable free text", () => {
+      // `categoria`/`seccion` are ids (specs.md §10.22) — the injection risk
+      // lives in the free-text `nombre` they resolve to, not the id itself.
+      const csv = buildCsv([movimiento({ categoria: 'cat_x', seccion: 'sec_x' })], 'es-CO', {
+        secciones: [{ id: 'sec_x', nombre: '@import' }],
+        categorias: [{ id: 'cat_x', nombre: '=HYPERLINK("evil")' }],
+      })
       const row = lines(csv)[2]
       const fields = row!.split(';')
       expect(fields[2]).toBe("'@import") // seccion
@@ -156,13 +187,21 @@ describe('buildMovimientoCsvParts()', () => {
   describe('chunking for a large dataset', () => {
     it('returns more than one string part once the dataset exceeds one chunk, never one giant string', () => {
       const many = Array.from({ length: 1200 }, (_, i) => movimiento({ id: `m${i}` }))
-      const parts = buildMovimientoCsvParts(many, { locale: 'es-CO' })
+      const parts = buildMovimientoCsvParts(many, {
+        locale: 'es-CO',
+        secciones: DEFAULT_SECCIONES,
+        categorias: DEFAULT_CATEGORIAS,
+      })
       expect(parts.length).toBeGreaterThan(1)
     })
 
     it('the joined parts contain exactly one data row per movimiento, in order', () => {
       const many = Array.from({ length: 1200 }, (_, i) => movimiento({ id: `m${i}` }))
-      const csv = buildMovimientoCsvParts(many, { locale: 'es-CO' }).join('')
+      const csv = buildMovimientoCsvParts(many, {
+        locale: 'es-CO',
+        secciones: DEFAULT_SECCIONES,
+        categorias: DEFAULT_CATEGORIAS,
+      }).join('')
       const dataLines = lines(csv).slice(2, -1)
       expect(dataLines).toHaveLength(1200)
       expect(dataLines[0]!.startsWith('m0;')).toBe(true)

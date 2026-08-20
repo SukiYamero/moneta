@@ -4214,7 +4214,166 @@ lint` clean bar the one pre-existing `components/ui` warning). `AGENTS.md`
   drew it. Resolved under `AGENTS.md`'s canvas-vs-code rule by asking, not by
   assuming.
 
+- 2026-08-19 — **Track G1, stage 1: the taxonomy-reference migration
+  (§10.22 Decision 1) implemented.** `Movimiento.categoria` now stores
+  `Categoria.id`; `getMovimientoVisual` in `movimientoView.ts` is a pure
+  resolution (`icono`/`color` → tipo-based fallback), and a new
+  `resolveCategoria(id, config)` is the one place an id is turned back into
+  a `Categoria`. `CATEGORY_ICON`/`CATEGORY_TINT` are deleted; their pairings
+  moved onto `CONFIG_SEMILLA.categorias` and `repo.fake.ts`'s demo
+  categories as explicit `icono`/`color`. `Categoria` gained `icono?:
+CategoryIconKey` (new `src/features/tags/categoryIcons.ts`, a curated
+  34-icon `lucide-react` allowlist), `color?: IconAvatarTint`, and
+  `archivado?: boolean` — additive, no `SCHEMA_VERSION` bump. `schema.ts`'s
+  `categoria`/`seccion` comments corrected to say "id", not "valor de la
+  taxonomía". `repo.fake.ts`'s `MOVIMIENTO_TEMPLATES` switched from category
+  _names_ to ids, making it consistent with `repo.contract.ts` (which
+  already seeded an id) instead of the two fixtures disagreeing.
+  - **The Blast radius list in §10.22 was incomplete — the sweep found
+    four more real render/consumer sites**, all fixed in the same change:
+    `src/features/history/HistoryScreen.tsx` (threads `Config.categorias`
+    into `BreakdownCard`/`MovimientoRow`, which the listed files alone
+    can't do without a caller supplying it), `src/features/home/RecentMovimientos.tsx`
+    - `src/features/home/useHomeDashboard.ts` + `src/routes/Home.tsx` (Home's
+      own `MovimientoRow` list — the dashboard a real user actually lands on —
+      had no `categorias` source at all), and `src/lib/export/index.ts` (the
+      actual `exportMovimientosToCsv` caller of `csv.ts`, which needed to fetch
+      `repo.getConfig()` and pass `secciones`/`categorias` through — `csv.ts`
+      alone can't resolve anything without them). None of these are owned by
+      Track Z or another wave-4 track; all are one-hop callers of the files
+      §10.22 already listed as owned, not scope creep.
+  - **Two existing tests were quietly enshrining the exact bug this
+    migration exists to fix**, found by the sweep, not by inspection:
+    `HistoryScreen.test.tsx`'s breakdown test asserted `topIngreso.key` (a
+    raw category id) rendered as visible text; `SearchScreen.tsx`'s active
+    tag chip rendered `label: tag` (the raw id) directly. Both fixed to
+    assert the resolved _name_ and that the raw id is absent from the DOM.
+  - **`SearchScreen.tsx`'s free-text search matched `m.categoria` (now an
+    id) directly** — coincidentally still "worked" for seed data only
+    because seed ids are name-derived (`cat_sueldo` contains "sueldo"); any
+    user-created category (`crypto.randomUUID()`) would have silently
+    stopped being findable by name. Fixed to resolve the category's `nombre`
+    before matching. Its tag filter (`selectedTags`/`toggleTag`,
+    `useSearchFilters.ts`) already compared by identity and needed no logic
+    change, only a rename from "name" to "id" in a doc comment — it was
+    already correct by construction, just previously fed names instead of
+    ids.
+  - **`[seccion+fecha]` Dexie indexes verified, not assumed, to keep
+    working**: `db.ts`'s only indexed movement fields are `fecha` and
+    `seccion` (already an id before this change per the original audit);
+    `categoria` was never indexed. No `db.ts` change, no index rebuild.
+  - **`csv.ts`'s injection-escaping test was testing the wrong field**: it
+    put `=HYPERLINK(...)` directly in `movimiento.categoria`, which is now
+    an id, not free text. The real remaining risk is a category's `nombre`
+    (still free text, still user-editable) — the test now constructs that
+    shape and confirms the resolved name is still escaped the same way.
+  - **`bun run check` is green** (956 tests, typecheck and lint clean)
+    before any picker UI exists, per the plan's explicit ordering.
+
+- 2026-08-20 — **Track G1, stage 2: `dataStore.upsertCategoria`/
+  `archiveCategoria`/`deleteCategoria` implemented, TDD.** Built on the
+  existing `runMutation` convention (§10.13): `settings`-kind mutation
+  (refused offline, same as `updateConfig`), optimistic apply, rollback on
+  failure, a config `put` enqueued on success. `archiveCategoria` refuses
+  (toast, never the repo) when archiving would leave zero non-archived
+  categories; `deleteCategoria` refuses when any loaded `Movimiento`
+  references the id — both per Decision 5's semantics, Track G2's UI to
+  build on top of.
+  - **The same-tick race (§10.22's first edge case) is closed by a shared
+    `upsertById` helper**, not by discipline at each call site: every
+    optimistic apply reads `state.categorias` from the `set((state) => …)`
+    callback (never a value closed over earlier), and every `write()`
+    reads `get().config` fresh at the moment it's invoked — after the
+    optimistic apply already ran — rather than the `previous` snapshot
+    taken only for rollback. Proven by a test that fires two
+    `upsertCategoria` calls via `Promise.all` against a repo mock that
+    performs a real shallow merge (mirroring `repo.fake.ts`); both
+    categories survive.
+  - **Went one step further than the named edge case, and it's worth
+    flagging:** the existing `updateConfig` action's `onSuccess` does a
+    blind `set({ config: result })` — trusting whichever write's own
+    return value arrives, not merging it into whatever the store holds at
+    that moment. For `movimiento` actions this is safe (`onSuccess` merges
+    one row into the array by id, matching `movimientos`' existing
+    pattern), but for a single `Config` object it means two concurrent
+    `Config` writes whose underlying repo calls **settle out of dispatch
+    order** could have the earlier one's stale result clobber the later
+    one's already-applied change — unreachable today with the in-process
+    fake/local repos (write order and settle order coincide), genuinely
+    reachable once `repo.drive.ts` (Track Z) introduces real network
+    latency. The three new actions above avoid this by merging their own
+    category back into the freshest `get().config` inside `onSuccess`
+    instead of trusting the write's raw return value — but `updateConfig`
+    itself still has the blind-overwrite shape, and it is **not fixed
+    here**: `runMutation`/`updateConfig` are shared, pre-existing surface
+    outside this stage's file ownership, and touching them is a
+    cross-cutting call for the operator, not a G1 stage-2 decision. Filed
+    to §12.
+  - `bun run check` green (969 tests).
+
+- 2026-08-20 — **Track G1, stage 3: `CategoryPicker`, `CategoryFormModal`,
+  `categorySuggest.ts` built and demoed in `/kit`.** `CategoryPicker`
+  renders inline (never its own overlay), filters `archivado` itself,
+  orders `tipo`-matching categories first without hiding the rest or
+  flipping the sheet's toggle, and shows a "crear «query»" chip only when
+  nothing matches. `CategoryFormModal` is one `CenterModal` for create and
+  edit: name/section/icon-grid/color-grid + a live preview, duplicate name
+  blocked inline and scoped to section, name capped on the value (not just
+  `maxlength`), and it calls `useDataStore().upsertCategoria` directly and
+  closes immediately (optimistic, matching every other write here — Tier 3,
+  specs.md §10.9). `categorySuggest.ts` holds 34 concepts (a bit over the
+  spec's "roughly 30") each with icon/tint/one multilingual keyword bag,
+  matched on whole normalized words via `searchMatch.normalizeForSearch`
+  (no second normalizer); the no-match case falls back to
+  `leastUsedTint()`, exported alongside a new `ICON_AVATAR_TINTS` in
+  `tintClasses.ts` (derived from `TINT_CLASSES`'s own keys, replacing
+  `Kit.tsx`'s previously-separate hardcoded tint array — one enumeration,
+  not two).
+  - **Not wired into a real screen.** Track F (the movement Add/Edit sheet)
+    doesn't exist in this codebase yet, so both components are built,
+    unit/interaction-tested, and demoed in `/kit` — ready for Track F/G2
+    to consume once they land. `CategoryPicker.onSelect` hands back the
+    full `Categoria`, so a future caller derives `categoria`/`seccionId`
+    from one tap, matching the spec's "seccion is derived, never picked."
+  - **A judgment call worth flagging: the icon grid's per-button
+    accessible label is the raw icon key** (`"dumbbell"`, `"gift"`),
+    English and untranslated — unlike the color grid, which got real
+    localized names (`tags:colors.*`, all four locales) because color is
+    the more meaningful semantic quality for a screen-reader user choosing
+    a category's visual identity. Translating 34 icon names across four
+    locales for a supplementary label felt like the wrong place to spend
+    this stage's remaining scope; revisit if it's ever raised as a real
+    accessibility gap.
+  - **Pressure-tested Decision 7's "always the concept's tint, even
+    colliding" call by implementing it as specified** — no new consequence
+    surfaced beyond what the decision already named (the tenth-plus
+    category shares a color family). Confirmed by test
+    (`categorySuggest.test.ts`: a matched concept keeps its own tint even
+    when every existing category already uses it).
+  - `bun run check` green (1001 tests, typecheck/lint clean,
+    `rg 'CATEGORY_TINT' src` empty).
+
 ## 12. Backlog (pending verification / deferred work)
+
+- **`dataStore.updateConfig`'s `onSuccess` blindly trusts its own write's
+  return value (`set({ config: result })`) instead of merging into the
+  freshest store state.** Found by Track G1 while building
+  `upsertCategoria`/`archiveCategoria`/`deleteCategoria` (§11, 2026-08-20),
+  which avoid the shape for their own field (`categorias`, merged by id) but
+  don't fix the general-purpose `updateConfig` action itself. Two concurrent
+  `Config` writes whose underlying repo calls settle **out of dispatch
+  order** — impossible today with the in-process fake/local repos, where
+  settle order always matches dispatch order, but plausible the moment
+  `repo.drive.ts` (Track Z) adds real network latency — would have the
+  earlier dispatch's stale result silently overwrite the later one's
+  already-applied change in the store (though not in the repo itself, which
+  each call still writes to independently). Two shapes of fix, unevaluated
+  here: give `onSuccess` a per-field merge the way the new categoria actions
+  do, generalized across whichever fields the patch actually touched; or a
+  version/generation check that refuses to apply a stale write's result over
+  a newer one. Whoever picks this up should re-check it against
+  `repo.drive.ts`'s actual latency characteristics once that track lands,
+  not just in the abstract.
 
 - **The lock feature is not internationalised at all.** `LockScreen`,
   `LockSettings` and `src/features/lock/errorCopy.ts` still hold hardcoded

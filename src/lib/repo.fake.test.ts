@@ -49,7 +49,7 @@ describe('createFakeRepo', () => {
       id: 'mov_new',
       fecha: '2026-08-18',
       seccion: 'sec_personal',
-      categoria: 'Comida',
+      categoria: 'cat_comida',
       tipo: 'gasto',
       monto: 1000,
       moneda: 'COP',

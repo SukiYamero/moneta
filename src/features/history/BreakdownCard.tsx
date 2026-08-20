@@ -1,10 +1,11 @@
 import { useTranslation } from 'react-i18next'
-import type { Moneda, Periodo, TipoMovimiento } from '@/lib/schema'
+import type { Categoria, Moneda, Periodo, TipoMovimiento } from '@/lib/schema'
 import type { BreakdownEntry, Totals } from '@/lib/movimientoStats'
 import {
   formatMonto,
   formatMontoWithSign,
   getMovimientoVisual,
+  resolveCategoria,
 } from '@/components/shared/movimientoView'
 import { useLocaleFormatting } from '@/lib/i18n/localeFormatting'
 import { SegmentedControl, type SegmentedControlOption } from '@/components/shared/SegmentedControl'
@@ -18,6 +19,12 @@ export interface BreakdownCardProps {
   bdType: TipoMovimiento
   onBdTypeChange: (tipo: TipoMovimiento) => void
   moneda: Moneda
+  /**
+   * `Config.categorias` — required, no default: `entry.key` is a category id
+   * when `breakdown` was grouped by `'categoria'` (specs.md §10.22), so
+   * resolving it to a name/icon/color needs this in scope from the caller.
+   */
+  categorias: Categoria[]
 }
 
 // Presentation-only: the progress bar needs a solid fill, `IconAvatar`'s own
@@ -44,8 +51,9 @@ export const BreakdownCard = ({
   bdType,
   onBdTypeChange,
   moneda,
+  categorias,
 }: BreakdownCardProps) => {
-  const { t } = useTranslation('history')
+  const { t } = useTranslation(['history', 'tags'])
   const { locale } = useLocaleFormatting()
 
   const balanceLabel: Record<Periodo, string> = {
@@ -111,10 +119,8 @@ export const BreakdownCard = ({
         ) : (
           <div className="flex flex-col gap-3">
             {breakdown.slice(0, 5).map((entry) => {
-              const { icon: Icon, tint } = getMovimientoVisual({
-                categoria: entry.key,
-                tipo: bdType,
-              })
+              const categoria = resolveCategoria(entry.key, { categorias })
+              const { icon: Icon, tint } = getMovimientoVisual(categoria, bdType)
               const percent = Math.round(entry.share * 100)
               return (
                 <div key={entry.key}>
@@ -124,7 +130,7 @@ export const BreakdownCard = ({
                       aria-hidden="true"
                     />
                     <span className="min-w-0 flex-1 truncate text-ms font-semibold text-fg-secondary">
-                      {entry.key}
+                      {categoria?.nombre ?? t('tags:unknownCategory')}
                     </span>
                     <span className="text-ms font-bold">
                       {formatMonto(entry.total, moneda, locale)}
