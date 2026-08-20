@@ -5,7 +5,7 @@ vi.mock('@/lib/export/delivery', () => ({ deliverCsv: vi.fn(() => Promise.resolv
 
 import type { ListQuery, ListResult, Repo } from '@/lib/repo'
 import { getRepo } from '@/lib/repoProvider'
-import type { Movimiento } from '@/lib/schema'
+import { CONFIG_SEMILLA, type Movimiento } from '@/lib/schema'
 import { deliverCsv } from '@/lib/export/delivery'
 import { buildExportFilename, exportMovimientosToCsv } from '@/lib/export'
 
@@ -49,7 +49,9 @@ const repoStubWithList = (list: Repo['movimientos']['list']): Repo => {
       remove: notUsed,
       removeMany: notUsed,
     },
-    getConfig: notUsed,
+    // exportMovimientosToCsv() resolves category/section names for the CSV
+    // (specs.md §10.22) — every test needs a real Config, not `notUsed`.
+    getConfig: () => Promise.resolve(CONFIG_SEMILLA),
     updateConfig: notUsed,
   }
 }
@@ -111,6 +113,21 @@ describe('exportMovimientosToCsv()', () => {
     for (const [query] of listSpy.mock.calls) {
       expect(query).toMatchObject({ sortBy: 'fecha', sortDir: 'asc' })
     }
+  })
+
+  it('resolves category/section names via repo.getConfig(), never the raw id', async () => {
+    const repo = repoStubWithPages(
+      [movimiento({ categoria: 'cat_sueldo', seccion: 'sec_personal' })],
+      500,
+    )
+    mGetRepo.mockReturnValue(repo)
+
+    await exportMovimientosToCsv({ locale: 'es-CO' })
+
+    const csv = mDeliverCsv.mock.calls[0]![0].parts.join('')
+    expect(csv).toContain(';Personal;Sueldo;')
+    expect(csv).not.toContain('sec_personal')
+    expect(csv).not.toContain('cat_sueldo')
   })
 
   it('stops paging on an empty page even if the Repo keeps returning a nextCursor, rather than looping forever', async () => {

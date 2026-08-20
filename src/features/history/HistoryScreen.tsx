@@ -55,6 +55,7 @@ export const HistoryScreen = () => {
   // through every status instead of disappearing behind a full-screen
   // loading swap the way it used to.
   const { primerDiaSemana, monedaPrincipal } = (config ?? CONFIG_SEMILLA).preferencias
+  const categorias = config?.categorias ?? CONFIG_SEMILLA.categorias
   const range = periodRange(scope, anchor, primerDiaSemana)
   const periodMovimientos = filterByRange(movimientos, range)
   const periodTotals = totals(periodMovimientos)
@@ -166,12 +167,14 @@ export const HistoryScreen = () => {
               bdType={bdType}
               onBdTypeChange={setBdType}
               moneda={monedaPrincipal}
+              categorias={categorias}
             />
             <div className="flex flex-col gap-2.5">
               {periodMovimientos.map((movimiento) => (
                 <MovimientoRow
                   key={movimiento.id}
                   movimiento={movimiento}
+                  categorias={categorias}
                   locale={locale}
                   dateFnsLocale={dateFnsLocale}
                 />

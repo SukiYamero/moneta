@@ -61,7 +61,16 @@ export interface ExportMovimientosOptions {
 export const exportMovimientosToCsv = async ({
   locale,
 }: ExportMovimientosOptions): Promise<void> => {
-  const movimientos = await fetchAllMovimientos()
-  const parts = buildMovimientoCsvParts(movimientos, { locale })
+  const repo = getRepo()
+  await repo.ready()
+  // Fetched together: the export must show the same category/section names
+  // the rest of the app resolves `movimiento.categoria`/`.seccion` ids
+  // against (specs.md §10.22), not the raw ids.
+  const [movimientos, config] = await Promise.all([fetchAllMovimientos(), repo.getConfig()])
+  const parts = buildMovimientoCsvParts(movimientos, {
+    locale,
+    secciones: config.secciones,
+    categorias: config.categorias,
+  })
   await deliverCsv({ filename: buildExportFilename(new Date()), parts })
 }

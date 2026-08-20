@@ -4,7 +4,7 @@ import { useLocaleFormatting } from '@/lib/i18n/localeFormatting'
 import { useDataStore, type DataStatus } from '@/lib/dataStore'
 import type { RepoErrorCode } from '@/lib/repo'
 import { CONFIG_SEMILLA } from '@/lib/schema'
-import type { Moneda, Movimiento } from '@/lib/schema'
+import type { Categoria, Moneda, Movimiento } from '@/lib/schema'
 import {
   filterByRange,
   periodRange,
@@ -38,6 +38,8 @@ export interface HomeDashboard {
   weekStripDays: WeekStripDay[]
   week: { range: DateRange; totalGastos: number; chart: SeriesBucket[] }
   recent: Movimiento[]
+  /** `Config.categorias` — `RecentMovimientos`/`MovimientoRow` resolve `categoria` ids against this. */
+  categorias: Categoria[]
   retry: () => void
 }
 
@@ -111,6 +113,7 @@ export const useHomeDashboard = (): HomeDashboard => {
     weekStripDays,
     week: { range: weekRange, totalGastos: weekTotalGastos, chart },
     recent,
+    categorias: config?.categorias ?? CONFIG_SEMILLA.categorias,
     retry: () => void load(),
   }
 }

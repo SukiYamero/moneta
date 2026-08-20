@@ -1,60 +1,16 @@
-import {
-  Briefcase,
-  Car,
-  Circle,
-  Gift,
-  HeartPulse,
-  House,
-  Landmark,
-  Laptop,
-  type LucideIcon,
-  PartyPopper,
-  Receipt,
-  ShoppingBag,
-  TrendingUp,
-  UtensilsCrossed,
-  Wallet,
-} from 'lucide-react'
-import type { Moneda, Movimiento, TipoMovimiento } from '@/lib/schema'
+import { Circle, type LucideIcon, TrendingUp } from 'lucide-react'
+import type { Categoria, Config, Moneda, Movimiento, TipoMovimiento } from '@/lib/schema'
 import type { IconAvatarTint } from '@/components/shared/IconAvatar'
+import { CATEGORY_ICONS } from '@/features/tags/categoryIcons'
 
-// Single source of truth for category -> icon/tint. Icon/tint are
-// presentation, deliberately not part of schema.ts — every screen that
-// renders a Movimiento imports this instead of re-deriving its own mapping.
-// Keyed by category *name* (CONFIG_SEMILLA.categorias[].nombre), plus common
-// categories from the design's sample data so screens built against either
-// source render consistently.
-const CATEGORY_ICON: Record<string, LucideIcon> = {
-  Sueldo: Briefcase,
-  Ventas: TrendingUp,
-  Freelance: Laptop,
-  Servicios: Receipt,
-  Impuestos: Landmark,
-  'Caja menor': Wallet,
-  Comida: UtensilsCrossed,
-  Transporte: Car,
-  Compras: ShoppingBag,
-  Ocio: PartyPopper,
-  Salud: HeartPulse,
-  Hogar: House,
-  Regalo: Gift,
-}
-
-const CATEGORY_TINT: Record<string, IconAvatarTint> = {
-  Sueldo: 'emerald',
-  Ventas: 'emerald',
-  Freelance: 'blue',
-  Servicios: 'blue',
-  Impuestos: 'rose',
-  'Caja menor': 'amber',
-  Comida: 'amber',
-  Transporte: 'blue',
-  Compras: 'purple',
-  Ocio: 'rose',
-  Salud: 'emerald',
-  Hogar: 'emerald',
-  Regalo: 'purple',
-}
+// A movement whose category id isn't in Config (a shard not pulled yet, a
+// hand-edited Drive file, a category deleted on another device) is a
+// legitimate, expected outcome (specs.md §10.22's edge cases), never a
+// crash — every render site must handle `undefined` here, not assume a hit.
+export const resolveCategoria = (
+  categoriaId: string,
+  config: Pick<Config, 'categorias'> | null | undefined,
+): Categoria | undefined => config?.categorias.find((c) => c.id === categoriaId)
 
 const FALLBACK_ICON: Record<TipoMovimiento, LucideIcon> = {
   ingreso: TrendingUp,
@@ -71,15 +27,19 @@ export interface MovimientoVisual {
   tint: IconAvatarTint
 }
 
-/** Unknown category names (custom user tags) fall back to a type-based icon/tint. */
+/**
+ * Resolution, in order: the category's own `icono`/`color` → the `tipo`-based
+ * fallback. No name-keyed lookup survives (specs.md §10.22 Decision 2) — a
+ * category with no icon/color (every pre-migration seed, an unresolved id)
+ * degrades to the same fallback every unknown category always used.
+ */
 export const getMovimientoVisual = (
-  m: Pick<Movimiento, 'categoria' | 'tipo'>,
-): MovimientoVisual => {
-  return {
-    icon: CATEGORY_ICON[m.categoria] ?? FALLBACK_ICON[m.tipo],
-    tint: CATEGORY_TINT[m.categoria] ?? FALLBACK_TINT[m.tipo],
-  }
-}
+  categoria: Pick<Categoria, 'icono' | 'color'> | undefined,
+  tipo: TipoMovimiento,
+): MovimientoVisual => ({
+  icon: (categoria?.icono ? CATEGORY_ICONS[categoria.icono] : undefined) ?? FALLBACK_ICON[tipo],
+  tint: categoria?.color ?? FALLBACK_TINT[tipo],
+})
 
 // income reads success-green, expense reads plain foreground — matches the
 // design (only income gets a color call-out, expense is never flagged red).

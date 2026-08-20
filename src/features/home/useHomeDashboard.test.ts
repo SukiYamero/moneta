@@ -61,6 +61,22 @@ describe('useHomeDashboard', () => {
     expect(repo.movimientos.list).toHaveBeenCalledTimes(1)
   })
 
+  it('exposes Config.categorias for MovimientoRow to resolve `categoria` ids against', async () => {
+    const config: Config = { ...CONFIG_SEMILLA, categorias: [] }
+    mGetRepo.mockReturnValue(makeRepo({ config }))
+    const { result } = renderHook(() => useHomeDashboard())
+
+    await waitFor(() => expect(result.current.status).toBe('ready'))
+    expect(result.current.categorias).toEqual([])
+  })
+
+  it('falls back to CONFIG_SEMILLA.categorias before Config has loaded', () => {
+    mGetRepo.mockReturnValue(makeRepo({}))
+    const { result } = renderHook(() => useHomeDashboard())
+
+    expect(result.current.categorias).toEqual(CONFIG_SEMILLA.categorias)
+  })
+
   it('marks isEmpty only once ready with zero movimientos', async () => {
     mGetRepo.mockReturnValue(makeRepo({ movimientos: [] }))
     const { result } = renderHook(() => useHomeDashboard())

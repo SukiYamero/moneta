@@ -20,7 +20,7 @@ import {
 } from '@/components/shared'
 import { ToastKitDemo } from '@/components/shared/ToastKitDemo'
 import { useLocaleFormatting } from '@/lib/i18n/localeFormatting'
-import type { Movimiento } from '@/lib/schema'
+import type { Categoria, Movimiento } from '@/lib/schema'
 
 const TINTS: IconAvatarTint[] = [
   'emerald',
@@ -39,7 +39,7 @@ const SAMPLE_MOVEMENTS: Movimiento[] = [
     id: 'kit_1',
     fecha: '2026-08-18',
     seccion: 'sec_personal',
-    categoria: 'Sueldo',
+    categoria: 'cat_sueldo',
     tipo: 'ingreso',
     monto: 4200000,
     moneda: 'COP',
@@ -50,7 +50,7 @@ const SAMPLE_MOVEMENTS: Movimiento[] = [
     id: 'kit_2',
     fecha: '2026-08-17',
     seccion: 'sec_personal',
-    categoria: 'Comida',
+    categoria: 'cat_comida',
     tipo: 'gasto',
     monto: 18000,
     moneda: 'COP',
@@ -60,11 +60,38 @@ const SAMPLE_MOVEMENTS: Movimiento[] = [
     id: 'kit_3',
     fecha: '2026-08-10',
     seccion: 'sec_emprendimiento',
-    categoria: 'Ventas',
+    categoria: 'cat_ventas',
     tipo: 'ingreso',
     monto: 1800000,
     moneda: 'COP',
     createdAt: '2026-08-10T14:30:00.000Z',
+  },
+]
+
+const SAMPLE_CATEGORIAS: Categoria[] = [
+  {
+    id: 'cat_sueldo',
+    nombre: 'Sueldo',
+    seccionId: 'sec_personal',
+    tipo: 'ingreso',
+    icono: 'briefcase',
+    color: 'emerald',
+  },
+  {
+    id: 'cat_comida',
+    nombre: 'Comida',
+    seccionId: 'sec_personal',
+    tipo: 'gasto',
+    icono: 'utensils',
+    color: 'amber',
+  },
+  {
+    id: 'cat_ventas',
+    nombre: 'Ventas',
+    seccionId: 'sec_emprendimiento',
+    tipo: 'ingreso',
+    icono: 'trending-up',
+    color: 'emerald',
   },
 ]
 
@@ -163,6 +190,7 @@ export const Kit = () => {
             <MovimientoRow
               key={m.id}
               movimiento={m}
+              categorias={SAMPLE_CATEGORIAS}
               onClick={() => {}}
               locale={locale}
               dateFnsLocale={dateFnsLocale}
@@ -170,6 +198,7 @@ export const Kit = () => {
           ))}
           <MovimientoRow
             movimiento={SAMPLE_MOVEMENTS[1]!}
+            categorias={SAMPLE_CATEGORIAS}
             pending
             meta="Estimado · próx. semana"
             locale={locale}

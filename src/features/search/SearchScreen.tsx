@@ -38,7 +38,7 @@ const EmptyState = ({ title, subtitle }: { title: string; subtitle: string }) =>
  * filtering itself is client-side over the already-loaded `movimientos`.
  */
 export const SearchScreen = () => {
-  const { t } = useTranslation('search')
+  const { t } = useTranslation(['search', 'tags'])
   const status = useDataStore((s) => s.status)
   const error = useDataStore((s) => s.error)
   const movimientos = useDataStore((s) => s.movimientos)
@@ -64,8 +64,12 @@ export const SearchScreen = () => {
   const showLoading = usePendingDelay(isPending)
   const categories = config?.categorias ?? CONFIG_SEMILLA.categorias
 
-  const categoryTipoByName = useMemo(
-    () => new Map(categories.map((category) => [category.nombre, category.tipo])),
+  // Keyed by id, not nombre: `Movimiento.categoria`/`filters.selectedTags`
+  // both hold category ids (specs.md §10.22) — a name-keyed map would silently
+  // stop matching the moment a user-created category's id isn't derived from
+  // its name (every id but the seed's is a crypto.randomUUID()).
+  const categoriaById = useMemo(
+    () => new Map(categories.map((category) => [category.id, category])),
     [categories],
   )
 
@@ -78,7 +82,17 @@ export const SearchScreen = () => {
       result = result.filter((m) => tagSet.has(m.categoria))
     }
     if (filters.debouncedQuery) {
-      result = result.filter((m) => matchesQuery(filters.debouncedQuery, m.nota ?? '', m.categoria))
+      // Free-text search matches the category's display *name*, never the
+      // raw id — searching "sueldo" must still find a movement filed under
+      // cat_sueldo (and, unlike the seed, a user-created category's id
+      // shares nothing with its name at all).
+      result = result.filter((m) =>
+        matchesQuery(
+          filters.debouncedQuery,
+          m.nota ?? '',
+          categoriaById.get(m.categoria)?.nombre ?? '',
+        ),
+      )
     }
     return result.toSorted((a, b) => b.fecha.localeCompare(a.fecha))
   }, [
@@ -87,6 +101,7 @@ export const SearchScreen = () => {
     filters.typeFilter,
     filters.selectedTags,
     filters.debouncedQuery,
+    categoriaById,
   ])
 
   const hasNoDataAtAll = ready && movimientos.length === 0
@@ -116,11 +131,15 @@ export const SearchScreen = () => {
       })
     }
     for (const tag of filters.selectedTags) {
-      const tipo = categoryTipoByName.get(tag) ?? 'gasto'
+      const category = categoriaById.get(tag)
+      const tipo = category?.tipo ?? 'gasto'
       chips.push({
         key: `tag-${tag}`,
-        label: tag,
-        icon: getMovimientoVisual({ categoria: tag, tipo }).icon,
+        // Never the raw id (specs.md §10.22): a category not yet in Config
+        // (unsynced shard, deleted elsewhere) reads as "sin categoría", not
+        // as `cat_a1b2`.
+        label: category?.nombre ?? t('tags:unknownCategory'),
+        icon: getMovimientoVisual(category, tipo).icon,
         onRemove: () => filters.toggleTag(tag),
       })
     }
@@ -132,7 +151,7 @@ export const SearchScreen = () => {
     filters.customTo,
     filters.typeFilter,
     filters.selectedTags,
-    categoryTipoByName,
+    categoriaById,
     dateFnsLocale,
     t,
   ])
@@ -248,6 +267,7 @@ export const SearchScreen = () => {
               <MovimientoRow
                 key={movimiento.id}
                 movimiento={movimiento}
+                categorias={categories}
                 locale={locale}
                 dateFnsLocale={dateFnsLocale}
               />

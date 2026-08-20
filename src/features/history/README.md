@@ -51,7 +51,11 @@ and the movements list for the currently viewed period.
   recomputed locally). Calls `useLocaleFormatting()` directly for
   `formatMonto`/`formatMontoWithSign` — it previously hand-prepended a
   `+`/`-` character, which put the sign before the currency symbol
-  (`docs/wave-2.1/track-n.md`).
+  (`docs/wave-2.1/track-n.md`). Each `entry.key` is a category id
+  (`specs.md` §10.22) — takes a required `categorias: Categoria[]` prop
+  (`HistoryScreen` supplies `Config.categorias`) and resolves it via
+  `movimientoView.resolveCategoria`, rendering the resolved name (or a
+  translated "sin categoría") rather than the raw id.
 
 Not built: a hide/show-amounts toggle (the design draws one) — masking the
 movements list would need a prop `MovimientoRow` doesn't have, and adding

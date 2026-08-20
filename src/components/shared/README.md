@@ -44,8 +44,17 @@ doesn't belong to any one `src/features/**` folder. See `specs.md` §10.5.
   `Record` lookups onto the `chart-1..5`/status tokens, not new hex.
 - `MovimientoRow.tsx` + `movimientoView.ts` — the movement list row, and
   the single source of truth for category → icon/tint and signed-amount
-  formatting. Every screen that renders a `Movimiento` imports the mapper
-  from here instead of re-deriving it. `formatMonto`'s `Intl.NumberFormat`
+  formatting. `Movimiento.categoria` stores a `Categoria.id` (`specs.md`
+  §10.22) — `movimientoView.resolveCategoria(id, config)` is the one place
+  an id is turned back into a `Categoria`, and `getMovimientoVisual(categoria,
+tipo)` resolves that category's own `icono`/`color` first, falling back to
+  a `tipo`-based icon/tint only when it has none (every pre-migration seed,
+  an id not yet in `Config`). `MovimientoRow` takes a required `categorias:
+Categoria[]` prop (no default, same no-silent-fallback rule as
+  `locale`/`dateFnsLocale` below) and does the resolve internally, rendering
+  a translated "sin categoría" (`tags:unknownCategory`) rather than a raw id
+  when the lookup misses. Every screen that renders a `Movimiento` imports
+  the mapper from here instead of re-deriving it. `formatMonto`'s `Intl.NumberFormat`
   instances are memoized per `(locale, currency)` pair at module scope (a
   list this grows to years of rows can't afford building one per row per
   render). `formatMonto`/`getMovimientoAmountView` and `MovimientoRow`'s

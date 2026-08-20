@@ -2,13 +2,14 @@ import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import { MovimientoRow } from '@/components/shared/MovimientoRow'
 import { useLocaleFormatting } from '@/lib/i18n/localeFormatting'
-import type { Movimiento } from '@/lib/schema'
+import type { Categoria, Movimiento } from '@/lib/schema'
 
 export interface RecentMovimientosProps {
   movimientos: Movimiento[]
+  categorias: Categoria[]
 }
 
-export const RecentMovimientos = ({ movimientos }: RecentMovimientosProps) => {
+export const RecentMovimientos = ({ movimientos, categorias }: RecentMovimientosProps) => {
   const { t } = useTranslation('home')
   const { locale, dateFnsLocale } = useLocaleFormatting()
 
@@ -30,7 +31,13 @@ export const RecentMovimientos = ({ movimientos }: RecentMovimientosProps) => {
       </div>
       <div className="flex flex-col gap-2.5">
         {movimientos.map((m) => (
-          <MovimientoRow key={m.id} movimiento={m} locale={locale} dateFnsLocale={dateFnsLocale} />
+          <MovimientoRow
+            key={m.id}
+            movimiento={m}
+            categorias={categorias}
+            locale={locale}
+            dateFnsLocale={dateFnsLocale}
+          />
         ))}
       </div>
     </section>

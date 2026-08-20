@@ -4214,6 +4214,62 @@ lint` clean bar the one pre-existing `components/ui` warning). `AGENTS.md`
   drew it. Resolved under `AGENTS.md`'s canvas-vs-code rule by asking, not by
   assuming.
 
+- 2026-08-19 — **Track G1, stage 1: the taxonomy-reference migration
+  (§10.22 Decision 1) implemented.** `Movimiento.categoria` now stores
+  `Categoria.id`; `getMovimientoVisual` in `movimientoView.ts` is a pure
+  resolution (`icono`/`color` → tipo-based fallback), and a new
+  `resolveCategoria(id, config)` is the one place an id is turned back into
+  a `Categoria`. `CATEGORY_ICON`/`CATEGORY_TINT` are deleted; their pairings
+  moved onto `CONFIG_SEMILLA.categorias` and `repo.fake.ts`'s demo
+  categories as explicit `icono`/`color`. `Categoria` gained `icono?:
+CategoryIconKey` (new `src/features/tags/categoryIcons.ts`, a curated
+  34-icon `lucide-react` allowlist), `color?: IconAvatarTint`, and
+  `archivado?: boolean` — additive, no `SCHEMA_VERSION` bump. `schema.ts`'s
+  `categoria`/`seccion` comments corrected to say "id", not "valor de la
+  taxonomía". `repo.fake.ts`'s `MOVIMIENTO_TEMPLATES` switched from category
+  _names_ to ids, making it consistent with `repo.contract.ts` (which
+  already seeded an id) instead of the two fixtures disagreeing.
+  - **The Blast radius list in §10.22 was incomplete — the sweep found
+    four more real render/consumer sites**, all fixed in the same change:
+    `src/features/history/HistoryScreen.tsx` (threads `Config.categorias`
+    into `BreakdownCard`/`MovimientoRow`, which the listed files alone
+    can't do without a caller supplying it), `src/features/home/RecentMovimientos.tsx`
+    - `src/features/home/useHomeDashboard.ts` + `src/routes/Home.tsx` (Home's
+      own `MovimientoRow` list — the dashboard a real user actually lands on —
+      had no `categorias` source at all), and `src/lib/export/index.ts` (the
+      actual `exportMovimientosToCsv` caller of `csv.ts`, which needed to fetch
+      `repo.getConfig()` and pass `secciones`/`categorias` through — `csv.ts`
+      alone can't resolve anything without them). None of these are owned by
+      Track Z or another wave-4 track; all are one-hop callers of the files
+      §10.22 already listed as owned, not scope creep.
+  - **Two existing tests were quietly enshrining the exact bug this
+    migration exists to fix**, found by the sweep, not by inspection:
+    `HistoryScreen.test.tsx`'s breakdown test asserted `topIngreso.key` (a
+    raw category id) rendered as visible text; `SearchScreen.tsx`'s active
+    tag chip rendered `label: tag` (the raw id) directly. Both fixed to
+    assert the resolved _name_ and that the raw id is absent from the DOM.
+  - **`SearchScreen.tsx`'s free-text search matched `m.categoria` (now an
+    id) directly** — coincidentally still "worked" for seed data only
+    because seed ids are name-derived (`cat_sueldo` contains "sueldo"); any
+    user-created category (`crypto.randomUUID()`) would have silently
+    stopped being findable by name. Fixed to resolve the category's `nombre`
+    before matching. Its tag filter (`selectedTags`/`toggleTag`,
+    `useSearchFilters.ts`) already compared by identity and needed no logic
+    change, only a rename from "name" to "id" in a doc comment — it was
+    already correct by construction, just previously fed names instead of
+    ids.
+  - **`[seccion+fecha]` Dexie indexes verified, not assumed, to keep
+    working**: `db.ts`'s only indexed movement fields are `fecha` and
+    `seccion` (already an id before this change per the original audit);
+    `categoria` was never indexed. No `db.ts` change, no index rebuild.
+  - **`csv.ts`'s injection-escaping test was testing the wrong field**: it
+    put `=HYPERLINK(...)` directly in `movimiento.categoria`, which is now
+    an id, not free text. The real remaining risk is a category's `nombre`
+    (still free text, still user-editable) — the test now constructs that
+    shape and confirms the resolved name is still escaped the same way.
+  - **`bun run check` is green** (956 tests, typecheck and lint clean)
+    before any picker UI exists, per the plan's explicit ordering.
+
 ## 12. Backlog (pending verification / deferred work)
 
 - **The lock feature is not internationalised at all.** `LockScreen`,

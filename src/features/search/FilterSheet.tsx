@@ -116,18 +116,15 @@ export const FilterSheet = ({
           <SectionHeading>{t('filters.tags.heading')}</SectionHeading>
           <div className="flex flex-wrap gap-2">
             {categories.map((category) => {
-              const { icon, tint } = getMovimientoVisual({
-                categoria: category.nombre,
-                tipo: category.tipo,
-              })
+              const { icon, tint } = getMovimientoVisual(category, category.tipo)
               return (
                 <TagChip
                   key={category.id}
                   icon={icon}
                   tint={tint}
                   label={category.nombre}
-                  selected={filters.selectedTags.includes(category.nombre)}
-                  onClick={() => filters.toggleTag(category.nombre)}
+                  selected={filters.selectedTags.includes(category.id)}
+                  onClick={() => filters.toggleTag(category.id)}
                 />
               )
             })}

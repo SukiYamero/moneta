@@ -16,6 +16,7 @@ export {
   formatMonto,
   getMovimientoAmountView,
   getMovimientoVisual,
+  resolveCategoria,
   type MovimientoAmountView,
   type MovimientoVisual,
 } from '@/components/shared/movimientoView'

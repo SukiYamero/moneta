@@ -1,21 +1,55 @@
 import { describe, it, expect, vi } from 'vitest'
+import type { Config } from '@/lib/schema'
 import {
   formatMonto,
   getMovimientoAmountView,
   getMovimientoVisual,
+  resolveCategoria,
 } from '@/components/shared/movimientoView'
 
 describe('getMovimientoVisual', () => {
-  it('maps a known category to its icon/tint', () => {
-    const visual = getMovimientoVisual({ categoria: 'Sueldo', tipo: 'ingreso' })
+  it("uses the category's own icono/color when it has one", () => {
+    const visual = getMovimientoVisual({ icono: 'briefcase', color: 'emerald' }, 'ingreso')
     expect(visual.tint).toBe('emerald')
   })
 
-  it('falls back to a type-based visual for an unknown (custom) category', () => {
-    const income = getMovimientoVisual({ categoria: 'Etiqueta inventada', tipo: 'ingreso' })
-    const expense = getMovimientoVisual({ categoria: 'Etiqueta inventada', tipo: 'gasto' })
+  it('falls back to a type-based visual for a category with no icono/color (every pre-migration seed)', () => {
+    const income = getMovimientoVisual({}, 'ingreso')
+    const expense = getMovimientoVisual({}, 'gasto')
     expect(income.tint).toBe('emerald')
     expect(expense.tint).toBe('neutral')
+  })
+
+  it('falls back to a type-based visual when the category is undefined (unresolved id)', () => {
+    const visual = getMovimientoVisual(undefined, 'gasto')
+    expect(visual.tint).toBe('neutral')
+  })
+
+  it('falls back to the type-based icon when icono is an unknown key (older/newer build, hand-edited Drive file)', () => {
+    const visual = getMovimientoVisual(
+      { icono: 'not-a-real-key' as never, color: 'purple' },
+      'gasto',
+    )
+    expect(visual.tint).toBe('purple') // color still resolves — only icono was invalid
+  })
+})
+
+describe('resolveCategoria', () => {
+  const config: Pick<Config, 'categorias'> = {
+    categorias: [{ id: 'cat_1', nombre: 'Comida', seccionId: 'sec_1', tipo: 'gasto' }],
+  }
+
+  it('finds a category by id', () => {
+    expect(resolveCategoria('cat_1', config)?.nombre).toBe('Comida')
+  })
+
+  it('returns undefined for an id not in Config, never throws', () => {
+    expect(resolveCategoria('cat_missing', config)).toBeUndefined()
+  })
+
+  it('returns undefined when Config itself is null/undefined (not loaded yet)', () => {
+    expect(resolveCategoria('cat_1', null)).toBeUndefined()
+    expect(resolveCategoria('cat_1', undefined)).toBeUndefined()
   })
 })
 

@@ -138,7 +138,12 @@ describe('HistoryScreen', () => {
 
     await user.click(await screen.findByRole('radio', { name: 'Ingresos' }))
 
-    expect(await screen.findByText(topIngreso!.key)).toBeInTheDocument()
+    // `topIngreso.key` is a category id (specs.md §10.22) — the screen must
+    // render its resolved *name*, never the raw id.
+    const topIngresoName = config.categorias.find((c) => c.id === topIngreso!.key)?.nombre
+    expect(topIngresoName).toBeDefined()
+    expect(await screen.findByText(topIngresoName!)).toBeInTheDocument()
+    expect(screen.queryByText(topIngreso!.key)).not.toBeInTheDocument()
     expect(
       screen.getByText(
         money(formatMonto(topIngreso!.total, config.preferencias.monedaPrincipal, 'es-CO')),

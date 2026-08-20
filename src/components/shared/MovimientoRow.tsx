@@ -1,13 +1,25 @@
 import { format, parseISO, type Locale } from 'date-fns'
 import { CircleHelp } from 'lucide-react'
 import type { Ref } from 'react'
-import type { Movimiento } from '@/lib/schema'
+import { useTranslation } from 'react-i18next'
+import type { Categoria, Movimiento } from '@/lib/schema'
 import { cn } from '@/lib/utils'
 import { IconAvatar } from '@/components/shared/IconAvatar'
-import { getMovimientoAmountView, getMovimientoVisual } from '@/components/shared/movimientoView'
+import {
+  getMovimientoAmountView,
+  getMovimientoVisual,
+  resolveCategoria,
+} from '@/components/shared/movimientoView'
 
 export interface MovimientoRowProps {
   movimiento: Movimiento
+  /**
+   * `Config.categorias` — required, no default (same no-silent-fallback rule
+   * as `locale`/`dateFnsLocale` below): `movimiento.categoria` is an id
+   * (specs.md §10.22), and resolving it to a label/icon/color needs this to
+   * be in scope rather than read from a store this component doesn't touch.
+   */
+  categorias: Categoria[]
   onClick?: () => void
   /** "Estimado" badge — used for movements the History screen projects, not yet confirmed. */
   pending?: boolean
@@ -32,6 +44,7 @@ export interface MovimientoRowProps {
 
 export const MovimientoRow = ({
   movimiento,
+  categorias,
   onClick,
   pending,
   meta,
@@ -40,9 +53,12 @@ export const MovimientoRow = ({
   locale,
   dateFnsLocale,
 }: MovimientoRowProps) => {
-  const { icon, tint } = getMovimientoVisual(movimiento)
+  const { t } = useTranslation('tags')
+  const categoria = resolveCategoria(movimiento.categoria, { categorias })
+  const { icon, tint } = getMovimientoVisual(categoria, movimiento.tipo)
   const amount = getMovimientoAmountView(movimiento, locale)
   const label = meta ?? format(parseISO(movimiento.fecha), 'd MMM', { locale: dateFnsLocale })
+  const categoriaLabel = movimiento.nota || categoria?.nombre || t('unknownCategory')
   const isInteractive = onClick !== undefined
 
   return (
@@ -69,7 +85,7 @@ export const MovimientoRow = ({
     >
       <IconAvatar icon={icon} tint={tint} />
       <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-bold">{movimiento.nota || movimiento.categoria}</div>
+        <div className="truncate text-sm font-bold">{categoriaLabel}</div>
         <div className="mt-0.5 flex items-center gap-1.5">
           <span className="text-xs font-medium text-fg-tertiary">{label}</span>
           {pending && (

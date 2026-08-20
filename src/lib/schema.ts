@@ -4,6 +4,12 @@
 // Regla de oro: subí SCHEMA_VERSION solo ante cambios ESTRUCTURALES (renombrar,
 // partir o borrar un campo). Agregar algo opcional o meterlo en `extra` no cuenta.
 
+// Type-only imports (erased at compile time, verbatimModuleSyntax): `Categoria.icono`/
+// `.color` reuse the tag feature's curated icon allowlist and the shared tint
+// families rather than redeclaring either union here (specs.md §10.22 Decision 2).
+import type { CategoryIconKey } from '@/features/tags/categoryIcons'
+import type { IconAvatarTint } from '@/components/shared/IconAvatar'
+
 export const SCHEMA_VERSION = 1
 
 // --- tipos base / enums ---
@@ -29,8 +35,8 @@ export type TipoActivo =
 export interface Movimiento {
   id: string // uuid generado por la app (no la posición de la fila)
   fecha: string // ISO "yyyy-mm-dd" — cuándo ocurrió
-  seccion: string // valor de la taxonomía (Personal, Trabajo, Emprendimiento…)
-  categoria: string // valor de la taxonomía (Sueldo, Impuestos, Servicios…)
+  seccion: string // id de Seccion (Personal, Trabajo, Emprendimiento…)
+  categoria: string // id de Categoria (Sueldo, Impuestos, Servicios…) — el nombre se resuelve vía Config, nunca se guarda (specs.md §10.22)
   tipo: TipoMovimiento // da el signo: ingreso suma, gasto resta
   monto: number // SIEMPRE positivo; el signo lo pone `tipo`
   moneda: Moneda // "COP" por ahora
@@ -73,6 +79,9 @@ export interface Categoria {
   nombre: string
   seccionId: string // a qué sección pertenece
   tipo: TipoMovimiento // tipo por defecto al elegir esta categoría
+  icono?: CategoryIconKey // elegido o sugerido; ausente = fallback por tipo (specs.md §10.8/§10.22)
+  color?: IconAvatarTint // elegido o sugerido; ausente = fallback por tipo (specs.md §10.8/§10.22)
+  archivado?: boolean // oculta la categoría del picker sin borrar el historial que la referencia (specs.md §10.22 Decisión 5)
   presupuesto?: number // queda en el esquema; sin UI en la v1
 }
 
@@ -105,12 +114,51 @@ export const CONFIG_SEMILLA: Config = {
     { id: 'sec_trabajo', nombre: 'Trabajo', orden: 1 },
     { id: 'sec_emprendimiento', nombre: 'Emprendimiento', orden: 2 },
   ],
+  // icono/color port the pairings that used to live in movimientoView.ts's
+  // deleted CATEGORY_ICON/CATEGORY_TINT tables (specs.md §10.22 Decision 2) —
+  // same visual result, now a property of the category instead of a
+  // Spanish-name-keyed lookup.
   categorias: [
-    { id: 'cat_sueldo', nombre: 'Sueldo', seccionId: 'sec_personal', tipo: 'ingreso' },
-    { id: 'cat_servicios', nombre: 'Servicios', seccionId: 'sec_personal', tipo: 'gasto' },
-    { id: 'cat_ventas', nombre: 'Ventas', seccionId: 'sec_emprendimiento', tipo: 'ingreso' },
-    { id: 'cat_impuestos', nombre: 'Impuestos', seccionId: 'sec_emprendimiento', tipo: 'gasto' },
-    { id: 'cat_caja_menor', nombre: 'Caja menor', seccionId: 'sec_emprendimiento', tipo: 'gasto' },
+    {
+      id: 'cat_sueldo',
+      nombre: 'Sueldo',
+      seccionId: 'sec_personal',
+      tipo: 'ingreso',
+      icono: 'briefcase',
+      color: 'emerald',
+    },
+    {
+      id: 'cat_servicios',
+      nombre: 'Servicios',
+      seccionId: 'sec_personal',
+      tipo: 'gasto',
+      icono: 'receipt',
+      color: 'blue',
+    },
+    {
+      id: 'cat_ventas',
+      nombre: 'Ventas',
+      seccionId: 'sec_emprendimiento',
+      tipo: 'ingreso',
+      icono: 'trending-up',
+      color: 'emerald',
+    },
+    {
+      id: 'cat_impuestos',
+      nombre: 'Impuestos',
+      seccionId: 'sec_emprendimiento',
+      tipo: 'gasto',
+      icono: 'landmark',
+      color: 'rose',
+    },
+    {
+      id: 'cat_caja_menor',
+      nombre: 'Caja menor',
+      seccionId: 'sec_emprendimiento',
+      tipo: 'gasto',
+      icono: 'wallet',
+      color: 'amber',
+    },
   ],
   preferencias: {
     tema: 'sistema',

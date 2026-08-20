@@ -19,14 +19,18 @@ vi.mock('@/routes/Kit', () => {
 const CHUNK_FAILURE_TIMEOUT_MS = 30_000
 
 describe('router — /kit dev route, lazy chunk failure', () => {
-  it('still renders RouteErrorFallback (not a blank screen or a hang) when the lazy import rejects', async () => {
-    const { router } = await import('@/router')
+  it(
+    'still renders RouteErrorFallback (not a blank screen or a hang) when the lazy import rejects',
+    async () => {
+      const { router } = await import('@/router')
 
-    await act(async () => {
-      await router.navigate('/kit')
-    })
-    render(<RouterProvider router={router} />)
+      await act(async () => {
+        await router.navigate('/kit')
+      })
+      render(<RouterProvider router={router} />)
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('tuvo un problema inesperado')
-  }, CHUNK_FAILURE_TIMEOUT_MS)
+      expect(await screen.findByRole('alert')).toHaveTextContent('tuvo un problema inesperado')
+    },
+    CHUNK_FAILURE_TIMEOUT_MS,
+  )
 })
