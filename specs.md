@@ -1488,6 +1488,103 @@ its outbox, `bootstrap.ts`, and §4. **Not the screens** — they read through
 storage and transport format; the local database is always the merged truth,
 and `movimientoStats` keeps receiving a plain `Movimiento[]`.
 
+### 10.20 Signing out, and what a profile belongs to
+
+Written 2026-08-19 after Track Y's review traced a confirmed defect and the
+user worked through the cases. **Not implemented.**
+
+- **Goal:** "Sign out" means what it says, and the data left behind belongs
+  to someone identifiable rather than to whoever opens the app next.
+- **The defect it fixes (CONFIRMED, traced):** `authStore.logout()` clears the
+  in-memory session and re-locks the vault, but never invalidates the
+  **encrypted session cached inside the vault**. With the PIN lock enabled,
+  entering the correct PIN runs `unlockWithPin` → `resume()` → `hydrate()`
+  with that same cached session and lands the user back in the account they
+  just left. "Sign out" is behaviourally identical to the "Lock now" button
+  one section below it. Unreachable until §10.18 shipped the control, so it
+  is now user-visible, not latent.
+
+#### Decided: signing out invalidates the vault
+
+User decision. The vault exists to cache _that account's_ token; with no
+account there is nothing left for it to protect, and §10.2 already sets the
+precedent ("PIN reset = re-login with Google"). The visible consequence,
+stated plainly rather than discovered: **the user also loses their PIN and
+sets it again next time.** Rejected alternatives: keeping the PIN while
+clearing only the session (you would enter a PIN to arrive at a login screen),
+and hiding sign-out while the lock is on (honest, but leaves a user with a PIN
+no way out of their own account).
+
+#### A profile must know which account it belongs to
+
+`ProfileRecord` is `{ id, label, kind, databaseName, createdAt, lastUsedAt }`.
+`kind` says `'local' | 'google'` — _what_ a profile is, never _whose_. So
+today two Google accounts on one device are indistinguishable in the registry,
+and `getActiveProfile()` resolves by recency rather than identity: signing back
+in does not return you to your own profile.
+
+This is the hole that makes "just delete the data on sign out" feel
+reasonable. **It is not the fix — deleting is the workaround for a missing
+field.** The registry gains an account key; with it, two accounts are two
+profiles and signing back in restores yours. Additive, no migration.
+
+This is also what keeps §10.15's "nothing is ever replaced" true: destroying
+local data as a side effect of signing out is exactly the side effect that
+decision forbids, and §12 already carries an accepted "local data can be lost
+with no recovery path" window that this wave is trying to **shrink**.
+
+#### A guest's identity is the device, and we must not claim otherwise
+
+A guest never signs out — the control only renders for
+`status === 'authenticated'`. A guest closes the app, reopens it, and their
+data is still there. **Not because we assume it is the same person: because
+there was never a person, only a device, and it is the same device.**
+`auth.welcome.guestReassurance` already tells them exactly this ("si lo
+perdés, se pierde con él"). Claiming recognition we cannot perform would be a
+lie; loading what is on the device is not. When that guest later signs in,
+§10.15 already rules: the local profile stays untouched, side by side.
+
+#### UI
+
+- **A confirmation modal on sign-out, shown only when there is unsynced local
+  data and Drive is not connected.** With Drive connected, sign out directly —
+  there is nothing at risk to warn about. Built on `ConfirmDialog` (§10.14);
+  it must not reimplement overlay behaviour.
+- The copy names the real quantity ("N movements exist only on this device"),
+  and the primary action signs out **keeping** them.
+- **A "delete stored data" control, shipped visibly inert this wave** (user
+  decision: visual now, real later), carrying its `STUB` with what the real
+  thing needs. It is the answer to the borrowed-device case, and it stays an
+  explicit, secondary, destructive choice — never the default and never a side
+  effect of signing out.
+
+#### Data touched
+
+The vault (invalidated on logout), the profile registry (one additive field).
+**No `schema.ts` change.**
+
+#### Edge cases
+
+Signing out with no vault (the common case — nothing to invalidate); signing
+out while offline (it is a local operation and must work); a guest (no
+sign-out control at all); a vault whose invalidation fails (the sign-out must
+still complete — it must never trap the user inside an account because storage
+misbehaved).
+
+#### Done when
+
+With a PIN set, signing out and entering the correct PIN reaches
+`WelcomeScreen`, not the old account. Two Google accounts on one device
+resolve to two profiles, and signing back in returns the right one. The modal
+appears only in the unsynced-and-unlinked case. The delete control is visibly
+unavailable and cannot be mistaken for armed.
+
+#### Blast radius
+
+`authStore.ts`, `lockStore.ts`, `pinLock.ts` (invalidate, not restructure),
+`src/lib/profiles/`, and `src/features/profile/`. No screens beyond the
+profile sheet, no schema change.
+
 ### Wave 3 — staging and dependencies
 
 Not everything runs in parallel. A track in a later stage is **blocked** until
