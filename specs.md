@@ -1529,8 +1529,19 @@ in the same change.
 
 #### Edge cases
 
-An unknown `op` or a file written by a newer version is **ignored and left
-untouched, never deleted**. A device that has not downloaded a shard yet shows
+**Everything read from Drive is untrusted input, and this is a direct
+consequence of the product's own promise.** The files live in the user's own
+Drive, in a visible folder, as plain JSON — they can open `movimientos.json`
+in an editor and mangle it, truncate it, or delete it. `drive.file` limits
+what _we_ can see, never what _they_ can do. So the reader validates shape
+rather than trusting it: `drive.ts`'s `readJsonFile<T>` **casts, it does not
+check**, and that generic is a compile-time claim about runtime bytes. A
+malformed file, a malformed entry inside a good file, and a file whose
+`schemaVersion` is newer than this build must each degrade to "skip this and
+keep going", never to a thrown boot or a silent zero. A truncated or failed
+download must never be replayed as truth — half a file parsed as the whole
+file is indistinguishable from data loss. An unknown `op` or a file written by
+a newer version is **ignored and left untouched, never deleted**. A device that has not downloaded a shard yet shows
 partial history, not wrong history. Compaction writes the new file and only
 then deletes the months it replaced, and only its own. Two devices may hold
 the same movement id only if a UUID collided, which is not a case to handle.
