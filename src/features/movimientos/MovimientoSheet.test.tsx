@@ -146,6 +146,22 @@ describe('MovimientoSheet — delete', () => {
     await waitFor(() => expect(useMovimientoSheetStore.getState().viewId).toBeNull())
   })
 
+  it('a refused delete keeps the sheet open on the same movement', async () => {
+    const user = userEvent.setup()
+    mDeleteMovimiento.mockResolvedValue(false)
+    state.movimientos = [movimiento()]
+    useMovimientoSheetStore.setState({ viewId: 'mov_1' })
+    render(<MovimientoSheet />)
+
+    await user.click(screen.getByRole('button', { name: /eliminar/i }))
+    const confirmButtons = screen.getAllByRole('button', { name: /^eliminar$/i })
+    await user.click(confirmButtons.at(-1)!)
+
+    await waitFor(() => expect(mDeleteMovimiento).toHaveBeenCalledWith('mov_1'))
+    expect(useMovimientoSheetStore.getState().viewId).toBe('mov_1')
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+  })
+
   it('cancelling the confirm dialog never calls deleteMovimiento', async () => {
     const user = userEvent.setup()
     state.movimientos = [movimiento()]

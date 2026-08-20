@@ -32,6 +32,16 @@ describe('AmountField', () => {
     expect(screen.getByLabelText('Monto')).toHaveAttribute('aria-invalid', 'true')
   })
 
+  it('is not aria-invalid for a non-positive amount typed on the way to a valid one, e.g. "0" toward "0,50"', () => {
+    render(<AmountField label="Monto" value="0" onChange={() => {}} locale="es-CO" />)
+    expect(screen.getByLabelText('Monto')).toHaveAttribute('aria-invalid', 'false')
+  })
+
+  it('is not aria-invalid for an empty value with no error prop', () => {
+    render(<AmountField label="Monto" value="" onChange={() => {}} locale="es-CO" />)
+    expect(screen.getByLabelText('Monto')).toHaveAttribute('aria-invalid', 'false')
+  })
+
   it('wires an explicit error message via aria-describedby and role=alert', () => {
     render(
       <AmountField

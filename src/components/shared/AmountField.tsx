@@ -1,7 +1,7 @@
 import { useId, type Ref } from 'react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { parseAmount } from '@/lib/i18n/amountFormat'
+import { parseAmountForInput } from '@/lib/i18n/amountFormat'
 import { cn } from '@/lib/utils'
 
 export interface AmountFieldProps {
@@ -27,11 +27,15 @@ export interface AmountFieldProps {
  * brings up the numeric keyboard on mobile without those constraints.
  *
  * `aria-invalid` is true both when the caller passes `error` (a business
- * rule, e.g. "amount required") and when the typed text doesn't parse
- * under `locale` at all — the second case needs no copy from the caller,
- * since this component is the one place that knows what "doesn't parse"
- * means; `error`'s text is what renders, malformed-but-no-`error` is
- * flagged without a message.
+ * rule, e.g. "amount required") and when the typed text is malformed under
+ * `locale` — the second case needs no copy from the caller, since this
+ * component is the one place that knows what "doesn't parse" means;
+ * `error`'s text is what renders, malformed-but-no-`error` is flagged
+ * without a message. Deliberately **not** flagged for `not_positive` (e.g.
+ * a bare `0`): that is a valid keystroke on the way to `0,50`, not a typo,
+ * and a caller with a business rule against it passes `error` explicitly
+ * (`docs/error-handling.md`'s malformed/not_positive split, specs.md
+ * §10.23 Decision 4).
  */
 export const AmountField = ({
   label,
@@ -49,7 +53,8 @@ export const AmountField = ({
   const autoId = useId()
   const inputId = id ?? autoId
   const errorId = `${inputId}-error`
-  const isMalformed = value.trim() !== '' && parseAmount(value, locale) === undefined
+  const parsed = parseAmountForInput(value, locale)
+  const isMalformed = !parsed.ok && parsed.reason === 'malformed'
   const invalid = error !== undefined || isMalformed
 
   return (
