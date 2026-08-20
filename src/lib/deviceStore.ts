@@ -64,7 +64,12 @@ export type SyncTipRow = { id: string; hlc: string }
 // negative — a file that failed validation last time, kept so a
 // permanently malformed file isn't re-downloaded every single pull, while
 // its `modifiedTime` still lets a later fix be noticed.
-export type SyncFileCacheRow = { id: string; modifiedTime: string; file: unknown }
+// `skipped` rides alongside the cached file (specs.md §12, 2026-08-20): a
+// cache hit skips re-downloading, but must still be able to report how many
+// entries validate.ts dropped from this file the one time it was parsed —
+// additive to the row's value shape, no version bump (only the primary key
+// is part of the store's schema).
+export type SyncFileCacheRow = { id: string; modifiedTime: string; file: unknown; skipped: number }
 
 const MARKER_ID = 1 as const
 const DRIVE_DECISION_ID = 1 as const

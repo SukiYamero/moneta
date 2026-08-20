@@ -72,12 +72,24 @@ interface SyncState {
   /** Real progress for the first-run download view (a later track) — files reconciled of total, never an indefinite spinner. */
   pullProgress: { done: number; total: number } | null
   lastError: string | null
+  /**
+   * The most recent successful pull's summary — every `PullSummary` field
+   * this store doesn't otherwise expose (the revived-ids/skipped-entries
+   * counts, specs.md §10.26 §4) rides here instead of each of `pull()`'s
+   * several call sites (the trigger wiring, the first-run download view, a
+   * manual retry) separately deciding whether to raise a notice. A single
+   * subscriber (`syncSession.ts`) reacts to this changing and owns raising
+   * the revived-movement Toast exactly once per pull, regardless of which
+   * call site produced it.
+   */
+  lastPullSummary: PullSummary | null
 }
 
 export const useSyncStore = create<SyncState>(() => ({
   phase: 'idle',
   pullProgress: null,
   lastError: null,
+  lastPullSummary: null,
 }))
 
 /** What a future sync indicator renders — combines this store's own phase with the outbox's independent dirty flag. */
@@ -175,6 +187,8 @@ export interface PullSummary {
   filesReconciled: number
   /** Ids revived by the concurrent delete-vs-edit rule this pull — the caller (a future UI) is what says why, per specs.md §10.19. */
   revivedMovIds: string[]
+  /** Malformed entries dropped across every file this pull reconciled — already logged per-file by `driveFiles.ts`'s downloads; this is the aggregate a future "N entries were skipped" notice reads (specs.md §12, 2026-08-20). */
+  skippedEntries: number
 }
 
 const DOWNLOADABLE_KINDS = new Set(['mov-month', 'mov-year', 'act', 'config'])
@@ -191,8 +205,36 @@ const DOWNLOADABLE_KINDS = new Set(['mov-month', 'mov-year', 'act', 'config'])
  * means a caller that forgets to pass it is a compile error, not a
  * `LEEME.txt` silently written in English for a Spanish-reading user
  * (specs.md §11, 2026-08-19).
+ *
+ * Coalesced against itself the same way `push()` is (specs.md §10.26 §1's
+ * sweep): `onOnline` and `onVisible` (which itself calls `onOnline`) can
+ * both fire within the same tick on a real reconnect, and the first-run
+ * download view's own pull races the trigger wiring's "pull on app open."
+ * Concurrent pulls don't lose data the way concurrent pushes do (replay is
+ * a pure function of the same inputs, and `materializeMovimientos` is an
+ * idempotent replace) — but they redouble every download, and
+ * `compactYear`'s unconditional `deleteFile` on this device's own already-
+ * compacted months is not itself idempotent against a second compaction
+ * racing it (an already-deleted file's second delete throws, caught only by
+ * `pull()`'s own fire-and-forget `.catch()` several frames up). Coalescing
+ * removes the redundant work and the race both, for the identical reason
+ * `push()`'s guard does.
  */
-export const pull = async (
+let pullInFlight: Promise<PullSummary> | null = null
+
+export const pull = (
+  token: string,
+  profile: ProfileRecord,
+  locale: SupportedLocale,
+): Promise<PullSummary> => {
+  if (pullInFlight) return pullInFlight
+  pullInFlight = pullOnce(token, profile, locale).finally(() => {
+    pullInFlight = null
+  })
+  return pullInFlight
+}
+
+const pullOnce = async (
   token: string,
   profile: ProfileRecord,
   locale: SupportedLocale,
@@ -220,9 +262,11 @@ export const pull = async (
     const actFiles: ActOpFile[] = []
     const configFiles: ConfigOpFile[] = []
     let done = 0
+    let skippedEntries = 0
 
     for (const { listing, parsed } of candidates) {
-      const file = await resolveFile(token, listing, parsed.kind)
+      const { file, skipped } = await resolveFile(token, listing, parsed.kind)
+      skippedEntries += skipped
       if (file) {
         if (parsed.kind === 'mov-month' || parsed.kind === 'mov-year')
           movFiles.push(file as MovOpFile)
@@ -266,7 +310,13 @@ export const pull = async (
     await Promise.all([...tipWrites, ...observations])
 
     await recordSuccessfulPull(profile.id)
-    useSyncStore.setState({ phase: 'idle', pullProgress: null })
+
+    const summary: PullSummary = {
+      filesReconciled: candidates.length,
+      revivedMovIds: movResult.revivedIds,
+      skippedEntries,
+    }
+    useSyncStore.setState({ phase: 'idle', pullProgress: null, lastPullSummary: summary })
 
     void compactClosedYearsIfNeeded(
       token,
@@ -278,7 +328,7 @@ export const pull = async (
       console.warn('sync: compaction check failed, will retry on the next pull', e),
     )
 
-    return { filesReconciled: candidates.length, revivedMovIds: movResult.revivedIds }
+    return summary
   } catch (e) {
     useSyncStore.setState({
       phase: 'idle',
@@ -298,18 +348,24 @@ const resolveFile = async (
   token: string,
   listing: DriveFileListing,
   kind: string,
-): Promise<MovOpFile | ActOpFile | ConfigOpFile | null> => {
-  let cached: { modifiedTime: string; file: unknown } | undefined
+): Promise<{ file: MovOpFile | ActOpFile | ConfigOpFile | null; skipped: number }> => {
+  let cached: { modifiedTime: string; file: unknown; skipped: number } | undefined
   try {
     cached = await deviceDb.syncFileCache.get(listing.id)
   } catch (e) {
     console.warn(`sync: could not read the file cache for ${listing.name}, re-downloading`, e)
   }
   if (cached && cached.modifiedTime === listing.modifiedTime) {
-    return cached.file as MovOpFile | ActOpFile | ConfigOpFile | null
+    // Still reported every pull, not just the download that first found it
+    // — the entries really are missing from the merged data on every pull
+    // that includes this file, cached or not (specs.md §12, 2026-08-20).
+    return {
+      file: cached.file as MovOpFile | ActOpFile | ConfigOpFile | null,
+      skipped: cached.skipped,
+    }
   }
 
-  const file =
+  const { file, skipped } =
     kind === 'mov-month' || kind === 'mov-year'
       ? await downloadMovFile(token, listing.id)
       : kind === 'act'
@@ -317,11 +373,16 @@ const resolveFile = async (
         : await downloadConfigFile(token, listing.id)
 
   try {
-    await deviceDb.syncFileCache.put({ id: listing.id, modifiedTime: listing.modifiedTime, file })
+    await deviceDb.syncFileCache.put({
+      id: listing.id,
+      modifiedTime: listing.modifiedTime,
+      file,
+      skipped,
+    })
   } catch (e) {
     console.warn(`sync: could not cache ${listing.name}, will re-download next pull`, e)
   }
-  return file
+  return { file, skipped }
 }
 
 // --- push --------------------------------------------------------------
@@ -358,7 +419,7 @@ const pushMovShard = async (
 
   let baseOps: MovOpEntry[] = []
   if (existingId) {
-    const existing = await downloadMovFile(token, existingId)
+    const { file: existing } = await downloadMovFile(token, existingId)
     if (!existing) {
       console.warn(
         `sync: could not verify existing shard "${filename}" before pushing — deferring, will retry next trigger`,
@@ -389,7 +450,7 @@ const pushConfig = async (
 
   let baseOps: ConfigOpEntry[] = []
   if (existingId) {
-    const existing = await downloadConfigFile(token, existingId)
+    const { file: existing } = await downloadConfigFile(token, existingId)
     if (!existing) {
       console.warn(
         `sync: could not verify existing "${filename}" before pushing — deferring, will retry next trigger`,
@@ -424,7 +485,29 @@ const pushConfig = async (
  * loss, but exactly the "grows the file forever" failure this format
  * otherwise avoids).
  */
-export const push = async (token: string, profile: ProfileRecord): Promise<void> => {
+// A module-level coalescing guard, the same shape as `boot.ts`'s `inFlight`
+// (specs.md §10.26 §1, CONFIRMED and reproduced by the general review): a
+// second `push()` call arriving before the first settles must never start
+// its own independent read-modify-write against the same Drive file — two
+// concurrent pushes each read a shard, append their own view of "pending,"
+// and the later write silently overwrites the earlier one, permanently
+// dropping whatever the earlier push uploaded from *both* Drive and the
+// outbox that would have retried it. Refusing (here: coalescing into the
+// same promise) is sufficient — every trigger path that calls `push()`
+// already treats "nothing to do" as a safe no-op, so an op left behind by a
+// coalesced call simply waits for the next trigger, which is a genuine
+// no-op-safe deferral, not a loss.
+let pushInFlight: Promise<void> | null = null
+
+export const push = (token: string, profile: ProfileRecord): Promise<void> => {
+  if (pushInFlight) return pushInFlight
+  pushInFlight = pushOnce(token, profile).finally(() => {
+    pushInFlight = null
+  })
+  return pushInFlight
+}
+
+const pushOnce = async (token: string, profile: ProfileRecord): Promise<void> => {
   const pending = await listPendingOperations()
   if (pending.length === 0) return
 
@@ -535,13 +618,13 @@ export const compactYear = async (
   if (ownMonths.length === 0) return false // nothing to compact yet
 
   const downloaded = await Promise.all(ownMonths.map((f) => downloadMovFile(token, f.id)))
-  if (downloaded.some((f) => f === null)) {
+  if (downloaded.some((d) => d.file === null)) {
     console.warn(
       `sync: could not verify every ${year} shard before compacting — skipping this round`,
     )
     return false
   }
-  const files = downloaded as MovOpFile[]
+  const files = downloaded.map((d) => d.file) as MovOpFile[]
 
   const replayed = replayMovimientos(files)
   const compactedOps: MovOpEntry[] = [...replayed.tips].map(([id, tip]) =>
@@ -604,41 +687,54 @@ export interface SyncTriggerHandle {
   stop: () => void
 }
 
-/** Idempotent per handle: call `stop()` before starting a second one in the same tab/test to avoid double-firing. `debounceMs` defaults to the real debounce; tests override it to avoid a real multi-second wait. */
+/**
+ * Idempotent per handle: call `stop()` before starting a second one in the
+ * same tab/test to avoid double-firing. `debounceMs` defaults to the real
+ * debounce; tests override it to avoid a real multi-second wait.
+ *
+ * `getContext` may return a `Promise` — `sync/syncSession.ts`'s real one
+ * does, since honoring "the token is refreshed" (specs.md §10.26 §2) means
+ * checking `AuthSession.expiresAt` and, if it's stale, awaiting a fresh
+ * token before a trigger fires, not just reading whatever's already in
+ * memory. A plain synchronous getter (every test in this file) still works
+ * unchanged — `await`ing a non-`Promise` resolves it immediately.
+ */
 export const startSyncTriggers = (
-  getContext: () => SyncContext | null,
+  getContext: () => SyncContext | null | Promise<SyncContext | null>,
   { debounceMs = PUSH_DEBOUNCE_MS }: { debounceMs?: number } = {},
 ): SyncTriggerHandle => {
   let debounceTimer: ReturnType<typeof setTimeout> | undefined
 
-  const runPush = (): void => {
-    const ctx = getContext()
+  const runPush = async (): Promise<void> => {
+    const ctx = await getContext()
     if (!ctx) return
-    push(ctx.token, ctx.profile).catch((e: unknown) => console.warn('sync: push trigger failed', e))
+    await push(ctx.token, ctx.profile).catch((e: unknown) =>
+      console.warn('sync: push trigger failed', e),
+    )
   }
-  const runPull = (): void => {
-    const ctx = getContext()
+  const runPull = async (): Promise<void> => {
+    const ctx = await getContext()
     if (!ctx) return
-    pull(ctx.token, ctx.profile, ctx.locale).catch((e: unknown) =>
+    await pull(ctx.token, ctx.profile, ctx.locale).catch((e: unknown) =>
       console.warn('sync: pull trigger failed', e),
     )
   }
 
   const onOnline = (): void => {
-    runPull()
-    if (useOutboxStore.getState().dirty) runPush()
+    void runPull()
+    if (useOutboxStore.getState().dirty) void runPush()
   }
   const onVisible = (): void => {
     if (document.visibilityState !== 'visible') return
     onOnline()
   }
   const onPageHide = (): void => {
-    if (useOutboxStore.getState().dirty) runPush() // best-effort — specs.md §10.19: the moment is backgrounding, not closing; there is no guaranteed completion here.
+    if (useOutboxStore.getState().dirty) void runPush() // best-effort — specs.md §10.19: the moment is backgrounding, not closing; there is no guaranteed completion here.
   }
   const onOutboxDirty = (dirty: boolean): void => {
     if (!dirty) return
     clearTimeout(debounceTimer)
-    debounceTimer = setTimeout(runPush, debounceMs)
+    debounceTimer = setTimeout(() => void runPush(), debounceMs)
   }
 
   window.addEventListener('online', onOnline)

@@ -183,10 +183,10 @@ describe('parseMovOpFile', () => {
       periodo: '2026-08',
       ops: [{ op: 'put', hlc, basedOn: null, mov: movimiento }],
     }
-    expect(parseMovOpFile(raw)).toEqual(raw)
+    expect(parseMovOpFile(raw)).toEqual({ file: raw, skipped: 0 })
   })
 
-  it('drops a malformed entry but keeps the rest of a good file — never takes the whole file down', () => {
+  it('drops a malformed entry but keeps the rest of a good file — never takes the whole file down, and counts what it dropped', () => {
     const good = clock.tick()
     const raw = {
       v: 1,
@@ -199,21 +199,31 @@ describe('parseMovOpFile', () => {
         { op: 'put', hlc: good, basedOn: null, mov: { id: 'bad', monto: -5 } },
       ],
     }
-    const parsed = parseMovOpFile(raw)
-    expect(parsed?.ops).toHaveLength(1)
-    expect(parsed?.ops[0]).toEqual({ op: 'put', hlc: good, basedOn: null, mov: movimiento })
+    const { file, skipped } = parseMovOpFile(raw)
+    expect(file?.ops).toHaveLength(1)
+    expect(file?.ops[0]).toEqual({ op: 'put', hlc: good, basedOn: null, mov: movimiento })
+    expect(skipped).toBe(3) // the caller is who logs this (validate.ts stays silent by design)
   })
 
-  it('rejects the whole file when it is not even the right shape', () => {
-    expect(parseMovOpFile(null)).toBeNull()
-    expect(parseMovOpFile('a string, e.g. a truncated/corrupted download')).toBeNull()
-    expect(parseMovOpFile({ v: 1, device: 'dev1', periodo: '2026-08' })).toBeNull() // ops missing
-    expect(parseMovOpFile({ v: 1, device: 'dev1', periodo: 'not-a-periodo', ops: [] })).toBeNull()
+  it('rejects the whole file when it is not even the right shape — 0 skipped, since there is nothing to salvage a per-entry count from', () => {
+    expect(parseMovOpFile(null)).toEqual({ file: null, skipped: 0 })
+    expect(parseMovOpFile('a string, e.g. a truncated/corrupted download')).toEqual({
+      file: null,
+      skipped: 0,
+    })
+    expect(parseMovOpFile({ v: 1, device: 'dev1', periodo: '2026-08' })).toEqual({
+      file: null,
+      skipped: 0,
+    }) // ops missing
+    expect(parseMovOpFile({ v: 1, device: 'dev1', periodo: 'not-a-periodo', ops: [] })).toEqual({
+      file: null,
+      skipped: 0,
+    })
   })
 
   it('rejects a file from a newer format version — ignored, never a thrown boot', () => {
     const raw = { v: 999, device: 'dev1', periodo: '2026-08', ops: [] }
-    expect(parseMovOpFile(raw)).toBeNull()
+    expect(parseMovOpFile(raw)).toEqual({ file: null, skipped: 0 })
   })
 })
 
@@ -221,7 +231,7 @@ describe('parseActOpFile / parseConfigOpFile', () => {
   it('parseActOpFile parses a well-shaped file', () => {
     const hlc = clock.tick()
     const raw = { v: 1, device: 'dev1', ops: [{ op: 'put', hlc, basedOn: null, act: activo }] }
-    expect(parseActOpFile(raw)).toEqual(raw)
+    expect(parseActOpFile(raw)).toEqual({ file: raw, skipped: 0 })
   })
 
   it('parseConfigOpFile parses a well-shaped file and rejects a malformed config entry', () => {
@@ -231,13 +241,15 @@ describe('parseActOpFile / parseConfigOpFile', () => {
       device: 'dev1',
       ops: [{ op: 'put', hlc, basedOn: null, config: CONFIG_SEMILLA }],
     }
-    expect(parseConfigOpFile(good)).toEqual(good)
+    expect(parseConfigOpFile(good)).toEqual({ file: good, skipped: 0 })
 
     const bad = {
       v: 1,
       device: 'dev1',
       ops: [{ op: 'put', hlc, basedOn: null, config: { ...CONFIG_SEMILLA, secciones: 'nope' } }],
     }
-    expect(parseConfigOpFile(bad)?.ops).toHaveLength(0)
+    const parsedBad = parseConfigOpFile(bad)
+    expect(parsedBad.file?.ops).toHaveLength(0)
+    expect(parsedBad.skipped).toBe(1)
   })
 })

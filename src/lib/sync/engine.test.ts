@@ -111,9 +111,62 @@ describe('pull', () => {
     const summary = await pull('tok', profile, 'en')
 
     expect(summary.filesReconciled).toBe(1)
+    expect(summary.skippedEntries).toBe(0)
     const database = getProfileDatabase('kurobello-engine-test')
     await expect(database.movimientos.toArray()).resolves.toEqual([movimiento()])
     expect((await getProfile('p1'))?.lastPullAt).toBeDefined()
+  })
+
+  it('carries the count of malformed entries dropped across every reconciled file into PullSummary (specs.md §12, 2026-08-20)', async () => {
+    mListFiles.mockImplementation(async (_token, opts) =>
+      opts.space === 'appDataFolder' ? [] : [listing('f1', 'mov-remdev-2026-08.json')],
+    )
+    mReadJsonFile.mockResolvedValue({
+      v: 1,
+      device: 'remdev',
+      periodo: '2026-08',
+      ops: [
+        { op: 'put', hlc: '000000001-0000-remdev', basedOn: null, mov: movimiento() },
+        { op: 'weird-op', hlc: '000000002-0000-remdev', basedOn: null },
+      ],
+    })
+
+    const summary = await pull('tok', profile, 'en')
+
+    expect(summary.skippedEntries).toBe(1)
+    // The good entry from the same file still replays — one bad line never
+    // takes the rest of a good file down.
+    const database = getProfileDatabase('kurobello-engine-test')
+    await expect(database.movimientos.toArray()).resolves.toEqual([movimiento()])
+  })
+
+  it('serializes pull() against itself: a second call arriving before the first settles coalesces into it instead of re-listing/re-downloading (specs.md §10.26 §1 sweep)', async () => {
+    let resolveList!: (files: ReturnType<typeof listing>[]) => void
+    mListFiles.mockImplementation((_token, opts) =>
+      opts.space === 'appDataFolder'
+        ? Promise.resolve([])
+        : new Promise((resolve) => {
+            resolveList = resolve
+          }),
+    )
+    mReadJsonFile.mockResolvedValue({
+      v: 1,
+      device: 'remdev',
+      periodo: '2026-08',
+      ops: [{ op: 'put', hlc: '000000001-0000-remdev', basedOn: null, mov: movimiento() }],
+    })
+
+    const pullA = pull('tok', profile, 'en')
+    const pullB = pull('tok', profile, 'en')
+
+    resolveList([listing('f1', 'mov-remdev-2026-08.json')])
+    const [summaryA, summaryB] = await Promise.all([pullA, pullB])
+
+    // Reference-equal: two independent pullOnce() runs would each construct
+    // their own PullSummary object. The same object back on both sides is
+    // only possible if the second call coalesced into the first's promise
+    // rather than starting a second, concurrent listing/download/replay.
+    expect(summaryA).toBe(summaryB)
   })
 
   it('skips re-downloading a file whose modifiedTime has not changed', async () => {
@@ -256,6 +309,63 @@ describe('push', () => {
     await push('tok', profile)
     expect(mFindFile).not.toHaveBeenCalled()
     expect(mUpsertJsonFile).not.toHaveBeenCalled()
+  })
+
+  it('serializes push() against itself: a second call arriving before the first settles coalesces into it instead of racing it (specs.md §10.26 §1, reproduced by the general review)', async () => {
+    mFindFile.mockResolvedValue(null)
+    mUpsertJsonFile.mockResolvedValue('shard-id')
+    await enqueueOperation({ entity: 'movimiento', op: 'put', payload: movimiento({ id: 'op1' }) })
+
+    // Two calls issued back-to-back, neither awaited before the second
+    // fires — the exact shape of two overlapping triggers (onOnline's
+    // pull-then-push and the debounced post-write push) in ordinary mobile
+    // use (unlock as signal returns).
+    const pushA = push('tok', profile)
+    const pushB = push('tok', profile)
+
+    await Promise.all([pushA, pushB])
+
+    // A second, independent read-modify-write against the same Drive file
+    // is exactly the race that drops an operation permanently — there must
+    // only ever be one.
+    expect(mUpsertJsonFile).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not lose an operation enqueued while the first push is still writing (the exact data-loss shape §10.26 §1 describes)', async () => {
+    let resolveFind!: (id: string | null) => void
+    mFindFile.mockImplementation(
+      () =>
+        new Promise<string | null>((resolve) => {
+          resolveFind = resolve
+        }),
+    )
+    mUpsertJsonFile.mockResolvedValue('shard-id')
+    await enqueueOperation({ entity: 'movimiento', op: 'put', payload: movimiento({ id: 'op1' }) })
+
+    // push A starts and blocks inside pushMovShard's findFile — it has
+    // already committed to its snapshot of "pending" (op1 only).
+    const pushA = push('tok', profile)
+
+    // op2 arrives, and a second push is triggered, while A is still in
+    // flight — without the reentrancy guard, the original bug (§10.26 §1)
+    // has A's stale write land after B's and silently drop op2 from both
+    // Drive and the outbox.
+    await enqueueOperation({ entity: 'movimiento', op: 'put', payload: movimiento({ id: 'op2' }) })
+    const pushB = push('tok', profile)
+
+    resolveFind(null)
+    await Promise.all([pushA, pushB])
+
+    const stillPending = await listPendingOperations()
+    const uploadedIds = mUpsertJsonFile.mock.calls
+      .flatMap((c) => (c[1] as { data: { ops: { mov?: { id: string } }[] } }).data.ops)
+      .map((o) => o.mov?.id)
+    const accountedFor = new Set([...stillPending.map((e) => e.entityId), ...uploadedIds])
+
+    // op2 must be somewhere: either still queued (coalesced away, waiting
+    // for the next trigger) or already durably uploaded — never neither.
+    expect(accountedFor.has('op2')).toBe(true)
+    expect(mUpsertJsonFile).toHaveBeenCalledTimes(1) // no second, racing write
   })
 
   it('a failure pushing one entity type never causes the other, already-uploaded type to be re-pushed (and duplicated) on retry', async () => {
@@ -516,5 +626,31 @@ describe('startSyncTriggers', () => {
     window.dispatchEvent(new Event('online'))
     await new Promise((resolve) => setTimeout(resolve, 10))
     expect(mListFiles).not.toHaveBeenCalled()
+  })
+
+  it('"locked mid-sync" (specs.md §10.26 edge cases): stop() does not abort a push already in flight — it completes and drains the outbox normally, only *new* pushes are prevented', async () => {
+    let resolveFind!: (id: string | null) => void
+    mFindFile.mockImplementation(
+      () =>
+        new Promise<string | null>((resolve) => {
+          resolveFind = resolve
+        }),
+    )
+    mUpsertJsonFile.mockResolvedValue('id')
+
+    handle = startSyncTriggers(() => ({ token: 'tok', profile, locale: 'en' }), { debounceMs: 1 })
+    await enqueueOperation({ entity: 'movimiento', op: 'put', payload: movimiento() })
+    await vi.waitFor(() => expect(mFindFile).toHaveBeenCalled()) // the push is now in flight (blocked on findFile)
+
+    // The lock fires here in the real app (lockStore.ts's `lock()` calling
+    // `stopSyncSession()`) — the outbox's own binding never changes on a
+    // lock (only a boot rebind redirects it), so nothing about *this*
+    // push's target table becomes stale by locking mid-flight.
+    handle.stop()
+    handle = undefined
+
+    resolveFind(null) // let the already-in-flight push resolve
+    await vi.waitFor(() => expect(mUpsertJsonFile).toHaveBeenCalled())
+    await expect(listPendingOperations()).resolves.toEqual([]) // drained, not stranded
   })
 })

@@ -20,7 +20,12 @@ import {
   type ConfigOpFile,
   type MovOpFile,
 } from '@/lib/sync/opLog'
-import { parseActOpFile, parseConfigOpFile, parseMovOpFile } from '@/lib/sync/validate'
+import {
+  parseActOpFile,
+  parseConfigOpFile,
+  parseMovOpFile,
+  type ParsedOpFile,
+} from '@/lib/sync/validate'
 
 // driveFiles.ts — where opLog.ts's pure types and validate.ts's shape
 // checks meet drive.ts's REST client: listing, downloading + validating,
@@ -38,7 +43,40 @@ import { parseActOpFile, parseConfigOpFile, parseMovOpFile } from '@/lib/sync/va
 export const FOLDER_NAME = 'KuroBello'
 const FOLDER_MIME = 'application/vnd.google-apps.folder'
 
-export const ensureFolder = async (token: string): Promise<string> =>
+// Coalesced against itself for the identical reason engine.ts's push()/
+// pull() are (specs.md §10.26 §1's sweep): a device's very first sync calls
+// this from both pull() and push(), and `onOnline` fires `runPull()` then
+// `runPush()` without awaiting either — an unguarded check-then-create here
+// races itself exactly like the reentrancy bug this track exists to close,
+// except the two writers create two *different* KuroBello folders instead
+// of overwriting one file. `pullInFlight`/`pushInFlight` never protect this,
+// since a pull and a push are two different exported functions each independently
+// calling `ensureFolder`.
+//
+// Keyed by `token`, not a single shared slot — a coalescing cache blind to
+// *which* account is calling would hand a concurrent call for a second
+// account the first account's folder id the instant their two calls
+// overlapped, which is not "two tabs of the same account" (a real, accepted
+// residual risk — see this track's report) but silently writing one
+// account's data into another's Drive folder. Today's architecture only
+// ever has one profile's triggers active at a time (`syncSession.ts`), so
+// this is defensive rather than reachable — but the fix costs nothing and
+// closes a *worse* version of the bug this whole section exists to avoid.
+// Each entry is cleared once its own call resolves (success or failure) so
+// a later, genuinely separate call for that token re-checks Drive.
+const ensureFolderInFlight = new Map<string, Promise<string>>()
+
+export const ensureFolder = (token: string): Promise<string> => {
+  const existing = ensureFolderInFlight.get(token)
+  if (existing) return existing
+  const inFlight = ensureFolderOnce(token).finally(() => {
+    ensureFolderInFlight.delete(token)
+  })
+  ensureFolderInFlight.set(token, inFlight)
+  return inFlight
+}
+
+const ensureFolderOnce = async (token: string): Promise<string> =>
   (await findFile(token, { name: FOLDER_NAME, mimeType: FOLDER_MIME })) ??
   (await createFolder(token, FOLDER_NAME))
 
@@ -57,36 +95,58 @@ export const listAppDataFiles = (token: string): Promise<DriveFileListing[]> =>
 // same outcome — skip it and keep going, never replay a truncated partial
 // as the whole truth.
 
-export const downloadMovFile = async (token: string, fileId: string): Promise<MovOpFile | null> => {
+// `skipped` (validate.ts's ParsedOpFile) is logged right here, once per
+// download — this is the I/O layer validate.ts's own header comment points
+// to ("callers are I/O code that already knows *which* file/entry it was
+// reading"). Never silent (docs/error-handling.md), and the count also
+// rides back to the caller so a pull can carry it into `PullSummary`
+// (specs.md §12, 2026-08-20) instead of the warning being the only trace.
+
+export const downloadMovFile = async (
+  token: string,
+  fileId: string,
+): Promise<ParsedOpFile<MovOpFile>> => {
   try {
     const raw = await readJsonFile<unknown>(token, fileId)
-    return parseMovOpFile(raw)
+    const parsed = parseMovOpFile(raw)
+    if (parsed.skipped > 0)
+      console.warn(`sync: skipping ${parsed.skipped} malformed entr(y/ies) in ${fileId}`, raw)
+    return parsed
   } catch (e) {
     console.warn(`sync: could not download/parse movimiento shard ${fileId}, skipping it`, e)
-    return null
+    return { file: null, skipped: 0 }
   }
 }
 
-export const downloadActFile = async (token: string, fileId: string): Promise<ActOpFile | null> => {
+export const downloadActFile = async (
+  token: string,
+  fileId: string,
+): Promise<ParsedOpFile<ActOpFile>> => {
   try {
     const raw = await readJsonFile<unknown>(token, fileId)
-    return parseActOpFile(raw)
+    const parsed = parseActOpFile(raw)
+    if (parsed.skipped > 0)
+      console.warn(`sync: skipping ${parsed.skipped} malformed entr(y/ies) in ${fileId}`, raw)
+    return parsed
   } catch (e) {
     console.warn(`sync: could not download/parse activo file ${fileId}, skipping it`, e)
-    return null
+    return { file: null, skipped: 0 }
   }
 }
 
 export const downloadConfigFile = async (
   token: string,
   fileId: string,
-): Promise<ConfigOpFile | null> => {
+): Promise<ParsedOpFile<ConfigOpFile>> => {
   try {
     const raw = await readJsonFile<unknown>(token, fileId)
-    return parseConfigOpFile(raw)
+    const parsed = parseConfigOpFile(raw)
+    if (parsed.skipped > 0)
+      console.warn(`sync: skipping ${parsed.skipped} malformed entr(y/ies) in ${fileId}`, raw)
+    return parsed
   } catch (e) {
     console.warn(`sync: could not download/parse config file ${fileId}, skipping it`, e)
-    return null
+    return { file: null, skipped: 0 }
   }
 }
 

@@ -265,31 +265,49 @@ const YEAR_PERIODO_RE = /^\d{4}$/
 const isMovPeriodo = (value: unknown): value is string =>
   typeof value === 'string' && (MONTH_PERIODO_RE.test(value) || YEAR_PERIODO_RE.test(value))
 
+/**
+ * `skipped` is the count of entries this call dropped — specs.md §12,
+ * 2026-08-20: a malformed entry inside an otherwise-good file used to
+ * vanish with zero trace, because this module (deliberately pure and
+ * silent — see the header comment) had nowhere to put the count. The I/O
+ * caller (`driveFiles.ts`) is what logs it; this module only ever reports
+ * the number, never a console call of its own. `0` for a whole-file reject
+ * too — there is no salvageable per-entry count once the file itself
+ * doesn't parse.
+ */
+export interface ParsedOpFile<T> {
+  file: T | null
+  skipped: number
+}
+
 /** Malformed entries are dropped, not the whole file — a lone bad line must never take a good file down with it. */
-export const parseMovOpFile = (value: unknown): MovOpFile | null => {
-  if (!isPlainObject(value)) return null
-  if (!isFiniteNumber(value.v) || value.v > OP_FORMAT_VERSION) return null
-  if (!isNonEmptyString(value.device)) return null
-  if (!isMovPeriodo(value.periodo)) return null
-  if (!Array.isArray(value.ops)) return null
+export const parseMovOpFile = (value: unknown): ParsedOpFile<MovOpFile> => {
+  if (!isPlainObject(value)) return { file: null, skipped: 0 }
+  if (!isFiniteNumber(value.v) || value.v > OP_FORMAT_VERSION) return { file: null, skipped: 0 }
+  if (!isNonEmptyString(value.device)) return { file: null, skipped: 0 }
+  if (!isMovPeriodo(value.periodo)) return { file: null, skipped: 0 }
+  if (!Array.isArray(value.ops)) return { file: null, skipped: 0 }
   const ops = value.ops.filter(isValidMovOpEntry)
-  return { v: value.v, device: value.device, periodo: value.periodo, ops }
+  return {
+    file: { v: value.v, device: value.device, periodo: value.periodo, ops },
+    skipped: value.ops.length - ops.length,
+  }
 }
 
-export const parseActOpFile = (value: unknown): ActOpFile | null => {
-  if (!isPlainObject(value)) return null
-  if (!isFiniteNumber(value.v) || value.v > OP_FORMAT_VERSION) return null
-  if (!isNonEmptyString(value.device)) return null
-  if (!Array.isArray(value.ops)) return null
+export const parseActOpFile = (value: unknown): ParsedOpFile<ActOpFile> => {
+  if (!isPlainObject(value)) return { file: null, skipped: 0 }
+  if (!isFiniteNumber(value.v) || value.v > OP_FORMAT_VERSION) return { file: null, skipped: 0 }
+  if (!isNonEmptyString(value.device)) return { file: null, skipped: 0 }
+  if (!Array.isArray(value.ops)) return { file: null, skipped: 0 }
   const ops = value.ops.filter(isValidActOpEntry)
-  return { v: value.v, device: value.device, ops }
+  return { file: { v: value.v, device: value.device, ops }, skipped: value.ops.length - ops.length }
 }
 
-export const parseConfigOpFile = (value: unknown): ConfigOpFile | null => {
-  if (!isPlainObject(value)) return null
-  if (!isFiniteNumber(value.v) || value.v > OP_FORMAT_VERSION) return null
-  if (!isNonEmptyString(value.device)) return null
-  if (!Array.isArray(value.ops)) return null
+export const parseConfigOpFile = (value: unknown): ParsedOpFile<ConfigOpFile> => {
+  if (!isPlainObject(value)) return { file: null, skipped: 0 }
+  if (!isFiniteNumber(value.v) || value.v > OP_FORMAT_VERSION) return { file: null, skipped: 0 }
+  if (!isNonEmptyString(value.device)) return { file: null, skipped: 0 }
+  if (!Array.isArray(value.ops)) return { file: null, skipped: 0 }
   const ops = value.ops.map(sanitizeConfigOpEntry).filter((op): op is ConfigOpEntry => op !== null)
-  return { v: value.v, device: value.device, ops }
+  return { file: { v: value.v, device: value.device, ops }, skipped: value.ops.length - ops.length }
 }

@@ -59,6 +59,52 @@ describe('ensureFolder', () => {
     expect(await ensureFolder('tok')).toBe('NEW')
     expect(mCreateFolder).toHaveBeenCalledWith('tok', FOLDER_NAME)
   })
+
+  it("coalesces two concurrent first-ever calls into one folder, not two (specs.md §10.26 §1 sweep: pull() and push() both call ensureFolder() on the same profile's very first sync — onOnline fires runPull() and runPush() without awaiting each other — and an unguarded check-then-create races itself the same way push() used to)", async () => {
+    let resolveFind!: (id: string | null) => void
+    mFindFile.mockImplementation(
+      () =>
+        new Promise<string | null>((resolve) => {
+          resolveFind = resolve
+        }),
+    )
+    mCreateFolder.mockResolvedValue('NEW')
+
+    const a = ensureFolder('tok')
+    const b = ensureFolder('tok')
+
+    resolveFind(null)
+    const [idA, idB] = await Promise.all([a, b])
+
+    expect(idA).toBe('NEW')
+    expect(idB).toBe('NEW')
+    expect(mCreateFolder).toHaveBeenCalledTimes(1) // never two KuroBello folders
+  })
+
+  it("keys the coalescing by token — a concurrent call for a *different* account never receives the first account's folder id", async () => {
+    mFindFile.mockImplementation(async (token: string) => (token === 'tok-a' ? null : null))
+    mCreateFolder.mockImplementation(async (token: string) =>
+      token === 'tok-a' ? 'FOLDER-A' : 'FOLDER-B',
+    )
+
+    const [idA, idB] = await Promise.all([ensureFolder('tok-a'), ensureFolder('tok-b')])
+
+    expect(idA).toBe('FOLDER-A')
+    expect(idB).toBe('FOLDER-B')
+    expect(mCreateFolder).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not keep coalescing once resolved — a later, genuinely separate call re-checks Drive', async () => {
+    mFindFile.mockResolvedValueOnce(null)
+    mCreateFolder.mockResolvedValueOnce('FIRST')
+    await ensureFolder('tok')
+
+    mFindFile.mockResolvedValueOnce('FIRST') // now exists
+    const second = await ensureFolder('tok')
+
+    expect(second).toBe('FIRST')
+    expect(mCreateFolder).toHaveBeenCalledTimes(1)
+  })
 })
 
 describe('listKuroBelloFiles / listAppDataFiles', () => {
@@ -92,30 +138,49 @@ const movOp = {
 }
 
 describe('downloads degrade to null, never throw', () => {
-  it('downloadMovFile returns the parsed file when well-shaped', async () => {
+  it('downloadMovFile returns the parsed file when well-shaped, with nothing skipped', async () => {
     const raw = { v: 1, device: 'devicea', periodo: '2026-08', ops: [movOp] }
     mReadJsonFile.mockResolvedValue(raw)
-    expect(await downloadMovFile('tok', 'f1')).toEqual(raw)
+    expect(await downloadMovFile('tok', 'f1')).toEqual({ file: raw, skipped: 0 })
   })
 
-  it('downloadMovFile returns null on a malformed file', async () => {
+  it('downloadMovFile returns a null file on a malformed file', async () => {
     mReadJsonFile.mockResolvedValue({ not: 'a real op file' })
-    expect(await downloadMovFile('tok', 'f1')).toBeNull()
+    expect(await downloadMovFile('tok', 'f1')).toEqual({ file: null, skipped: 0 })
   })
 
-  it('downloadMovFile returns null on a network/parse failure, logging why', async () => {
+  it('downloadMovFile returns a null file on a network/parse failure, logging why', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     mReadJsonFile.mockRejectedValue(new Error('truncated'))
-    expect(await downloadMovFile('tok', 'f1')).toBeNull()
+    expect(await downloadMovFile('tok', 'f1')).toEqual({ file: null, skipped: 0 })
     expect(warn).toHaveBeenCalled()
+  })
+
+  it('logs and carries the count when a malformed entry inside an otherwise-good file is dropped (specs.md §12, 2026-08-20)', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    mReadJsonFile.mockResolvedValue({
+      v: 1,
+      device: 'devicea',
+      periodo: '2026-08',
+      ops: [movOp, { op: 'weird-op', hlc: movOp.hlc, basedOn: null }],
+    })
+
+    const { file, skipped } = await downloadMovFile('tok', 'f1')
+
+    expect(file?.ops).toEqual([movOp])
+    expect(skipped).toBe(1)
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('f1'), expect.anything())
   })
 
   it('downloadActFile / downloadConfigFile behave the same way', async () => {
     mReadJsonFile.mockResolvedValueOnce({ v: 1, device: 'devicea', ops: [] })
-    expect(await downloadActFile('tok', 'f1')).toEqual({ v: 1, device: 'devicea', ops: [] })
+    expect(await downloadActFile('tok', 'f1')).toEqual({
+      file: { v: 1, device: 'devicea', ops: [] },
+      skipped: 0,
+    })
 
     mReadJsonFile.mockResolvedValueOnce('not an object')
-    expect(await downloadConfigFile('tok', 'f2')).toBeNull()
+    expect(await downloadConfigFile('tok', 'f2')).toEqual({ file: null, skipped: 0 })
   })
 })
 
