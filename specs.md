@@ -3763,6 +3763,21 @@ lint` clean bar the one pre-existing `components/ui` warning). `AGENTS.md`
   is a product decision about what signing out means under an active lock,
   pending with the user.
 
+- **Sequencing constraint for the `repoProvider` flip: a guest who signs in
+  will see an empty account.** §10.15 correctly decides that a guest's local
+  profile stays untouched, side by side, when they later sign in — nothing is
+  merged or overwritten. The consequence is a usability cliff, not a data
+  problem: a person who used the app as a guest for a month signs in and lands
+  in a fresh Google profile, with their month sitting in a profile the UI
+  cannot switch to, because the switcher is Wave 5+. **Unreachable today** —
+  `getRepo()` still returns the fake repo — and it becomes real the moment
+  that stub is flipped in Wave 4. Two acceptable answers: bring the profile
+  switcher forward into Wave 4, or have the account screen say plainly where
+  the guest data went. What is not acceptable is shipping the flip and leaving
+  someone staring at an empty account, because the conclusion they will draw
+  is that the app lost their data. Recorded before the flip so it is a
+  decision, not a bug report.
+
 ### Development waves (parallel tracks, sequencing, worktree log)
 
 Moved to **[`docs/waves.md`](../docs/waves.md)** — the full wave/track plan
