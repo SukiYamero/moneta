@@ -474,7 +474,7 @@ missing/finished here).
 
 | Path                           | Branch      | Track | Status                   |
 | ------------------------------ | ----------- | ----- | ------------------------ |
-| `../moneta-worktrees/track-z`  | `track-z`   | Z     | active                   |
+| `../moneta-worktrees/track-z`  | `review-z`  | Z     | merged; review in flight |
 | `../moneta-worktrees/track-g1` | `review-g1` | G1    | merged; review in flight |
 
 Paths are relative to the repo root (`web/moneta`), i.e. a sibling

@@ -159,10 +159,10 @@ Non-negotiable, per `AGENTS.md` § Review protocol:
 
 ## 5. Status
 
-| Track | Status      |
-| ----- | ----------- |
-| Z     | not started |
-| G1    | not started |
+| Track | Status                                                       |
+| ----- | ------------------------------------------------------------ |
+| Z     | ✅ merged `498632a` (+ seam fix `8806321`); review in flight |
+| G1    | ✅ merged `1fdfeb0`; review in flight                        |
 
 The authoritative worktree log stays in `docs/waves.md`; this table is the
 per-track execution view.
