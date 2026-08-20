@@ -6708,6 +6708,23 @@ SupportedLocale = detectLocale()`, and looks up each section/category's
   under-describes it, which is the dangerous direction for a validation file
   (a future reader may add the check the comment implies is missing, or route
   around the file believing it does less than it does).
+- **A guest is shown a lock control that can only fail.** CONFIRMED by the
+  operator 2026-08-20, tracing a user question about forgotten PINs.
+  `lockStore.enable` throws `NO_SESSION_ERROR` when there is no session
+  (`lockStore.ts:137`) and a guest has none, but `SecuritySection.tsx` renders
+  `LockSettings` unconditionally inside `ProfileSheet` — no auth-status gate
+  anywhere in the chain. A guest opens their profile, sees "Seguridad", taps
+  it, and receives an error for a thing they were offered.
+  **This is the same shape the project already fixed one layer down and did
+  not sweep:** `LockScreen.tsx:11` carries an explicit comment that the user
+  "must not see a button that always fails (specs.md §11, 2026-08-19)" —
+  applied to the biometric CTA, never to the section that hosts it. Exactly
+  `AGENTS.md`'s "fix the shape, not the instance", missed by the very fix that
+  named the rule. Whoever picks this up should gate the section on auth status
+  **and** re-sweep for a third instance rather than fixing this one site.
+  Note the product question underneath is open and belongs to the user
+  (`docs/pendientes-usuario.md` item 9): whether a guest should be offered a
+  PIN at all, given that a guest lockout has no honest recovery.
 - **Three more `'yyyy-MM-dd'` reimplementations exist beyond the ones Track
   AC's `toIsoDate` export (this section, closed above) fixed.** Found by
   Track AC's own sweep, 2026-08-20, but left unfixed because none of the
