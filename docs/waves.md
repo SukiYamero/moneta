@@ -510,12 +510,14 @@ Check this table against `git worktree list` at the start of any parallel
 session; prune anything stale (merged-but-not-removed, or on disk but
 missing/finished here).
 
-| Path                           | Branch     | Status   |
-| ------------------------------ | ---------- | -------- |
-| `../moneta-worktrees/track-ab` | `track-ab` | `active` |
+| Path | Branch | Status |
+| ---- | ------ | ------ |
 
-Wave 4 stage 3, step 2: AB = §10.26 sync goes live; AC = §10.27 + the review
-debt filed in §12 (merged and removed 2026-08-20, along with `track-boot`).
+_(empty — every track's worktree merged and was removed)_
+
+Wave 4 stage 3, step 2: AB = §10.26 sync goes live (merged and removed
+2026-08-20, along with its own review pass); AC = §10.27 + the review debt
+filed in §12 (merged and removed 2026-08-20, along with `track-boot`).
 
 Paths are relative to the repo root (`web/moneta`), i.e. a sibling
 `web/moneta-worktrees/` directory outside the repo — deliberately not nested

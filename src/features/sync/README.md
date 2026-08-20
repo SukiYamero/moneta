@@ -18,11 +18,15 @@ that's guaranteed safe to.
   than in `syncSession.ts` itself, because this is the one place a
   `repoProvider` binding is guaranteed to exist (`syncSession.ts`'s own
   start moment can race `boot.ts`'s bind — see that module's README entry).
-  Remounts fresh on every boot rebind (`BootGate` unmounts its children
-  while a rebind is `'running'`), which is the only time the gate decision
-  could legitimately change. On a successful gated download, resets and
-  reloads `dataStore` (mirroring `boot.ts`'s own rebind path — `load()`
-  alone is a no-op once already `'ready'`) before revealing `children`.
+  Remounts on a boot rebind (the only time the gate decision could
+  legitimately _change_) but also on every navigation between `/` and
+  `/settings` (siblings in `router.tsx`, not nested, so each gets its own
+  `BootGate`/`FirstSyncGate` instance) — `dismissedProfileIds`, a
+  module-level set keyed by profile id, is what keeps an explicit "continue
+  without Drive" skip from reappearing on that second, far more frequent
+  kind of remount. On a successful gated download, resets and reloads
+  `dataStore` (mirroring `boot.ts`'s own rebind path — `load()` alone is a
+  no-op once already `'ready'`) before revealing `children`.
 - `DriveDownloadScreen.tsx` — the screen itself, built from existing
   primitives per the user's 2026-08-20 decision (`specs.md` §10.26 §3)
   rather than blocked on a canvas design; replaceable in place if one lands

@@ -16,7 +16,7 @@ vi.mock('@/features/sync/DriveDownloadScreen', () => ({
 
 import { getActiveProfileBinding } from '@/lib/repoProvider'
 import { runInitialSync } from '@/lib/sync/syncSession'
-import { FirstSyncGate } from '@/features/sync/FirstSyncGate'
+import { FirstSyncGate, __resetFirstSyncGateForTests } from '@/features/sync/FirstSyncGate'
 
 const mGetActiveProfileBinding = vi.mocked(getActiveProfileBinding)
 const mRunInitialSync = vi.mocked(runInitialSync)
@@ -36,6 +36,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   useAuthStore.setState(originalAuthState, true)
   mGetActiveProfileBinding.mockReturnValue(null)
+  __resetFirstSyncGateForTests()
 })
 
 afterEach(() => {
@@ -114,5 +115,34 @@ describe('FirstSyncGate', () => {
 
     resetSpy.mockRestore()
     loadSpy.mockRestore()
+  })
+
+  it('a profile dismissed via "continue without Drive" must not re-show the gate on the very next remount (specs.md §10.19: "once," and router.tsx mounts a fresh FirstSyncGate on every top-level route — /settings is a sibling route to /, not nested, so navigating there remounts this component even though no boot rebind happened)', async () => {
+    const user = userEvent.setup()
+    useAuthStore.setState({ status: 'authenticated', drive: { folderId: 'F' } })
+    // The profile never gets a lastPullAt in this test — simulating a pull that
+    // keeps failing (e.g. persistently offline) even after the user dismisses.
+    mGetActiveProfileBinding.mockReturnValue({ profile, database: {} as never, repo: {} as never })
+
+    const first = render(
+      <FirstSyncGate>
+        <div>app</div>
+      </FirstSyncGate>,
+    )
+    // Simulate the "continue without Drive for now" dismissal (DriveDownloadScreen
+    // calls the same onDone prop for both a real success and this explicit skip).
+    await user.click(first.getByText('fake-download-done'))
+    expect(first.getByText('app')).toBeInTheDocument()
+    first.unmount()
+
+    // Remount with the identical (still-unsynced) profile state — this is what
+    // happens when the user taps the settings gear right after dismissing.
+    const second = render(
+      <FirstSyncGate>
+        <div>app</div>
+      </FirstSyncGate>,
+    )
+    expect(second.queryByText('fake-download-done')).not.toBeInTheDocument()
+    expect(second.getByText('app')).toBeInTheDocument()
   })
 })
