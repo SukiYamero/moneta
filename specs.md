@@ -1716,6 +1716,72 @@ unavailable and cannot be mistaken for armed.
 `src/lib/profiles/`, and `src/features/profile/`. No screens beyond the
 profile sheet, no schema change.
 
+### 10.21 Coming back — the returning-user entry screen
+
+Written 2026-08-19 (user observation). **Not implemented.**
+
+- **Goal:** a person who has used the app for months and reopens it never sees
+  the first-run screen. Seeing it reads as "everything reset", which is the
+  single worst thing a finance app can imply.
+- **User story:** I open the app, my Google session happens to have lapsed,
+  and instead of a welcome-to-the-app pitch I see my own name and one button
+  to continue.
+
+#### When it shows, and how we know
+
+The signal already exists and is **already read at exactly this point**:
+`restore()` consults the device login marker before attempting silent
+re-auth. After §10.20 the profile registry also holds the account's `label`,
+so the screen can greet the person by name rather than generically.
+
+| Device state                                | What renders                                                                                          |
+| ------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Login marker present, silent re-auth failed | **This screen**                                                                                       |
+| No marker (genuine first visit)             | `WelcomeScreen`, unchanged                                                                            |
+| Signed out deliberately                     | `WelcomeScreen` — §10.20 clears the marker, and someone who chose to leave should get the full screen |
+
+#### UI
+
+One purpose, nothing else: get this person back in.
+
+- Greets by name from the registry.
+- **One primary action**, "continue with Google". A secondary "use another
+  account" is acceptable; the guest option, the value proposition and the
+  first-run legal copy are **not** — this person accepted all of that months
+  ago and repeating it is what makes the app feel reset.
+- **The reassurance line is the entire point of the screen** and therefore
+  must be true. The marker only proves a session once existed, **not that data
+  survived** — a browser can evict IndexedDB. So either gate the line on local
+  data actually being present, or word it so it stays true either way. A
+  screen that says "your data is still here" over an empty store is precisely
+  the dishonest-UI defect §11 has already ruled on twice.
+
+#### Edge cases
+
+Offline (§10.11 already lets a returning user in from the marker — this screen
+must not appear in front of that path and block it); a returning **guest**,
+who has local data and no account (see below); a marker present but the
+registry empty, where the greeting degrades to no name rather than a blank.
+
+#### Done when
+
+A returning user whose silent re-auth fails sees their own name and one
+button, never the first-run pitch — and the reassurance it shows is verifiable
+against the local store rather than assumed.
+
+#### Blast radius
+
+`src/features/auth/**` and one branch in the boot path. No schema change, no
+new store.
+
+#### Related, and now unblocked
+
+A returning **guest** hits the same wall for a different reason: guest mode is
+in-memory only, so reopening drops them to `WelcomeScreen` with their local
+data intact but invisible. §10.10 recorded that persisting guest mode was
+blocked on there being a way out of it, and §10.18 built that exit — so it is
+unblocked, and this screen is its natural home. Decide the two together.
+
 ### Wave 3 — staging and dependencies
 
 Not everything runs in parallel. A track in a later stage is **blocked** until
@@ -3701,6 +3767,22 @@ lint` clean bar the one pre-existing `components/ui` warning). `AGENTS.md`
   technical is a weaker claim than the one being made. **The bigger hole this
   does not close: a user who never linked Drive has nothing there at all —
   portability is decided by whether the file exists, not by its format.**
+
+- 2026-08-19 — **Rule, not a patch: no screen may render its first-run state
+  to a returning user.** User noticed the third instance of one defect class,
+  so it is recorded as the class rather than the case. The three found so far:
+  a guest who signs in lands in an empty account (§12); a new device renders a
+  dashboard of zeros while the first pull runs (§10.19); and a returning user
+  whose silent re-auth lapses gets the welcome-to-the-app pitch (§10.21). All
+  three are **normal states rendering as "you lost everything"** — the worst
+  thing a finance app can imply, and each was reached by a different path,
+  which is why fixing them one at a time kept missing the pattern.
+
+  The general rule: **any screen reachable by both a first-time and a
+  returning user must branch on the returning signal**, and any reassurance it
+  shows must be verifiable against what is actually stored rather than
+  inferred from a session having once existed. `AGENTS.md` § "How every agent
+  works" already asks for the process finding over the instance; this is one.
 
 ## 12. Backlog (pending verification / deferred work)
 

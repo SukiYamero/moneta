@@ -389,6 +389,18 @@ operator recommends against it, because seeded movements in a money app create
 a "is this mine or sample data?" ambiguity that is worse than waiting one
 stage. Revisit if stage 2 slips.
 
+### Small, unscheduled: the returning-user entry screen (§10.21)
+
+Cheap, self-contained, and worth doing before anyone else meets it: a person
+who has used the app for months and reopens it must never see the first-run
+screen. The signal is already read at exactly that point (`restore()`'s device
+login marker), and §10.20's registry already holds the account name to greet
+them with. Pairs with persisting guest mode, which §10.18 unblocked — decide
+the two together. See `specs.md` §11 (2026-08-19) for the rule this belongs
+to, which is bigger than the screen.
+
+---
+
 ## Wave 5 — hardening: assume nothing that arrives is trustworthy (2026-08-19)
 
 Raised by the user while scoping Wave 4. The decisions behind it are in
