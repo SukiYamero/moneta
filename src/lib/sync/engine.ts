@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { findFile, getLastKnownServerTime, type DriveFileListing } from '@/lib/drive'
-import { getDeviceId } from '@/lib/deviceStore'
+import { deviceDb, getDeviceId } from '@/lib/deviceStore'
 import { buildMovimientoCsvParts } from '@/lib/export/csv'
 import { CONFIG_ID, type ProfileDb } from '@/lib/db'
 import {
@@ -282,7 +282,6 @@ const resolveFile = async (
   listing: DriveFileListing,
   kind: string,
 ): Promise<MovOpFile | ActOpFile | ConfigOpFile | null> => {
-  const { deviceDb } = await import('@/lib/deviceStore')
   let cached: { modifiedTime: string; file: unknown } | undefined
   try {
     cached = await deviceDb.syncFileCache.get(listing.id)

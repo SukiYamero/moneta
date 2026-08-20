@@ -24,7 +24,7 @@ import {
   deleteFile,
   getLastKnownServerTime,
 } from '@/lib/drive'
-import { deviceDb } from '@/lib/deviceStore'
+import { __resetDeviceIdForTests, deviceDb } from '@/lib/deviceStore'
 import { db } from '@/lib/db'
 import {
   __clearRegistryForTests,
@@ -264,14 +264,12 @@ describe('compactYear', () => {
     // Pins getDeviceId() to a known value via the real device-id table
     // (rather than mocking the module) so compactYear's own "only this
     // device's own files" filter has something real to match against.
-    const { __resetDeviceIdForTests } = await import('@/lib/deviceStore')
     __resetDeviceIdForTests()
     await deviceDb.deviceId.put({ id: 1, value: device })
   })
 
   afterEach(async () => {
     await deviceDb.deviceId.clear()
-    const { __resetDeviceIdForTests } = await import('@/lib/deviceStore')
     __resetDeviceIdForTests()
   })
 
