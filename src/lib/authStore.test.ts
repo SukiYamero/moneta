@@ -16,7 +16,11 @@ vi.mock('@/lib/auth', () => {
 })
 vi.mock('@/lib/bootstrap', () => ({ bootstrap: vi.fn() }))
 vi.mock('@/lib/pinLock', () => ({ hasVault: vi.fn(), updateSession: vi.fn(), resetVault: vi.fn() }))
-vi.mock('@/lib/profiles', () => ({ resolveGoogleProfile: vi.fn() }))
+vi.mock('@/lib/profiles', () => ({
+  resolveGoogleProfile: vi.fn(),
+  touchLastUsed: vi.fn(),
+  DEFAULT_PROFILE_ID: 'kurobello',
+}))
 vi.mock('@/lib/deviceStore', () => ({
   hasLoggedInBefore: vi.fn(),
   markLoggedIn: vi.fn(),
@@ -41,7 +45,7 @@ vi.mock('@/lib/networkStore', () => ({
 import { AuthError, requestAccessToken, fetchGoogleUser } from '@/lib/auth'
 import { bootstrap } from '@/lib/bootstrap'
 import { hasVault, resetVault, updateSession } from '@/lib/pinLock'
-import { resolveGoogleProfile } from '@/lib/profiles'
+import { resolveGoogleProfile, touchLastUsed } from '@/lib/profiles'
 import {
   clearDriveDecision,
   getDriveDecision,
@@ -58,6 +62,7 @@ const mHasVault = vi.mocked(hasVault)
 const mUpdateSession = vi.mocked(updateSession)
 const mResetVault = vi.mocked(resetVault)
 const mResolveGoogleProfile = vi.mocked(resolveGoogleProfile)
+const mTouchLastUsed = vi.mocked(touchLastUsed)
 const mHasLoggedInBefore = vi.mocked(hasLoggedInBefore)
 const mMarkLoggedIn = vi.mocked(markLoggedIn)
 const mGetDriveDecision = vi.mocked(getDriveDecision)
@@ -231,6 +236,35 @@ describe('useAuthStore.login', () => {
     await useAuthStore.getState().login()
 
     expect(mResolveGoogleProfile).toHaveBeenCalledWith({ accountKey: 'a@b.com', label: 'Ana' })
+  })
+
+  // specs.md §10.28's highest-risk edge case, closed at the source: a boot
+  // sequence that reads the active-profile registry the instant `status`
+  // flips to 'authenticated' must never race `resolveGoogleProfile`'s own
+  // write to that same registry — otherwise a fresh sign-in can render
+  // against whatever profile was *previously* most-recently-used, not the
+  // one that just signed in. Pinned down here rather than only in
+  // integration: the profile resolves and lands in the registry *before*
+  // `status` commits, not concurrently with it.
+  it('resolves the account in the profile registry before status flips to authenticated', async () => {
+    mToken.mockResolvedValue({ accessToken: 'tok', expiresAt: 1 })
+    mUser.mockResolvedValue({ sub: 'google-sub-1', email: 'a@b.com', name: 'Ana' })
+    let resolveProfile!: () => void
+    mResolveGoogleProfile.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveProfile = () => resolve({ id: 'p1' } as never)
+        }),
+    )
+
+    const pending = useAuthStore.getState().login()
+    await vi.waitFor(() => expect(mResolveGoogleProfile).toHaveBeenCalled())
+    expect(useAuthStore.getState().status).toBe('authenticating')
+
+    resolveProfile()
+    await pending
+
+    expect(useAuthStore.getState().status).toBe('authenticated')
   })
 
   it('does not fail or block login when resolving the profile itself fails', async () => {
@@ -474,6 +508,30 @@ describe('useAuthStore.restore', () => {
     await useAuthStore.getState().restore()
 
     expect(mResolveGoogleProfile).toHaveBeenCalledWith({ accountKey: 'a@b.com', label: 'Ana' })
+  })
+
+  // Same race as login()'s own version of this test — restore()'s online
+  // branch takes the identical authenticate()-then-set() shape.
+  it('resolves the account in the profile registry before status flips to authenticated', async () => {
+    mHasLoggedInBefore.mockResolvedValue(true)
+    mToken.mockResolvedValue({ accessToken: 'tok', expiresAt: 1 })
+    mUser.mockResolvedValue({ sub: 'google-sub-1', email: 'a@b.com', name: 'Ana' })
+    let resolveProfile!: () => void
+    mResolveGoogleProfile.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveProfile = () => resolve({ id: 'p1' } as never)
+        }),
+    )
+
+    const pending = useAuthStore.getState().restore()
+    await vi.waitFor(() => expect(mResolveGoogleProfile).toHaveBeenCalled())
+    expect(useAuthStore.getState().status).toBe('authenticating')
+
+    resolveProfile()
+    await pending
+
+    expect(useAuthStore.getState().status).toBe('authenticated')
   })
 
   // Same cold-start persistence as login() above, exercised via the silent
@@ -1113,5 +1171,20 @@ describe('useAuthStore.continueAsGuest', () => {
     useAuthStore.getState().continueAsGuest()
 
     expect(useAuthStore.getState().driveOptIn).toBe('pending')
+  })
+
+  // CONFIRMED gap (specs.md §10.28): the registry resolves the active
+  // profile purely by recency (`profiles/profileRegistry.ts`'s
+  // `getActiveProfile()`) — with no account-aware signal of its own for
+  // guest. Without this, a device that signed out of a Google account and
+  // then chose "continue as guest" would still resolve to that account's
+  // profile (touched more recently than the default local one), and the
+  // boot sequence would read/write a guest's movements into the signed-out
+  // account's local database. Mirrors `syncProfileForAccount`'s own touch
+  // for the Google path, applied to the one profile guest ever uses.
+  it('touches the default local profile so recency-based resolution cannot land a guest in a stale Google profile', () => {
+    useAuthStore.getState().continueAsGuest()
+
+    expect(mTouchLastUsed).toHaveBeenCalledWith('kurobello')
   })
 })

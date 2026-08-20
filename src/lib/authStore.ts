@@ -9,7 +9,7 @@ import {
 } from '@/lib/auth'
 import { bootstrap, type DriveLayout } from '@/lib/bootstrap'
 import { hasVault, resetVault, updateSession } from '@/lib/pinLock'
-import { resolveGoogleProfile } from '@/lib/profiles'
+import { resolveGoogleProfile, touchLastUsed, DEFAULT_PROFILE_ID } from '@/lib/profiles'
 import {
   clearDriveDecision,
   getDriveDecision,
@@ -298,9 +298,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const { session, user } = await authenticate('consent')
       const driveOptIn = await resolveDriveOptIn(get().driveOptIn)
       if (generation !== authGeneration) return
+      // Resolved *before* the status flip below, not after (specs.md
+      // §10.28): the boot sequence reads the active-profile registry the
+      // instant `status` becomes 'authenticated', so a fresh sign-in must
+      // already be the most-recently-touched profile by that moment — never
+      // a race against whichever profile recency last pointed at.
+      await syncProfileForAccount(user)
+      if (generation !== authGeneration) return
       set({ status: 'authenticated', session, user, driveOptIn })
       await syncLockedSession(session, user)
-      await syncProfileForAccount(user)
       void reacquireDriveIfNeeded(driveOptIn, set, get)
       // Explicit, user-initiated success only — the signal restore() below
       // gates on (specs.md §11, 2026-08-19). markLoggedIn() self-catches, so
@@ -363,9 +369,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const { session, user } = await authenticate('')
       const driveOptIn = await resolveDriveOptIn(get().driveOptIn)
       if (generation !== authGeneration) return
+      // Same reordering as login() above, and for the identical reason
+      // (specs.md §10.28): resolved before the status flip, not after.
+      await syncProfileForAccount(user)
+      if (generation !== authGeneration) return
       set({ status: 'authenticated', session, user, driveOptIn })
       await syncLockedSession(session, user)
-      await syncProfileForAccount(user)
       void reacquireDriveIfNeeded(driveOptIn, set, get)
     } catch {
       // Deliberately silent, unlike syncLockedSession's console.warn
@@ -427,6 +436,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       driveConnecting: false,
       driveError: null,
     })
+    // specs.md §10.28: the profile registry resolves the active profile by
+    // recency alone (profiles/profileRegistry.ts's getActiveProfile()), with
+    // no notion of "guest" of its own. Without this touch, a device that
+    // signed out of a Google account and then chose to continue as guest
+    // would still resolve to that account's profile — it was touched more
+    // recently than the untouched default local one — and the boot sequence
+    // would read/write a guest's data into the signed-out account's local
+    // database. touchLastUsed() self-catches (profiles/profileRegistry.ts),
+    // so a storage failure here degrades to stale recency, never blocks
+    // entering guest mode.
+    void touchLastUsed(DEFAULT_PROFILE_ID)
   },
   // Fires on a mid-session re-lock/unlock too (Page Visibility timeout,
   // §10.2), not only on cold start — resolveDriveOptIn() only consults

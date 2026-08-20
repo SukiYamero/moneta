@@ -3,6 +3,7 @@ import { createBrowserRouter } from 'react-router'
 import { Home } from '@/routes/Home'
 import { AppShell } from '@/routes/AppShell'
 import { RequireAuth } from '@/features/auth/RequireAuth'
+import { BootGate } from '@/features/boot/BootGate'
 import { RouteErrorFallback } from '@/RouteErrorFallback'
 import { SearchScreen } from '@/features/search/SearchScreen'
 import { HistoryScreen } from '@/features/history/HistoryScreen'
@@ -37,7 +38,9 @@ export const router = createBrowserRouter([
     // crash in one screen doesn't take the persistent nav down with it.
     element: (
       <RequireAuth>
-        <AppShell />
+        <BootGate>
+          <AppShell />
+        </BootGate>
       </RequireAuth>
     ),
     errorElement: <RouteErrorFallback />,
@@ -58,9 +61,11 @@ export const router = createBrowserRouter([
     path: '/settings',
     element: (
       <RequireAuth>
-        <Suspense fallback={<ScreenLoading />}>
-          <SettingsLazy />
-        </Suspense>
+        <BootGate>
+          <Suspense fallback={<ScreenLoading />}>
+            <SettingsLazy />
+          </Suspense>
+        </BootGate>
       </RequireAuth>
     ),
     errorElement: <RouteErrorFallback />,

@@ -185,7 +185,9 @@ Shared stores, helpers, and the Drive/auth/lock logic layer. No UI here.
   site. `load()` is idempotent and race-safe (mirrors `authStore.restore()`'s
   synchronous check-then-set guard) and owns its own error handling end to
   end: a failure lands in `error` as a `RepoErrorCode`, never thrown past
-  `load()`. `createMovimiento`/`updateMovimiento`/`deleteMovimiento`/
+  `load()`. `reset()` puts the store back to its pre-load shape — `boot.ts`'s
+  only caller, before re-`load()`ing on a profile rebind, so a previous
+  profile's rows are never shown even transiently under the new binding. `createMovimiento`/`updateMovimiento`/`deleteMovimiento`/
   `updateConfig` (`specs.md` §10.13) are the write path Wave 4 builds on, all
   sharing one `runMutation()`: a single `networkStore.canWrite()` check (the
   only place the offline policy is enforced), an optimistic apply in
@@ -241,8 +243,24 @@ Shared stores, helpers, and the Drive/auth/lock logic layer. No UI here.
   fake `Repo` today. `// STUB(wave3)` marks the one line to change once a
   create UI exists (`specs.md` §12) — `repo.drive.ts` is ready, but flipping
   this before then would leave the app showing an empty screen with no way
-  to add anything. `getActiveProfileRepo()` builds the real per-profile-
-  scoped repo and is fully tested, but nothing calls it yet.
+  to add anything. `resolveActiveProfileBinding()` resolves the active
+  profile, opens its database and returns `{ profile, database, repo }`
+  together (`getActiveProfileRepo()` is a thin convenience wrapper around it
+  for a caller that only wants the repo); `bindActiveProfile()`/
+  `getActiveProfileBinding()` are the module-level binding `src/lib/boot.ts`
+  establishes once per boot (`specs.md` §10.28) — built and tested, but
+  `getRepo()` above doesn't read it yet. That read is the flip itself
+  (`specs.md` §10.25).
+- `boot.ts` — the boot sequence (`specs.md` §10.28): `useBootStore.run()`
+  resolves the active profile, binds it, resets and reloads `dataStore` on a
+  genuine rebind (switching accounts — never on a same-profile repeat call,
+  which is a idempotent no-op so navigating between top-level routes can't
+  re-trigger a reload), then lands in `'ready'` or `'error'`. Its
+  concurrency guard is a plain module variable, not the public `status`
+  field — `status` only flips to `'running'` when a reload is actually
+  about to happen, which is what lets `src/features/boot/BootGate.tsx` skip
+  the brand screen entirely on a same-profile remount. Consumed by
+  `BootGate`, own `README.md` there.
 - `profiles/` — the device-scoped profile registry (`specs.md` §10.15). One
   dexie database per profile (via `db.ts`'s `createProfileDb()`); the
   registry itself lives in `deviceStore.ts`'s shared `kurobello-device`

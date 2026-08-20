@@ -15,6 +15,8 @@ type DataState = {
   status: DataStatus
   error: RepoErrorCode | null
   load: () => Promise<void>
+  /** Back to the pre-load shape (specs.md §10.28): the boot sequence calls this before re-`load()`ing on a profile rebind, so a previous profile's rows are never shown — even transiently — under the newly-bound one. */
+  reset: () => void
   createMovimiento: (input: Omit<Movimiento, 'id' | 'createdAt'>) => Promise<boolean>
   updateMovimiento: (id: string, patch: Partial<Omit<Movimiento, 'id'>>) => Promise<boolean>
   deleteMovimiento: (id: string) => Promise<boolean>
@@ -146,6 +148,7 @@ export const useDataStore = create<DataState>((set, get) => ({
   config: null,
   status: 'idle',
   error: null,
+  reset: () => set({ movimientos: [], activos: [], config: null, status: 'idle', error: null }),
   // Idempotent and race-safe: the status check and the 'loading' set happen
   // synchronously, before any await, mirroring authStore.restore()'s guard
   // (src/lib/authStore.ts) — so two calls issued back-to-back in the same

@@ -122,6 +122,25 @@ describe('useDataStore', () => {
     expect(s.error).toBeNull()
   })
 
+  // boot.ts's only caller (specs.md §10.28): back to the pre-load shape
+  // before re-load()ing on a profile rebind, so a previous profile's rows
+  // can never linger — even transiently — under the newly-bound one.
+  it('reset() clears loaded data and status back to idle', async () => {
+    const repo = makeFakeRepo({ movimientos: [movimiento()], activos: [activo()] })
+    mGetRepo.mockReturnValue(repo)
+    await useDataStore.getState().load()
+    expect(useDataStore.getState().status).toBe('ready')
+
+    useDataStore.getState().reset()
+
+    const s = useDataStore.getState()
+    expect(s.status).toBe('idle')
+    expect(s.movimientos).toEqual([])
+    expect(s.activos).toEqual([])
+    expect(s.config).toBeNull()
+    expect(s.error).toBeNull()
+  })
+
   it('load() populates movimientos, activos and config from the repo', async () => {
     const m = movimiento()
     const a = activo()

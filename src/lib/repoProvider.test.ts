@@ -10,7 +10,14 @@ import {
   registerProfile,
   touchLastUsed,
 } from '@/lib/profiles'
-import { getActiveProfileRepo, getRepo } from '@/lib/repoProvider'
+import {
+  bindActiveProfile,
+  getActiveProfileBinding,
+  getActiveProfileRepo,
+  getRepo,
+  resolveActiveProfileBinding,
+  __resetRepoBindingForTests,
+} from '@/lib/repoProvider'
 import type { Movimiento } from '@/lib/schema'
 
 describe('getRepo()', () => {
@@ -85,5 +92,37 @@ describe('getActiveProfileRepo() — the real per-profile binding (not wired int
     await touchLastUsed(DEFAULT_PROFILE_ID)
     const guestRepoAgain = await getActiveProfileRepo()
     expect(await guestRepoAgain.movimientos.get(guestMovimiento.id)).toBeDefined()
+  })
+})
+
+// specs.md §10.28: the binding boot.ts establishes — separate from
+// getActiveProfileRepo() above, which resolves fresh every call and binds
+// nothing. getRepo() does not read this yet (that is the flip, specs.md
+// §10.25); these tests only cover the binding's own bookkeeping.
+describe('the active-profile binding (specs.md §10.28, not yet read by getRepo())', () => {
+  afterEach(async () => {
+    __resetRepoBindingForTests()
+    await db.movimientos.clear()
+    await db.config.clear()
+    __resetReadyMemoForTests()
+    await __clearRegistryForTests()
+  })
+
+  it('is null before the first bind', () => {
+    expect(getActiveProfileBinding()).toBeNull()
+  })
+
+  it('resolveActiveProfileBinding() resolves the profile, database and repo together', async () => {
+    const binding = await resolveActiveProfileBinding()
+    expect(binding.profile.id).toBe(DEFAULT_PROFILE_ID)
+    expect(binding.database).toBe(db)
+    const added = await binding.repo.movimientos.add(movimiento())
+    expect(await db.movimientos.get(added.id)).toBeDefined()
+  })
+
+  it('bindActiveProfile() makes the binding readable via getActiveProfileBinding()', async () => {
+    const binding = await resolveActiveProfileBinding()
+    bindActiveProfile(binding)
+    expect(getActiveProfileBinding()).toBe(binding)
   })
 })

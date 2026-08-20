@@ -1,6 +1,17 @@
 {
   "common": {
-    "loading": "Cargando…"
+    "loading": "Cargando…",
+    "error": {
+      "title": "No pudimos abrir la app",
+      "retry": "Reintentar",
+      "codes": {
+        "notFound": "No encontramos tus datos.",
+        "schemaMismatch": "Tus datos no son compatibles con esta versión de la app.",
+        "invalidInput": "Hubo un problema con tus datos.",
+        "network": "No hay conexión. Revisá tu internet e intentá de nuevo.",
+        "unknown": "Ocurrió un error inesperado. Intentá de nuevo."
+      }
+    }
   },
   "auth": {
     "welcome": {
