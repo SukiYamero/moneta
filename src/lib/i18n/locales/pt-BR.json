@@ -235,6 +235,7 @@
     },
     "profiles": {
       "heading": "Perfis",
+      "loading": "Carregando perfis…",
       "activeBadge": "Ativo",
       "kind": {
         "local": "Neste dispositivo",
