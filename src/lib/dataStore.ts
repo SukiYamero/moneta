@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Activo, Config, Movimiento } from '@/lib/schema'
+import type { Activo, Categoria, Config, Movimiento } from '@/lib/schema'
 import { RepoError, type RepoErrorCode } from '@/lib/repo'
 import { getRepo } from '@/lib/repoProvider'
 import { type MutationKind, useNetworkStore, type WriteRefusalReason } from '@/lib/networkStore'
@@ -19,6 +19,11 @@ type DataState = {
   updateMovimiento: (id: string, patch: Partial<Omit<Movimiento, 'id'>>) => Promise<void>
   deleteMovimiento: (id: string) => Promise<void>
   updateConfig: (patch: Partial<Config>) => Promise<void>
+  /** Create (new id) or edit (existing id) — one action, matching `CategoryFormModal`'s single component for both (specs.md §10.22). */
+  upsertCategoria: (categoria: Categoria) => Promise<void>
+  archiveCategoria: (id: string) => Promise<void>
+  /** Only a category with no referencing movimiento may be deleted (specs.md §10.22 Decision 5) — otherwise it must be archived instead. */
+  deleteCategoria: (id: string) => Promise<void>
 }
 
 // The refusal copy Track R wrote (specs.md §10.11) and left unconsumed —
@@ -96,6 +101,17 @@ const runMutation = async <TResult>(
     toast.error('errors:sync.notQueued')
   }
 }
+
+// Replaces the row with a matching id, or appends when there is none —
+// shared by upsertCategoria/archiveCategoria/deleteCategoria's optimistic
+// apply *and* their onSuccess so both read the freshest `categorias` array
+// available at the moment they run, never a value captured earlier (specs.md
+// §10.22's first edge case: two categories created in the same tick must not
+// let one write's stale array silently drop the other's).
+const upsertById = (categorias: Categoria[], next: Categoria): Categoria[] =>
+  categorias.some((c) => c.id === next.id)
+    ? categorias.map((c) => (c.id === next.id ? next : c))
+    : [...categorias, next]
 
 // Raw entities only — no derived totals/breakdowns cached here. Screens
 // compute those from movimientoStats at the call site; caching them on the
@@ -215,6 +231,124 @@ export const useDataStore = create<DataState>((set, get) => ({
       (result) => {
         set({ config: result })
         return { entity: 'config', op: 'put', payload: result }
+      },
+    )
+  },
+
+  upsertCategoria: async (categoria) => {
+    const previous = get().config
+    if (!previous) return
+    await runMutation(
+      'settings',
+      () =>
+        set((state) =>
+          state.config
+            ? {
+                config: {
+                  ...state.config,
+                  categorias: upsertById(state.config.categorias, categoria),
+                },
+              }
+            : state,
+        ),
+      () => set({ config: previous }),
+      // Read fresh, right when the write fires (after the optimistic apply
+      // above already ran) — never the `previous` snapshot captured before
+      // it, which is exactly the stale-array read-modify-write §10.22 warns
+      // against.
+      () => getRepo().updateConfig({ categorias: (get().config ?? previous).categorias }),
+      (result) => {
+        // A per-id merge, not `set({ config: result })`: `result` is *this*
+        // write's own return value, dispatched from whatever the store held
+        // at the moment this call's write() fired. If a second, concurrent
+        // categoria write settles out of order, blindly trusting `result`
+        // here would silently clobber it — the same reason
+        // `createMovimiento`'s onSuccess merges by id into the array instead
+        // of replacing it wholesale.
+        const base = get().config ?? result
+        const merged: Config = { ...base, categorias: upsertById(base.categorias, categoria) }
+        set({ config: merged })
+        return { entity: 'config', op: 'put', payload: merged }
+      },
+    )
+  },
+
+  archiveCategoria: async (id) => {
+    const previous = get().config
+    if (!previous) return
+    const target = previous.categorias.find((c) => c.id === id)
+    if (!target) {
+      toast.error(WRITE_ERROR_TOAST_KEY.not_found)
+      return
+    }
+    // The picker must never end up with nowhere to file a movement (specs.md
+    // §10.22 edge cases) — checked against the freshest config, not `target`
+    // alone, since another category could have been archived moments ago.
+    const stillActiveWithoutThis = previous.categorias.some(
+      (c) => c.id !== id && c.archivado !== true,
+    )
+    if (!stillActiveWithoutThis) {
+      toast.error('tags:errors.lastCategory')
+      return
+    }
+    const archive = (categorias: Categoria[]): Categoria[] =>
+      upsertById(categorias, { ...target, archivado: true })
+    await runMutation(
+      'settings',
+      () =>
+        set((state) =>
+          state.config
+            ? { config: { ...state.config, categorias: archive(state.config.categorias) } }
+            : state,
+        ),
+      () => set({ config: previous }),
+      () => getRepo().updateConfig({ categorias: archive((get().config ?? previous).categorias) }),
+      (result) => {
+        const base = get().config ?? result
+        const merged: Config = { ...base, categorias: archive(base.categorias) }
+        set({ config: merged })
+        return { entity: 'config', op: 'put', payload: merged }
+      },
+    )
+  },
+
+  deleteCategoria: async (id) => {
+    const previous = get().config
+    if (!previous) return
+    const target = previous.categorias.find((c) => c.id === id)
+    if (!target) {
+      toast.error(WRITE_ERROR_TOAST_KEY.not_found)
+      return
+    }
+    // A category referenced by any movimiento must be archived, never hard-
+    // deleted (specs.md §10.22 Decision 5) — deleting it would orphan every
+    // movement that names it, exactly the failure the id reference exists
+    // to prevent.
+    const inUse = get().movimientos.some((m) => m.categoria === id)
+    if (inUse) {
+      toast.error('tags:errors.categoryInUse')
+      return
+    }
+    const withoutTarget = (categorias: Categoria[]): Categoria[] =>
+      categorias.filter((c) => c.id !== id)
+    await runMutation(
+      'settings',
+      () =>
+        set((state) =>
+          state.config
+            ? { config: { ...state.config, categorias: withoutTarget(state.config.categorias) } }
+            : state,
+        ),
+      () => set({ config: previous }),
+      () =>
+        getRepo().updateConfig({
+          categorias: withoutTarget((get().config ?? previous).categorias),
+        }),
+      (result) => {
+        const base = get().config ?? result
+        const merged: Config = { ...base, categorias: withoutTarget(base.categorias) }
+        set({ config: merged })
+        return { entity: 'config', op: 'put', payload: merged }
       },
     )
   },

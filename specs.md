@@ -4270,7 +4270,68 @@ CategoryIconKey` (new `src/features/tags/categoryIcons.ts`, a curated
   - **`bun run check` is green** (956 tests, typecheck and lint clean)
     before any picker UI exists, per the plan's explicit ordering.
 
+- 2026-08-20 — **Track G1, stage 2: `dataStore.upsertCategoria`/
+  `archiveCategoria`/`deleteCategoria` implemented, TDD.** Built on the
+  existing `runMutation` convention (§10.13): `settings`-kind mutation
+  (refused offline, same as `updateConfig`), optimistic apply, rollback on
+  failure, a config `put` enqueued on success. `archiveCategoria` refuses
+  (toast, never the repo) when archiving would leave zero non-archived
+  categories; `deleteCategoria` refuses when any loaded `Movimiento`
+  references the id — both per Decision 5's semantics, Track G2's UI to
+  build on top of.
+  - **The same-tick race (§10.22's first edge case) is closed by a shared
+    `upsertById` helper**, not by discipline at each call site: every
+    optimistic apply reads `state.categorias` from the `set((state) => …)`
+    callback (never a value closed over earlier), and every `write()`
+    reads `get().config` fresh at the moment it's invoked — after the
+    optimistic apply already ran — rather than the `previous` snapshot
+    taken only for rollback. Proven by a test that fires two
+    `upsertCategoria` calls via `Promise.all` against a repo mock that
+    performs a real shallow merge (mirroring `repo.fake.ts`); both
+    categories survive.
+  - **Went one step further than the named edge case, and it's worth
+    flagging:** the existing `updateConfig` action's `onSuccess` does a
+    blind `set({ config: result })` — trusting whichever write's own
+    return value arrives, not merging it into whatever the store holds at
+    that moment. For `movimiento` actions this is safe (`onSuccess` merges
+    one row into the array by id, matching `movimientos`' existing
+    pattern), but for a single `Config` object it means two concurrent
+    `Config` writes whose underlying repo calls **settle out of dispatch
+    order** could have the earlier one's stale result clobber the later
+    one's already-applied change — unreachable today with the in-process
+    fake/local repos (write order and settle order coincide), genuinely
+    reachable once `repo.drive.ts` (Track Z) introduces real network
+    latency. The three new actions above avoid this by merging their own
+    category back into the freshest `get().config` inside `onSuccess`
+    instead of trusting the write's raw return value — but `updateConfig`
+    itself still has the blind-overwrite shape, and it is **not fixed
+    here**: `runMutation`/`updateConfig` are shared, pre-existing surface
+    outside this stage's file ownership, and touching them is a
+    cross-cutting call for the operator, not a G1 stage-2 decision. Filed
+    to §12.
+  - `bun run check` green (969 tests).
+
 ## 12. Backlog (pending verification / deferred work)
+
+- **`dataStore.updateConfig`'s `onSuccess` blindly trusts its own write's
+  return value (`set({ config: result })`) instead of merging into the
+  freshest store state.** Found by Track G1 while building
+  `upsertCategoria`/`archiveCategoria`/`deleteCategoria` (§11, 2026-08-20),
+  which avoid the shape for their own field (`categorias`, merged by id) but
+  don't fix the general-purpose `updateConfig` action itself. Two concurrent
+  `Config` writes whose underlying repo calls settle **out of dispatch
+  order** — impossible today with the in-process fake/local repos, where
+  settle order always matches dispatch order, but plausible the moment
+  `repo.drive.ts` (Track Z) adds real network latency — would have the
+  earlier dispatch's stale result silently overwrite the later one's
+  already-applied change in the store (though not in the repo itself, which
+  each call still writes to independently). Two shapes of fix, unevaluated
+  here: give `onSuccess` a per-field merge the way the new categoria actions
+  do, generalized across whichever fields the patch actually touched; or a
+  version/generation check that refuses to apply a stale write's result over
+  a newer one. Whoever picks this up should re-check it against
+  `repo.drive.ts`'s actual latency characteristics once that track lands,
+  not just in the abstract.
 
 - **The lock feature is not internationalised at all.** `LockScreen`,
   `LockSettings` and `src/features/lock/errorCopy.ts` still hold hardcoded
