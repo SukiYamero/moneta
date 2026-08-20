@@ -9,6 +9,7 @@ import {
   listProfiles,
   makeProfileDatabaseName,
   registerProfile,
+  resolveGoogleProfile,
   touchLastUsed,
 } from '@/lib/profiles/profileRegistry'
 
@@ -114,6 +115,54 @@ test('touchLastUsed is safe to fire-and-forget: a write failure is caught and lo
 
   spy.mockRestore()
   warn.mockRestore()
+})
+
+// specs.md §10.20: today two Google accounts on one device are
+// indistinguishable — `ProfileRecord` said only what kind a profile is
+// (`kind`), never whose it is. `resolveGoogleProfile` is what makes
+// `getActiveProfile()`'s existing recency resolution identity-aware,
+// without that function's own signature changing at all: whichever account
+// resolves here becomes, by construction, the most-recently-touched
+// profile.
+test('resolveGoogleProfile registers a new profile keyed by account on first sign-in', async () => {
+  const profile = await resolveGoogleProfile({ accountKey: 'ana@example.com', label: 'Ana' })
+
+  expect(profile.kind).toBe('google')
+  expect(profile.accountKey).toBe('ana@example.com')
+  expect(profile.label).toBe('Ana')
+  expect(await getProfile(profile.id)).toEqual(profile)
+})
+
+test('resolveGoogleProfile returns the same profile for the same account on a later sign-in, not a duplicate', async () => {
+  const first = await resolveGoogleProfile({ accountKey: 'ana@example.com', label: 'Ana' })
+  const second = await resolveGoogleProfile({ accountKey: 'ana@example.com', label: 'Ana' })
+
+  expect(second.id).toBe(first.id)
+  const all = await listProfiles()
+  expect(all.filter((p) => p.accountKey === 'ana@example.com')).toHaveLength(1)
+})
+
+test('resolveGoogleProfile gives two different accounts on the same device two different profiles', async () => {
+  const ana = await resolveGoogleProfile({ accountKey: 'ana@example.com', label: 'Ana' })
+  const beto = await resolveGoogleProfile({ accountKey: 'beto@example.com', label: 'Beto' })
+
+  expect(ana.id).not.toBe(beto.id)
+  expect(ana.databaseName).not.toBe(beto.databaseName)
+})
+
+// This is the actual fix for "signing back in does not return you to your
+// own profile": resolveGoogleProfile touches the matched profile's
+// lastUsedAt, so getActiveProfile()'s pure-recency resolution naturally
+// tracks whichever account most recently established a session.
+test('signing back into a previously-used account makes it the active profile again', async () => {
+  const ana = await resolveGoogleProfile({ accountKey: 'ana@example.com', label: 'Ana' })
+  await resolveGoogleProfile({ accountKey: 'beto@example.com', label: 'Beto' })
+  expect((await getActiveProfile()).accountKey).toBe('beto@example.com')
+
+  const anaAgain = await resolveGoogleProfile({ accountKey: 'ana@example.com', label: 'Ana' })
+
+  expect(anaAgain.id).toBe(ana.id)
+  expect((await getActiveProfile()).id).toBe(ana.id)
 })
 
 test('getActiveProfile still returns a usable default record when persisting it fails', async () => {

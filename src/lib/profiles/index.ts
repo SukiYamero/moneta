@@ -2,6 +2,7 @@ export type {
   ProfileKind,
   ProfileRecord,
   RegisterProfileInput,
+  ResolveGoogleProfileInput,
 } from '@/lib/profiles/profileRegistry'
 export {
   __clearRegistryForTests,
@@ -12,6 +13,7 @@ export {
   listProfiles,
   makeProfileDatabaseName,
   registerProfile,
+  resolveGoogleProfile,
   touchLastUsed,
 } from '@/lib/profiles/profileRegistry'
 export { __clearProfileDatabaseCacheForTests, getProfileDatabase } from '@/lib/profiles/profileDb'
