@@ -27,6 +27,13 @@ type DriveDecisionRow = { id: number; decision: DriveDecision }
 // lives in the modules that own the *meaning* of these rows, not the table
 // declaration.
 export type AnchorRow = { id: number; lastOnlineAt: number }
+// Kept in sync with `profiles/profileRegistry.ts`'s `ProfileRecord` field
+// for field (that module owns what each one *means*; this is just the
+// persisted shape) — `accountKey` was already additive here only by luck of
+// `put()`'s structural typing accepting a superset; an `update()` call with
+// an object *literal* (profileRegistry.ts's new watermark setters) doesn't
+// get that same leniency, so the row type has to actually declare every
+// field a literal update might set.
 export type ProfileRow = {
   id: string
   label: string
@@ -34,6 +41,10 @@ export type ProfileRow = {
   databaseName: string
   createdAt: string
   lastUsedAt: string
+  accountKey?: string
+  driveFolderId?: string
+  lastPushAt?: string
+  lastPullAt?: string
 }
 // Short and filename-safe on purpose (specs.md §10.19: `mov-<device>-<YYYY-MM>.json`).
 export type DeviceIdRow = { id: number; value: string }

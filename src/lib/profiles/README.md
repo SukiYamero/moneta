@@ -32,6 +32,17 @@ _someone_. One dexie database per profile, not a `profileId` column — see
   established a session is, by construction, the most-recently-touched
   profile, so signing back into a previously-used account resolves to it
   again instead of to whatever else was touched last.
+  `driveFolderId?: string` / `lastPushAt?: string` / `lastPullAt?: string`
+  (`specs.md` §10.19) are the sync watermark: "is this profile linked to
+  Drive" is `driveFolderId !== undefined` (set once `bootstrap.ts` resolves
+  the KuroBello folder — not `kind === 'google'`, since §5's incremental
+  authorization means signing in and granting Drive access are separate
+  consents), and "has it ever synced" / "is it up to date" derive from
+  `lastPullAt`/`lastPushAt` rather than a stored `isSynced` flag that could
+  drift from reality. Written only by `src/lib/sync/engine.ts`
+  (`setDriveFolderId`/`recordSuccessfulPush`/`recordSuccessfulPull`), not
+  self-catching — same posture as `resolveGoogleProfile`: a caller
+  recording a sync result needs to know if the write didn't land.
 - `profileDb.ts` — one Dexie connection per database name, cached across
   calls. The default name resolves to `db.ts`'s exact `db` singleton
   (not a second connection to the same IndexedDB database), so every

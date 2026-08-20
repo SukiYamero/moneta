@@ -8,8 +8,11 @@ import {
   getProfile,
   listProfiles,
   makeProfileDatabaseName,
+  recordSuccessfulPull,
+  recordSuccessfulPush,
   registerProfile,
   resolveGoogleProfile,
+  setDriveFolderId,
   touchLastUsed,
 } from '@/lib/profiles/profileRegistry'
 
@@ -195,4 +198,30 @@ test('getActiveProfile still returns a usable default record when persisting it 
 
   spy.mockRestore()
   warn.mockRestore()
+})
+
+// specs.md §10.19: the watermark that answers every sync question instead
+// of a stale isSynced boolean — written only by sync/engine.ts.
+test('setDriveFolderId / recordSuccessfulPush / recordSuccessfulPull each patch just their own field', async () => {
+  await getActiveProfile() // ensures the default profile row exists to update
+
+  await setDriveFolderId(DEFAULT_PROFILE_ID, 'FOLDER123')
+  expect((await getProfile(DEFAULT_PROFILE_ID))?.driveFolderId).toBe('FOLDER123')
+
+  await recordSuccessfulPush(DEFAULT_PROFILE_ID, '2026-08-19T12:00:00.000Z')
+  expect((await getProfile(DEFAULT_PROFILE_ID))?.lastPushAt).toBe('2026-08-19T12:00:00.000Z')
+
+  await recordSuccessfulPull(DEFAULT_PROFILE_ID, '2026-08-19T13:00:00.000Z')
+  const after = await getProfile(DEFAULT_PROFILE_ID)
+  expect(after?.lastPullAt).toBe('2026-08-19T13:00:00.000Z')
+  // Earlier writes are untouched by a later, different field.
+  expect(after?.driveFolderId).toBe('FOLDER123')
+  expect(after?.lastPushAt).toBe('2026-08-19T12:00:00.000Z')
+})
+
+test('a profile with no watermark yet has undefined driveFolderId/lastPushAt/lastPullAt', async () => {
+  const active = await getActiveProfile()
+  expect(active.driveFolderId).toBeUndefined()
+  expect(active.lastPushAt).toBeUndefined()
+  expect(active.lastPullAt).toBeUndefined()
 })
