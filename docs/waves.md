@@ -377,13 +377,16 @@ empty state to land with it.
 | **The `repoProvider` flip**      | §10.25 ✅ written | Operator step. Gated on F **and** on the guest-cliff decision — now `docs/pendientes-usuario.md` item 6. |
 | **G2 — "Personalizar" settings** | §10.24 ✅ written | `src/features/settings/**` + the lock i18n retrofit. All four §12 prerequisites decided in the spec.     |
 
-**Stage 3 — turn the real data on (planned 2026-08-20, user + operator):**
+**Stage 3 — ✅ COMPLETE (merged to `main`, 2026-08-20).** The app persists and
+syncs. Step 1 (boot + the flip), then AB and AC in parallel, each with its own
+code review applied, plus the operator's cross-track pass. `bun run check`:
+131 files, 1375 tests.
 
-The app can create, edit and delete a movement, and none of it survives a
-reload: `repoProvider.ts:11` still returns `fakeRepo`. The sync engine is
-built, tested and called by nobody. That is what this stage fixes, and it is
-sequenced **serial then parallel**, because the flip moves the ground the sync
-wiring stands on.
+Kept below as written, because the "before" it describes is what the stage
+was measured against: the app could create, edit and delete a movement and
+none of it survived a reload — `repoProvider.ts` returned `fakeRepo` — and the
+sync engine was built, tested and called by nobody. It was sequenced **serial
+then parallel**, because the flip moved the ground the sync wiring stands on.
 
 **Step 1 — the flip (operator, alone, its own commit).** §10.25 plus its
 2026-08-20 addendum: the async profile binding (`getRepo()` is synchronous and
@@ -394,15 +397,43 @@ share a commit with anything else.
 
 **Step 2 — two tracks in parallel, no shared files:**
 
-| Track                   | Spec              | Owns                                                                                                                             |
-| ----------------------- | ----------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| **AB — sync goes live** | §10.26 ✅ written | `src/lib/sync/**`, `authStore.ts` (start/stop hooks), `main.tsx`, the first-run download view, the Drive status row              |
-| **AC — review debt**    | §12 + §10.27      | `movimientoStats.ts` + its call sites (§10.27 currency), `OptionList`, `SettingsScreen`, `SecuritySection`, the week-start table |
+| Track                      | Spec         | Owns                                                                                                                             |
+| -------------------------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------- |
+| **AB — sync goes live** ✅ | §10.26       | `src/lib/sync/**`, `authStore.ts` (start/stop hooks), `main.tsx`, the first-run download view, the Drive status row              |
+| **AC — review debt** ✅    | §12 + §10.27 | `movimientoStats.ts` + its call sites (§10.27 currency), `OptionList`, `SettingsScreen`, `SecuritySection`, the week-start table |
 
 **AB ships a data-loss fix before it ships a feature.** The general cross-wave
 review reproduced a race in `push()` that permanently drops an operation from
 Drive (§10.26 §1, §12). It is unreachable today only because nothing calls the
 engine — wiring it is exactly what makes it reachable.
+
+### What stage 3 cost, and what the reviews actually caught
+
+Recorded because the numbers are the argument for the protocol, not a
+celebration. **Seven CONFIRMED defects were found after their track's author
+declared the work done and green**, every one reproduced with a failing test
+before being fixed:
+
+- **Two by the operator reading a diff** — a race fixed in two functions and
+  given the opposite answer in a third, in the same commit; and `push()`
+  coalescing while ignoring its own arguments.
+- **Four by per-track reviewers** — a guest binding a signed-out account's
+  profile (lost the race on _every_ run, not intermittently); a boot gate
+  trusting a module-global "ready"; an unkeyed `pull()` handing a fresh
+  profile another profile's stale pull and reporting success; and every PIN
+  lock silently killing sync for the rest of the session, which no backlog
+  had ever named.
+- **One by the cross-track pass** — the first-sync gate re-trapping a user who
+  had already dismissed it, because `/` and `/settings` are sibling routes and
+  the gate assumed it only remounted on a rebind.
+
+**The shape they share:** all but one live in the seam between two pieces of
+work, and every one was invisible to the author who wrote it — not through
+carelessness, but because each was correct read alone. The cross-track pass's
+own observation is the sharpest version: in both of its findings the defect
+sat under a confident, well-written doc comment whose claim the _calling_ file
+had quietly falsified. A reviewer checking "is this file internally
+consistent" passes it every time.
 
 **Stage 4 — after the app persists:**
 
