@@ -48,6 +48,11 @@ question that `AGENTS.md` says must not be resolved by assumption:
 - **Drive status row.** The canvas has it in the profile sheet; the code does
   not. `specs.md` §12 has carried it since Wave 2 — here the canvas is ahead
   and the code should catch up. Confirm and it becomes a build task.
+  **Now urgent, 2026-08-20:** §10.26 (Track AB) needs somewhere to render sync
+  state, and this row is the place the design already put it. The operator's
+  reading is that the canvas is authoritative here — the code simply never
+  caught up — and Track AB proceeds on that reading. Say so if it is wrong:
+  it is a row in the profile sheet, cheap to move, expensive to build twice.
 - **"Notificaciones" preference.** No notification system exists, and with no
   backend there can be no push (§6). Remove from the canvas, or keep it as
   aspirational knowing it needs an explicit §6 exception?
@@ -73,8 +78,17 @@ dedicated full-screen view with real progress and an honest failure state,
 because rendering a dashboard of zeros reads as data loss.
 
 It was left out of the 2026-08-19 split — the user took two screens, the
-operator pushed five — so it currently has no owner. Decide: user designs it, or
-the operator pushes a mock like the others.
+operator pushed five — so it currently had no owner.
+
+**Answered 2026-08-20 (user): the operator builds it now.** It had become a
+blocker on §10.26 (sync going live), which is a bad reason for a screen to stay
+unbuilt. Built from primitives that already exist — `ScreenLoading`, the shared
+error taxonomy, the design tokens — so a later canvas design **replaces** it
+rather than argues with it.
+
+**This item stays open** until the user has seen the built view and says it is
+good enough to keep, or replaces it. The ownership question is answered; the
+screen is not signed off.
 
 ### 6. The guest cliff — must be answered before launch, not before the flip — `owner: user`
 

@@ -2683,6 +2683,262 @@ costs, plus the empty state. **It must not land in the same commit as Track F**
 — if creating a movement breaks after the flip, the two changes must be
 separable to tell which one did it.
 
+#### Addendum, 2026-08-20 — two things the section above underestimates
+
+Written by the operator while scoping stage 3, after reading the code rather
+than the spec.
+
+**1. `getRepo()` is synchronous and the real binding is not.** §10.25 calls the
+flip "one line in `src/lib/repoProvider.ts`". It is not.
+`getRepo(): Repo` returns `fakeRepo` synchronously; `getActiveProfileRepo():
+Promise<Repo>` resolves the active profile from the device registry, touches
+`lastUsed`, and opens that profile's database. Nine call sites read the
+synchronous form (`dataStore.ts` ×8, `export/index.ts` ×2), each inside an
+already-async mutation or read — so the flip is a **binding decision**, not a
+substitution:
+
+- **Resolve once at boot and hand out the resolved repo.** The active profile
+  is resolved before the app renders; `getRepo()` keeps its synchronous
+  signature and throws (or returns a not-ready sentinel) if called before the
+  binding exists. Cheapest at the call sites, and it makes "which profile am I
+  writing to" a boot-time fact rather than a per-call race. **This is the
+  recommended shape**: it matches how `dataStore.load()` already gates the
+  screens, and a profile that changes mid-session is a Wave 5 switcher concern
+  that does not exist yet.
+- **Make `getRepo()` async and await it at every call site.** Honest about the
+  lifecycle, but it turns nine call sites into nine `await`s that can each
+  resolve a _different_ profile if the active one changed between them — a
+  worse property than the one it fixes.
+
+Whichever is chosen, the flip must also **redirect the outbox** (§12,
+2026-08-19): `outbox.ts` targets the default `kurobello` database, matching
+`getRepo()`'s own single-profile posture. The day `dataStore.ts` writes through
+the profile-scoped repo, an outbox still pointing at the default database means
+a guest's pending operations queue up in the signed-in account's outbox. That
+is a data-crossing bug, not a tidiness issue, and it lands with the flip or
+the flip is wrong.
+
+**2. §10.22 Decision 6 becomes reachable the day this ships.** The seed
+taxonomy localization gap (§12, 2026-08-20) is filed as "unreachable today —
+`getRepo()` still returns the fake repo, so no real first run hits this path."
+The flip is exactly what makes it reachable. `buildSeedConfig()` still passes
+`CONFIG_SEMILLA`'s Spanish names (`Sueldo`, `Servicios`, `Personal`, `Trabajo`,
+`Emprendimiento`) through untouched, so the first real first-run on a `pt-BR`
+device seeds a Portuguese speaker a Spanish taxonomy — the precise failure
+Decision 6 was written to prevent.
+
+**Decided with the flip, not deferred past it:** seeding keys off **the active
+i18next language**, not the device region. Region already owns
+`monedaPrincipal` (`monedaForRegion`) because money is a property of where you
+are; the names of your categories are a property of what language you read.
+The two axes are already independent by §10.7's own decision, and copying
+`monedaForRegion`'s wiring by default would silently re-couple them.
+
+### 10.26 Sync goes live — wiring the engine into the running app (Track AB)
+
+Wave 4 stage 3. Written 2026-08-20, after the general cross-wave review.
+
+The Drive sync engine is built, tested, and called by nobody: `rg` finds
+`startSyncTriggers` at exactly one site outside its own tests — its definition.
+`pull()`, `push()`, `bootstrap()` and `repo.drive.ts` all pass their suites and
+none of them runs in the app. §12 has recorded this as deliberate since Track Z
+merged, matching `repoProvider.ts`'s own stub posture. §10.25 removes the
+reason to wait.
+
+- **Goal:** a signed-in user's movements reach their own Drive and come back on
+  another device, without the user thinking about it.
+- **User story:** "I add an expense on my phone. I open the app on my laptop
+  and it is there. I add one with no signal and it arrives when the signal
+  does."
+- **Done when:** a movement created on device A appears on device B after a
+  pull; the outbox drains only on a confirmed upload; and a person who has
+  never synced sees real progress rather than a dashboard of zeros.
+
+#### 1. The reentrancy guard — build this first, it is a data-loss fix
+
+Found and **reproduced** by the general review, 2026-08-20, against the real
+`push()`/`pushMovShard` code.
+
+`pushMovShard`/`pushConfig` (`sync/engine.ts:348-409`) are a read-modify-write:
+`findFile` → `download` the existing ops → append this call's pending entries →
+`upsertJsonFile`, which is a blind find-or-create-then-overwrite with no ETag
+or revision check. `push()` has no reentrancy guard; `useSyncStore`'s `phase`
+is written for display and never read before starting a push.
+`startSyncTriggers` has three independent triggers — `onOnline`, `onVisible`
+(which itself calls the online path), and the debounced post-write push — so
+two overlapping pushes are an ordinary mobile sequence, not a contrived one:
+unlock the phone as signal returns.
+
+The failure: push A reads an empty shard. Push B, started later, uploads
+`[op1, op2]` and drains **both** from the local outbox on success. A's upload,
+built from the stale `baseOps` it read before `op2` existed, then lands and
+overwrites the file with `[op1]`. `op2` is now absent from Drive **and** from
+the outbox that would have retried it. No error is raised anywhere.
+
+This also quietly breaks §10.19's own foundational claim — "exactly one device
+ever writes any given file, so there is no race to resolve." True only if a
+device serializes its own writes to that file. Nothing did.
+
+**Fix:** serialize `push()` against itself, the way `dataStore.load()` and
+`repo.local.ts`'s `readyPromises` already do it in this codebase — either
+refuse a second concurrent call or coalesce it into the in-flight promise.
+Every trigger path already treats "nothing to do" as a safe no-op, so refusing
+is sufficient. **Ship the failing test first** (`AGENTS.md`: TDD is mandatory
+for money math and for anything that can lose data): the review's scratch
+reproduction is the shape to port into `engine.test.ts`.
+
+**Sweep the shape, do not fix the instance.** `AGENTS.md`'s most expensive
+lesson is that this defect always has a twin. Before closing this, check
+`pull()`, `bootstrap()`'s `ensureSeedConfigQueued` (a known narrow
+check-then-enqueue, judged self-healing at replay — confirm that judgment
+holds once triggers actually fire concurrently), and every other
+find-then-write pair in `sync/` and `drive.ts`. Report what the sweep found,
+including "nothing else" if that is the honest answer.
+
+#### 2. The context getter, and who starts and stops the triggers
+
+`startSyncTriggers` needs the live access token scoped to Drive and the active
+profile. Neither may be captured once and closed over: the token is refreshed
+(§10.11's session paths), and the profile changes on sign-in/sign-out.
+
+- Pass a **getter**, not a value. A stale token produces a 401 the engine reads
+  as a failure rather than as "reacquire"; a stale profile writes one account's
+  operations into another's files.
+- **Start** when there is a Drive-scoped session and an active profile — not on
+  module import, and not in `main.tsx` unconditionally. A guest has no Drive
+  and must never start triggers.
+- **Stop** on sign-out, on losing Drive scope, and on lock. `startSyncTriggers`
+  already returns a stop handle; today only its tests call it. Something in
+  production must own that handle, or the "no leaks" property the review
+  verified stops being true the moment this ships.
+
+#### 3. `pull()` on a genuinely fresh session, and the first-run download view
+
+§10.19 requires a pull before the dashboard renders on a fresh session, and
+`docs/pendientes-usuario.md` item 5 left the view itself unowned since
+2026-08-19.
+
+**Decided 2026-08-20 (user): the operator builds it now**, from the primitives
+that already exist (`ScreenLoading`, the shared error copy, the token set), so
+stage 3 is not blocked on canvas work. It is replaceable: if a canvas design
+lands later, it replaces this view rather than arguing with it.
+
+What it must do, from §10.19 and §10.9:
+
+- **Real progress, not a spinner that could mean anything.** The engine knows
+  how many files it is fetching; say so.
+- **An honest failure state with a retry** — the same taxonomy as
+  `HomeErrorState`, never a silent fall-through to an empty dashboard. A
+  dashboard of zeros after a failed pull is indistinguishable from data loss,
+  which is the whole reason §10.25 refused to ship the flip bare.
+- **Only on a genuinely fresh session.** A returning user with local data pulls
+  in the background; they must not meet a full-screen loader on every cold
+  start. §10.9's rule against full-screen loaders is not suspended here — this
+  view is the one case it allows, because there is genuinely nothing to show
+  yet.
+
+#### 4. Where sync becomes visible, and the revived-movement notice
+
+- **The Drive status row.** The canvas has it in the profile sheet, the code
+  does not, and §12 has carried it since Wave 2
+  (`docs/pendientes-usuario.md` item 3 asks the user to confirm the canvas is
+  authoritative here; the operator's reading is that it is — the code simply
+  never caught up). It reads from `sync/status.ts`, which already exists and
+  has no consumer. Last sync, pending count, and the offline/failed states.
+- **The revived movement.** `PullSummary.revivedMovIds` is returned by the
+  engine and consumed by nobody. §10.19 says "the app briefly says why" — a
+  movement you deleted on one device came back because another device edited
+  it after the delete. The Toast (§10.6) is the surface; this is one line of
+  copy, not a screen, and shipping the merge rule without it means the user
+  watches a deleted movement reappear with no explanation.
+- **Skipped entries.** §12, 2026-08-20: a malformed entry inside an otherwise
+  good file is dropped with zero trace. `validate.ts`'s header comment already
+  says the I/O caller is the one positioned to log it. Wire the count through
+  `PullSummary` rather than a bare `console.warn`, so the Wave 5 "N entries
+  were skipped" notice has something real to read.
+
+#### Edge cases
+
+- **Guest.** No Drive, no triggers, no pull, no status row promising sync.
+- **Offline first run.** A fresh session with no network cannot pull; the
+  download view must say that in §10.11's offline language, not fail generically.
+- **Locked mid-sync.** The lock arrives while a push is in flight. The push
+  either completes or is stopped cleanly — it must not drain the outbox after
+  the session it belonged to is gone.
+- **Token expires mid-pull.** Reacquire and continue, per §10.11 — not a
+  failure state the user has to act on.
+
+#### Blast radius
+
+`src/lib/sync/**`, `src/lib/authStore.ts` (start/stop hookpoints only),
+`src/main.tsx`, one new first-run view under `src/features/`, the Drive status
+row in the profile sheet, and the `sync` i18n namespace. **Not** `dataStore.ts`
+and **not** `repoProvider.ts` — those belong to the flip, which lands first and
+in its own commit.
+
+### 10.27 One currency at a time, honestly (aggregation and the currency switch)
+
+Wave 4 stage 3. Written 2026-08-20, from a finding in the general cross-wave
+review.
+
+`movimientoStats`' aggregates — `totals()`, `breakdownBy()`, `series()` — sum
+every `Movimiento.monto` handed to them and never look at `moneda`. That was
+harmless while `monedaPrincipal` was decided once by device region: every
+movement carried the same currency. It stopped being harmless in stage 2.
+Track F captures `moneda` at creation from `Config.preferencias.monedaPrincipal`;
+Track G2 then made `monedaPrincipal` user-editable — the control §10.7 had
+explicitly deferred, shipped without §10.24 saying what happens to the
+movements already recorded.
+
+The failure, live today through the fake repo: a user in `COP` records a month
+of expenses, switches to `USD` in Personalizar, records one more. Home's
+totals, the weekly chart and History's breakdown now add COP and USD as if
+they were one unit and label the result with whatever currency is selected. A
+materially wrong number, with nothing to distinguish it from a right one.
+
+- **Goal:** a total is never the sum of two different currencies.
+- **Done when:** aggregates group by `moneda` and never mix; the screens show
+  the `monedaPrincipal` total; and movements in another currency are said out
+  loud rather than folded in.
+
+**Decided 2026-08-20 (user): aggregate by currency, display the principal
+one.** Not "warn on switch" (the user is warned once and forgets, and the
+totals stay wrong), and not "freeze the currency" (it discards the
+multi-currency the model has supported since §4 was written, to fix an
+aggregation bug).
+
+Concretely:
+
+- `movimientoStats`' aggregate functions take the currency they are aggregating
+  **as a required argument**, or return results keyed by currency. A default
+  parameter is the wrong shape here: it recreates exactly the silent-mixing
+  behaviour at any call site that forgets, and `AGENTS.md`'s review protocol
+  already names "a defaulted parameter nobody passed" as a finding worth
+  filing.
+- Home and History display the `monedaPrincipal` total.
+- When movements exist in a currency other than the principal one, the screen
+  **says so** — a short line, not a modal, and not a second total competing for
+  attention. What it must never do is silently exclude them, which is the same
+  dishonesty as silently including them.
+- Nothing about `Movimiento.moneda` changes. The field, its values and its
+  region-derived default are untouched; this is an aggregation fix, not a
+  schema change.
+
+#### Edge cases
+
+- **Every movement in one currency** — the overwhelmingly common case. Nothing
+  extra renders; the note appears only when a second currency actually exists.
+- **The principal currency has no movements**, because the user just switched.
+  The total is zero and is correct; the note carries the explanation.
+- **CSV export** already writes each movement's own `moneda` per row (§10.12)
+  and is unaffected — verify, do not assume.
+
+#### Blast radius
+
+`src/lib/movimientoStats.ts` and its call sites (`useHomeDashboard.ts`,
+`HistoryScreen.tsx`, `homeView.ts`), plus one i18n key. No schema change, no
+migration.
+
 ### Wave 3 — staging and dependencies
 
 Not everything runs in parallel. A track in a later stage is **blocked** until
@@ -5467,6 +5723,51 @@ i18n.resolvedLanguage ?? i18n.language)`) beside the canonical, tested
     checked against `specs.md` §12/`docs/waves.md`/
     `docs/pendientes-usuario.md`, never actually was.
 
+- 2026-08-20 — **Wave 4 stage 3 is "turn the real data on", and `Activo` is
+  not in it** (user + operator). Asked what "balances" meant in the user's own
+  priority list, the answer was the Home saldo — `BalanceCard`, the weekly
+  chart, the breakdowns — all of which already exist and are derived from
+  `Movimiento[]` per §4. `Activo` (the assets/patrimonio half of §4) has
+  **zero UI**: no `.tsx` in the tree mentions the type, there is no write
+  path, and `outbox.ts`'s union does not carry it. It is real missing scope,
+  it gets its own §10 spec, and it is scheduled after the app persists — not
+  cut. Stage 3 is instead: the flip (§10.25), sync in production (§10.26),
+  currency-correct aggregation (§10.27), and the review debt below.
+- 2026-08-20 — **The general cross-wave review found a reproduced data-loss
+  race in `push()`, in a module every per-track reviewer had already
+  passed.** Recorded as a process finding, not just a bug (`AGENTS.md`: name
+  systematic blind spots). Track Z's own reviewer read `sync/engine.ts` and
+  found it sound; it _is_ sound read as one call. The defect only exists
+  between two concurrent calls, and concurrency is a property of the wiring —
+  which did not exist yet, and therefore was in no track's scope. **The
+  lesson generalizes past this bug: a module built behind a stub gets
+  reviewed under single-caller assumptions, and the review that would catch
+  the race is owed at wiring time, not at build time.** §10.26 makes that
+  sweep an explicit part of the wiring track rather than trusting it to
+  happen.
+- 2026-08-20 — **Currency: aggregate by `moneda`, display the principal one**
+  (user, from §10.27's three options). Rejected "warn on switch" — the user is
+  warned once, forgets, and the totals stay wrong — and rejected freezing
+  `monedaPrincipal` once movements exist, which would discard the
+  multi-currency §4 has supported from the start in order to fix an
+  aggregation bug. The honest shape is that a total is never the sum of two
+  currencies, and a second currency is said out loud rather than silently
+  folded in or silently excluded.
+- 2026-08-20 — **The first-run download view is the operator's to build, and
+  it is replaceable** (user, closing `docs/pendientes-usuario.md` item 5's
+  ownership question — the item stays open until the user confirms the built
+  view). It was unowned since 2026-08-19 and had become a blocker on §10.26,
+  which is a bad reason for a screen to stay unbuilt. Built from primitives
+  that already exist (`ScreenLoading`, the shared error taxonomy, the design
+  tokens), so a later canvas design replaces it rather than argues with it.
+- 2026-08-20 — **The seed taxonomy localizes off the active i18next language,
+  not the device region** (operator, deciding the question §10.22 Decision 6
+  left open). Region already owns `monedaPrincipal` because money is a
+  property of where you are; the names of your categories are a property of
+  what language you read. §10.7 already made the two axes independent, and
+  copying `monedaForRegion`'s wiring by default would silently re-couple them.
+  Lands with the flip, because the flip is what makes the gap reachable.
+
 ## 12. Backlog (pending verification / deferred work)
 
 - **The Add sheet's "gear into `/settings`" entry point was never actually
@@ -5519,6 +5820,8 @@ undefined })` → a fresh `repo.ready()` read, and `idioma` came back
   sheet), or the field is removed at the next structural `schema.ts` change;
   until one of those happens, this is a schema field with no owner, which is
   exactly the shape of thing that quietly stays broken.
+
+- **✅ CLOSED 2026-08-20 (fixed in `ab78db8`, the stage-2 groundwork commit; the entry was never marked, and the general cross-wave review found it stale — that same commit edited `specs.md` and still missed it).** `updateConfig`'s `onSuccess` now merges only the patched keys into the freshest state (`dataStore.ts:254-267`), matching the pattern the three categoria actions already had. Original entry kept for the record:
 
 - **`dataStore.updateConfig`'s `onSuccess` blindly trusts its own write's
   return value (`set({ config: result })`) instead of merging into the
@@ -6002,6 +6305,8 @@ engine.ts`'s pull/replay side fully supports `act-<device>.json` (reads,
   (Wave 5, per `docs/wave-4-plan.md`'s scoping) actually tell the user "N
   entries were skipped," which the honest half of §10.19 also asks for.
 
+- **✅ CLOSED 2026-08-20 (verified by the general cross-wave review — the entry below was already stale when written).** `sync/validate.ts:21` imports `ICON_AVATAR_TINTS` from `@/lib/iconAvatarTint` directly and `tintClasses.ts:84` merely re-exports it, so no `src/lib/` module reaches into `src/components/` for this value any more. Original entry kept for the record:
+
 - **`iconAvatarTint.ts` has no runtime companion array**, unlike its sibling
   `categoryIconKeys.ts` (`CATEGORY_ICON_KEYS`). Found by the Track Z review
   (§11, 2026-08-20) while validating `Categoria.color` against it: only the
@@ -6030,6 +6335,66 @@ engine.ts`'s pull/replay side fully supports `act-<device>.json` (reads,
   now; revisit if the flash proves noticeable in real use, in which case the
   honest fix is persisting the chosen locale somewhere synchronously readable
   at boot rather than gating the render.
+
+- **`push()` has no reentrancy guard, and two concurrent pushes drop an
+  operation from Drive permanently.** CONFIRMED and **reproduced** by the
+  general cross-wave review, 2026-08-20, against the real
+  `push()`/`pushMovShard` code. Full analysis in §10.26 §1, which owns the
+  fix; filed here so it is visible from the backlog and not only from a spec.
+  Not the same item as "a local write and its outbox entry are not atomic"
+  (2026-08-19) — that one is the Dexie-write/outbox-enqueue pair; this one is
+  `push()` racing itself. **Blocks §10.26 shipping**: the wiring is precisely
+  what makes the race reachable.
+- **`OptionList` announces `role="radiogroup"` without implementing the
+  behaviour the role promises.** CONFIRMED by the general cross-wave review,
+  2026-08-20. `src/features/settings/OptionList.tsx` renders
+  `role="radiogroup"`/`role="radio"`/`aria-checked` — the same ARIA contract
+  as `src/components/shared/SegmentedControl.tsx` — but implements neither
+  roving `tabIndex` nor arrow-key handling, both of which `SegmentedControl`
+  does implement (`SegmentedControl.tsx:64-74,94`). A `<button role="radio">`
+  gets none of that for free the way a native `<input type="radio">` does. A
+  keyboard or screen-reader user on `/settings` tabs through all five language
+  options instead of one stop per group, and arrow keys do nothing. Two
+  components, one wave, the same pattern, one finished. The shared logic is
+  the natural fix.
+- **`SettingsScreen` skips a heading level (h1 → h3).** CONFIRMED, same
+  review. `SettingsScreen.tsx:49` renders the only `<h1>`; its children
+  `CategoriesSection.tsx:98` and `PreferencesEditor.tsx:56` both use
+  `ProfileSectionHeading`, which is a hardcoded `<h3>` built for
+  `ProfileSheet.tsx` — where it is correct, because that sheet supplies the
+  `<h2>` above it (`ProfileSheet.tsx:29`). Reused one level too deep. Either
+  `SettingsScreen` supplies an `h2` or the component takes a `level` prop.
+- **`toIsoDate`/`'yyyy-MM-dd'` is reimplemented in four files and inlined in
+  three more.** CONFIRMED, same review. `movimientoStats.ts:44-52` already
+  computes it and does not export it, which is _why_
+  `historyPeriodOptions.ts:26-27`, `useHistoryPeriod.ts:5-6` and
+  `dateRangePresets.ts:11-12` each redeclared their own copy, and why
+  `homeView.ts:67`, `useHomeDashboard.ts:66` and `useSearchFilters.ts:10`
+  inline the format string. Three of those four files already import other
+  helpers from `movimientoStats.ts`. Exporting it is the whole fix.
+- **`primerDiaSemana` ↔ day-name is two hand-maintained inverse lookup
+  tables.** CONFIRMED, same review. `PreferencesSection.tsx:9`
+  (`WEEK_START_KEY`, read) and `PreferencesEditor.tsx:14` (`WEEK_START_VALUE`,
+  write) encode the same mapping in opposite directions, in two features,
+  neither importing the other. One ordered tuple in `src/lib/` replaces both,
+  per `AGENTS.md`'s "move the value down into `src/lib/`" rule. Low cost
+  today; filed because it is the same shape as the entry above, smaller.
+- **`SecuritySection.tsx:9-12` asserts something false about a sibling file.**
+  CONFIRMED, same review. Its comment says `LockSettings` is "untouched,
+  including its still-hardcoded Spanish copy (specs.md §12)" — Track G2 did
+  the lock i18n retrofit in that same wave and `LockSettings.tsx` now calls
+  `t('settings.activeNote')` and friends. `SecuritySection.tsx` itself was
+  never touched by G2, so the comment was left describing a state that no
+  longer exists. Exactly the comment-drift-between-tracks shape the review
+  protocol's item 6 exists to catch.
+- **`sync/validate.ts`'s header comment claims it "stays permissive on
+  business rules" and the code is stricter than that.** Noted by the general
+  cross-wave review, 2026-08-20: `isValidMovimiento` does enforce `monto > 0`,
+  which is correct and load-bearing — a hand-edited `monto: -50` is dropped
+  before `materializeMovimientos`' `bulkPut`. The code is right; the comment
+  under-describes it, which is the dangerous direction for a validation file
+  (a future reader may add the check the comment implies is missing, or route
+  around the file believing it does less than it does).
 
 ### Development waves (parallel tracks, sequencing, worktree log)
 

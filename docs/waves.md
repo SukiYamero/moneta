@@ -377,17 +377,45 @@ empty state to land with it.
 | **The `repoProvider` flip**      | §10.25 ✅ written | Operator step. Gated on F **and** on the guest-cliff decision — now `docs/pendientes-usuario.md` item 6. |
 | **G2 — "Personalizar" settings** | §10.24 ✅ written | `src/features/settings/**` + the lock i18n retrofit. All four §12 prerequisites decided in the spec.     |
 
-**Stage 3 — after the app is usable:**
+**Stage 3 — turn the real data on (planned 2026-08-20, user + operator):**
 
-| Track                    | Notes                                                                                                                                                             |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Voice**                | An addition to F's sheet, so it cannot precede it. Architecture already resolved (§11, 2026-08-18): Web Speech API + a client-side parser, on-device, no backend. |
-| **H — groups / "Áreas"** | Last, per the user. Needs its schema addendum (`Grupo` type, or `extra` on `Categoria`) written **before** implementing — do not invent the shape inline.         |
+The app can create, edit and delete a movement, and none of it survives a
+reload: `repoProvider.ts:11` still returns `fakeRepo`. The sync engine is
+built, tested and called by nobody. That is what this stage fixes, and it is
+sequenced **serial then parallel**, because the flip moves the ground the sync
+wiring stands on.
+
+**Step 1 — the flip (operator, alone, its own commit).** §10.25 plus its
+2026-08-20 addendum: the async profile binding (`getRepo()` is synchronous and
+the real binding is not — nine call sites), redirecting the outbox to the
+active profile's database, the honest empty state, and the seed taxonomy
+localization that becomes reachable that same day. §10.25 requires this not
+share a commit with anything else.
+
+**Step 2 — two tracks in parallel, no shared files:**
+
+| Track                   | Spec              | Owns                                                                                                                             |
+| ----------------------- | ----------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| **AB — sync goes live** | §10.26 ✅ written | `src/lib/sync/**`, `authStore.ts` (start/stop hooks), `main.tsx`, the first-run download view, the Drive status row              |
+| **AC — review debt**    | §12 + §10.27      | `movimientoStats.ts` + its call sites (§10.27 currency), `OptionList`, `SettingsScreen`, `SecuritySection`, the week-start table |
+
+**AB ships a data-loss fix before it ships a feature.** The general cross-wave
+review reproduced a race in `push()` that permanently drops an operation from
+Drive (§10.26 §1, §12). It is unreachable today only because nothing calls the
+engine — wiring it is exactly what makes it reachable.
+
+**Stage 4 — after the app persists:**
+
+| Track                     | Notes                                                                                                                                                                                                |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`Activo` / patrimonio** | The assets half of §4, with **zero** UI today — no screen, no write path, no `outbox.ts` union member. Confirmed real missing scope on 2026-08-20, deferred rather than cut. Needs its own §10 spec. |
+| **Voice**                 | An addition to F's sheet, so it cannot precede it. Architecture already resolved (§11, 2026-08-18): Web Speech API + a client-side parser, on-device, no backend.                                    |
+| **H — groups / "Áreas"**  | Last, per the user. Needs its schema addendum (`Grupo` type, or `extra` on `Categoria`) written **before** implementing — do not invent the shape inline.                                            |
 
 ### Before any of this is dispatched
 
-**Stage 1 and stage 2 are specified (§10.19, §10.22, §10.23, §10.24, §10.25);
-only Track H does not have one.** `AGENTS.md`'s
+**Stages 1, 2 and 3 are specified (§10.19, §10.22–§10.27); Track H and the
+`Activo` track do not have one.** `AGENTS.md`'s
 first rule is that an unspecified feature gets its §10 spec written before it
 is built, so Track H still needs one before stage 3. G2's spec in particular has to **decide** four things §12 already
 files against it, not discover them mid-build: the week-start bug that becomes
