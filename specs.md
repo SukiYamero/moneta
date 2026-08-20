@@ -3578,6 +3578,48 @@ lint` clean bar the one pre-existing `components/ui` warning). `AGENTS.md`
   read-only _values_, and a disabled control is the right way to say "this
   action exists and is not available yet".
 
+- 2026-08-19 — **Untrusted-input hardening: validate the shape, not the
+  characters.** User asked for regex controls against injected content in what
+  comes back from Drive. Audited before answering, and the conclusion is a
+  split:
+  - **A character blocklist on free text is the wrong tool and would hurt.**
+    `nota`, `categoria` and `seccion` are Spanish and Portuguese — accents, ñ
+    and emoji are _legitimate user data_. A blocklist rejects their own valid
+    input and requires enumerating everything bad; a schema validator
+    enumerates the finite good.
+  - **Allowlist patterns on structured fields are right, and are already this
+    codebase's convention:** `fecha` ISO, `moneda` one of six, `tipo` one of
+    two, `id` a UUID. `repo.local.ts`'s `ISO_DATE_RE`/`validateMovimiento`
+    already do exactly this, so the Drive reader extends an existing pattern
+    rather than inventing one.
+  - **XSS through rendering is structurally closed and must stay that way.**
+    Zero `dangerouslySetInnerHTML`, `innerHTML`, `eval` or `new Function`
+    anywhere in `src` (verified by grep). React escapes by default and there is
+    no escape hatch. This is a property to _keep_ — a lint rule, not data
+    validation.
+  - **The genuinely open hazards, in value order:** number type and range
+    (`monto` must be finite and positive — `1e999` parses to `Infinity`, and a
+    `"5"` string poisons every sum silently); **prototype pollution**, because
+    `repo.local.ts`/`repo.fake.ts` merge with `{...existing, ...patch}` and a
+    `__proto__`/`constructor` key from parsed Drive JSON is live the day that
+    path exists; and an unbounded file size, which is a self-inflicted DoS.
+    CSV formula injection was the one real character-level threat and Track S
+    already closed it.
+
+- 2026-08-19 — **Rejected: client-side encryption of the Drive files.** It
+  sounds like more protection and costs the product its own promise: the user
+  could no longer open their own JSON in their own Drive, which is precisely
+  what makes "your data is yours" verifiable rather than asserted. With no
+  backend (§6) there is nowhere to escrow a key, so a lost key is
+  unrecoverable data loss. The model deliberately trades "Google can
+  technically read it" for "you own it and can read it". **What outbound
+  protection actually looks like here is architectural and already true: we
+  send to nobody but the user's own Drive, over HTTPS, with their own token —
+  no analytics, no telemetry, no CDN (`AGENTS.md`).** The two cheap additions
+  worth making are a **test** proving no file we write ever contains the
+  token, PIN or vault material (§10.12 already requires it for the CSV), and a
+  size cap.
+
 ## 12. Backlog (pending verification / deferred work)
 
 - **The lock feature is not internationalised at all.** `LockScreen`,

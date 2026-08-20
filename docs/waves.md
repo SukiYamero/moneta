@@ -389,6 +389,49 @@ operator recommends against it, because seeded movements in a money app create
 a "is this mine or sample data?" ambiguity that is worse than waiting one
 stage. Revisit if stage 2 slips.
 
+## Wave 5 — hardening: assume nothing that arrives is trustworthy (2026-08-19)
+
+Raised by the user while scoping Wave 4. The decisions behind it are in
+`specs.md` §11 (2026-08-19, "validate the shape, not the characters" and the
+rejected client-side encryption) — read those, not this summary.
+
+**The split that matters, and it is not optional:** the validation **Track Z
+cannot ship without** stays inside Track Z, in Wave 4. You cannot ship a Drive
+reader with no validation and call the validation a later wave — a malformed
+file would reach the store on day one. Wave 5 is the **broader pass** on top:
+the sweeps, the lint rules, the caps, and the parts with no consumer yet.
+
+### Why this exists at all
+
+The files live in the user's own Drive, in a visible folder, as plain JSON.
+They can open one and mangle it. `drive.file` limits what _we_ can see, never
+what _they_ can do — so the privacy win and the untrusted-input cost are the
+same coin (`specs.md` §10.19).
+
+### What belongs here
+
+| Item                                                       | Why                                                                                                                                                                                    |
+| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Prototype-pollution guard on every external merge**      | `repo.local.ts`/`repo.fake.ts` merge with `{...existing, ...patch}`; a `__proto__`/`constructor` key from parsed Drive JSON is live the day Z lands. Concrete and currently unguarded. |
+| **Number type + range validation on money**                | `monto` must be finite and positive. `1e999` parses to `Infinity`; a `"5"` string poisons every sum in silence. Highest value of anything here for a money app.                        |
+| **Size caps** on what is read and written                  | An unbounded file is a self-inflicted DoS.                                                                                                                                             |
+| **A lint rule pinning the no-`innerHTML`/`eval` property** | Verified true today across all of `src`; XSS through rendering is structurally closed, and this keeps it closed rather than trusting it stays that way.                                |
+| **A test proving no file we write carries a secret**       | The token, PIN and vault material. §10.12 already requires it for the CSV; the same rule belongs on the Drive files — a test, not a promise.                                           |
+| **Telling the user when entries were skipped**             | If a mangled file cost them three entries, saying so is the only way they would ever know. §10.19 already says "skip and keep going"; this is the honest half of it.                   |
+
+### What deliberately does NOT belong here
+
+- **A character blocklist on free text.** `nota`/`categoria`/`seccion` are
+  Spanish and Portuguese: accents, ñ and emoji are legitimate data. A
+  blocklist rejects the user's own valid input and needs every bad thing
+  enumerated. Allowlist patterns on _structured_ fields (`fecha`, `moneda`,
+  `tipo`, `id`) are the right shape and already the codebase's convention.
+- **Client-side encryption of the Drive files** — rejected with reasoning in
+  `specs.md` §11. It would cost the promise that makes the whole architecture
+  worth having.
+
+---
+
 ## Not scheduled
 
 - **Receipt scan** — deferred indefinitely. On-device OCR is unreliable on
