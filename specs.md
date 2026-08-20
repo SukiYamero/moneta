@@ -7028,6 +7028,56 @@ SupportedLocale = detectLocale()`, and looks up each section/category's
   indirection, which `outbox.ts`'s own README entry already names as debt
   ("move both together the day [the single-profile posture] changes").
 
+- ✅ **CLOSED 2026-08-20 (Wave 4 stage 3, general cross-track pass).**
+  `FirstSyncGate` remounts on every navigation between `/` and `/settings`
+  (siblings in `router.tsx`, not nested), not only on a genuine boot
+  rebind as its own doc comment claimed — a seam neither the boot track
+  nor the sync track could see alone, since it's the boot track's
+  route-splitting choice interacting with the sync track's per-mount gate
+  decision. A user who tapped "continue without Drive" on a still-failing
+  first pull had that dismissal forgotten the instant they opened
+  Settings, landing back on the full-screen `DriveDownloadScreen` they had
+  just dismissed — CONFIRMED, reproduced
+  (`src/features/sync/FirstSyncGate.test.tsx`, watched fail before the
+  fix). Fixed with a session-scoped `Set<profileId>` (`dismissedProfileIds`
+  in `FirstSyncGate.tsx`) recording an explicit skip, checked alongside
+  `hasEverSynced` at mount; cleared only by a fresh tab, not by remounting.
+  Commit `daaf63f`.
+
+- **The Drive status row can say "up to date" right after a sync attempt
+  that just failed.** Found (CONFIRMED, reproduced) 2026-08-20, general
+  cross-track pass — escalated rather than fixed, since the honest fix is
+  a product/copy decision, not a mechanical one. `sync/status.ts`'s
+  `deriveSyncIndicator({ isSyncing, outboxDirty })` and
+  `SyncSection.tsx` never read `useSyncStore.lastError`: a failed
+  `pull()`/`push()` (any of them — including a background trigger firing
+  silently, or the first-run `DriveDownloadScreen`'s own failed attempt
+  after the user picks "continue without Drive") returns `phase: 'idle'`
+  with `lastError` set to the failure message and leaves `outboxDirty`
+  false, which `deriveSyncIndicator` reads as `up_to_date` — a green
+  check and "Al día," even though the most recent real attempt
+  demonstrably did not reach Drive. Reproduced directly: `useSyncStore`
+  set to `{ phase: 'idle', lastError: 'network error: fetch failed' }`
+  with `outboxDirty: false` still renders "Al día" in `SyncSection`. Worse
+  on a **returning, previously-synced** profile than on a fresh one — the
+  subtitle then shows the stale-but-real last-sync time ("2 hours ago"),
+  which reads as current and hides that the newest attempt failed; this
+  is a far more common path than the fresh-profile case; any transient
+  network hiccup on a background trigger reaches it. §10.19's own words
+  for this row are "honest in all three states... the third is the one
+  that earns trust" — a fourth, unmodeled state undermines exactly that.
+  **Why this wasn't fixed outright:** §10.19 explicitly commits to three
+  states by name (syncing/up to date/pending), a decision the user made
+  directly — adding a fourth reads as reopening that call, not a
+  mechanical patch; `lastError` is also a raw `Error#message`/`String(e)`
+  string today (`engine.ts`), and surfacing it verbatim in a status row
+  bumps into `docs/error-handling.md`'s "no raw internals in UI" rule, so
+  an honest fix needs mapped copy across four locales, not the string
+  itself. Recommended shape for whoever picks this up: a `'failed'` (or
+  similarly named) indicator, derived with precedence
+  `isSyncing > lastError !== null > outboxDirty > up_to_date`, rendered
+  with its own icon/copy rather than silently folded into `pending`.
+
 ### Development waves (parallel tracks, sequencing, worktree log)
 
 Moved to **[`docs/waves.md`](../docs/waves.md)** — the full wave/track plan
