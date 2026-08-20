@@ -1434,6 +1434,68 @@ one device it can never fire — but the two things that keep it possible
 (immutable ops, `basedOn`) are in the format from day one, because the format
 is the expensive thing to change later.
 
+#### How we know a profile is synced — a watermark, not a flag
+
+Signing in with Google does **not** mean being synced: §5 is incremental
+authorization, so the login asks for identity and the Drive scopes are a
+separate, later consent. A user who dismissed the Drive prompt is signed in
+with nothing to sync to.
+
+Today the app can answer "what did the user reply to the prompt"
+(`driveOptIn`, persisted per **device**) and "did the bootstrap succeed this
+session" (`authStore.drive`, in-memory, never persisted — §11). It cannot
+answer **"has this profile's data ever reached Drive"**, which is the question
+every sync surface actually needs.
+
+**Do not add an `isSynced` boolean.** It goes stale the moment it is written —
+synced _when_, still true _now_, what about a push that failed halfway — and
+`AGENTS.md`'s single-source-of-truth rule says derive rather than cache a copy
+that can drift. Store a **watermark** instead: the last successful push and
+the last successful pull. Every question is then derived, and none of them can
+disagree with reality:
+
+| Question                         | Derived from                                                                          |
+| -------------------------------- | ------------------------------------------------------------------------------------- |
+| Is this profile linked to Drive? | whether it has a Drive binding at all                                                 |
+| Has it **ever** synced?          | whether a last-success watermark exists — this is what gates the first-run view below |
+| Is it up to date?                | outbox empty **and** a recent successful push                                         |
+| Is anything pending?             | the outbox's `dirty` flag                                                             |
+
+The three-state indicator (syncing · up to date · pending) is a projection of
+those, never a fourth stored value.
+
+**The watermark belongs to the profile, not the device.** "My data lives in
+Drive" is a property of a profile — one device can hold a guest profile that
+never synced beside a Google profile that did. It therefore lives on
+`ProfileRecord` (§10.15), next to the account key, and is written only by the
+sync engine. **A consequence worth naming: `driveOptIn` being device-scoped is
+correct only while one profile exists.** Revisit it with the profile switcher;
+do not quietly reinterpret a device signal as a profile one.
+
+#### The first run of a profile — a dedicated download view
+
+Signing in on a new device means the pull is not an optimization, it is the
+**only** source of data. Rendering the dashboard while it runs shows `$0` and
+"no movements" — a statement about someone's money that is false, and one they
+will read as "the app lost my data." Same failure shape as the empty-account
+cliff in §12.
+
+So: when a profile has **no successful-pull watermark**, the app shows a
+dedicated full-screen download view instead of the dashboard, and only then.
+It is not a modal and not a per-launch gate — it is the first run of a
+profile, once.
+
+- Shows real progress (files reconciled of total), not an indefinite spinner:
+  a multi-year history is a long wait, and an unmeasured wait reads as a hang.
+- **A failure state with retry, never a dashboard of zeros.** If the pull
+  fails, say so. Offer retry, and offer to continue with what is local —
+  which, on a genuinely new device, is honestly nothing.
+- **Never blocks a user out of local data they already have** (§10.11): a
+  profile with a watermark reconciles in the background and the app opens
+  normally, online or off.
+- Follows §10.9's loading rules; this is the rare legitimate full-screen gate,
+  because there is genuinely nothing truthful to render behind it.
+
 #### When it syncs
 
 - **Push** on: reconnect, return to foreground, a debounce after a burst of
@@ -3446,6 +3508,30 @@ lint` clean bar the one pre-existing `components/ui` warning). `AGENTS.md`
   Recorded because the _planning_ mistake repeated within one wave even after
   the rule was written into `AGENTS.md`, which says the rule alone is not
   enough: the ownership table has to be checked against it, not just carry it.
+
+- 2026-08-19 — **Sync state is a watermark on the profile, never an
+  `isSynced` flag.** User asked how the app would know a profile is synced,
+  since signing in with Google does not imply Drive access (§5 is incremental
+  authorization). A boolean lies the moment it is written — synced _when_,
+  still true _now_, what about a half-finished push — so the stored value is
+  the **last successful push and pull**, and everything else is derived from
+  it: linked-or-not, ever-synced, up-to-date, pending. It lives on
+  `ProfileRecord`, not on the device, because "my data lives in Drive" is a
+  property of a profile and one device can hold a never-synced guest profile
+  beside a synced Google one. Written only by the sync engine (Track Z);
+  Track AA's account key answers the neighbouring question, "whose profile is
+  this". Follows `AGENTS.md`'s single-source-of-truth rule directly. Spec in
+  §10.19.
+
+- 2026-08-19 — **A profile's first run gets a dedicated download view.** User
+  decision. On a new device the pull is not an optimization, it is the only
+  source of data, and rendering the dashboard while it runs shows `$0` and "no
+  movements" — a false statement about someone's money that reads as "the app
+  lost it". Gated on the absence of a successful-pull watermark, so it is once
+  per profile and not a per-launch gate. Real progress rather than an
+  indefinite spinner, an explicit failure state with retry, and **never a
+  dashboard of zeros**. It must never block a profile that already has local
+  data (§10.11). Spec in §10.19.
 
 ## 12. Backlog (pending verification / deferred work)
 
