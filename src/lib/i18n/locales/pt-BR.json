@@ -378,7 +378,6 @@
   },
   "sync": {
     "status": {
-      "linked": "Vinculado ao Drive",
       "upToDate": "Em dia",
       "pending": "Alterações pendentes de sincronização",
       "syncing": "Sincronizando…",

@@ -72,13 +72,25 @@ of it.
   `src/features/sync/`), and `lastPullSummary` (the most recent
   `PullSummary` — `syncSession.ts`'s one subscriber raises the
   revived-movement Toast off this, regardless of which call site produced
-  it). **`pull()` and `push()` are each coalesced against themselves**
-  (specs.md §10.26 §1, the data-loss fix this track opened with, reproduced
-  by the general review): a second concurrent call for either returns the
-  in-flight promise rather than racing it with an independent
-  read-modify-write against the same Drive file. `startSyncTriggers()`'s
-  `getContext` may return a `Promise` — `syncSession.ts`'s real one does,
-  to check token freshness before a trigger fires.
+  it). **`pull()` and `push()` are each coalesced against themselves,
+  keyed by `profile.id`** (specs.md §10.26 §1, the data-loss fix this
+  track opened with, reproduced by the general review; the `profile.id`
+  keying added by this track's own review — see specs.md §11, 2026-08-20
+  "Track AB review"): a second concurrent call for the _same_ profile
+  returns the in-flight promise rather than racing it with an independent
+  read-modify-write against the same Drive file; a call for a _different_
+  profile (the `boot.ts` rebind race — a fast logout+relogin never waits
+  for an in-flight pull/push before redirecting the outbox/repo binding)
+  gets its own promise instead of silently riding the other profile's,
+  which is what `ensureFolder()`'s own `token`-keyed guard already avoided
+  but `pull()`/`push()` originally did not. `startSyncTriggers()`'s debounced
+  push also re-arms itself after settling if the outbox is still dirty —
+  a write enqueued while an earlier push was already in flight never flips
+  the dirty-store's false→true edge the plain subscription reacts to, so
+  without this it could sit unpushed until an unrelated online/visibility/
+  pagehide event happened to occur. `startSyncTriggers()`'s `getContext`
+  may return a `Promise` — `syncSession.ts`'s real one does, to check token
+  freshness before a trigger fires.
 - `syncSession.ts` — the live context specs.md §10.26 §2 asks for
   (`getSyncContext()`: the current Drive-scoped token — refreshed silently,
   in place, if within 60s of `expiresAt` — the active profile from
@@ -90,10 +102,17 @@ of it.
   `continueAsGuest`: `authStore.ts` cannot import this module back (it
   already imports `authStore.ts`), the identical circular-import shape
   `lockStore.ts`'s own bottom-of-file `useAuthStore.subscribe` solves the
-  same way. Covers every path that sets/clears `drive`; "stop on lock" is
-  the one transition it structurally cannot see (locking never touches
-  `authStore`), so that hookpoint lives in `lockStore.ts`'s own `lock()`
-  instead. `runInitialSync()` ("pull on app open," specs.md §10.19) is
+  same way. Covers every path that sets/clears `drive`; "stop on lock" (and its
+  counterpart, "start on unlock") are the one pair of transitions it
+  structurally cannot see (locking never touches `authStore`, and
+  `hydrate()` on a successful unlock re-sets `status`/`drive` to the exact
+  values a lock never changed, so the subscription's edge detection never
+  fires either way) — both hookpoints live in `lockStore.ts`'s own `lock()`
+  and `resume()` instead, calling `stopSyncSession()`/`startSyncSession()`
+  explicitly (the latter added by this track's own review, specs.md §11,
+  2026-08-20 "Track AB review" — the original code left the restart to the
+  subscription, which never actually fired, silently killing live sync for
+  the rest of the session after the very first lock). `runInitialSync()` ("pull on app open," specs.md §10.19) is
   **not** called from here either, for the identical reason: `drive`
   becoming non-null can race `boot.ts` binding a profile (the automatic
   reacquire path runs from `RequireAuth`, a sibling of `BootGate`, not a

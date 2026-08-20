@@ -219,19 +219,36 @@ const DOWNLOADABLE_KINDS = new Set(['mov-month', 'mov-year', 'act', 'config'])
  * `pull()`'s own fire-and-forget `.catch()` several frames up). Coalescing
  * removes the redundant work and the race both, for the identical reason
  * `push()`'s guard does.
+ *
+ * Keyed by `profile.id`, not a single shared slot — `boot.ts`'s rebind path
+ * (logout, then a new login) proceeds immediately, with no coordination
+ * with a pull already in flight for the *previous* profile: a bare
+ * unkeyed guard hands a fresh call for the new profile the old profile's
+ * still-resolving promise, which was built to materialize into the *old*
+ * profile's own database (`getProfileDatabase(profile.databaseName)`
+ * closes over pull's own `profile` argument). `FirstSyncGate`'s
+ * `DriveDownloadScreen` then sees that promise resolve successfully and
+ * calls `onDone()`, dismissing the first-run gate for a profile whose own
+ * database was never touched — an empty dashboard presented as "synced,"
+ * indistinguishable from data loss. Reproduced against the real code
+ * (`sync/engine.test.ts`'s cross-profile pull test) before this fix; keyed
+ * exactly like `driveFiles.ts`'s `ensureFolder()` already is, for the
+ * identical reason.
  */
-let pullInFlight: Promise<PullSummary> | null = null
+const pullInFlight = new Map<string, Promise<PullSummary>>()
 
 export const pull = (
   token: string,
   profile: ProfileRecord,
   locale: SupportedLocale,
 ): Promise<PullSummary> => {
-  if (pullInFlight) return pullInFlight
-  pullInFlight = pullOnce(token, profile, locale).finally(() => {
-    pullInFlight = null
+  const existing = pullInFlight.get(profile.id)
+  if (existing) return existing
+  const inFlight = pullOnce(token, profile, locale).finally(() => {
+    pullInFlight.delete(profile.id)
   })
-  return pullInFlight
+  pullInFlight.set(profile.id, inFlight)
+  return inFlight
 }
 
 const pullOnce = async (
@@ -497,14 +514,24 @@ const pushConfig = async (
 // already treats "nothing to do" as a safe no-op, so an op left behind by a
 // coalesced call simply waits for the next trigger, which is a genuine
 // no-op-safe deferral, not a loss.
-let pushInFlight: Promise<void> | null = null
+//
+// Keyed by `profile.id`, same reasoning and same fix as `pull()` above: an
+// unkeyed guard handed a `push()` call for a *different* profile (the
+// `boot.ts` rebind race) the previous profile's in-flight promise, which
+// reads `entries` (`outbox.ts`'s module-level table pointer) and `token`/
+// `folderId` all closed over the *old* profile — the new profile's own
+// pending ops are silently never uploaded this round. Reproduced against
+// the real code (`sync/engine.test.ts`'s cross-profile push test).
+const pushInFlight = new Map<string, Promise<void>>()
 
 export const push = (token: string, profile: ProfileRecord): Promise<void> => {
-  if (pushInFlight) return pushInFlight
-  pushInFlight = pushOnce(token, profile).finally(() => {
-    pushInFlight = null
+  const existing = pushInFlight.get(profile.id)
+  if (existing) return existing
+  const inFlight = pushOnce(token, profile).finally(() => {
+    pushInFlight.delete(profile.id)
   })
-  return pushInFlight
+  pushInFlight.set(profile.id, inFlight)
+  return inFlight
 }
 
 const pushOnce = async (token: string, profile: ProfileRecord): Promise<void> => {
@@ -711,6 +738,20 @@ export const startSyncTriggers = (
     await push(ctx.token, ctx.profile).catch((e: unknown) =>
       console.warn('sync: push trigger failed', e),
     )
+    // The outbox-dirty subscription below only reacts to a false→true
+    // *edge* — a write enqueued while `dirty` was already true (this push
+    // was already in flight) never flips that edge, so it gets no debounce
+    // timer of its own and `pushOnce`'s already-captured `pending` snapshot
+    // didn't include it either. Re-arming here whenever the outbox is
+    // still dirty after an attempt — whether from such a late write or from
+    // a partial/failed push — is what actually guarantees "the next
+    // trigger picks it up" (specs.md §10.26 §1's own claim for a coalesced
+    // call): confirmed missing, and reproduced, before this fix
+    // (`sync/engine.test.ts`'s debounce-gap test).
+    if (useOutboxStore.getState().dirty) {
+      clearTimeout(debounceTimer)
+      debounceTimer = setTimeout(() => void runPush(), debounceMs)
+    }
   }
   const runPull = async (): Promise<void> => {
     const ctx = await getContext()

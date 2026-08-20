@@ -6188,6 +6188,90 @@ export/index.ts:49` all still inline `format(date, 'yyyy-MM-dd')` instead
     as debt to "move together the day that changes." Filed rather than
     fixed, per this track's own scope.
 
+- **2026-08-20 (Track AB review — per-track reviewer, `AGENTS.md` §Review
+  protocol):** two CONFIRMED (reproduced with a failing test first) gaps in
+  the reentrancy fix and trigger wiring above, both fixed on `track-ab`;
+  one dead i18n key removed. Full diff in `sync/engine.ts`, `lockStore.ts`,
+  the three new regression tests under `src/lib/sync/`, and
+  `lockStore.test.ts`.
+  - **`pull()`/`push()`'s coalescing guards were a single shared slot, not
+    keyed at all** — the one place the "same shape, fixed in one place and
+    not its twin" pattern (`AGENTS.md`) repeated inside this very track's
+    own fix: `driveFiles.ts`'s `ensureFolder()` was deliberately keyed by
+    `token` for exactly this reason (see its own comment), but `pull()`/
+    `push()` right next to it were not. `boot.ts`'s rebind path
+    (logout, then a new login) proceeds with no coordination with a
+    pull/push already in flight for the _previous_ profile — reproduced
+    (`sync/crossProfileCoalescing.pull.test.ts`,
+    `sync/crossProfileCoalescing.push.test.ts`): a `pull()`/`push()` call
+    for profile B, issued while profile A's own call is still resolving,
+    silently rode A's promise instead of running its own. For `push()`,
+    the practical effect matched the residual risk already filed above
+    (B's own pending ops sit unpushed, self-healing on B's next session).
+    For `pull()` it was worse and previously undocumented: `pullOnce()`
+    materializes into `getProfileDatabase(profile.databaseName)` closed
+    over the _first_ caller's profile — `FirstSyncGate`'s
+    `DriveDownloadScreen` (a genuinely fresh profile B) would see that
+    stale promise resolve successfully and call `onDone()`, dismissing the
+    first-run gate and dropping the user into B's dashboard with B's own
+    local database never touched by any pull. Indistinguishable from data
+    loss, exactly the failure mode this track's own `FirstSyncGate` design
+    doc says must never happen. Fixed by keying both guards
+    (`Map<profile.id, Promise<...>>`), the identical shape `ensureFolder()`
+    already used.
+  - **The debounced push's outbox-dirty subscription only reacts to a
+    false→true edge, not to "still dirty after a push attempt."** A write
+    enqueued while an earlier push for the same profile is already in
+    flight never flips that edge (`dirty` was already `true` and stays
+    `true`), so it got no debounce timer of its own, and the in-flight
+    push's own `pending` snapshot (taken at push-start) didn't include it
+    either — reproduced (`sync/debounceReArm.test.ts`): the op sat queued
+    with no scheduled follow-up, waiting on an unrelated online/visibility/
+    pagehide event that might never come. A quieter version of the
+    data-loss bug this track opened by fixing, not a data-loss bug itself
+    (nothing is dropped from the local outbox — it just never reaches
+    Drive). Fixed by re-arming the debounce after a push attempt whenever
+    the outbox is still dirty.
+  - **`lockStore.ts`'s `resume()` relied on the `authStore` subscription to
+    restart sync on a successful unlock — it never fires.** `lock()`
+    explicitly calls `stopSyncSession()` (documented above, correctly,
+    since locking never touches `authStore`). The code's own comment
+    claimed `hydrate()`'s `set()` on unlock "is what restarts it" — false:
+    `hydrate()` re-sets `status`/`drive` to the _exact values they already
+    held_ before the lock (a lock never clears either, and
+    `reacquireDriveIfNeeded()` is explicitly a no-op once `drive` is
+    already non-null, "must not re-run bootstrap() on every unlock"), so
+    the subscription's `isEligible(state) === isEligible(prev)` edge check
+    never sees a transition. Reproduced with a failing test first
+    (`sync/syncSession.test.ts`'s probe, then folded into
+    `lockStore.test.ts`): every PIN lock silently killed live sync for the
+    rest of that session — no reconnect/foreground/debounce/pagehide
+    trigger ever ran again until a full sign-out and back in. Fixed by
+    giving `resume()` the same explicit, symmetric call `lock()` already
+    has: `startSyncSession()` on a genuinely successful unlock (idempotent,
+    so calling it unconditionally there is safe, matching every other call
+    site).
+  - **`sync.status.linked`, a new i18n key added by this track across all
+    four locales, was never referenced by any component.** Removed rather
+    than left as dead weight — no spec or backlog entry named it as
+    intentionally-unused-yet (unlike `skippedEntries`, which is).
+  - Both deferred/escalated risks this track filed above (two tabs of one
+    account; the outbox module-level redirect racing a fast logout+relogin)
+    were re-examined against this fix and are judged **correctly scoped as
+    deferred** — closing either requires the architecture change already
+    named (cross-tab leader election; a profile-scoped db reference
+    threaded through `push()`/`pull()` instead of `outbox.ts`'s module-level
+    indirection), not a quick guard. The keying fix above does not close
+    them, and does not make either worse: the two-tabs risk is orthogonal
+    (module-level state is still invisible across tabs regardless of how
+    it's keyed within one), and the outbox-redirect risk already existed
+    from a single profile's own lingering push racing `setOutboxDatabase()`
+    — it never depended on whether a second profile's call was coalesced
+    or not.
+  - `bun run check` verified green on the fixed branch: 131 files / 1374
+    tests. Verbatim output kept in this review's own report, not restated
+    here.
+
 ## 12. Backlog (pending verification / deferred work)
 
 - **The Add sheet's "gear into `/settings`" entry point was never actually
@@ -6809,6 +6893,7 @@ SupportedLocale = detectLocale()`, and looks up each section/category's
   (2026-08-19) — that one is the Dexie-write/outbox-enqueue pair; this one is
   `push()` racing itself. **Blocks §10.26 shipping**: the wiring is precisely
   what makes the race reachable.
+
 - ✅ **`OptionList` announces `role="radiogroup"` without implementing the
   behaviour the role promises.** — closed 2026-08-20 (Track AC, Wave 4 stage
   3). CONFIRMED by the general cross-wave review, 2026-08-20.

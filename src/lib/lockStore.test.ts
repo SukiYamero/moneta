@@ -35,10 +35,12 @@ vi.mock('@/lib/authStore', () => ({
   },
 }))
 const stopSyncSession = vi.fn()
+const startSyncSession = vi.fn()
 // Isolates this suite from the real sync engine/repoProvider/i18n chain
 // `syncSession.ts` otherwise pulls in — lockStore.ts's only use of it is
-// the one call under test below (specs.md §10.26 §2's "stop on lock").
-vi.mock('@/lib/sync/syncSession', () => ({ stopSyncSession }))
+// the calls under test below (specs.md §10.26 §2's "stop on lock" / "start
+// on unlock").
+vi.mock('@/lib/sync/syncSession', () => ({ stopSyncSession, startSyncSession }))
 
 const session = { accessToken: 'tok', expiresAt: 9_999_999_999_000 }
 const user = { email: 'a@b.com', name: 'Ana' }
@@ -267,6 +269,32 @@ describe('useLockStore', () => {
 
     expect(useLockStore.getState().phase).toBe('unlocked')
     expect(useLockStore.getState().error).toBeNull()
+  })
+
+  test("a successful unlock restarts the sync session (specs.md §10.26 §2) — lock()'s stopSyncSession() has no authStore-subscription counterpart to undo it, since hydrate() re-sets status/drive to the exact values a lock never touched (Track AB review)", async () => {
+    pinLock.unlockWithPin.mockResolvedValue({ session, user })
+    hydrate.mockImplementation(async () => {
+      authStatus = 'authenticated'
+    })
+    const { useLockStore } = await import('@/lib/lockStore')
+    useLockStore.setState({ phase: 'locked', error: null })
+
+    await useLockStore.getState().unlockPin('1234')
+
+    expect(startSyncSession).toHaveBeenCalledOnce()
+  })
+
+  test('a failed unlock (hydrate did not reach authenticated) does not restart the sync session', async () => {
+    pinLock.unlockWithPin.mockResolvedValue({ session, user })
+    hydrate.mockImplementation(async () => {
+      authStatus = 'error'
+    })
+    const { useLockStore } = await import('@/lib/lockStore')
+    useLockStore.setState({ phase: 'locked', error: null })
+
+    await useLockStore.getState().unlockPin('1234')
+
+    expect(startSyncSession).not.toHaveBeenCalled()
   })
 
   // specs.md §10.11: a correct PIN with no network must reach 'authenticated'

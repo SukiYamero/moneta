@@ -378,7 +378,6 @@
   },
   "sync": {
     "status": {
-      "linked": "Linked to Drive",
       "upToDate": "Up to date",
       "pending": "Changes pending sync",
       "syncing": "Syncing…",

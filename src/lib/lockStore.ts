@@ -14,7 +14,7 @@ import {
   unlockWithPin,
   type VaultSession,
 } from '@/lib/pinLock'
-import { stopSyncSession } from '@/lib/sync/syncSession'
+import { startSyncSession, stopSyncSession } from '@/lib/sync/syncSession'
 
 // lockStore substitutes its own message strings instead of forwarding the
 // error classes' — exported so `features/lock/errorCopy` keys off these
@@ -74,6 +74,17 @@ const resume = async (
       return
     }
     set({ phase: 'unlocked', error: null })
+    // lock()'s explicit stopSyncSession() call needs an equally explicit
+    // counterpart here, not the authStore subscription: hydrate() re-sets
+    // `status`/`drive` to the exact values they already held before this
+    // lock (locking never clears them), so that subscription's edge
+    // detection never fires across a lock/unlock cycle — traced and
+    // reproduced (`sync/syncSession.test.ts`), the trigger was staying dead
+    // for the rest of the session after the very first lock. Safe to call
+    // unconditionally, same as every other `startSyncSession()` call site:
+    // idempotent, and a no-Drive/guest session's triggers simply no-op via
+    // `getSyncContext()`.
+    startSyncSession()
   } catch (e) {
     if (e instanceof LockedOutError) {
       try {
