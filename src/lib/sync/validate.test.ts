@@ -3,11 +3,11 @@ import { createLogicalClock } from '@/lib/hlc'
 import { CONFIG_SEMILLA } from '@/lib/schema'
 import {
   isValidActivo,
-  isValidConfig,
   isValidMovimiento,
   parseActOpFile,
   parseConfigOpFile,
   parseMovOpFile,
+  sanitizeConfig,
 } from '@/lib/sync/validate'
 
 const clock = createLogicalClock('dev1')
@@ -68,9 +68,9 @@ describe('isValidActivo', () => {
   })
 })
 
-describe('isValidConfig', () => {
-  it('accepts the real seed config', () => {
-    expect(isValidConfig(CONFIG_SEMILLA)).toBe(true)
+describe('sanitizeConfig', () => {
+  it('accepts the real seed config unchanged', () => {
+    expect(sanitizeConfig(CONFIG_SEMILLA)).toEqual(CONFIG_SEMILLA)
   })
 
   it.each([
@@ -81,6 +81,13 @@ describe('isValidConfig', () => {
       {
         ...CONFIG_SEMILLA,
         categorias: [{ id: 'c', nombre: 'C', seccionId: 's', tipo: 'ahorro' }],
+      },
+    ],
+    [
+      'a categoria missing id',
+      {
+        ...CONFIG_SEMILLA,
+        categorias: [{ nombre: 'C', seccionId: 's', tipo: 'gasto' }],
       },
     ],
     [
@@ -97,8 +104,42 @@ describe('isValidConfig', () => {
         preferencias: { ...CONFIG_SEMILLA.preferencias, primerDiaSemana: 3 },
       },
     ],
-  ])('rejects: %s', (_label, value) => {
-    expect(isValidConfig(value)).toBe(false)
+  ])('rejects the whole config: %s', (_label, value) => {
+    expect(sanitizeConfig(value)).toBeNull()
+  })
+
+  it('strips an invalid icono but keeps the category and the rest of the config — an unknown icono is never a reason to drop a category the user created (specs.md §10.22)', () => {
+    const value = {
+      ...CONFIG_SEMILLA,
+      categorias: [
+        { id: 'c', nombre: 'C', seccionId: 's', tipo: 'gasto', icono: 'not-a-real-icon' },
+      ],
+    }
+    const sanitized = sanitizeConfig(value)
+    expect(sanitized).not.toBeNull()
+    expect(sanitized?.categorias).toEqual([{ id: 'c', nombre: 'C', seccionId: 's', tipo: 'gasto' }])
+  })
+
+  it("strips an invalid color but keeps the category — an invalid IconAvatarTint from a hand-edited Drive file must never reach IconAvatar/TagChip's TINT_CLASSES[tint] lookup unguarded", () => {
+    const value = {
+      ...CONFIG_SEMILLA,
+      categorias: [{ id: 'c', nombre: 'C', seccionId: 's', tipo: 'gasto', color: 'purple-ish' }],
+    }
+    const sanitized = sanitizeConfig(value)
+    expect(sanitized).not.toBeNull()
+    expect(sanitized?.categorias).toEqual([{ id: 'c', nombre: 'C', seccionId: 's', tipo: 'gasto' }])
+  })
+
+  it('keeps a valid icono/color untouched', () => {
+    const value = {
+      ...CONFIG_SEMILLA,
+      categorias: [
+        { id: 'c', nombre: 'C', seccionId: 's', tipo: 'gasto', icono: 'coffee', color: 'amber' },
+      ],
+    }
+    expect(sanitizeConfig(value)?.categorias).toEqual([
+      { id: 'c', nombre: 'C', seccionId: 's', tipo: 'gasto', icono: 'coffee', color: 'amber' },
+    ])
   })
 })
 
