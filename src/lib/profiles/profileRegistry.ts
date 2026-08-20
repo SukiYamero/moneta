@@ -20,6 +20,22 @@ export interface ProfileRecord {
   // (`specs.md` §5: identity = the userinfo `email`, already fetched on
   // every session, not a second field to request).
   accountKey?: string
+  // specs.md §10.19: "is this profile linked to Drive?" is answered by
+  // whether it has a Drive binding at all — not by `kind === 'google'`,
+  // since §5's incremental authorization means a Google sign-in and Drive
+  // access are two separate consents. Set once `bootstrap.ts` resolves the
+  // KuroBello folder for this profile; `undefined` until then. Additive,
+  // optional, written only by the sync engine (`sync/engine.ts`).
+  driveFolderId?: string
+  // The watermark specs.md §10.19 asks for instead of an `isSynced`
+  // boolean: "the last successful push and the last successful pull."
+  // Every other sync question (ever synced? up to date? pending?) is
+  // derived from these two plus the outbox's own `dirty` flag — see
+  // `sync/status.ts`. `undefined` means "never" — `lastPullAt`'s absence in
+  // particular is what gates the first-run download view (a later track).
+  // Written only by `sync/engine.ts`, on the profile the sync ran for.
+  lastPushAt?: string
+  lastPullAt?: string
 }
 
 // Lives on src/lib/deviceStore.ts's shared `kurobello-device` connection
@@ -133,6 +149,25 @@ export const touchLastUsed = async (id: string): Promise<void> => {
     // slightly stale next read, not that anything already saved is lost.
     console.warn(`profiles: could not update last-used for "${id}"`, e)
   }
+}
+
+// The three watermark writers (specs.md §10.19) — `sync/engine.ts`'s only
+// callers, deliberately not wrapped in the read-side "degrade to no
+// signal" posture: a caller recording a Drive binding or a successful sync
+// needs to know if that write didn't land, the same reasoning
+// `registerProfile`/`resolveGoogleProfile` already give for a write path
+// (unlike `touchLastUsed`, whose failure is a harmless recency staleness).
+
+export const setDriveFolderId = async (id: string, driveFolderId: string): Promise<void> => {
+  await profileTable.update(id, { driveFolderId })
+}
+
+export const recordSuccessfulPush = async (id: string, at: string = nowIso()): Promise<void> => {
+  await profileTable.update(id, { lastPushAt: at })
+}
+
+export const recordSuccessfulPull = async (id: string, at: string = nowIso()): Promise<void> => {
+  await profileTable.update(id, { lastPullAt: at })
 }
 
 export interface ResolveGoogleProfileInput {

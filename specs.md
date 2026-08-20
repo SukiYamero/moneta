@@ -62,25 +62,30 @@ Source of truth for types: **`src/lib/schema.ts`** — import it, never redefine
 the types. (Domain field names stay in Spanish: they are the real Drive
 columns/contract.)
 
-Three stores (all JSON files in the user's Drive):
+Three logical stores, laid out in Drive as **per-device, append-only
+operation logs** (§10.19, implemented Wave 4/Track Z — supersedes the
+earlier one-file-per-store layout: a single shared file per store cannot be
+written by two devices without losing an update, and re-uploads the whole
+history to record one entry):
 
-- `Movimiento[]` — **flow** (in/out) → `movimientos.json` in the `KuroBello` folder.
-- `Activo[]` — **balance** (what you own and what it's worth today) → `activos.json`
-  in the same folder.
-- `Config` (sections, categories, preferences, schemaVersion) → `config.json` in
-  the **appDataFolder** (syncs across devices). Location abstracted behind a single
-  repo function so it could move to the visible folder later (no UI for it in v1).
+- `Movimiento[]` — **flow** (in/out) → `mov-<device>-<YYYY-MM>.json` in the
+  `KuroBello` folder, one shard per device per month; a closed year
+  compacts to `mov-<device>-<YYYY>.json`.
+- `Activo[]` — **balance** (what you own and what it's worth today) →
+  `act-<device>.json` in the same folder (few enough that sharding buys
+  nothing).
+- `Config` (sections, categories, preferences, schemaVersion) →
+  `config-<device>.json` in the **appDataFolder** (syncs across devices).
 
-Storage format is **JSON files** (only the Drive Files API under `drive.file`).
-A Google Sheets export is a possible future, not v1.
-
-> **The one-file-per-store layout above is superseded by §10.19** (decided
-> 2026-08-19). Each store is now a set of **per-device, append-only operation
-> logs**, movements sharded by month, because a single shared file per store
-> cannot be written by two devices without losing an update and re-uploads the
-> whole history to record one entry. The three logical stores and their types
-> are unchanged — only how they are laid out in Drive. Read §10.19 before
-> touching `bootstrap.ts` or anything that names a file.
+Storage format is **JSON files** (only the Drive Files API under
+`drive.file`); each file holds `put`/`del` operations, not the stores'
+current state — see §10.19 for the full file table, the merge/replay rule,
+and why. `LEEME.txt` (localized) and a yearly `movimientos-<YYYY>.csv` (via
+`src/lib/export/csv.ts`, written by `sync/engine.ts`'s year-close
+compaction) live alongside the `KuroBello` folder's files for anyone
+opening the folder without the app. `bootstrap.ts` provisions the folder
+and `LEEME.txt`; every op-log file itself is created lazily, on first
+write, by `sync/engine.ts`'s push path — never pre-created.
 
 Local cache of everything in IndexedDB (disposable; re-downloaded from Drive if
 cleared). **The local database is always the merged truth**: the operation logs
@@ -4352,6 +4357,104 @@ CategoryIconKey` (new `src/features/tags/categoryIcons.ts`, a curated
     when every existing category already uses it).
   - `bun run check` green (1001 tests, typecheck/lint clean,
     `rg 'CATEGORY_TINT' src` empty).
+- 2026-08-20 — **Track Z (Drive sync engine, §10.19) pressure-tested its own
+  spec's four load-bearing claims before building on top of them, per the
+  brief's explicit instruction; all four findings below, plus the format/
+  transport/watermark implementation itself.**
+
+  1. **"Exactly one device ever writes any given file" is false for
+     `LEEME.txt` and the yearly CSV — but safely false, and one instance was
+     a real bug, now fixed.** Both files have no `<device>` in their name and
+     are legitimately written by whichever device's `bootstrap()`/
+     `compactYear()` happens to run. The reason this doesn't reintroduce the
+     race the design otherwise removes: both files' content is **derived and
+     deterministic** (locale + `OP_FORMAT_VERSION` for `LEEME.txt`; the full
+     globally-merged movement set, filtered by year, for the CSV), never
+     accumulated per-writer data — a second device's write converges to the
+     same bytes instead of losing the first device's half. The first
+     `compactYear()` draft violated this without realizing it: it built the
+     CSV from a replay of only _this device's own_ year-shards, so two
+     devices that each created movements in the same closing year would have
+     each overwritten the other's half of the spreadsheet on their own
+     compaction. Fixed by having `pull()` pass its own already-merged
+     `movimientos` into `compactClosedYearsIfNeeded`/`compactYear`, so the
+     CSV is a filtered projection of the full merged truth. Caught before
+     shipping, not in production — recorded because the "single writer"
+     framing invited exactly this mistake once thought about too literally.
+  2. **The `config` op's whole-object-put gap (filed 2026-08-19 while
+     specifying §10.22) is confirmed real and deliberately not fixed here.**
+     Traced against the actual replay engine, not just re-asserted: two
+     devices each adding a category offline replay as two whole-`Config`
+     `put`s and the later one wins outright — `replayEntity()`'s "last put
+     always wins" rule (correct for the general case) has no field-level
+     awareness to do otherwise. Fixing it means a finer-grained config op (a
+     format change), which is exactly the kind of change this track's own
+     ordering rule ("format first, reviewed, before anything is built on top
+     of it") argues should not be slipped in as a side effect of building
+     the engine around today's format. Left for a follow-up; `Preferencias`
+     needs the same check whoever takes it.
+  3. **The Drive response `Date` header is reachable from a browser fetch —
+     confirmed live, not assumed.** `Date` is not on the CORS-safelisted
+     response-header list, so the spec's claim it can clamp a skewed local
+     clock "at no extra request cost" depended on Google actually exposing
+     it. Verified with a real `curl -H "Origin: ..."` request against
+     `googleapis.com/drive/v3/files`: `access-control-expose-headers`
+     includes `date`, on both a success and a 403 response. `drive.ts`'s
+     `getLastKnownServerTime()` captures it passively from every call;
+     `hlc.ts`'s new `clampToServer()` (below) is what uses it.
+  4. **`outbox.ts`'s `basedOn` approximation was wrong the moment a sync
+     engine exists — confirmed and fixed, not just flagged.** Its own
+     comment predicted the shape of the problem ("the real basedOn should
+     come from the merged log... a finding for whoever builds it"); tracing
+     it produced a concrete failure: device A creates a movement, pulls
+     device B's edit (arrives via replay, never through A's own outbox),
+     then deletes it locally. Consulting only A's own outbox history stamps
+     the delete with the _create's_ hlc instead of B's edit's, making it
+     look concurrent with an edit A actually saw — which silently fires the
+     (otherwise correct) delete-vs-edit revival rule on a case that was
+     never a real conflict. Fixed with `sync/tip.ts` (a device-scoped cache
+     of the last hlc known per entity, updated by every pull and every
+     successful push) plus `outbox.ts`'s `lastHlcFor` now taking the greater
+     of its own history and the cached tip.
+
+  Building the fixes above surfaced one more gap in `hlc.ts` itself, not
+  originally in scope but load-bearing for the above: **two independent
+  per-device `LogicalClock` instances have no guaranteed relative order**
+  until one observes the other, which breaks the one property a `basedOn`
+  chain depends on (an op claiming `basedOn: X` must sort after `X`). Filled
+  in the "hybrid" half `hlc.ts`'s own header comment had already left for
+  "whoever builds replay/pull": `observe(remote)` (fold in a learned hlc so
+  future ticks sort after it) and `clampToServer(serverNow)` (recover from a
+  poisoned local clock using finding 3 above) — `tick()`'s algorithm and
+  `Hlc`'s encoding are untouched.
+
+- 2026-08-20 — **`repo.drive.ts` delegates every `Repo` call straight to
+  `repo.local.ts`, on purpose, not as a placeholder.** §10.19 states the
+  local database is always the merged truth, so there is no "read/write
+  Drive directly" path for `list()`/`add()`/`update()` to take — the `Repo`
+  port has no notion of push/pull to begin with, and a screen reading
+  through `getRepo()` must stay unaware any of this exists. What actually
+  makes a profile Drive-backed (the op log, pull, push, compaction,
+  triggers) lives entirely in `sync/engine.ts`, outside the port. This
+  module's honest job is narrower than "the Drive repo" suggests: it is the
+  explicitly Drive-identified `Repo` instance a Drive-linked profile binds
+  to, reusing `repo.local.ts`'s already-correct validation/pagination/error
+  behavior rather than re-deriving it — which is also why it passes the
+  identical `repo.contract.ts` suite with no divergence to reconcile.
+
+- 2026-08-20 — **A device-scoped `syncFileCache` (`deviceDb` v6), not a
+  per-profile table, is what makes the `files.list` revision check
+  ("download only the files whose modifiedTime moved") actually correct
+  rather than merely faster.** `Movimiento` deliberately carries no hlc or
+  provenance (`schema.ts` stays untouched by this track, per spec) — so
+  skipping a re-download of an unchanged file on the strength of its
+  `modifiedTime` alone would silently drop that file's ops from every
+  future replay, since nothing else remembers what they were. The cache
+  holds each previously-downloaded file's already-validated content, keyed
+  by Drive fileId; a pull's replay always runs over the full accumulated
+  set (cached + freshly-downloaded), never an incremental "apply this one
+  new op onto the current local record," because the local record itself
+  carries no hlc to compare against.
 
 ## 12. Backlog (pending verification / deferred work)
 
@@ -4722,6 +4825,12 @@ CategoryIconKey` (new `src/features/tags/categoryIcons.ts`, a curated
   follow-up; whoever takes it should check whether `Preferencias` needs the
   same treatment or whether last-writer-wins is genuinely correct there.
 
+  **Status update (Track Z, 2026-08-20): confirmed, and no longer
+  "unreachable today"** — the sync engine now exists (§10.19 implemented),
+  so this is a live, traced gap rather than a hypothetical one, still
+  deliberately unfixed for the reason above. See §11, 2026-08-20, for the
+  full pressure-test writeup.
+
 - **`schema.ts`'s `Movimiento.seccion` comment was wrong before §10.22 and
   nothing caught it.** The comment claimed a taxonomy _value_ ("Personal,
   Trabajo…") while every fixture stored an id. The process finding, which is
@@ -4732,6 +4841,37 @@ CategoryIconKey` (new `src/features/tags/categoryIcons.ts`, a curated
   against the contract fixtures. Any future field whose meaning is a
   convention rather than a type deserves either a branded type or a test that
   crosses that seam.
+
+- **The Drive sync engine (§10.19, Track Z) is built and tested but not
+  wired into the running app — deliberately, matching `repoProvider.ts`'s
+  own stub posture.** `bootstrap()`, `sync/engine.ts`'s `pull()`/`push()`/
+  `startSyncTriggers()`, and `repo.drive.ts` all exist and pass their own
+  tests, but nothing in `main.tsx`/`authStore.ts` calls any of them yet —
+  `getRepo()` still returns the fake repo (`AGENTS.md` forbids flipping it
+  before a create UI exists). Whoever builds that UI also needs to: call
+  `startSyncTriggers()` with a context getter that reads the live
+  Drive-scoped token from `authStore.ts` and the active profile from
+  `profiles/`; call `pull()` once on a genuinely fresh session before
+  rendering the dashboard (the first-run download view this gates,
+  `docs/pendientes-usuario.md` item 5, still has no owner); and decide
+  where a revived movement's notice (`PullSummary.revivedMovIds`, specs.md
+  §10.19: "the app briefly says why") actually renders — the data is
+  returned, no screen consumes it yet.
+- **`Activo` has no sync write path yet, matching `outbox.ts`'s own scope
+  (specs.md §10.13: Movimiento CRUD + Config only this wave).** `sync/
+engine.ts`'s pull/replay side fully supports `act-<device>.json` (reads,
+  validates, merges, materializes) so it is ready the day a write path
+  exists; `push()` simply has nothing to send because nothing enqueues an
+  `activo` op today. Whoever adds `Activo` mutations to `dataStore.ts`
+  should extend `OutboxOperation`'s union (`outbox.ts`'s own comment
+  already flags this) and add a `pushActFile`-shaped function to
+  `sync/engine.ts` mirroring `pushMovShard`.
+- **`config-<device>.json` never compacts.** Movement shards compact because
+  they grow with every transaction; a device's own config file only grows
+  with settings/taxonomy changes, which are rare enough that "small, always
+  fetched" (§10.19's own words for this file) should hold indefinitely.
+  Revisit only if a real account's config file is observed growing
+  unreasonably — not a default expectation.
 
 ### Development waves (parallel tracks, sequencing, worktree log)
 

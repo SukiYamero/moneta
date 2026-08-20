@@ -5,11 +5,14 @@ import { db } from '@/lib/db'
 import { __resetDeviceIdForTests, deviceDb } from '@/lib/deviceStore'
 import {
   __resetOutboxClockForTests,
+  clampOutboxClockToServer,
   enqueueOperation,
   listPendingOperations,
+  observeRemoteHlc,
   removeOperations,
   useOutboxStore,
 } from '@/lib/outbox'
+import { __clearKnownTipsForTests, recordKnownTip } from '@/lib/sync/tip'
 
 const movimiento = (overrides: Partial<Movimiento> = {}): Movimiento => ({
   id: crypto.randomUUID(),
@@ -26,6 +29,7 @@ const movimiento = (overrides: Partial<Movimiento> = {}): Movimiento => ({
 afterEach(async () => {
   await db.outbox.clear()
   await deviceDb.deviceId.clear()
+  await __clearKnownTipsForTests()
   __resetDeviceIdForTests()
   __resetOutboxClockForTests()
   useOutboxStore.setState({ dirty: false })
@@ -53,6 +57,33 @@ describe('enqueueOperation', () => {
 
     const edited = { ...m, monto: 2000 }
     await enqueueOperation({ entity: 'movimiento', op: 'put', payload: edited })
+    const entries = await listPendingOperations()
+    const second = entries.find((e) => e.hlc !== first?.hlc)
+
+    expect(second?.basedOn).toBe(first?.hlc)
+  })
+
+  it("chains basedOn to a tip learned from a pull, not just this device's own outbox history", async () => {
+    // The bug this closes (specs.md §11, 2026-08-19): a device that pulled a
+    // newer version it never queued locally must still base its next op on
+    // it, or a later delete looks falsely concurrent with an edit it saw.
+    const m = movimiento()
+    await recordKnownTip('movimiento', m.id, '000000005-0000-remotedev')
+
+    await enqueueOperation({ entity: 'movimiento', op: 'del', payload: { id: m.id } })
+    const [entry] = await listPendingOperations()
+
+    expect(entry?.basedOn).toBe('000000005-0000-remotedev')
+  })
+
+  it("prefers this device's own more recent outbox history over a stale pulled tip", async () => {
+    const m = movimiento()
+    await recordKnownTip('movimiento', m.id, '000000001-0000-remotedev') // stale — from before this device's own edit below
+
+    await enqueueOperation({ entity: 'movimiento', op: 'put', payload: m })
+    const [first] = await listPendingOperations()
+
+    await enqueueOperation({ entity: 'movimiento', op: 'del', payload: { id: m.id } })
     const entries = await listPendingOperations()
     const second = entries.find((e) => e.hlc !== first?.hlc)
 
@@ -156,5 +187,39 @@ describe('removeOperations', () => {
     await removeOperations([first!.id])
 
     expect(useOutboxStore.getState().dirty).toBe(true)
+  })
+})
+
+describe('observeRemoteHlc / clampOutboxClockToServer', () => {
+  it('a later local tick sorts after an observed remote hlc, even before this device has ticked itself', async () => {
+    await observeRemoteHlc('000000005-0000-remotedev')
+
+    await enqueueOperation({ entity: 'movimiento', op: 'put', payload: movimiento() })
+    const [entry] = await listPendingOperations()
+
+    expect(entry!.hlc > '000000005-0000-remotedev').toBe(true)
+  })
+
+  it('clampOutboxClockToServer pulls a poisoned clock down so future ticks track real time again', async () => {
+    // Mocking just Date.now (not vi.useFakeTimers, which also stalls the
+    // real timers dexie's IndexedDB transactions schedule on) mirrors
+    // hlc.test.ts's own clampToServer scenario: a wildly-ahead physical
+    // reading poisons the clock, then the real clock corrects itself.
+    const dateNow = vi.spyOn(Date, 'now').mockReturnValue(10_000_000_000_000)
+    await enqueueOperation({ entity: 'movimiento', op: 'put', payload: movimiento() })
+    const [poisoned] = await listPendingOperations()
+
+    dateNow.mockReturnValue(1_000)
+    await clampOutboxClockToServer(1_000)
+    await enqueueOperation({ entity: 'movimiento', op: 'put', payload: movimiento() })
+    // listPendingOperations() sorts by hlc, not insertion order — the
+    // clamped (small) hlc now sorts *before* the poisoned one, so find it
+    // by exclusion rather than assuming array position.
+    const entries = await listPendingOperations()
+    const clamped = entries.find((e) => e.hlc !== poisoned!.hlc)
+    const decodedMillis = Number.parseInt(clamped!.hlc.split('-')[0] ?? '0', 36)
+
+    expect(decodedMillis).toBe(1_000)
+    dateNow.mockRestore()
   })
 })

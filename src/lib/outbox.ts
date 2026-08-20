@@ -3,13 +3,14 @@ import type { Config, Movimiento } from '@/lib/schema'
 import { db } from '@/lib/db'
 import { getDeviceId } from '@/lib/deviceStore'
 import { createLogicalClock, type Hlc, type LogicalClock } from '@/lib/hlc'
+import { getKnownTip } from '@/lib/sync/tip'
 
 // outbox.ts — the local record of operations not yet pushed to Drive
-// (specs.md §10.13/§10.19). Nothing consumes it yet: Track Z's sync engine
-// is the first reader, the same way toastStore.ts shipped a wave before its
-// first caller. What's built here is the op envelope (hlc/basedOn/device),
-// the queue itself, and the `dirty` signal a future flush trigger reads —
-// not transport, not file sharding, not merge.
+// (specs.md §10.13/§10.19). Track Z's sync engine is its first reader (the
+// same way toastStore.ts shipped a wave before its first caller) and also
+// its first fix: `basedOn` now consults `sync/tip.ts`'s cache of what the
+// last pull taught this device, not just this device's own queued history
+// — see `lastHlcFor`'s comment below for the concrete bug that closes.
 //
 // Activo mutations aren't built this wave (specs.md §10.13's scope is
 // Movimiento CRUD + Config), so this union only covers what actually
@@ -48,26 +49,67 @@ const entityIdOf = (operation: OutboxOperation): string =>
 
 let clock: LogicalClock | null = null
 
-const nextHlc = async (): Promise<{ hlc: Hlc; device: string }> => {
-  const device = await getDeviceId()
-  clock ??= createLogicalClock(device)
-  return { hlc: clock.tick(), device }
+// This module owns the one clock instance every local tick comes from, so
+// it is also the one place that can fold in what a pull/push just taught it
+// (hlc.ts's `observe`/`clampToServer` — the "hybrid" half of the clock).
+// Lazily creating it here (not just in `nextHlc`) means `sync/engine.ts`
+// can call `observeRemoteHlc`/`clampOutboxClockToServer` right after a pull,
+// before this device has ever ticked locally, and have it actually stick.
+const ensureClock = async (): Promise<LogicalClock> => {
+  clock ??= createLogicalClock(await getDeviceId())
+  return clock
 }
 
-// basedOn is the hlc of the last operation *this device* recorded for the
-// same entity — the local approximation available before a sync engine
-// exists. Once Track Z's pull/replay lands, the real "last known hlc" for
-// an entity should come from the merged log (including other devices'
-// ops), not just this device's own outbox history; that's a finding for
-// whoever builds it, not something fakeable here without a merge to read.
+const nextHlc = async (): Promise<{ hlc: Hlc; device: string }> => {
+  const [c, device] = await Promise.all([ensureClock(), getDeviceId()])
+  return { hlc: c.tick(), device }
+}
+
+/** Called by `sync/engine.ts` after a pull, once per downloaded op's hlc — so this device's next local tick sorts after everything it just learned, not just what it has ticked itself. */
+export const observeRemoteHlc = async (remote: Hlc): Promise<void> => {
+  const c = await ensureClock()
+  c.observe(remote)
+}
+
+/** Called by `sync/engine.ts` whenever a Drive response carries a server `Date` (specs.md §10.19's clock-skew clamp). */
+export const clampOutboxClockToServer = async (serverNowMs: number): Promise<void> => {
+  const c = await ensureClock()
+  c.clampToServer(serverNowMs)
+}
+
+// basedOn is the best hlc this device knows for the entity: the greater of
+// (a) the last op *this device's own outbox* recorded for it, and (b) the
+// last hlc `sync/tip.ts` learned from a pull (or from a just-pushed op —
+// engine.ts records one there the moment it clears the outbox row, so this
+// device doesn't "forget" its own tip the instant a push drains it). (a)
+// alone is what this function used to be, and it is wrong the moment a pull
+// exists: device A creates a movement, pulls device B's edit (never queued
+// in A's own outbox — it arrived via replay), then deletes it locally. If
+// basedOn only consulted (a), the delete would be stamped with the
+// *create's* hlc instead of B's edit's, making it look concurrent with an
+// edit A actually saw — and opLog.ts's delete-vs-edit revival rule (correct
+// for a genuine conflict) would fire on a case that was never one, silently
+// un-deleting something the user just removed. hlc strings compare
+// correctly as plain strings (hlc.ts), so "the greater of two" is just `>`.
 const lastHlcFor = async (entity: string, entityId: string): Promise<Hlc | null> => {
-  try {
-    const rows = await entries.where('[entity+entityId]').equals([entity, entityId]).sortBy('hlc')
-    return rows.at(-1)?.hlc ?? null
-  } catch (e) {
-    console.warn('outbox: could not read prior operations for basedOn, treating as unseen', e)
-    return null
-  }
+  const [ownHistory, pulledTip] = await Promise.all([
+    (async (): Promise<Hlc | null> => {
+      try {
+        const rows = await entries
+          .where('[entity+entityId]')
+          .equals([entity, entityId])
+          .sortBy('hlc')
+        return rows.at(-1)?.hlc ?? null
+      } catch (e) {
+        console.warn('outbox: could not read prior operations for basedOn, treating as unseen', e)
+        return null
+      }
+    })(),
+    getKnownTip(entity, entityId),
+  ])
+  if (!ownHistory) return pulledTip
+  if (!pulledTip) return ownHistory
+  return ownHistory > pulledTip ? ownHistory : pulledTip
 }
 
 interface OutboxState {
