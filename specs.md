@@ -5889,6 +5889,67 @@ i18n.resolvedLanguage ?? i18n.language)`) beside the canonical, tested
   the moment they changed the app's language. Choose the names once, in the
   detected language, then never touch them again.
 
+- 2026-08-20 — **Wave 4 stage 3, step 1 (the boot sequence, §10.28, and the
+  flip, §10.25) landed in two commits, as required.** Commit 1:
+  `src/lib/boot.ts` (`useBootStore.run()`), `src/features/boot/**`
+  (`BootGate`/`BootScreen`/`BootErrorScreen`), wired into `src/router.tsx`
+  around both `RequireAuth` usages — with `getRepo()` still returning the
+  fake repo, so the sequence and the UI are provable independently of the
+  flip. Commit 2: `getRepo()` now serves the binding `boot.ts` establishes
+  (throws if called unbound, never falls back to the fake repo),
+  `outbox.ts`'s `setOutboxDatabase()` redirect, and §10.22 Decision 6's seed
+  taxonomy localization (closed above, §12).
+- 2026-08-20 — **The resolve-once-at-boot shape from the §10.25 addendum was
+  taken as written** — `getRepo()` stays synchronous; `src/lib/boot.ts`
+  resolves the binding once and hands it out via
+  `repoProvider.bindActiveProfile()`/`getActiveProfileBinding()`. No
+  concrete reason turned up during implementation to prefer the async
+  alternative the addendum itself rejected.
+- 2026-08-20 — **A same-profile repeat call to `boot.ts`'s `run()` must never
+  re-announce `status: 'running'`, or every navigation to `/settings` (a
+  separate top-level route, so `BootGate` remounts) would re-show the brand
+  screen** — contradicts §10.9's "no per-navigation loader" the moment the
+  boot screen exists at all. Solved by resolving the profile _before_
+  deciding whether to flip `status`, comparing the resolved `profile.id`
+  against what is already bound, and only entering `'running'` on a genuine
+  first boot or a rebind. The StrictMode/concurrency guard is therefore a
+  plain module variable separate from `status`, not the
+  check-then-set-on-`status` pattern `dataStore.load()`/`authStore.restore()`
+  use — that pattern would force `'running'` on every call, including the
+  no-op ones.
+- 2026-08-20 — **`authStore.ts`'s `login()`/`restore()` now resolve the
+  account's profile-registry entry (`syncProfileForAccount`) _before_
+  flipping `status` to `'authenticated'`, not after — a correctness fix the
+  flip's implementation needed, found while building it, not requested in
+  the brief.** Previously `status` flipped first and `syncProfileForAccount`
+  ran afterward in the same async function; since React re-renders the
+  instant the store's `set()` fires, `BootGate` (or anything reading
+  `status`) could observe `'authenticated'` and resolve the active profile
+  from the registry _before_ the just-signed-in account's row existed or was
+  touched there — landing on whichever profile recency last pointed at
+  instead. This is exactly §10.28's own named highest-risk case (sign out,
+  sign in as a different account, binding must not go stale) with the race
+  moved one layer down, into `authStore.ts` rather than `boot.ts`. `hydrate()`
+  needed no equivalent change — `lockStore.resume()` already awaits
+  `hydrate()`'s whole promise before leaving `phase: 'locked'`, so by the
+  time anything below the lock screen can render, the profile sync is
+  already done. Both reordered call sites re-check `authGeneration` after
+  the moved `await`, matching every other await-then-commit point in these
+  functions. This touches a file outside this track's stated blast radius
+  (`AGENTS.md`'s "question the framing" rather than silently widen scope) —
+  flagged explicitly in the implementer's report for the operator to
+  confirm rather than assumed correct by default.
+- 2026-08-20 — **`authStore.continueAsGuest()` now touches the default local
+  profile's recency (`touchLastUsed(DEFAULT_PROFILE_ID)`), the same
+  correctness gap's guest-side twin.** `getActiveProfile()` resolves purely
+  by recency with no notion of "guest" — a device that signed out of a
+  Google account and then chose "continue as guest" would otherwise still
+  resolve to that account's profile (touched more recently than the
+  untouched default one), and the boot sequence would read/write the
+  guest's data into the signed-out account's local database. Found while
+  implementing the same edge case above, not requested in the brief; same
+  disclosure as above.
+
 ## 12. Backlog (pending verification / deferred work)
 
 - **The Add sheet's "gear into `/settings`" entry point was never actually
@@ -6254,11 +6315,12 @@ undefined })` → a fresh `repo.ready()` read, and `idioma` came back
   a real Dexie repo exists, and the moment the question becomes answerable
   rather than hypothetical.
 
-- **The outbox targets the default `kurobello` database, not the active
-  profile's.** Correct today — `getRepo()` is single-profile — and the table
-  now lives on the per-profile database, so this closes itself the day
-  `dataStore` writes through `getActiveProfileRepo()`. Listed so that day
-  does not arrive silently.
+- ✅ **The outbox targets the default `kurobello` database, not the active
+  profile's.** Closed 2026-08-20 (Wave 4 stage 3, step 1 — the flip).
+  `outbox.ts`'s `entries` is now a `let`, redirected by the new
+  `setOutboxDatabase(database)`; `src/lib/boot.ts` calls it right after
+  `repoProvider.bindActiveProfile()`, so the outbox and the repo always
+  point at the same profile.
 
 - **The default profile's label is hardcoded `'Local'`, not localized.**
   `src/lib/profiles/profileRegistry.ts` mints it regardless of the active
@@ -6367,29 +6429,20 @@ engine.ts`'s pull/replay side fully supports `act-<device>.json` (reads,
   fetched" (§10.19's own words for this file) should hold indefinitely.
   Revisit only if a real account's config file is observed growing
   unreasonably — not a default expectation.
-- **§10.22 Decision 6 (localizing the seed category/section names) was
-  specified but never implemented, and nothing flagged it as deferred**
-  (found by the Track G1 review, 2026-08-20). `buildSeedConfig()`
-  (`src/lib/seedConfig.ts`) still only varies `monedaPrincipal` by device
-  region; `CONFIG_SEMILLA`'s Spanish category/section names (`Sueldo`,
-  `Servicios`, `Personal`, `Trabajo`, `Emprendimiento`…) pass through
-  untouched regardless of locale or region. This is exactly the failure
-  Decision 6 names ("a first run on a pt-BR device seeds a Portuguese-
-  speaking user a Spanish taxonomy") still happening. **Unreachable today**
-  — `getRepo()` still returns the fake repo, so no real first run hits this
-  path — which is presumably why it slipped past `bun run check` and every
-  stage summary without being noticed or filed; the three §11 stage entries
-  above report `seedConfig.ts` in the blast radius but never mention this
-  gap. Left unimplemented rather than fixed by this review because it needs
-  a product decision the code shouldn't make silently: translated names for
-  8 seed entries (3 secciones + 5 categorias) across `en`/`es-AR`/`pt-BR`,
-  and whether seeding keys off device region (matching `monedaForRegion`'s
-  existing pattern) or the active i18next language (which can differ from
-  region once a user changes the app's language) — Decision 6's own text
-  doesn't say which. Whoever picks this up should re-verify it's still
-  unreachable before shipping a fix with no urgency behind it, and should
-  decide the region-vs-language question explicitly rather than copy
-  `monedaForRegion`'s wiring by default.
+- ✅ **§10.22 Decision 6 (localizing the seed category/section names) — closed
+  2026-08-20 (Wave 4 stage 3, step 1 — the flip).** `buildSeedConfig()`
+  (`src/lib/seedConfig.ts`) now takes a second parameter, `locale:
+SupportedLocale = detectLocale()`, and looks up each section/category's
+  `nombre` in a `Record<SupportedLocale, Record<id, name>>` table keyed by
+  the `CONFIG_SEMILLA` ids (ids never change across locales). Decided
+  region-vs-language per the §10.25 addendum: locale, not region —
+  `monedaForRegion` keeps the region axis to itself. The operator's draft
+  translations (en/es-AR/pt-BR, `es` matching `CONFIG_SEMILLA` unchanged)
+  from the §10.28 brief are what shipped; flagged for the user to review as
+  real copy, not placeholder. Both call sites (`repo.local.ts`,
+  `bootstrap.ts`) already called `buildSeedConfig()` with no arguments, so
+  neither needed a change — the new parameter's default is exactly what
+  they were already relying on.
 
 - **The category icon grid's accessible labels are raw, untranslated English
   icon keys** (`"dumbbell"`, `"party-popper"`) — a deliberate scope call the

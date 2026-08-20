@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import type { Config, Movimiento } from '@/lib/schema'
-import { db } from '@/lib/db'
+import { db, type ProfileDb } from '@/lib/db'
 import { getDeviceId } from '@/lib/deviceStore'
 import { createLogicalClock, type Hlc, type LogicalClock } from '@/lib/hlc'
 import { getKnownTip } from '@/lib/sync/tip'
@@ -35,12 +35,26 @@ export interface OutboxEntry {
 // A table on the per-profile `ProfileDb` (`db.ts`'s `outbox` table, added
 // in its v3), not a database of its own: the queue is per-profile data —
 // each profile's own pending operations — the same reasoning that keeps
-// `movimientos`/`config` on this connection rather than a shared one. Reads
-// through the frozen default `db` (the `kurobello` profile) for now, matching
-// `repoProvider.getRepo()`'s own current single-profile reality — the day
-// `dataStore.ts` writes through `getActiveProfileRepo()` instead, this must
-// move with it (see specs.md §12).
-const entries = db.outbox
+// `movimientos`/`config` on this connection rather than a shared one.
+// Starts on the frozen default `db` (the `kurobello` profile) and is
+// redirected by `setOutboxDatabase()` below, the boot sequence's one call
+// (specs.md §10.25 addendum, §12 2026-08-19): once `dataStore.ts` writes
+// through the profile-scoped repo, a guest's pending operations queuing
+// into a signed-in account's outbox (or vice versa) is data crossing
+// accounts, not a tidiness issue — this must move with the flip.
+let entries = db.outbox
+
+/**
+ * Redirects every function below to the given profile's own `outbox`
+ * table. Called once by the boot sequence right after
+ * `repoProvider.bindActiveProfile()` (specs.md §10.28) — the outbox and the
+ * repo must always point at the same profile, or a write lands in one
+ * profile's database while its sync record queues under another's.
+ */
+export const setOutboxDatabase = (database: ProfileDb): void => {
+  entries = database.outbox
+  void refreshDirty()
+}
 
 const CONFIG_ENTITY_ID = 'config'
 
@@ -199,4 +213,10 @@ export const removeOperations = async (ids: string[]): Promise<void> => {
 // matching deviceStore.ts's __resetDeviceIdForTests.
 export const __resetOutboxClockForTests = (): void => {
   clock = null
+}
+
+// Test-only: points the module back at the frozen default `db`, so a test
+// that redirected the outbox doesn't leak that binding into the next one.
+export const __resetOutboxDatabaseForTests = (): void => {
+  entries = db.outbox
 }

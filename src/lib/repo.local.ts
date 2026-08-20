@@ -619,9 +619,11 @@ const performReady = async (database: ProfileDb): Promise<void> => {
   const stored = await database.config.get(CONFIG_ID)
 
   if (!stored) {
-    // First-run only: monedaPrincipal derives from the device region
-    // (specs.md §10.7). A schemaVersion mismatch below never re-enters
-    // this branch, so a currency the user already has is never reassigned.
+    // First-run only: monedaPrincipal derives from the device region, the
+    // section/category names from the active copy locale (specs.md §10.7,
+    // §10.22 Decision 6). A schemaVersion mismatch below never re-enters
+    // this branch, so a currency or a name the user already has is never
+    // reassigned.
     const seeded: ConfigRow = { ...buildSeedConfig(), id: CONFIG_ID }
     await database.config.put(seeded)
     return

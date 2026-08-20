@@ -3,6 +3,8 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { HistoryScreen } from '@/features/history/HistoryScreen'
 import { fakeRepo } from '@/lib/repo.fake'
+import { bindActiveProfile } from '@/lib/repoProvider'
+import type { ProfileDb } from '@/lib/db'
 import { breakdownBy, filterByRange, periodRange, totals } from '@/lib/movimientoStats'
 import { formatMonto, formatMontoWithSign } from '@/components/shared/movimientoView'
 import { i18next } from '@/lib/i18n'
@@ -28,6 +30,12 @@ const money = (text: string): string => text.replaceAll(' ', ' ')
 
 describe('HistoryScreen', () => {
   beforeEach(async () => {
+    // specs.md §10.25: getRepo() now throws unless the boot sequence has
+    // bound a profile — this suite exercises the real dataStore.load()
+    // against the real fakeRepo (unlike the other screens' tests, which
+    // mock repoProvider outright), so it needs to establish that binding
+    // itself. profile/database are never read on this path.
+    bindActiveProfile({ profile: {} as never, database: {} as ProfileDb, repo: fakeRepo })
     const movimientos = (await fakeRepo.movimientos.list()).items
     seedTodayIso = movimientos.find((m) => m.nota === 'Café de la mañana')!.fecha
     vi.useFakeTimers({ toFake: ['Date'] })

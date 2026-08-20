@@ -5,6 +5,7 @@ import {
   getActiveProfileBinding,
   resolveActiveProfileBinding,
 } from '@/lib/repoProvider'
+import { setOutboxDatabase } from '@/lib/outbox'
 import { useDataStore } from '@/lib/dataStore'
 
 // The boot sequence (specs.md §10.28): resolve the active profile, bind it,
@@ -39,6 +40,10 @@ const runOnce = async (
   const binding = await resolveActiveProfileBinding()
   const isRebind = binding.profile.id !== previous?.profile.id
   bindActiveProfile(binding)
+  // The outbox and the repo must always point at the same profile (specs.md
+  // §10.25 addendum, §12 2026-08-19) — a guest's pending operations must
+  // never queue into a signed-in account's outbox, or vice versa.
+  setOutboxDatabase(binding.database)
 
   if (!isRebind && get().status === 'ready') return
 

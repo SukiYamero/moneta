@@ -7,6 +7,7 @@ vi.mock('@/lib/repoProvider', () => ({
   getRepo: vi.fn(),
 }))
 vi.mock('@/lib/toastStore', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/outbox', () => ({ setOutboxDatabase: vi.fn() }))
 
 import type { Repo } from '@/lib/repo'
 import { RepoError } from '@/lib/repo'
@@ -19,12 +20,14 @@ import {
 } from '@/lib/repoProvider'
 import { CONFIG_SEMILLA } from '@/lib/schema'
 import { useDataStore } from '@/lib/dataStore'
+import { setOutboxDatabase } from '@/lib/outbox'
 import { __resetBootStoreForTests, useBootStore } from '@/lib/boot'
 
 const mResolveBinding = vi.mocked(resolveActiveProfileBinding)
 const mBindActiveProfile = vi.mocked(bindActiveProfile)
 const mGetActiveProfileBinding = vi.mocked(getActiveProfileBinding)
 const mGetRepo = vi.mocked(getRepo)
+const mSetOutboxDatabase = vi.mocked(setOutboxDatabase)
 
 const makeRepo = (readyError?: unknown): Repo =>
   ({
@@ -72,6 +75,9 @@ describe('useBootStore.run()', () => {
     await useBootStore.getState().run()
 
     expect(mBindActiveProfile).toHaveBeenCalledWith(binding)
+    // specs.md §10.25 addendum: the outbox must move with the repo, or a
+    // guest's pending operations queue into a signed-in account's outbox.
+    expect(mSetOutboxDatabase).toHaveBeenCalledWith(binding.database)
     expect(useBootStore.getState().status).toBe('ready')
     expect(useDataStore.getState().status).toBe('ready')
   })

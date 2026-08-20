@@ -51,12 +51,16 @@ _someone_. One dexie database per profile, not a `profileId` column — see
 - `index.ts` — the public barrel: profile types, the registry functions, and
   `getProfileDatabase()`.
 
-Consumed by `src/lib/repoProvider.ts`'s `getActiveProfileRepo()` — proven
-with tests, not yet wired into `getRepo()` (the stub flip is gated on Wave
-4's create UI, `specs.md` "Wave 3 — staging and dependencies") — and by
-`src/lib/authStore.ts` (`resolveGoogleProfile`, `specs.md` §10.20), which
-is live: every `login()`/`restore()`/`hydrate()` success resolves the
-signed-in account's profile, self-catching so a registry failure never
-fails the auth flow it rides on. No UI writes through this module yet;
-`specs.md` §10.18 renders a read-only profile list in stage 3
+Consumed by `src/lib/repoProvider.ts`'s `resolveActiveProfileBinding()`,
+called once per boot by `src/lib/boot.ts` (`specs.md` §10.28) — its result is
+what `getRepo()` now serves (the flip, `specs.md` §10.25). Also consumed by
+`src/lib/authStore.ts`: `resolveGoogleProfile` (`specs.md` §10.20) — every
+`login()`/`restore()`/`hydrate()` success resolves the signed-in account's
+profile, self-catching so a registry failure never fails the auth flow it
+rides on, and (for `login()`/`restore()`'s online branch) resolved _before_
+`status` flips to `'authenticated'`, so `boot.ts` can never read the
+registry ahead of it — and `touchLastUsed(DEFAULT_PROFILE_ID)` from
+`continueAsGuest()`, so recency-based resolution can't land a guest in
+whatever Google account was last signed out of. No UI writes through this
+module yet; `specs.md` §10.18 renders a read-only profile list in stage 3
 (`src/features/profile/ProfilesSection.tsx`).
