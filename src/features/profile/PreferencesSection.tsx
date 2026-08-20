@@ -2,14 +2,11 @@ import { ChevronRight } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import { useDataStore } from '@/lib/dataStore'
-import type { SupportedLocale } from '@/lib/i18n/resources'
 import { LOCALE_LABEL } from '@/lib/i18n/localeLabels'
+import { resolveActiveLocale } from '@/lib/i18n/localeResolution'
 import { ProfileSectionHeading } from '@/features/profile/ProfileSectionHeading'
 
 const WEEK_START_KEY: Record<0 | 1, 'sunday' | 'monday'> = { 0: 'sunday', 1: 'monday' }
-
-const asSupportedLocale = (tag: string | undefined): SupportedLocale =>
-  tag !== undefined && tag in LOCALE_LABEL ? (tag as SupportedLocale) : 'es'
 
 /** The theme row: never a Link — there is nowhere to send it (Prerequisite 3). */
 const InertRow = ({ label, value }: { label: string; value: string }) => (
@@ -48,7 +45,7 @@ export const PreferencesSection = () => {
   // honesty copy lives in `settings`'s own namespace, not `profile`'s: this
   // track edits only `settings`/`lock` in the locale files, per
   // `docs/wave-4-plan.md` §5's contended-file resolution with Track F).
-  const { t, i18n } = useTranslation(['profile', 'settings'])
+  const { t } = useTranslation(['profile', 'settings'])
   const preferencias = useDataStore((s) => s.config?.preferencias)
 
   return (
@@ -80,11 +77,7 @@ export const PreferencesSection = () => {
         />
         <LinkedRow
           label={t('preferences.language.label')}
-          value={
-            LOCALE_LABEL[
-              preferencias?.idioma ?? asSupportedLocale(i18n.resolvedLanguage ?? i18n.language)
-            ]
-          }
+          value={LOCALE_LABEL[resolveActiveLocale(preferencias?.idioma)]}
         />
       </div>
     </section>
