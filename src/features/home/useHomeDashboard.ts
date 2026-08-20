@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react'
-import { addDays, format, parseISO } from 'date-fns'
+import { addDays, parseISO } from 'date-fns'
 import { useLocaleFormatting } from '@/lib/i18n/localeFormatting'
 import { useDataStore, type DataStatus } from '@/lib/dataStore'
 import type { RepoErrorCode } from '@/lib/repo'
@@ -7,8 +7,10 @@ import { CONFIG_SEMILLA } from '@/lib/schema'
 import type { Categoria, Moneda, Movimiento } from '@/lib/schema'
 import {
   filterByRange,
+  otherCurrencies,
   periodRange,
   series,
+  toIsoDate,
   totals,
   type DateRange,
   type SeriesBucket,
@@ -35,6 +37,13 @@ export interface HomeDashboard {
   monthLabel: string
   /** All-time totals — "Balance total" is the running balance, not scoped to a period. */
   totals: Totals
+  /**
+   * Currencies other than `moneda` present in `movimientos` (specs.md
+   * §10.27) — empty in the common case where every movement shares one
+   * currency. `totals`/`week` above already exclude these; this is only
+   * what lets the screen say so rather than silently drop them.
+   */
+  otherCurrencies: Moneda[]
   weekStripDays: WeekStripDay[]
   week: { range: DateRange; totalGastos: number; chart: SeriesBucket[] }
   recent: Movimiento[]
@@ -63,7 +72,7 @@ export const useHomeDashboard = (): HomeDashboard => {
     void load()
   }, [load])
 
-  const todayIso = useMemo(() => format(new Date(), 'yyyy-MM-dd'), [])
+  const todayIso = useMemo(() => toIsoDate(new Date()), [])
   const primerDiaSemana =
     config?.preferencias.primerDiaSemana ?? CONFIG_SEMILLA.preferencias.primerDiaSemana
   const moneda = config?.preferencias.monedaPrincipal ?? CONFIG_SEMILLA.preferencias.monedaPrincipal
@@ -80,16 +89,21 @@ export const useHomeDashboard = (): HomeDashboard => {
     [weekRange, dateFnsLocale],
   )
 
-  const allTotals = useMemo(() => totals(movimientos), [movimientos])
+  const allTotals = useMemo(() => totals(movimientos, moneda), [movimientos, moneda])
+
+  const otherCurrenciesPresent = useMemo(
+    () => otherCurrencies(movimientos, moneda),
+    [movimientos, moneda],
+  )
 
   const weekTotalGastos = useMemo(
-    () => totals(filterByRange(movimientos, weekRange)).gastos,
-    [movimientos, weekRange],
+    () => totals(filterByRange(movimientos, weekRange), moneda).gastos,
+    [movimientos, weekRange, moneda],
   )
 
   const chart = useMemo(
-    () => series(movimientos, 'semana', weekRange, primerDiaSemana),
-    [movimientos, weekRange, primerDiaSemana],
+    () => series(movimientos, 'semana', weekRange, primerDiaSemana, moneda),
+    [movimientos, weekRange, primerDiaSemana, moneda],
   )
 
   const weekStripDays = useMemo(
@@ -110,6 +124,7 @@ export const useHomeDashboard = (): HomeDashboard => {
     todayIso,
     monthLabel,
     totals: allTotals,
+    otherCurrencies: otherCurrenciesPresent,
     weekStripDays,
     week: { range: weekRange, totalGastos: weekTotalGastos, chart },
     recent,

@@ -2879,7 +2879,9 @@ in its own commit.
 ### 10.27 One currency at a time, honestly (aggregation and the currency switch)
 
 Wave 4 stage 3. Written 2026-08-20, from a finding in the general cross-wave
-review.
+review. **Implemented 2026-08-20** (Track AC) — see §11 for the
+file-ownership deviation this track took to actually render the note, and
+the CSV-export verification.
 
 `movimientoStats`' aggregates — `totals()`, `breakdownBy()`, `series()` — sum
 every `Movimiento.monto` handed to them and never look at `moneda`. That was
@@ -6000,6 +6002,49 @@ i18n.resolvedLanguage ?? i18n.language)`) beside the canonical, tested
   can call `getRepo()`/enqueue an outbox operation in the gap between
   `logout()` and the next boot (`RequireAuth` renders only `WelcomeScreen`
   there, which touches neither).
+- 2026-08-20 — Track AC (§10.27, Wave 4 stage 3): **`totals()`/
+  `breakdownBy()`/`series()` in `movimientoStats.ts` take `moneda` as a
+  required argument**, not a default. A screen that needs an unscoped sum
+  doesn't exist and shouldn't be built by omitting the argument — the
+  point of making it required is that a call site cannot forget. The
+  currencies-excluded note is a new `otherCurrencies()` helper (distinct
+  currencies present besides the scoped one, empty in the common case) plus
+  one shared i18n key, `common.otherCurrencyNote` — reused by both Home and
+  History rather than one key per screen, since the copy has no
+  screen-specific content once `{{currencies}}` is interpolated
+  (`Intl.ListFormat`, matching §10.7's `formatToParts` reasoning for why a
+  hand-joined string is wrong).
+  **File-ownership deviation, flagged rather than silent:** rendering the
+  note on Home required editing `src/routes/Home.tsx` (and reading, not
+  editing, `src/features/home/BalanceCard.tsx`), neither of which was in
+  this track's file list — `useHomeDashboard.ts` is a hook with no JSX, so
+  the note can only actually reach the screen one layer up. `Home.tsx` is
+  not owned by Track AB (`src/lib/sync/**`/`authStore.ts`/`boot.ts`/
+  `main.tsx`/`router.tsx`/a new first-run view/the profile sheet's Drive
+  row) or any other in-flight track, so this was a minimal, non-colliding
+  addition (one conditional `<p>` plus a `useLocaleFormatting()` call) —
+  the alternative was shipping §10.27's UI requirement (the note) unbuilt
+  while the data half (`useHomeDashboard.ts`'s `otherCurrencies`) had
+  nowhere to render. Escalate to the operator if this should instead have
+  been a stop-and-ask.
+  **CSV export verified, not assumed** (§10.27's own edge case):
+  `src/lib/export/csv.ts`'s `buildRow` writes `moneda: movimiento.moneda`
+  per row — each row's own currency, never `monedaPrincipal` — so the
+  aggregation fix needed no change there. Confirmed by reading the file, not
+  inferred from its being outside Track AC's blast radius.
+  **Sweep for the same shape:** `PreferencesEditor.tsx`'s `weekStartValue`
+  turned out to be a third, un-tabled copy of the `primerDiaSemana`↔choice
+  mapping (a ternary, not even a `Record`) beyond the two §12 already named
+  — fixed alongside the other two, since both files were already owned by
+  this track. The `radiogroup` sweep found nothing beyond `OptionList`/
+  `SegmentedControl`. The `'yyyy-MM-dd'` sweep found three more call sites
+  this track does **not** own and left unfixed: `src/components/shared/
+DateChipPicker.tsx:109`, `src/lib/repo.fake.ts:366,381`, and `src/lib/
+export/index.ts:49` all still inline `format(date, 'yyyy-MM-dd')` instead
+  of importing `movimientoStats.ts`'s newly-exported `toIsoDate`. Filed in
+  §12 rather than fixed here, since none of those three files were in this
+  track's file list and widening scope to touch them risks another
+  in-flight track's work.
 
 ## 12. Backlog (pending verification / deferred work)
 
@@ -6584,9 +6629,10 @@ SupportedLocale = detectLocale()`, and looks up each section/category's
   (2026-08-19) — that one is the Dexie-write/outbox-enqueue pair; this one is
   `push()` racing itself. **Blocks §10.26 shipping**: the wiring is precisely
   what makes the race reachable.
-- **`OptionList` announces `role="radiogroup"` without implementing the
-  behaviour the role promises.** CONFIRMED by the general cross-wave review,
-  2026-08-20. `src/features/settings/OptionList.tsx` renders
+- ✅ **`OptionList` announces `role="radiogroup"` without implementing the
+  behaviour the role promises.** — closed 2026-08-20 (Track AC, Wave 4 stage
+  3). CONFIRMED by the general cross-wave review, 2026-08-20.
+  `src/features/settings/OptionList.tsx` renders
   `role="radiogroup"`/`role="radio"`/`aria-checked` — the same ARIA contract
   as `src/components/shared/SegmentedControl.tsx` — but implements neither
   roving `tabIndex` nor arrow-key handling, both of which `SegmentedControl`
@@ -6595,37 +6641,65 @@ SupportedLocale = detectLocale()`, and looks up each section/category's
   keyboard or screen-reader user on `/settings` tabs through all five language
   options instead of one stop per group, and arrow keys do nothing. Two
   components, one wave, the same pattern, one finished. The shared logic is
-  the natural fix.
-- **`SettingsScreen` skips a heading level (h1 → h3).** CONFIRMED, same
-  review. `SettingsScreen.tsx:49` renders the only `<h1>`; its children
+  the natural fix. **Fix:** extracted the roving-`tabIndex`/arrow-key
+  mechanics into `src/components/shared/useRovingRadioGroup.ts` (taking an
+  `orientation`, since `OptionList` is vertical and needs Up/Down where
+  `SegmentedControl` uses Left/Right per the APG spec) and had both
+  components consume it; `OptionList.test.tsx` gained the same
+  roving-tabIndex/arrow-key/focus-ref tests `SegmentedControl.test.tsx`
+  already had, written first and watched fail against the un-fixed component.
+- ✅ **`SettingsScreen` skips a heading level (h1 → h3).** — closed
+  2026-08-20 (Track AC, Wave 4 stage 3). CONFIRMED, same review.
+  `SettingsScreen.tsx:49` renders the only `<h1>`; its children
   `CategoriesSection.tsx:98` and `PreferencesEditor.tsx:56` both use
   `ProfileSectionHeading`, which is a hardcoded `<h3>` built for
   `ProfileSheet.tsx` — where it is correct, because that sheet supplies the
   `<h2>` above it (`ProfileSheet.tsx:29`). Reused one level too deep. Either
   `SettingsScreen` supplies an `h2` or the component takes a `level` prop.
-- **`toIsoDate`/`'yyyy-MM-dd'` is reimplemented in four files and inlined in
-  three more.** CONFIRMED, same review. `movimientoStats.ts:44-52` already
+  **Fix:** `SettingsScreen` supplies the `h2` — each section is wrapped in
+  `<section aria-labelledby>` with a visually hidden `<h2>`, not a `level`
+  prop on `ProfileSectionHeading`, because `CategoriesSection.tsx` (which
+  also renders one of the offending `<h3>`s) is outside Track AC's file
+  ownership; a `level` prop would have needed a call-site change there too.
+  This fixes both sections without touching that file.
+- ✅ **`toIsoDate`/`'yyyy-MM-dd'` is reimplemented in four files and inlined in
+  three more.** — closed 2026-08-20 (Track AC, Wave 4 stage 3). CONFIRMED,
+  same review. `movimientoStats.ts:44-52` already
   computes it and does not export it, which is _why_
   `historyPeriodOptions.ts:26-27`, `useHistoryPeriod.ts:5-6` and
   `dateRangePresets.ts:11-12` each redeclared their own copy, and why
   `homeView.ts:67`, `useHomeDashboard.ts:66` and `useSearchFilters.ts:10`
   inline the format string. Three of those four files already import other
-  helpers from `movimientoStats.ts`. Exporting it is the whole fix.
-- **`primerDiaSemana` ↔ day-name is two hand-maintained inverse lookup
-  tables.** CONFIRMED, same review. `PreferencesSection.tsx:9`
+  helpers from `movimientoStats.ts`. Exporting it is the whole fix. **Fix:**
+  exported it; deleted all four redeclarations and pointed all three inline
+  literals at the export.
+- ✅ **`primerDiaSemana` ↔ day-name is two hand-maintained inverse lookup
+  tables.** — closed 2026-08-20 (Track AC, Wave 4 stage 3). CONFIRMED, same
+  review. `PreferencesSection.tsx:9`
   (`WEEK_START_KEY`, read) and `PreferencesEditor.tsx:14` (`WEEK_START_VALUE`,
   write) encode the same mapping in opposite directions, in two features,
   neither importing the other. One ordered tuple in `src/lib/` replaces both,
   per `AGENTS.md`'s "move the value down into `src/lib/`" rule. Low cost
   today; filed because it is the same shape as the entry above, smaller.
-- **`SecuritySection.tsx:9-12` asserts something false about a sibling file.**
-  CONFIRMED, same review. Its comment says `LockSettings` is "untouched,
+  **Fix:** `src/lib/weekStart.ts` derives both `Record`s from one ordered
+  entry list; both features import from it. The sweep for a third instance
+  found one: `PreferencesEditor.tsx`'s own `weekStartValue` was a third,
+  un-tabled copy of the same mapping as a ternary
+  (`primerDiaSemana === 0 ? 'sunday' : 'monday'`) — also a lookup-table
+  violation on its own (`AGENTS.md`'s "pure value→value mappings use a
+  `Record`, never a `switch`/`if-else` chain") — fixed to read from
+  `WEEK_START_KEY` too.
+- ✅ **`SecuritySection.tsx:9-12` asserts something false about a sibling
+  file.** — closed 2026-08-20 (Track AC, Wave 4 stage 3). CONFIRMED, same
+  review. Its comment says `LockSettings` is "untouched,
   including its still-hardcoded Spanish copy (specs.md §12)" — Track G2 did
   the lock i18n retrofit in that same wave and `LockSettings.tsx` now calls
   `t('settings.activeNote')` and friends. `SecuritySection.tsx` itself was
   never touched by G2, so the comment was left describing a state that no
   longer exists. Exactly the comment-drift-between-tracks shape the review
-  protocol's item 6 exists to catch.
+  protocol's item 6 exists to catch. **Fix:** corrected the comment to state
+  the lock retrofit landed, verified by reading `LockSettings.tsx` (it now
+  calls `t()` throughout, no hardcoded Spanish left).
 - **`sync/validate.ts`'s header comment claims it "stays permissive on
   business rules" and the code is stricter than that.** Noted by the general
   cross-wave review, 2026-08-20: `isValidMovimiento` does enforce `monto > 0`,
@@ -6634,6 +6708,33 @@ SupportedLocale = detectLocale()`, and looks up each section/category's
   under-describes it, which is the dangerous direction for a validation file
   (a future reader may add the check the comment implies is missing, or route
   around the file believing it does less than it does).
+- **A guest is shown a lock control that can only fail.** CONFIRMED by the
+  operator 2026-08-20, tracing a user question about forgotten PINs.
+  `lockStore.enable` throws `NO_SESSION_ERROR` when there is no session
+  (`lockStore.ts:137`) and a guest has none, but `SecuritySection.tsx` renders
+  `LockSettings` unconditionally inside `ProfileSheet` — no auth-status gate
+  anywhere in the chain. A guest opens their profile, sees "Seguridad", taps
+  it, and receives an error for a thing they were offered.
+  **This is the same shape the project already fixed one layer down and did
+  not sweep:** `LockScreen.tsx:11` carries an explicit comment that the user
+  "must not see a button that always fails (specs.md §11, 2026-08-19)" —
+  applied to the biometric CTA, never to the section that hosts it. Exactly
+  `AGENTS.md`'s "fix the shape, not the instance", missed by the very fix that
+  named the rule. Whoever picks this up should gate the section on auth status
+  **and** re-sweep for a third instance rather than fixing this one site.
+  Note the product question underneath is open and belongs to the user
+  (`docs/pendientes-usuario.md` item 9): whether a guest should be offered a
+  PIN at all, given that a guest lockout has no honest recovery.
+- **Three more `'yyyy-MM-dd'` reimplementations exist beyond the ones Track
+  AC's `toIsoDate` export (this section, closed above) fixed.** Found by
+  Track AC's own sweep, 2026-08-20, but left unfixed because none of the
+  three files were in that track's file list:
+  `src/components/shared/DateChipPicker.tsx:109`, `src/lib/repo.fake.ts:366`
+  and `:381`, and `src/lib/export/index.ts:49` all still call
+  `format(date, 'yyyy-MM-dd')` directly instead of importing
+  `movimientoStats.ts`'s now-exported `toIsoDate`. Same fix shape as the
+  closed entry above — swap the inline `format` call for the import — just
+  needs an owner for those three files.
 
 - **A guest is shown a lock control that can only fail.** CONFIRMED by the
   operator 2026-08-20, tracing a user question about forgotten PINs.

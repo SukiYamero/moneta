@@ -2,6 +2,7 @@ import { Search } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import { usePendingDelay } from '@/components/shared'
+import { useLocaleFormatting } from '@/lib/i18n/localeFormatting'
 import { AreasBanner } from '@/features/home/AreasBanner'
 import { BalanceCard } from '@/features/home/BalanceCard'
 import { HomeEmptyState } from '@/features/home/HomeEmptyState'
@@ -19,13 +20,24 @@ import { useHomeDashboard } from '@/features/home/useHomeDashboard'
 // The screen's <h1> lives inside HomeHeader (the greeting) — the design's
 // actual subject for this screen, not the app name.
 export const Home = () => {
-  const { t } = useTranslation('home')
+  const { t } = useTranslation(['home', 'common'])
+  const { locale } = useLocaleFormatting()
   const dashboard = useHomeDashboard()
   const isPending = dashboard.status === 'idle' || dashboard.status === 'loading'
   // Anti-flash gate (specs.md §10.9): a first load fast enough to beat the
   // delay shows nothing at all, and a skeleton that did appear never blinks
   // back out before its minimum-visible time.
   const showLoading = usePendingDelay(isPending)
+  // specs.md §10.27: `dashboard.totals` already excludes these — this is
+  // only what lets the screen say so instead of silently dropping them.
+  // `Intl.ListFormat`, not a hand-joined string, for the same reason
+  // `formatMonto` builds off `formatToParts` (specs.md §10.7).
+  const otherCurrenciesLabel =
+    dashboard.otherCurrencies.length > 0
+      ? new Intl.ListFormat(locale, { style: 'short', type: 'conjunction' }).format(
+          dashboard.otherCurrencies,
+        )
+      : null
 
   return (
     <main className="min-h-full px-5 pt-2 pb-1">
@@ -50,6 +62,11 @@ export const Home = () => {
             <WeekStrip monthLabel={dashboard.monthLabel} days={dashboard.weekStripDays} />
             <BalanceCard totals={dashboard.totals} moneda={dashboard.moneda} />
           </div>
+          {otherCurrenciesLabel && (
+            <p className="-mt-2 px-1 text-xs font-medium text-fg-tertiary">
+              {t('common:otherCurrencyNote', { currencies: otherCurrenciesLabel })}
+            </p>
+          )}
           <WeeklyChart
             chart={dashboard.week.chart}
             totalGastos={dashboard.week.totalGastos}

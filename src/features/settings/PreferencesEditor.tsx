@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next'
 import type { Moneda, Preferencias } from '@/lib/schema'
 import type { SupportedLocale } from '@/lib/i18n/resources'
 import { LOCALE_LABEL } from '@/lib/i18n/localeLabels'
+import { WEEK_START_KEY, WEEK_START_VALUE } from '@/lib/weekStart'
 import { SegmentedControl, type SegmentedControlOption } from '@/components/shared/SegmentedControl'
 import { OptionList } from '@/features/settings/OptionList'
 import { ProfileSectionHeading } from '@/features/profile/ProfileSectionHeading'
@@ -10,8 +11,6 @@ export interface PreferencesEditorProps {
   preferencias: Preferencias
   onChange: (patch: Partial<Preferencias>) => void
 }
-
-const WEEK_START_VALUE: Record<'sunday' | 'monday', 0 | 1> = { sunday: 0, monday: 1 }
 
 const MONEDAS: Moneda[] = ['COP', 'USD', 'MXN', 'ARS', 'BRL', 'PEN']
 
@@ -38,7 +37,7 @@ export const PreferencesEditor = ({ preferencias, onChange }: PreferencesEditorP
     { value: 'sunday', label: t('profile:preferences.weekStart.sunday') },
     { value: 'monday', label: t('profile:preferences.weekStart.monday') },
   ]
-  const weekStartValue = preferencias.primerDiaSemana === 0 ? 'sunday' : 'monday'
+  const weekStartValue = WEEK_START_KEY[preferencias.primerDiaSemana]
 
   const localeItems: { value: LocaleChoice; label: string }[] = [
     { value: 'device', label: t('settings:preferences.language.device') },

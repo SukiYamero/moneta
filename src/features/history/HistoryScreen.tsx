@@ -2,7 +2,13 @@ import { useEffect, useState } from 'react'
 import { ChevronLeft, ChevronRight, Search as SearchIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { CONFIG_SEMILLA, type Periodo, type TipoMovimiento } from '@/lib/schema'
-import { breakdownBy, filterByRange, periodRange, totals } from '@/lib/movimientoStats'
+import {
+  breakdownBy,
+  filterByRange,
+  otherCurrencies,
+  periodRange,
+  totals,
+} from '@/lib/movimientoStats'
 import { useDataStore } from '@/lib/dataStore'
 import { repoErrorCopyKey } from '@/lib/errorCopy'
 import { useLocaleFormatting } from '@/lib/i18n/localeFormatting'
@@ -62,8 +68,9 @@ export const HistoryScreen = () => {
   const categorias = config?.categorias ?? CONFIG_SEMILLA.categorias
   const range = periodRange(scope, anchor, primerDiaSemana)
   const periodMovimientos = filterByRange(movimientos, range)
-  const periodTotals = totals(periodMovimientos)
-  const breakdown = breakdownBy(periodMovimientos, 'categoria', bdType)
+  const periodTotals = totals(periodMovimientos, monedaPrincipal)
+  const breakdown = breakdownBy(periodMovimientos, 'categoria', bdType, monedaPrincipal)
+  const periodOtherCurrencies = otherCurrencies(periodMovimientos, monedaPrincipal)
   const years = buildYearOptions(movimientos, new Date())
   const label = getPeriodLabel(
     scope,
@@ -193,6 +200,7 @@ export const HistoryScreen = () => {
               onBdTypeChange={setBdType}
               moneda={monedaPrincipal}
               categorias={categorias}
+              otherCurrencies={periodOtherCurrencies}
             />
             <div className="flex flex-col gap-2.5">
               {periodMovimientos.map((movimiento) => (

@@ -69,14 +69,32 @@ export const SettingsScreen = () => {
           />
         ) : isPending ? null : (
           <>
-            <CategoriesSection />
+            {/* `CategoriesSection`/`PreferencesEditor` each render a
+                `ProfileSectionHeading` (`<h3>`) built for `ProfileSheet.tsx`,
+                where that sheet's own `<h2>` sits above it. This screen has
+                only the `<h1>` above, so each section gets a visually
+                hidden `<h2>` here — the visible heading stays the `<h3>`
+                inside each section; this one exists purely so the document
+                heading order never skips a level (specs.md §12,
+                2026-08-20). */}
+            <section aria-labelledby="settings-categories-heading">
+              <h2 id="settings-categories-heading" className="sr-only">
+                {t('settings:categories.heading')}
+              </h2>
+              <CategoriesSection />
+            </section>
             {config && (
-              <PreferencesEditor
-                preferencias={config.preferencias}
-                onChange={(patch) =>
-                  void updateConfig({ preferencias: { ...config.preferencias, ...patch } })
-                }
-              />
+              <section aria-labelledby="settings-preferences-heading">
+                <h2 id="settings-preferences-heading" className="sr-only">
+                  {t('settings:preferences.heading')}
+                </h2>
+                <PreferencesEditor
+                  preferencias={config.preferencias}
+                  onChange={(patch) =>
+                    void updateConfig({ preferencias: { ...config.preferencias, ...patch } })
+                  }
+                />
+              </section>
             )}
           </>
         )}

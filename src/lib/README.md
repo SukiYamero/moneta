@@ -204,7 +204,23 @@ name>>` table (`specs.md` §10.22 Decision 6/§10.25 addendum) — ids never
   ISO strings or parsed with `date-fns`'s `parseISO` (never `new Date(iso)`,
   which shifts a date-only string by a day under a negative-offset TZ);
   `series()` buckets are clamped to their period, so the bars always sum to
-  the total printed beside them.
+  the total printed beside them. `totals()`/`breakdownBy()`/`series()` all
+  take `moneda` as a **required** argument (`specs.md` §10.27, 2026-08-20) —
+  a total is never the sum of two currencies, and a default would silently
+  reproduce that exact mixing bug at any call site that forgot to pass one.
+  `otherCurrencies(movimientos, moneda)` returns the distinct currencies
+  present other than `moneda`, empty in the common single-currency case —
+  what lets a screen say a total excludes movements instead of silently
+  dropping them. `toIsoDate()` is exported so callers that build their own
+  date-only ISO strings share one formatting rule instead of redeclaring
+  `format(date, 'yyyy-MM-dd')` per file.
+- `weekStart.ts` — the `Preferencias.primerDiaSemana` (`0 | 1`) ↔
+  `'sunday' | 'monday'` mapping, in both directions (`WEEK_START_KEY`,
+  `WEEK_START_VALUE`), from one ordered source — replaces two
+  hand-maintained inverse tables that used to live separately in
+  `src/features/profile/PreferencesSection.tsx` and
+  `src/features/settings/PreferencesEditor.tsx` (`specs.md` §12,
+  2026-08-20).
 - `dataStore.ts` — zustand store holding the raw `movimientos`/`activos`/
   `config` the Wave 2 screens read, plus `status`/`error`. No derived totals
   cached here — screens compute those from `movimientoStats` at the call

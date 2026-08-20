@@ -37,10 +37,9 @@ directly or is a deliberately inert stub.
   Switching/renaming/consolidating are Wave 5+.
 - `SecuritySection.tsx` — the real production home for `LockSettings`
   (moved off the dev-only `/kit` route, `specs.md` §10.18). Only the call
-  site moved; `LockSettings` itself still lives in `src/features/lock/` and
-  is untouched, including its still-hardcoded Spanish copy
-  (`specs.md` §12) — this section's own heading is the only i18n-routed
-  part of this block.
+  site moved; `LockSettings` itself still lives in `src/features/lock/`,
+  which Track G2 retrofitted through i18n in the same wave
+  (`specs.md` §10.24 Prerequisite 4).
 - `DataSection.tsx` — the first real caller of
   `exportMovimientosToCsv()` (`src/lib/export`, `specs.md` §10.12), which
   had no UI trigger for a whole stage. Catches its rejection itself (the
@@ -61,7 +60,10 @@ directly or is a deliberately inert stub.
   dark, so there's nowhere to send that tap; it always reads "Oscuro"
   rather than repeating a stored `tema` that has no effect. Reads
   `LOCALE_LABEL` (`src/lib/i18n/localeLabels.ts`), the one endonym table
-  this section and `/settings`'s own language picker both share.
+  this section and `/settings`'s own language picker both share, and
+  `src/lib/weekStart.ts`'s `WEEK_START_KEY` for the `primerDiaSemana` row's
+  label — the same shared mapping `/settings`'s `PreferencesEditor.tsx`
+  writes through in the other direction.
 - `ProfileSectionHeading.tsx` — the one small heading style every section
   above shares (mirrors `FilterSheet.tsx`'s local `SectionHeading`).
 - `index.ts` — the public barrel: `ProfileSheet` only. Sections are this

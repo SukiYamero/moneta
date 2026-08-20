@@ -1,5 +1,6 @@
 import { Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useRovingRadioGroup } from '@/components/shared/useRovingRadioGroup'
 
 export interface OptionListItem<T extends string> {
   value: T
@@ -20,39 +21,54 @@ export interface OptionListProps<T extends string> {
  * same layout `YearMenu.tsx`'s popover already uses for its own option rows
  * (a leading/trailing `Check`) — but as static, non-popover content, so
  * `/settings` shows both lists inline rather than behind a trigger. ARIA
- * semantics follow `SegmentedControl`'s `radiogroup`/`radio` pattern, not
- * `YearMenu`'s `listbox`/`option`: this is a persistent single-select
- * control, not a popup menu.
+ * semantics and keyboard behavior follow `SegmentedControl`'s `radiogroup`/
+ * `radio` pattern (via the shared `useRovingRadioGroup`, oriented vertically
+ * — Up/Down rather than Left/Right), not `YearMenu`'s `listbox`/`option`:
+ * this is a persistent single-select control, not a popup menu.
  */
 export const OptionList = <T extends string>({
   items,
   value,
   onChange,
   'aria-label': ariaLabel,
-}: OptionListProps<T>) => (
-  <div
-    role="radiogroup"
-    aria-label={ariaLabel}
-    className="flex flex-col gap-1 rounded-2xl border border-border-subtle bg-card p-1"
-  >
-    {items.map((item) => {
-      const selected = item.value === value
-      return (
-        <button
-          key={item.value}
-          type="button"
-          role="radio"
-          aria-checked={selected}
-          onClick={() => onChange(item.value)}
-          className={cn(
-            'flex min-h-11 w-full items-center justify-between gap-2.5 rounded-xl px-3.5 text-sm font-semibold transition-colors',
-            selected ? 'bg-secondary text-foreground' : 'text-fg-secondary hover:text-foreground',
-          )}
-        >
-          {item.label}
-          {selected && <Check className="size-4 text-primary" aria-hidden="true" />}
-        </button>
-      )
-    })}
-  </div>
-)
+}: OptionListProps<T>) => {
+  const { buttonRefs, selectedIndex, handleKeyDown } = useRovingRadioGroup(
+    items,
+    value,
+    onChange,
+    'vertical',
+  )
+
+  return (
+    <div
+      role="radiogroup"
+      aria-label={ariaLabel}
+      className="flex flex-col gap-1 rounded-2xl border border-border-subtle bg-card p-1"
+    >
+      {items.map((item, index) => {
+        const selected = item.value === value
+        return (
+          <button
+            key={item.value}
+            type="button"
+            role="radio"
+            ref={(el) => {
+              buttonRefs.current[index] = el
+            }}
+            aria-checked={selected}
+            tabIndex={index === selectedIndex ? 0 : -1}
+            onClick={() => onChange(item.value)}
+            onKeyDown={handleKeyDown}
+            className={cn(
+              'flex min-h-11 w-full items-center justify-between gap-2.5 rounded-xl px-3.5 text-sm font-semibold transition-colors',
+              selected ? 'bg-secondary text-foreground' : 'text-fg-secondary hover:text-foreground',
+            )}
+          >
+            {item.label}
+            {selected && <Check className="size-4 text-primary" aria-hidden="true" />}
+          </button>
+        )
+      })}
+    </div>
+  )
+}

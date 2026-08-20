@@ -7,9 +7,8 @@ import { ProfileSectionHeading } from '@/features/profile/ProfileSectionHeading'
  * off the dev-only `/kit` route, where it was the only way to enable,
  * disable or manually re-lock the PIN vault in a shipped build. Only the
  * call site moved; `LockSettings` itself stays in `src/features/lock/`
- * (its owning feature) and is untouched, including its still-hardcoded
- * Spanish copy (specs.md §12) — this section's own heading is the only
- * part of this block routed through i18n.
+ * (its owning feature), which Track G2 retrofitted through i18n in the
+ * same wave (specs.md §10.24 Prerequisite 4).
  */
 export const SecuritySection = () => {
   const { t } = useTranslation('profile')

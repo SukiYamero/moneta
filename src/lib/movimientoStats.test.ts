@@ -1,7 +1,14 @@
 import { addDays, format, parseISO, subDays } from 'date-fns'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Movimiento, Periodo } from '@/lib/schema'
-import { breakdownBy, filterByRange, periodRange, series, totals } from '@/lib/movimientoStats'
+import {
+  breakdownBy,
+  filterByRange,
+  otherCurrencies,
+  periodRange,
+  series,
+  totals,
+} from '@/lib/movimientoStats'
 
 const movimiento = (overrides: Partial<Movimiento> = {}): Movimiento => ({
   id: crypto.randomUUID(),
@@ -31,7 +38,7 @@ describe('totals()', () => {
       movimiento({ tipo: 'ingreso', monto: 0.1 }),
       movimiento({ tipo: 'ingreso', monto: 0.2 }),
     ]
-    expect(totals(movimientos).ingresos).toBe(0.3)
+    expect(totals(movimientos, 'COP').ingresos).toBe(0.3)
     expect(0.1 + 0.2).not.toBe(0.3) // sanity: the naive sum really does drift
   })
 
@@ -40,7 +47,7 @@ describe('totals()', () => {
       movimiento({ tipo: 'gasto', monto: 333_333.33 }),
       movimiento({ tipo: 'gasto', monto: 666_666.67 }),
     ]
-    expect(totals(movimientos).gastos).toBe(1_000_000)
+    expect(totals(movimientos, 'COP').gastos).toBe(1_000_000)
   })
 
   it('computes balance as ingresos minus gastos', () => {
@@ -48,16 +55,43 @@ describe('totals()', () => {
       movimiento({ tipo: 'ingreso', monto: 500 }),
       movimiento({ tipo: 'gasto', monto: 200 }),
     ]
-    expect(totals(movimientos)).toEqual({ ingresos: 500, gastos: 200, balance: 300 })
+    expect(totals(movimientos, 'COP')).toEqual({ ingresos: 500, gastos: 200, balance: 300 })
   })
 
   it('returns all zeros for an empty list', () => {
-    expect(totals([])).toEqual({ ingresos: 0, gastos: 0, balance: 0 })
+    expect(totals([], 'COP')).toEqual({ ingresos: 0, gastos: 0, balance: 0 })
   })
 
   it('handles an all-expense set (ingresos stays 0)', () => {
     const movimientos = [movimiento({ tipo: 'gasto', monto: 100 })]
-    expect(totals(movimientos)).toEqual({ ingresos: 0, gastos: 100, balance: -100 })
+    expect(totals(movimientos, 'COP')).toEqual({ ingresos: 0, gastos: 100, balance: -100 })
+  })
+
+  // specs.md §10.27: a total is never the sum of two different currencies —
+  // `moneda` is a required argument precisely so a call site cannot forget
+  // to scope it and silently add COP to USD.
+  describe('currency scoping', () => {
+    it('sums only movements matching the given moneda, ignoring the rest', () => {
+      const movimientos = [
+        movimiento({ tipo: 'ingreso', monto: 500, moneda: 'COP' }),
+        movimiento({ tipo: 'ingreso', monto: 300, moneda: 'USD' }),
+        movimiento({ tipo: 'gasto', monto: 100, moneda: 'COP' }),
+        movimiento({ tipo: 'gasto', monto: 50, moneda: 'USD' }),
+      ]
+      expect(totals(movimientos, 'COP')).toEqual({ ingresos: 500, gastos: 100, balance: 400 })
+      expect(totals(movimientos, 'USD')).toEqual({ ingresos: 300, gastos: 50, balance: 250 })
+    })
+
+    // The "just switched currency" edge case (specs.md §10.27): the
+    // principal currency has no movements yet. The total must be an honest
+    // zero, not a mix of whatever else exists.
+    it('returns all zeros for a currency with no movements, even when other currencies have plenty', () => {
+      const movimientos = [
+        movimiento({ tipo: 'ingreso', monto: 500, moneda: 'COP' }),
+        movimiento({ tipo: 'gasto', monto: 200, moneda: 'COP' }),
+      ]
+      expect(totals(movimientos, 'USD')).toEqual({ ingresos: 0, gastos: 0, balance: 0 })
+    })
   })
 })
 
@@ -140,7 +174,7 @@ describe('breakdownBy()', () => {
       movimiento({ seccion: 'sec_personal', tipo: 'gasto', monto: 200 }),
       movimiento({ seccion: 'sec_trabajo', tipo: 'gasto', monto: 100 }),
     ]
-    const result = breakdownBy(movimientos, 'seccion', 'gasto')
+    const result = breakdownBy(movimientos, 'seccion', 'gasto', 'COP')
     expect(result).toEqual([
       { key: 'sec_personal', total: 300, share: 0.75 },
       { key: 'sec_trabajo', total: 100, share: 0.25 },
@@ -152,12 +186,12 @@ describe('breakdownBy()', () => {
       movimiento({ seccion: 'sec_personal', tipo: 'ingreso', monto: 500 }),
       movimiento({ seccion: 'sec_personal', tipo: 'gasto', monto: 100 }),
     ]
-    const result = breakdownBy(movimientos, 'seccion', 'gasto')
+    const result = breakdownBy(movimientos, 'seccion', 'gasto', 'COP')
     expect(result).toEqual([{ key: 'sec_personal', total: 100, share: 1 }])
   })
 
   it('returns an empty array with no NaN shares when the total is zero', () => {
-    expect(breakdownBy([], 'seccion', 'gasto')).toEqual([])
+    expect(breakdownBy([], 'seccion', 'gasto', 'COP')).toEqual([])
   })
 
   it('groups by categoria as well', () => {
@@ -165,9 +199,20 @@ describe('breakdownBy()', () => {
       movimiento({ categoria: 'cat_sueldo', tipo: 'ingreso', monto: 100 }),
       movimiento({ categoria: 'cat_ventas', tipo: 'ingreso', monto: 100 }),
     ]
-    const result = breakdownBy(movimientos, 'categoria', 'ingreso')
+    const result = breakdownBy(movimientos, 'categoria', 'ingreso', 'COP')
     expect(result).toHaveLength(2)
     expect(result.reduce((sum, entry) => sum + entry.share, 0)).toBe(1)
+  })
+
+  // Same currency-scoping guarantee as totals() — a breakdown that folded a
+  // USD row into a COP share would misreport that category's real weight.
+  it('only groups movements matching the given moneda', () => {
+    const movimientos = [
+      movimiento({ seccion: 'sec_personal', tipo: 'gasto', monto: 100, moneda: 'COP' }),
+      movimiento({ seccion: 'sec_trabajo', tipo: 'gasto', monto: 900, moneda: 'USD' }),
+    ]
+    const result = breakdownBy(movimientos, 'seccion', 'gasto', 'COP')
+    expect(result).toEqual([{ key: 'sec_personal', total: 100, share: 1 }])
   })
 })
 
@@ -176,7 +221,7 @@ describe('series()', () => {
     vi.stubEnv('TZ', 'America/Bogota')
     const range = periodRange('semana', '2026-08-19', 1)
     const movimientos = [movimiento({ fecha: '2026-08-17', tipo: 'ingreso', monto: 100 })]
-    const result = series(movimientos, 'semana', range, 1)
+    const result = series(movimientos, 'semana', range, 1, 'COP')
     expect(result).toHaveLength(7)
     expect(result[0]).toEqual({ bucketStart: '2026-08-17', ingresos: 100, gastos: 0 })
     expect(result[1]).toEqual({ bucketStart: '2026-08-18', ingresos: 0, gastos: 0 })
@@ -184,27 +229,40 @@ describe('series()', () => {
 
   it('produces one bucket for a dia period', () => {
     const range = periodRange('dia', '2026-08-19', 1)
-    const result = series([], 'dia', range, 1)
+    const result = series([], 'dia', range, 1, 'COP')
     expect(result).toEqual([{ bucketStart: '2026-08-19', ingresos: 0, gastos: 0 }])
   })
 
   it('produces 12 monthly buckets for an anio period', () => {
     const range = periodRange('anio', '2026-06-01', 1)
     const movimientos = [movimiento({ fecha: '2026-03-15', tipo: 'gasto', monto: 50 })]
-    const result = series(movimientos, 'anio', range, 1)
+    const result = series(movimientos, 'anio', range, 1, 'COP')
     expect(result).toHaveLength(12)
     expect(result[2]).toEqual({ bucketStart: '2026-03-01', ingresos: 0, gastos: 50 })
   })
 
   it('produces weekly buckets for a mes period, clamped to the month (not the natural week)', () => {
     const range = periodRange('mes', '2026-08-01', 1)
-    const result = series([], 'mes', range, 1)
+    const result = series([], 'mes', range, 1, 'COP')
     // August 2026: the natural first week is Mon 2026-07-27–Sun 2026-08-02,
     // but its bucketStart must be clamped to the month's own start (2026-08-01),
     // not the true week start (2026-07-27) — a label claiming to cover July
     // 27–31 when nothing from those days was counted would be a lie.
     expect(result.at(0)?.bucketStart).toBe('2026-08-01')
     expect(result.every((bucket) => bucket.ingresos === 0 && bucket.gastos === 0)).toBe(true)
+  })
+
+  // Same currency-scoping guarantee as totals() — a bucket that counted a
+  // USD movement into a COP-scoped chart would misreport that day's spend.
+  it('only counts movements matching the given moneda in each bucket', () => {
+    vi.stubEnv('TZ', 'America/Bogota')
+    const range = periodRange('semana', '2026-08-19', 1)
+    const movimientos = [
+      movimiento({ fecha: '2026-08-17', tipo: 'ingreso', monto: 100, moneda: 'COP' }),
+      movimiento({ fecha: '2026-08-17', tipo: 'ingreso', monto: 999, moneda: 'USD' }),
+    ]
+    const result = series(movimientos, 'semana', range, 1, 'COP')
+    expect(result[0]).toEqual({ bucketStart: '2026-08-17', ingresos: 100, gastos: 0 })
   })
 
   // The invariant every screen depends on: Home's weekly chart bars must sum
@@ -235,10 +293,10 @@ describe('series()', () => {
           movimiento({ id: 'after', fecha: dayAfter(range.to), tipo: 'gasto', monto: 444 }),
         ]
 
-        const result = series(movimientos, periodo, range, primerDiaSemana)
+        const result = series(movimientos, periodo, range, primerDiaSemana, 'COP')
         const seriesIngresos = result.reduce((sum, b) => sum + b.ingresos, 0)
         const seriesGastos = result.reduce((sum, b) => sum + b.gastos, 0)
-        const expected = totals(filterByRange(movimientos, range))
+        const expected = totals(filterByRange(movimientos, range), 'COP')
 
         expect(seriesIngresos).toBe(expected.ingresos)
         expect(seriesGastos).toBe(expected.gastos)
@@ -264,10 +322,33 @@ describe('series()', () => {
         movimiento({ fecha: '2026-08-17', tipo: 'ingreso', monto: 0.01 }),
         movimiento({ fecha: '2026-08-18', tipo: 'ingreso', monto: 0.05 }),
       ]
-      const result = series(movimientos, 'semana', range, primerDiaSemana)
+      const result = series(movimientos, 'semana', range, primerDiaSemana, 'COP')
       const seriesIngresos = result.reduce((sum, b) => sum + b.ingresos, 0)
-      const expected = totals(filterByRange(movimientos, range))
+      const expected = totals(filterByRange(movimientos, range), 'COP')
       expect(seriesIngresos).toBeCloseTo(expected.ingresos, 2)
     })
+  })
+})
+
+describe('otherCurrencies()', () => {
+  // The common case (specs.md §10.27 edge cases): nothing extra should ever
+  // need to render, so this must come back empty, not just falsy.
+  it('returns an empty array when every movement matches the principal currency', () => {
+    const movimientos = [movimiento({ moneda: 'COP' }), movimiento({ moneda: 'COP' })]
+    expect(otherCurrencies(movimientos, 'COP')).toEqual([])
+  })
+
+  it('returns the distinct currencies other than the principal one, in first-seen order', () => {
+    const movimientos = [
+      movimiento({ moneda: 'COP' }),
+      movimiento({ moneda: 'USD' }),
+      movimiento({ moneda: 'MXN' }),
+      movimiento({ moneda: 'USD' }),
+    ]
+    expect(otherCurrencies(movimientos, 'COP')).toEqual(['USD', 'MXN'])
+  })
+
+  it('returns an empty array for an empty list', () => {
+    expect(otherCurrencies([], 'COP')).toEqual([])
   })
 })

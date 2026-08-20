@@ -110,7 +110,7 @@ describe('Home', () => {
     mGetRepo.mockReturnValue(makeRepo({ movimientos }))
     renderHome()
 
-    const expected = totals(movimientos)
+    const expected = totals(movimientos, CONFIG_SEMILLA.preferencias.monedaPrincipal)
     // Intl inserts a non-breaking space after the currency symbol; RTL's
     // default text normalizer collapses it to a regular one before
     // matching, so the expectation needs the same normalization.
@@ -133,5 +133,35 @@ describe('Home', () => {
 
     const areas = await screen.findByRole('button', { name: 'Áreas' })
     expect(areas).toBeDisabled()
+  })
+
+  // specs.md §10.27: a user who switched monedaPrincipal after already
+  // recording COP movements must see the total say so, not silently
+  // exclude (or, the older bug, silently mix in) the other currency.
+  it('names another currency present in the data, without folding it into the total', async () => {
+    const config: Config = {
+      ...CONFIG_SEMILLA,
+      preferencias: { ...CONFIG_SEMILLA.preferencias, monedaPrincipal: 'USD' },
+    }
+    const movimientos = [
+      movimiento({ tipo: 'ingreso', monto: 500_000, moneda: 'COP' }),
+      movimiento({ tipo: 'ingreso', monto: 100, moneda: 'USD' }),
+    ]
+    mGetRepo.mockReturnValue(makeRepo({ movimientos, config }))
+    renderHome()
+
+    expect(await screen.findByText(/COP/)).toBeInTheDocument()
+    // The balance itself must be the USD-only figure (100), never
+    // 500_000 + 100 folded into one number — narrowSymbol renders USD as
+    // "$" too (specs.md §10.7), so match on the digits, not the symbol.
+    expect(screen.getAllByText(/\$\s*100,00/).length).toBeGreaterThan(0)
+  })
+
+  it('renders no other-currency note when every movement matches monedaPrincipal', async () => {
+    mGetRepo.mockReturnValue(makeRepo({ movimientos: [movimiento()] }))
+    renderHome()
+
+    await screen.findByText('Alex Rivera')
+    expect(screen.queryByText(/USD/)).not.toBeInTheDocument()
   })
 })

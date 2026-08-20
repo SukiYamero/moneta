@@ -1,13 +1,12 @@
-import { format } from 'date-fns'
 import { useMemo, useState } from 'react'
 import type { TipoMovimiento } from '@/lib/schema'
-import type { DateRange } from '@/lib/movimientoStats'
+import { toIsoDate, type DateRange } from '@/lib/movimientoStats'
 import { resolveDateRange, type DateRangePreset } from '@/features/search/dateRangePresets'
 import { useDebouncedQuery } from '@/features/search/useDebouncedQuery'
 
 export type MovementTypeFilter = 'all' | TipoMovimiento
 
-const todayIso = (): string => format(new Date(), 'yyyy-MM-dd')
+const todayIso = (): string => toIsoDate(new Date())
 
 export interface UseSearchFiltersResult {
   query: string

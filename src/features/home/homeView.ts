@@ -3,7 +3,7 @@
 // figure on screen still traces to `movimientoStats` (see useHomeDashboard.ts).
 import { addDays, format, parseISO, type Locale } from 'date-fns'
 import type { Movimiento } from '@/lib/schema'
-import type { DateRange } from '@/lib/movimientoStats'
+import { toIsoDate, type DateRange } from '@/lib/movimientoStats'
 
 export type GreetingKey = 'morning' | 'afternoon' | 'evening'
 
@@ -64,7 +64,7 @@ export const buildWeekStripDays = (
   const start = parseISO(weekRange.from)
   return Array.from({ length: WEEK_LENGTH }, (_, i) => {
     const date = addDays(start, i)
-    const iso = format(date, 'yyyy-MM-dd')
+    const iso = toIsoDate(date)
     return {
       iso,
       dayLabel: shortDayLabel(iso, locale),
