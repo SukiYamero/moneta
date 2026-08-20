@@ -3305,6 +3305,51 @@ lint` clean bar the one pre-existing `components/ui` warning). `AGENTS.md`
   Make it deliberate rather than casual (not the default gesture on an old
   row); do not prohibit it.
 
+- 2026-08-19 — **The write path's convention, settled once (§10.13, Track T).**
+  Every mutation goes through one `runMutation()`: consult
+  `networkStore.canWrite()` **exactly once** — the single place the offline
+  policy is enforced — then apply optimistically, then write to the repo,
+  then enqueue the operation. Decisions inside it:
+  - **Optimistic with rollback**, not pessimistic. Chosen for the repo this
+    app is _going_ to have — a Drive-backed one, where a round trip is
+    visible — rather than for today's fast local one, so the convention does
+    not have to be revisited when the slow implementation arrives.
+  - **The optimistic apply and the rollback both use zustand's updater
+    form**, so two mutations racing cannot clobber each other's state. The
+    rollback is an inverse transform, not a captured snapshot, for the same
+    reason. (A delete's rollback re-appends rather than restoring the array
+    index; that is deliberate and safe — every screen sorts explicitly
+    through `movimientoStats`, so raw store order is not observable, and
+    restoring a captured index would be wrong if another mutation shifted the
+    array meanwhile.)
+  - **The repo write and the outbox enqueue are separate failure domains.**
+    A repo failure rolls back and raises a Toast; an enqueue failure does
+    **not** roll back a write that already succeeded, but raises its own
+    Toast. This matters more than it looks: an operation that never queues
+    never reaches Drive, ever, and the first implementation resolved
+    identically on success and failure — a success-shaped value for a
+    failure, on the one thing this app promises. `enqueueOperation()` returns
+    a boolean for exactly that reason.
+  - **Errors surface as a Toast, never inline**, because this is a store and
+    not a form (`docs/error-handling.md` §7), and **no success Toast** — no
+    caller needs one yet, and inventing copy for it now is the "defaulted
+    parameter nobody passed" shape.
+  - **The 7-hour offline window gates `delete` as well as `create`.** The
+    window is about _session staleness_ — how long since we last validated —
+    which applies to any offline mutation, not about merge safety. The
+    "deletes commute" reasoning (§11, same date) is what makes deleting
+    offline allowed **at all**; it does not exempt it from the window.
+
+- 2026-08-19 — **The outbox lives on the per-profile database, not its own.**
+  It was first built as a sixth Dexie database, hours after a cross-track
+  review consolidated three into one, and for the same reason: the
+  ownership table left `db.ts` unassigned again. Pending operations are
+  per-profile data — they belong beside `movimientos`/`config`, so they land
+  correctly for free the day `dataStore` writes through the active profile.
+  Recorded because the _planning_ mistake repeated within one wave even after
+  the rule was written into `AGENTS.md`, which says the rule alone is not
+  enough: the ownership table has to be checked against it, not just carry it.
+
 ## 12. Backlog (pending verification / deferred work)
 
 - **The lock feature is not internationalised at all.** `LockScreen`,
@@ -3575,6 +3620,23 @@ lint` clean bar the one pre-existing `components/ui` warning). `AGENTS.md`
   DEK — no cross-account leak and no lock bypass — so gating it would add a
   guard with nothing to guard. Noted so a future sweep does not re-file it
   as the missing fifth case.
+
+- **A local write and its outbox entry are not atomic.** They are two Dexie
+  writes, so a crash or a quota failure between them leaves a change that is
+  materialized but unqueued — now surfaced to the user by a Toast rather than
+  swallowed, but still a state that has to be reconciled rather than
+  prevented. Making it atomic needs the _active_ repo and the outbox in one
+  transaction, and today `getRepo()` returns the **in-memory fake**, so there
+  is no Dexie write to wrap without extending the frozen `Repo` port. Revisit
+  **together with the `repoProvider` stub flip** (Wave 4): that is the moment
+  a real Dexie repo exists, and the moment the question becomes answerable
+  rather than hypothetical.
+
+- **The outbox targets the default `kurobello` database, not the active
+  profile's.** Correct today — `getRepo()` is single-profile — and the table
+  now lives on the per-profile database, so this closes itself the day
+  `dataStore` writes through `getActiveProfileRepo()`. Listed so that day
+  does not arrive silently.
 
 ### Development waves (parallel tracks, sequencing, worktree log)
 

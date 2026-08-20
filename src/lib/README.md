@@ -34,7 +34,11 @@ Shared stores, helpers, and the Drive/auth/lock logic layer. No UI here.
 - `db.ts` — the Dexie (IndexedDB) instance. `v1` has the `LockVault` table;
   `v2` additively adds `movimientos`, `activos`, and a single-row `config`
   table (indexes chosen to serve `Repo`'s `ListQuery` — see the comment
-  above `db.version(2)`). `createProfileDb(name)` is the factory behind it
+  above `db.version(2)`). `v3` additively adds `outbox` (`outbox.ts`'s queue
+  of operations not yet pushed to Drive, `specs.md` §10.13/§10.19) — pending
+  operations are per-profile data, so they live beside `movimientos`/`config`
+  here rather than on `deviceStore.ts`'s device-wide connection, and not as a
+  database of their own as first built. `createProfileDb(name)` is the factory behind it
   (`specs.md` §10.15): `db` is `createProfileDb('kurobello')`, the frozen
   first profile, and every additional profile calls the same factory
   against a suffixed name via `profiles/`.
@@ -146,19 +150,26 @@ Shared stores, helpers, and the Drive/auth/lock logic layer. No UI here.
   sharing one `runMutation()`: a single `networkStore.canWrite()` check (the
   only place the offline policy is enforced), an optimistic apply in
   zustand's updater form so concurrent mutations can't clobber each other,
-  the repo write, then the outbox enqueue — never the reverse. A repo failure
-  rolls the store back and raises a Toast (`docs/error-handling.md` §7 — a
-  store, not a form); it never throws past the action, same contract as
-  `load()`.
+  the repo write, then the outbox enqueue — never the reverse, and each is
+  its own failure domain: a repo failure rolls the store back and raises a
+  Toast (`docs/error-handling.md` §7 — a store, not a form), while an
+  enqueue failure never rolls back a repo write that already succeeded but
+  raises its own `errors:sync.notQueued` Toast rather than staying silent.
+  It never throws past the action, same contract as `load()`.
 - `hlc.ts` — a purely local hybrid logical clock (`specs.md` §10.19).
   `tick()` yields a strictly increasing `Hlc`, encoded so two values compare
   correctly as plain strings. It never folds in a remote clock value on
   purpose: a device only ever writes its own Drive file.
 - `outbox.ts` — the append-only queue of operations not yet pushed to Drive
   (`specs.md` §10.13/§10.19) plus the `dirty` flag a future flush trigger
-  reads. Holds the op envelope (`hlc`, `basedOn`, `device`). Track Z's sync
-  engine is its first reader; nothing consumes it yet, deliberately — the
-  same bet that paid off building the Toast a wave before its first caller.
+  reads. Holds the op envelope (`hlc`, `basedOn`, `device`); stored in
+  `db.ts`'s `outbox` table, reached through the default `db` for now since
+  `getRepo()` is still single-profile. `enqueueOperation()` returns a
+  `boolean`, not `void` — a storage failure reaches the caller instead of
+  only a log (`docs/error-handling.md` §4), so a repo write that succeeded
+  but never queued cannot pass for success. Track Z's sync engine is its
+  first reader; nothing consumes the queue yet, deliberately — the same bet
+  that paid off building the Toast a wave before its first caller.
 - `repoProvider.ts` — the single swap point: `getRepo()` returns the shared
   fake `Repo` today. `// STUB(wave3)` marks the one line to change once a
   Drive-backed `Repo` exists (`specs.md` §12). `getActiveProfileRepo()`

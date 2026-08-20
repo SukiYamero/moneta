@@ -46,16 +46,29 @@ const WRITE_ERROR_TOAST_KEY: Record<RepoErrorCode, ToastMessageKey> = {
 //  2. Optimistic apply, so the UI never waits on local storage.
 //  3. The repo write lands before the outbox append, never the other way —
 //     a change the user is already looking at must never depend on a
-//     second, independent write succeeding. enqueueOperation() is itself
-//     self-catching (outbox.ts) and can't throw, so it can safely sit
-//     inside this same try without an outbox hiccup ever triggering a
-//     rollback of a write that actually succeeded. See docs/wave-3/t.md for
-//     the full repo-vs-outbox ordering rationale.
-//  4. A repo failure rolls the store back to its exact prior value and
-//     raises a Toast — never inline, because this is a store, not a form
-//     (docs/error-handling.md §7: "anything raised from a store rather
-//     than a form"). It never throws past the action, matching load()'s
-//     own contract.
+//     second, independent write succeeding. A repo failure here rolls the
+//     store back to the exact prior record via an inverse transform, not a
+//     positional restore — `deleteMovimiento`'s rollback re-appends rather
+//     than re-splicing at the original index, which is deliberate: no
+//     screen renders `movimientos` in raw store order (every consumer sorts
+//     explicitly — `sortByRecency`, `movimientoStats`), and restoring a
+//     captured index would be wrong the moment a concurrent mutation has
+//     shifted it in between. It also raises a Toast — never inline, because
+//     this is a store, not a form (docs/error-handling.md §7: "anything
+//     raised from a store rather than a form").
+//  4. The outbox append is a *separate* failure domain from the repo write,
+//     caught on its own: by the time it runs, the repo write has already
+//     succeeded and the user is already looking at the result, so a
+//     queueing failure must never roll that back (docs/error-handling.md
+//     §3 — one try per operation whose failures mean the same thing to the
+//     caller). But it must not be silent either: this app's whole promise
+//     is that data reaches the user's Drive, and a write that never queues
+//     never will, with nothing else ever noticing. enqueueOperation()
+//     reports that back as `false` rather than a success-shaped
+//     `Promise<void>` (docs/error-handling.md §4) specifically so this can
+//     tell the user their change is safe on this device but not yet queued
+//     to sync, instead of that failure living only in a console log.
+// It never throws past the action, matching load()'s own contract.
 const runMutation = async <TResult>(
   kind: MutationKind,
   applyOptimistic: () => void,
@@ -69,13 +82,18 @@ const runMutation = async <TResult>(
     return
   }
   applyOptimistic()
+  let result: TResult
   try {
-    const result = await write()
-    await enqueueOperation(onSuccess(result))
+    result = await write()
   } catch (e) {
     rollback()
     const code = e instanceof RepoError ? e.code : 'unknown'
     toast.error(WRITE_ERROR_TOAST_KEY[code])
+    return
+  }
+  const queued = await enqueueOperation(onSuccess(result))
+  if (!queued) {
+    toast.error('errors:sync.notQueued')
   }
 }
 
