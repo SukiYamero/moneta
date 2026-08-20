@@ -15,7 +15,12 @@ export class AuthError extends Error {
 }
 
 export type AuthSession = { accessToken: string; expiresAt: number }
-export type GoogleUser = { email: string; name: string; photoLink?: string }
+// `sub` is the OIDC subject identifier — stable and never reassigned, unlike
+// `email` (a Workspace admin can rename a primary address). `userinfo`
+// already returns it on every call (IDENTITY_SCOPES always includes
+// `openid`); optional here only so a pre-existing cached/legacy `GoogleUser`
+// without one still type-checks (specs.md §11, 2026-08-19).
+export type GoogleUser = { email: string; name: string; photoLink?: string; sub?: string }
 
 const clientId = (): string => {
   const id = import.meta.env.VITE_GOOGLE_CLIENT_ID
@@ -78,6 +83,6 @@ export const requestAccessToken = (
 export const fetchGoogleUser = async (accessToken: string): Promise<GoogleUser> => {
   const res = await fetch(USERINFO_URL, { headers: { Authorization: `Bearer ${accessToken}` } })
   if (!res.ok) throw new AuthError(`userinfo ${res.status}`)
-  const data = (await res.json()) as { email: string; name: string; picture?: string }
-  return { email: data.email, name: data.name, photoLink: data.picture }
+  const data = (await res.json()) as { sub: string; email: string; name: string; picture?: string }
+  return { sub: data.sub, email: data.email, name: data.name, photoLink: data.picture }
 }

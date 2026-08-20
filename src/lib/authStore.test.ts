@@ -207,10 +207,24 @@ describe('useAuthStore.login', () => {
     expect(mMarkLoggedIn).toHaveBeenCalled()
   })
 
-  // specs.md §10.20: a Google session being established is what resolves
-  // this account's profile in the registry, so getActiveProfile()'s
-  // existing recency resolution returns the right one next time.
-  it('resolves this account in the profile registry, keyed by email', async () => {
+  // specs.md §10.20/§11 2026-08-19: keyed by the OIDC `sub` claim, not the
+  // Workspace-mutable `email` — a Workspace admin can rename a primary
+  // address, and an email-keyed registry would resolve a renamed account to
+  // a brand-new profile with none of its data. `userinfo` already returns
+  // `sub` for every request (IDENTITY_SCOPES always includes `openid`).
+  it('resolves this account in the profile registry, keyed by the stable subject id', async () => {
+    mToken.mockResolvedValue({ accessToken: 'tok', expiresAt: 1 })
+    mUser.mockResolvedValue({ sub: 'google-sub-1', email: 'a@b.com', name: 'Ana' })
+
+    await useAuthStore.getState().login()
+
+    expect(mResolveGoogleProfile).toHaveBeenCalledWith({ accountKey: 'google-sub-1', label: 'Ana' })
+  })
+
+  // Defensive fallback only — real `fetchGoogleUser` responses always carry
+  // `sub`, but a cached/legacy `GoogleUser` without one must still resolve
+  // to *some* profile rather than throwing.
+  it('falls back to email as the account key when no subject id is present', async () => {
     mToken.mockResolvedValue({ accessToken: 'tok', expiresAt: 1 })
     mUser.mockResolvedValue({ email: 'a@b.com', name: 'Ana' })
 

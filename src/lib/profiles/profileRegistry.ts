@@ -152,22 +152,39 @@ export interface ResolveGoogleProfileInput {
 // an already-registered profile is intentionally left as first-registered
 // — updating it to track a since-renamed Google account is a real feature
 // (Wave 5+'s renaming), not a side effect of this resolution.
+//
+// The whole find-or-create runs inside one `rw` transaction on
+// `profileTable`, same reasoning as `registerProfile`'s own comment: two
+// concurrent calls for the same account (a login racing restore()/hydrate(),
+// or two tabs restoring the same account at once) must not both read "no
+// existing profile" before either writes and mint two rows for one account
+// — a get-then-put race with the identical shape as the one already fixed
+// for `lastUsedAt` ties. IndexedDB serializes `readwrite` transactions
+// against the same object store, so the second call's read only starts once
+// the first call's write has committed.
 export const resolveGoogleProfile = async (
   input: ResolveGoogleProfileInput,
 ): Promise<ProfileRecord> => {
-  const existing = await listProfiles()
-  const owned = existing.find((p) => p.kind === 'google' && p.accountKey === input.accountKey)
-  if (owned) {
-    await touchLastUsed(owned.id)
-    return owned
-  }
-  const id = crypto.randomUUID()
-  return registerProfile({
-    id,
-    label: input.label,
-    kind: 'google',
-    databaseName: makeProfileDatabaseName(id),
-    accountKey: input.accountKey,
+  return deviceDb.transaction('rw', profileTable, async () => {
+    const existing: ProfileRecord[] = await profileTable.toArray()
+    const owned = existing.find((p) => p.kind === 'google' && p.accountKey === input.accountKey)
+    if (owned) {
+      const touched: ProfileRecord = { ...owned, lastUsedAt: nextLastUsedAt(existing) }
+      await profileTable.put(touched)
+      return touched
+    }
+    const id = crypto.randomUUID()
+    const record: ProfileRecord = {
+      id,
+      label: input.label,
+      kind: 'google',
+      databaseName: makeProfileDatabaseName(id),
+      createdAt: nowIso(),
+      lastUsedAt: nextLastUsedAt(existing),
+      accountKey: input.accountKey,
+    }
+    await profileTable.put(record)
+    return record
   })
 }
 
