@@ -200,37 +200,9 @@ asserting the fix.
 | Z     | ✅ merged `498632a` + seam fix `8806321` + review `8a7d8ce` |
 | G1    | ✅ merged `1fdfeb0` + review `ca9c545`                      |
 | —     | ✅ operator cross-track pass (layer guard + tint table)     |
-
-**Stage 1 is complete.** Both tracks merged, each reviewed by its own scoped
-reviewer which applied its fixes, then one operator pass over the seams.
-
-### What the cross-track pass found that neither reviewer could
-
-Recorded because §4.4 predicted this category of finding and it delivered:
-
-1. **The taxonomy seam, caught at rebase.** Z's yearly CSV called Track S's
-   CSV module with G1's pre-change signature. Merged unrebased, the file in
-   the user's Drive whose whole purpose is being readable without the app
-   would have shipped `cat_sueldo` where it promises `Sueldo` — G1's own
-   defect, reintroduced from Z's file. Fixed in `8806321`, with the
-   regression test watched failing first.
-2. **The layer inversion, twice in one wave.** `schema.ts` reached into a
-   feature folder for an icon-key union; `sync/validate.ts` reached into
-   `components/shared/` for the runtime tint list. Each track was locally
-   reasonable and each was caught by its own review — which is exactly the
-   evidence that catching instances would not stop it. Closed by a guard in
-   `bun run check` (`scripts/no-ui-imports-in-lib.sh`), verified by
-   reintroducing the violation and watching it fail.
-3. **A fourth private tint table** in `BreakdownCard`, a standing §12 item
-   whose stated deferral reason ("its feature was not being touched") expired
-   the moment G1's sweep touched that file. Folded into `tintClasses.ts`.
-
-**What it checked and found clean:** `categorySuggest.ts` genuinely reuses
-`searchMatch.ts`'s normalizer rather than growing a second one; Z's
-`sanitizeCategoria` (strip an invalid `icono`/`color`, keep the category) and
-G1's `getMovimientoVisual` (fall back on `undefined`) agree on what an unknown
-category means; the config-op gap is still filed and was not quietly
-half-fixed by either side.
+| —     | ✅ stage-2 groundwork `ab78db8` (the two contended files)   |
+| F     | active — `../moneta-worktrees/track-f`                      |
+| G2    | active — `../moneta-worktrees/track-g2`                     |
 
 The authoritative worktree log stays in `docs/waves.md`; this table is the
 per-track execution view.
