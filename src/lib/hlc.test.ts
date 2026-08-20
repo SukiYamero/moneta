@@ -64,3 +64,77 @@ describe('createLogicalClock', () => {
     expect(ticks).toEqual(sorted)
   })
 })
+
+describe('observe', () => {
+  it('makes the next tick sort after a remote hlc that is ahead of this clock', () => {
+    // Two independent devices' clocks have no relation until one observes
+    // the other — the exact gap that broke a `basedOn` chain across
+    // devices before this method existed.
+    const remoteClock = createLogicalClock('remote', () => 50_000)
+    const remote = remoteClock.tick()
+
+    const local = createLogicalClock('local', () => 1_000) // far behind physically
+    local.observe(remote)
+    const next = local.tick()
+
+    expect(next > remote).toBe(true)
+  })
+
+  it('carries the remote counter forward when millis match exactly', () => {
+    const remote = createLogicalClock('remote', () => 5_000)
+    remote.tick() // counter 0
+    const remoteSecond = remote.tick() // counter 1, same millis
+
+    const local = createLogicalClock('local', () => 5_000)
+    local.observe(remoteSecond)
+    const next = local.tick()
+
+    expect(next > remoteSecond).toBe(true)
+    expect(next.split('-')[0]).toBe(remoteSecond.split('-')[0]) // same millis segment
+  })
+
+  it('is a no-op when the remote hlc is already behind this clock', () => {
+    const local = createLogicalClock('local', () => 90_000)
+    const ahead = local.tick()
+
+    const behindRemote = createLogicalClock('remote', () => 1_000).tick()
+    local.observe(behindRemote)
+    const next = local.tick()
+
+    expect(next > ahead).toBe(true)
+    // Unaffected by the stale observe: still ticking from the same base millis.
+    expect(next.split('-')[0]).toBe(ahead.split('-')[0])
+  })
+})
+
+describe('clampToServer', () => {
+  it('pulls a runaway local clock down to server time so a later, sane reading is not forced to append onto the poisoned base', () => {
+    // A stuck-clock reboot: the first reading is wildly wrong, then the
+    // system clock corrects itself (e.g. NTP catches up) — but this
+    // LogicalClock instance lives for the whole session, so without
+    // clamping, `lastMillis` would stay pinned at the poisoned value
+    // forever and every later tick would just append a counter onto it,
+    // never reflecting real time again.
+    let reading = 10_000_000_000 // implausibly far in the "future"
+    const clock = createLogicalClock('dev1', () => reading)
+    clock.tick() // lastMillis is now poisoned
+
+    clock.clampToServer(1_000) // Drive's honest server time
+    reading = 2_000 // the system clock has since corrected itself
+
+    const next = clock.tick()
+    const decodedMillis = Number.parseInt(next.split('-')[0] ?? '0', 36)
+    expect(decodedMillis).toBe(2_000) // tracks the corrected reading, not stuck at 10_000_000_000
+  })
+
+  it('leaves the clock alone when it is only off by a normal amount of drift', () => {
+    const clock = createLogicalClock('dev1', () => 100_000)
+    const before = clock.tick()
+
+    clock.clampToServer(99_000) // 1s of drift — well under the default tolerance
+    const after = clock.tick()
+
+    expect(after > before).toBe(true)
+    expect(after.split('-')[0]).toBe(before.split('-')[0]) // still ticking from 100_000
+  })
+})
