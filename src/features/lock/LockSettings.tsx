@@ -1,14 +1,11 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useLockStore } from '@/lib/lockStore'
 import { Button } from '@/components/ui/button'
 import { enableLockErrorCopy } from '@/features/lock/errorCopy'
 
-// resetVault() only ever fails with an opaque storage error (no named class,
-// no lookup-worthy taxonomy — unlike enable()'s NO_SESSION_ERROR) so a
-// single fixed fallback line is the whole mapping needed here.
-const DISABLE_ERROR_COPY = 'No se pudo desactivar el bloqueo. Intenta de nuevo.'
-
 export const LockSettings = () => {
+  const { t } = useTranslation('lock')
   const enabled = useLockStore((s) => s.enabled)
   const biometricAvailable = useLockStore((s) => s.biometricAvailable)
   const enable = useLockStore((s) => s.enable)
@@ -16,32 +13,37 @@ export const LockSettings = () => {
   const reset = useLockStore((s) => s.reset)
   const [pin, setPin] = useState('')
   const [biometric, setBiometric] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  // `true` triggers the fallback key (errors.disableDefault) — resetVault()
+  // only ever fails with an opaque storage error (no named class, no
+  // lookup-worthy taxonomy — unlike enable()'s NO_SESSION_ERROR), so the
+  // fallback is the whole mapping this path needs.
+  const [disableFailed, setDisableFailed] = useState(false)
+  const [enableError, setEnableError] = useState<string | null>(null)
 
   const onReset = async () => {
-    setError(null)
+    setDisableFailed(false)
     try {
       await reset()
     } catch {
-      setError(DISABLE_ERROR_COPY)
+      setDisableFailed(true)
     }
   }
 
   if (enabled) {
     return (
       <div className="flex flex-col items-center gap-3">
-        <p className="text-muted-foreground text-sm">Lock activo</p>
+        <p className="text-muted-foreground text-sm">{t('settings.activeNote')}</p>
         <div className="flex gap-2">
           <Button type="button" size="touch" onClick={() => lock()}>
-            Lock now
+            {t('settings.lockNowCta')}
           </Button>
           <Button type="button" variant="destructive" size="touch" onClick={() => void onReset()}>
-            Desactivar
+            {t('settings.disableCta')}
           </Button>
         </div>
-        {error && (
+        {disableFailed && (
           <p role="alert" className="text-destructive text-sm">
-            {error}
+            {t('errors.disableDefault')}
           </p>
         )}
       </div>
@@ -49,19 +51,19 @@ export const LockSettings = () => {
   }
 
   const onEnable = async () => {
-    setError(null)
+    setEnableError(null)
     try {
       await enable(pin, biometric && biometricAvailable)
       setPin('')
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'no se pudo activar')
+      setEnableError(e instanceof Error ? e.message : '')
     }
   }
 
   return (
     <div className="flex flex-col items-center gap-3">
       <label className="flex flex-col gap-1">
-        <span className="text-sm">PIN (4 dígitos)</span>
+        <span className="text-sm">{t('settings.pinLabel')}</span>
         <input
           inputMode="numeric"
           pattern="\d*"
@@ -78,7 +80,7 @@ export const LockSettings = () => {
             checked={biometric}
             onChange={(e) => setBiometric(e.target.checked)}
           />
-          Usar biometría
+          {t('settings.biometricToggleLabel')}
         </label>
       )}
       <Button
@@ -87,11 +89,11 @@ export const LockSettings = () => {
         disabled={pin.length !== 4}
         onClick={() => void onEnable()}
       >
-        Activar lock
+        {t('settings.enableCta')}
       </Button>
-      {error && (
+      {enableError !== null && (
         <p role="alert" className="text-destructive text-sm">
-          {enableLockErrorCopy(error)}
+          {t(enableLockErrorCopy(enableError))}
         </p>
       )}
     </div>

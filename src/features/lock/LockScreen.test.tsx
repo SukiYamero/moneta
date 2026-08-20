@@ -1,6 +1,16 @@
 import { beforeEach, expect, test, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { i18next } from '@/lib/i18n'
+import type { ToastMessageKey } from '@/lib/toastStore'
+
+// Resolved through the real i18next instance ('es', forced by
+// src/test/setup.ts) rather than restated as a literal — a copy reword in
+// the `lock` namespace fails the build in resources.test.ts's key-parity
+// check, not silently here (same split `AppLock.test.tsx`'s own `T` helper
+// already uses for toast copy — `ToastMessageKey` spans every namespace,
+// not just `toast`, so it types this `lock:`-prefixed key too).
+const T = (key: Extract<ToastMessageKey, `lock:${string}`>): string => i18next.t(key)
 
 const unlockPin = vi.fn()
 let error: string | null = null
@@ -34,15 +44,15 @@ import LockScreen from '@/features/lock/LockScreen'
 test('entering a 4-digit PIN calls unlockPin', async () => {
   const user = userEvent.setup()
   render(<LockScreen />)
-  await user.type(screen.getByLabelText(/pin/i), '1234')
-  await user.click(screen.getByRole('button', { name: /unlock/i }))
+  await user.type(screen.getByLabelText(T('lock:screen.pinLabel')), '1234')
+  await user.click(screen.getByRole('button', { name: T('lock:screen.unlockCta') }))
   expect(unlockPin).toHaveBeenCalledWith('1234')
 })
 
-test('shows a Spanish, actionable error for a wrong PIN — never the raw message', () => {
+test('shows an actionable error for a wrong PIN — never the raw message', () => {
   error = 'lock: wrong pin'
   render(<LockScreen />)
-  expect(screen.getByRole('alert')).toHaveTextContent(/pin incorrecto/i)
+  expect(screen.getByRole('alert')).toHaveTextContent(T('lock:errors.wrongPin'))
   expect(screen.queryByText(/lock: wrong pin/i)).not.toBeInTheDocument()
 })
 
@@ -53,11 +63,13 @@ test('shows a Spanish, actionable error for a wrong PIN — never the raw messag
 test('does not offer biometric unlock when this vault never enrolled it', () => {
   biometricEnrolled = false
   render(<LockScreen />)
-  expect(screen.queryByRole('button', { name: /biometr/i })).not.toBeInTheDocument()
+  expect(
+    screen.queryByRole('button', { name: T('lock:screen.biometricCta') }),
+  ).not.toBeInTheDocument()
 })
 
 test('offers biometric unlock once this vault has biometrics enrolled', () => {
   biometricEnrolled = true
   render(<LockScreen />)
-  expect(screen.getByRole('button', { name: /biometr/i })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: T('lock:screen.biometricCta') })).toBeInTheDocument()
 })

@@ -59,4 +59,8 @@ render `CategoryPicker` inline via `MovimientoFormFields`, and its "crear
 `CategoryPicker`'s `onSelect` hands back the full `Categoria`, so the
 consuming form derives both `categoria`/`seccionId` from one tap without a
 second lookup. `index.ts` (added by Track F) re-exports both components as
-this folder's public surface.
+this folder's public surface. `CategoryFormModal` has a second real
+consumer as of Track G2: `src/features/settings/CategoriesSection.tsx`
+(`specs.md` §10.24) uses it for the settings screen's category list, so the
+same editor serves both the create-from-picker flow and the settings CRUD —
+there is deliberately no second editor.

@@ -19,13 +19,15 @@ PIN/biometric lock UI, layered on top of auth.
   check.
 - `LockSettings.tsx` — enable/disable/re-lock controls. This is a **dev/test
   harness**, not the polished settings UI (`specs.md` §12) — the visual
-  design is a separate, not-yet-written spec.
-- `errorCopy.ts` — maps a raw `pinLock.ts`/`lockStore.ts` error message to
-  the Spanish, actionable copy `LockScreen`/`LockSettings`/`AppLock` actually
-  render (`unlockErrorCopy`, `enableLockErrorCopy`) — never the raw message
-  (`docs/error-handling.md` §7). Still a hardcoded Spanish `Record`, not
-  routed through `@/lib/i18n` — the lock's full i18n retrofit stays out of
-  scope this track (`specs.md` §12).
+  design is a separate, not-yet-written spec. Its copy is real (routed
+  through the `lock` namespace), even though the layout stays plain.
+- `errorCopy.ts` — maps a raw `pinLock.ts`/`lockStore.ts` error message to a
+  translation key in the `lock` namespace's `errors` group
+  (`unlockErrorCopy`, `enableLockErrorCopy`) — never the raw message
+  (`docs/error-handling.md` §7), and never Spanish copy directly: the
+  component resolves it (`t(unlockErrorCopy(error))`), the same split
+  `src/features/auth/errorCopy.ts` already established (`specs.md` §10.24,
+  Wave 4 stage 2 — the retrofit `specs.md` §12 had open since Wave 2).
 
 All screens read `useLockStore` (`@/lib/lockStore`) for state.
 `useLockStore` also listens for `useAuthStore`'s logout transition (a

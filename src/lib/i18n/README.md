@@ -31,6 +31,27 @@ JSON resources — no `i18next-http-backend`, no CDN.
   the single place that turns copy locale + device region into an `Intl` tag
   and a `date-fns` `Locale`. Pure modules take these as parameters;
   components read the hook (`specs.md` §11, 2026-08-19).
+- `localeLabels.ts` — `LOCALE_LABEL`: each `SupportedLocale`'s endonym
+  ("Português (Brasil)"), not routed through `i18next` — a language's own
+  name doesn't translate. The one source `PreferencesSection.tsx`'s summary
+  row and `/settings`'s language picker both read (`specs.md` §10.24).
+- `localeResolution.ts` — `resolveActiveLocale(stored, languages?)`: a
+  stored `Preferencias.idioma` wins over `detectLocale()`; absence — never
+  chosen, or explicitly written back to `undefined` via "seguir el
+  dispositivo" — means "follow the device" (`specs.md` §10.24). Pure, no
+  `i18next` import, so it's testable without touching the shared instance.
+- `syncStoredLocale.ts` — `syncStoredLocale()`: subscribes to
+  `useDataStore` and calls `i18next.changeLanguage(resolveActiveLocale(…))`
+  whenever `Config.preferencias.idioma` changes (`i18next.changeLanguage`
+  is in-place, no remount). Called once from `src/main.tsx`, **not** a
+  module-level side effect of this `index.ts` — every test file's
+  `src/test/setup.ts` imports this module for the shared `i18next`
+  instance, and a static `@/lib/dataStore` import at `index.ts`'s top level
+  would load the real store (and, transitively, the real
+  `repoProvider.ts`) before a test file's own
+  `vi.mock('@/lib/repoProvider', …)` can intercept it — reproduced, not
+  guessed, while building this (`specs.md` §10.24; see the file's own
+  comment for the count).
 - `amountFormat.ts` — `parseAmount(raw, locale)` and its inverse
   `formatAmountForInput(value, locale)`, the pure locale money helpers
   behind `src/components/shared/AmountField.tsx`. Built on
@@ -47,10 +68,13 @@ JSON resources — no `i18next-http-backend`, no CDN.
 - `locales/*.json` — one file per locale (`es`, `en`, `es-AR`, `pt-BR`), each
   with the same reserved namespace keys at the top level: `common`, `auth`,
   `driveConsent`, `toast`, `nav`, `home`, `search`, `history`, `update`,
-  `errors`, `profile`, `tags` (`docs/wave-2-plan.md` §1.6; `profile` added
-  `specs.md` §10.18, Wave 3 stage 3; `tags` added `specs.md` §10.22, Wave 4
-  Track G1 — the category picker's copy, plus a `colors.*` group of
-  localized `IconAvatarTint` names for the color grid's accessible labels).
+  `errors`, `profile`, `tags`, `settings`, `lock`
+  (`docs/wave-2-plan.md` §1.6; `profile` added `specs.md` §10.18, Wave 3
+  stage 3; `tags` added `specs.md` §10.22, Wave 4 Track G1 — the category
+  picker's copy, plus a `colors.*` group of localized `IconAvatarTint`
+  names for the color grid's accessible labels; `settings`/`lock` added
+  `specs.md` §10.24, Wave 4 stage 2, Track G2 — the `/settings` screen's own
+  copy and the lock feature's full i18n retrofit, `errorCopy.ts` included).
   `es` is the source of truth for shape; the other three must stay
   key-identical even where a namespace is still `{}`.
 
@@ -83,11 +107,14 @@ JSON resources — no `i18next-http-backend`, no CDN.
 
 ## Out of scope here (by design)
 
-No locale picker UI, no persisted locale (`idioma` is not a field on
-`Preferencias` — `src/features/profile/PreferencesSection.tsx` renders the
-_detected_ `i18next` language as an inert row and says so in its own
-`STUB(wave3)` comment; a real picker needs a schema addition first, see
-`specs.md` §12), and no number/currency/date formatting — that's
-`Intl`/`date-fns` at the call site, not this table. Region _detection_ and
-the locale→tag mapping do live here (`detectRegion`, `localeFormatting.ts`);
-what stays out is the formatting itself.
+The locale picker UI lives in `src/features/settings/`, not here — this
+directory only owns the resolution (`localeResolution.ts`) and the wiring
+that applies it (`syncStoredLocale.ts`). No number/currency/date formatting
+either — that's `Intl`/`date-fns` at the call site, not this table. Region
+_detection_ and the locale→tag mapping do live here (`detectRegion`,
+`localeFormatting.ts`); what stays out is the formatting itself.
+
+`Preferencias.idioma` (`src/lib/schema.ts`) is optional — absent means
+"follow the device," which is the actual state for a user who never opened
+`/settings`, not a placeholder for a schema addition still to come
+(`specs.md` §10.24).

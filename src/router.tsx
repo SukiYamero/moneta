@@ -8,6 +8,7 @@ import { SearchScreen } from '@/features/search/SearchScreen'
 import { HistoryScreen } from '@/features/history/HistoryScreen'
 import { ScreenLoading } from '@/components/shared/ScreenLoading'
 import { KitLazy } from '@/routes/KitLazy'
+import { SettingsLazy } from '@/routes/SettingsLazy'
 
 const devRoutes = import.meta.env.DEV
   ? [
@@ -45,6 +46,24 @@ export const router = createBrowserRouter([
       { path: '/search', element: <SearchScreen />, errorElement: <RouteErrorFallback /> },
       { path: '/history', element: <HistoryScreen />, errorElement: <RouteErrorFallback /> },
     ],
+  },
+  {
+    // `/settings` is its own `RequireAuth`-wrapped route, not a child of
+    // the layout route above: it's not a bottom-nav tab (no `BottomNav` to
+    // share), and its own mount/unmount is what closes the Profile sheet
+    // that opened it — that sheet's state lives in `AppShell`, so
+    // navigating away from `AppShell`'s subtree unmounts it for free
+    // rather than needing an explicit close callback threaded through
+    // `PreferencesSection` (specs.md §10.24).
+    path: '/settings',
+    element: (
+      <RequireAuth>
+        <Suspense fallback={<ScreenLoading />}>
+          <SettingsLazy />
+        </Suspense>
+      </RequireAuth>
+    ),
+    errorElement: <RouteErrorFallback />,
   },
   ...devRoutes,
 ])

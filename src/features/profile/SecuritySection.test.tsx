@@ -9,6 +9,9 @@ import { SecuritySection } from '@/features/profile/SecuritySection'
 describe('SecuritySection', () => {
   it('renders the real LockSettings controls, not a stub', () => {
     render(<SecuritySection />)
-    expect(screen.getByRole('button', { name: /activar lock/i })).toBeInTheDocument()
+    // "Activar bloqueo" — the lock's copy is now real, i18n-routed Spanish
+    // (specs.md §10.24 Prerequisite 4), not the earlier hardcoded "Activar
+    // lock".
+    expect(screen.getByRole('button', { name: /activar bloqueo/i })).toBeInTheDocument()
   })
 })

@@ -13,6 +13,7 @@
 // (specs.md §10.22 Decision 2, corrected §11 2026-08-20).
 import type { CategoryIconKey } from '@/lib/categoryIconKeys'
 import type { IconAvatarTint } from '@/lib/iconAvatarTint'
+import type { SupportedLocale } from '@/lib/i18n/resources'
 
 export const SCHEMA_VERSION = 1
 
@@ -93,6 +94,7 @@ export interface Preferencias {
   tema: 'claro' | 'oscuro' | 'sistema'
   monedaPrincipal: Moneda
   primerDiaSemana: 0 | 1 // 0 = domingo, 1 = lunes
+  idioma?: SupportedLocale // ausente = seguir el idioma detectado del dispositivo (specs.md §10.24)
 }
 
 export interface Config {
