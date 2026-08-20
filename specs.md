@@ -5480,30 +5480,19 @@ i18n.resolvedLanguage ?? i18n.language)`) beside the canonical, tested
   a gear/settings affordance to the Add sheet (`src/features/movimientos/`)
   that navigates to `/settings`, matching the design.
 
-- **`sync/validate.ts`'s `isPreferencias` never validates `idioma`**
-  (found by the Track G2 review, 2026-08-20, while pressure-testing the
-  `idioma` round-trip through Drive). `TEMAS.has(value.tema...)`,
-  `isMoneda(value.monedaPrincipal)` and the `primerDiaSemana` check all
-  validate their field; `idioma` is added to `Preferencias` by §10.24 but
-  `isPreferencias` returns `value.preferencias` unchanged, so a malformed or
-  unrecognized `idioma` in a downloaded `config-<device>.json` (a hand-edited
-  file, or a locale a newer build added and this build doesn't know) passes
-  straight through — unlike `Categoria.icono`/`.color`, which are sanitized
-  and stripped when invalid rather than trusted. Traced, not reproduced at
-  runtime: `resolveActiveLocale`/`syncStoredLocale` do not validate their
-  input either, so the value would reach `i18next.changeLanguage(garbage)`
-  — `fallbackLng: 'es'` keeps the _copy_ correct, but
-  `document.documentElement.lang` would be set to the garbage value
-  (`src/lib/i18n/index.ts`'s `applyDocumentLang`). Low severity (no crash,
-  no data loss, no wrong-language copy shown) but the same validation gap
-  shape `sanitizeConfig`'s own comment says it closes for categories.
-  `sync/validate.ts` belongs to Track Z (merged and reviewed before G2), so
-  this is cross-track and left for whoever owns that file next — add an
-  `idioma` check to `isPreferencias` the same way `TEMAS` does, defaulting
-  to stripping rather than rejecting the whole config (matching the
-  `icono`/`color` precedent, not the whole-file-reject precedent `tema`
-  uses, since an unrecognized `idioma` is far less consequential than an
-  unrecognized `tema`/`monedaPrincipal`).
+- ✅ **`Preferencias.idioma` is validated like every other Drive-sourced
+  field** — closed 2026-08-20 (Wave 4 stage-2 cross-track pass). `isPreferencias`
+  checked `tema`/`monedaPrincipal`/`primerDiaSemana` and passed `idioma`
+  through untouched, so `idioma: "klingon"` from a hand-edited Drive file
+  reached the store, `LOCALE_LABEL[bogus]` returned `undefined`, and the
+  profile row rendered a blank value. Now a **sanitizer**, matching
+  `sanitizeCategoria`'s shape and reasoning: an unsupported value is stripped
+  rather than fatal, which lands the user on exactly the "follow the device"
+  behaviour they would have had without the field, instead of taking their
+  categories and currency down with a bad language tag. The runtime list and
+  its guard live in `src/lib/i18n/resources.ts` beside the table they
+  describe, so adding a locale is one edit and a second hand-written array
+  cannot drift from it.
 
   **The `undefined`-vs-JSON concern this same pressure test set out to
   check did not pan out as a defect.** `JSON.stringify` does drop an
@@ -6026,6 +6015,21 @@ engine.ts`'s pull/replay side fully supports `act-<device>.json` (reads,
   `ICON_AVATAR_TINTS`-equivalent const array the same way
   `categoryIconKeys.ts` already has one, so `sync/validate.ts` (and any
   future `src/lib/` consumer) never has to reach past it again.
+
+- **A cold boot briefly shows the detected language, not the stored one.**
+  `i18n/index.ts` initialises with `detectLocale()` synchronously; the stored
+  `idioma` is applied by `syncStoredLocale`'s subscription once `Config`
+  resolves from IndexedDB. A user who explicitly chose Spanish on an English
+  device therefore sees English for a moment on every cold start. **Named
+  deliberately alongside the week-boundary flash that was fixed** (§12,
+  2026-08-20) because the two are the same shape and got opposite answers,
+  and that asymmetry should be a decision rather than an accident: the week
+  fix was cheap and narrow — two elements wait, everything else renders — while
+  this one has no narrow version. The whole UI is text, so hiding it until
+  `Config` resolves _is_ the full-screen loader §10.9 forbids. Accepted for
+  now; revisit if the flash proves noticeable in real use, in which case the
+  honest fix is persisting the chosen locale somewhere synchronously readable
+  at boot rather than gating the render.
 
 ### Development waves (parallel tracks, sequencing, worktree log)
 

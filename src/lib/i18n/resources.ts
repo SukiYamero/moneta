@@ -14,3 +14,14 @@ export const resources = {
 } as const
 
 export type SupportedLocale = keyof typeof resources
+
+// The runtime list and its guard live here, beside the table they describe,
+// so a locale added to `resources` above is the only edit needed — a second
+// hand-written array would be free to drift from it. `sync/validate.ts` is
+// the caller that needs this at runtime: `Preferencias.idioma` arrives from
+// a file the user is allowed to hand-edit, so it is untrusted input like any
+// other Drive value (specs.md §10.19).
+export const SUPPORTED_LOCALES = Object.keys(resources) as SupportedLocale[]
+
+export const isSupportedLocale = (value: unknown): value is SupportedLocale =>
+  typeof value === 'string' && (SUPPORTED_LOCALES as string[]).includes(value)

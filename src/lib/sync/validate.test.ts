@@ -143,6 +143,37 @@ describe('sanitizeConfig', () => {
   })
 })
 
+describe('sanitizeConfig — Preferencias.idioma (specs.md §12, Wave 4 stage-2 cross-track pass)', () => {
+  it('strips an unsupported idioma and keeps the rest of the config', () => {
+    const value = {
+      ...CONFIG_SEMILLA,
+      preferencias: { ...CONFIG_SEMILLA.preferencias, idioma: 'klingon' },
+    }
+
+    const sanitized = sanitizeConfig(value)
+
+    expect(sanitized).not.toBeNull()
+    expect(sanitized?.preferencias).not.toHaveProperty('idioma')
+    expect(sanitized?.preferencias.monedaPrincipal).toBe(
+      CONFIG_SEMILLA.preferencias.monedaPrincipal,
+    )
+    expect(sanitized?.categorias).toEqual(CONFIG_SEMILLA.categorias)
+  })
+
+  it('keeps a supported idioma', () => {
+    const value = {
+      ...CONFIG_SEMILLA,
+      preferencias: { ...CONFIG_SEMILLA.preferencias, idioma: 'pt-BR' },
+    }
+
+    expect(sanitizeConfig(value)?.preferencias.idioma).toBe('pt-BR')
+  })
+
+  it('accepts a config with no idioma at all — absence means "follow the device"', () => {
+    expect(sanitizeConfig(CONFIG_SEMILLA)?.preferencias).not.toHaveProperty('idioma')
+  })
+})
+
 describe('parseMovOpFile', () => {
   it('parses a well-shaped file', () => {
     const hlc = clock.tick()

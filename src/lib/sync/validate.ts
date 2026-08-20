@@ -19,6 +19,7 @@ import type { IconAvatarTint } from '@/lib/iconAvatarTint'
 // tintClasses.ts's only import of IconAvatar.tsx is itself `import type`
 // (erased), so this pulls in no lucide-react/JSX — just the string table.
 import { ICON_AVATAR_TINTS } from '@/lib/iconAvatarTint'
+import { isSupportedLocale } from '@/lib/i18n/resources'
 import {
   OP_FORMAT_VERSION,
   type ActOpEntry,
@@ -174,11 +175,27 @@ const sanitizeCategoria = (value: unknown): Categoria | null => {
 }
 
 const TEMAS = new Set<Preferencias['tema']>(['claro', 'oscuro', 'sistema'])
-const isPreferencias = (value: unknown): value is Preferencias =>
-  isPlainObject(value) &&
-  TEMAS.has(value.tema as Preferencias['tema']) &&
-  isMoneda(value.monedaPrincipal) &&
-  (value.primerDiaSemana === 0 || value.primerDiaSemana === 1)
+/**
+ * A sanitizer, not a predicate — same shape and same reasoning as
+ * `sanitizeCategoria` below. `idioma` (specs.md §10.24) is optional and its
+ * absence is meaningful: it means "follow the device". An unsupported value
+ * from a hand-edited Drive file is therefore stripped, not fatal — stripping
+ * it lands the user on exactly the behaviour they would have had without the
+ * field, while rejecting the whole config would take their categories and
+ * currency down with a bad language tag. The required fields still reject.
+ */
+const sanitizePreferencias = (value: unknown): Preferencias | null => {
+  if (!isPlainObject(value)) return null
+  if (!TEMAS.has(value.tema as Preferencias['tema'])) return null
+  if (!isMoneda(value.monedaPrincipal)) return null
+  if (value.primerDiaSemana !== 0 && value.primerDiaSemana !== 1) return null
+  return {
+    tema: value.tema as Preferencias['tema'],
+    monedaPrincipal: value.monedaPrincipal,
+    primerDiaSemana: value.primerDiaSemana,
+    ...(isSupportedLocale(value.idioma) ? { idioma: value.idioma } : {}),
+  }
+}
 
 /**
  * Also a sanitizer rather than a predicate, but only for `icono`/`color`:
@@ -196,12 +213,13 @@ export const sanitizeConfig = (value: unknown): Config | null => {
   const sanitizedCategorias = value.categorias.map(sanitizeCategoria)
   if (sanitizedCategorias.some((c) => c === null)) return null
   const categorias = sanitizedCategorias.filter((c): c is Categoria => c !== null)
-  if (!isPreferencias(value.preferencias)) return null
+  const preferencias = sanitizePreferencias(value.preferencias)
+  if (preferencias === null) return null
   return {
     schemaVersion: value.schemaVersion,
     secciones: value.secciones,
     categorias,
-    preferencias: value.preferencias,
+    preferencias,
   }
 }
 
