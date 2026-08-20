@@ -3042,6 +3042,165 @@ new brand/boot screen under `src/features/`, and the `common` i18n namespace.
 **Not** `dataStore.ts`'s mutations and **not** any screen's own loading states
 — §10.9's three tiers stay exactly as they are.
 
+### 10.29 One loading moment, not two — consolidating the pre-content gates
+
+Wave 5. Specced 2026-08-20 from a **user observation against the running
+app**, then confirmed by tracing. No code written yet.
+
+The user reported seeing "the loading with the icon, and a loading" — twice,
+at app start and again after signing in — and said it should appear once,
+after signing in, right before Home. The report is accurate.
+
+#### What actually happens today, traced
+
+A cold open by an already-signed-in user renders **two consecutive full-screen
+loading states with different visual treatments**:
+
+1. `RequireAuth` (`src/features/auth/RequireAuth.tsx`) mounts with
+   `status: 'idle'`, calls `restore()`, and renders **`ScreenLoading`** — a
+   bare spinner, no brand — for as long as the restore takes.
+2. `restore()` settles to `'authenticated'`, `RequireAuth` renders its
+   children, `BootGate` mounts and renders **`BootScreen`** — the brand mark,
+   the app name, a second spinner — for at least the 800ms floor (§10.28).
+3. Home.
+
+Neither track could see this. `RequireAuth`'s loading is §10.9's Tier 1 fix
+(Wave 2.2, Track Q); `BootScreen` is §10.28 (Wave 4 stage 3). Each is correct
+alone, and nobody owned the sequence — the same seam shape the stage-3
+cross-track pass named.
+
+#### Why the obvious fix is wrong
+
+Deleting `RequireAuth`'s loader **reintroduces the exact defect §10.9 Tier 1
+was written to fix**: with nothing rendered while `restore()` runs, a
+returning user's app flashes the Welcome/login screen before resolving to
+their dashboard. §10.9 calls that out as the boot flash; it is not available
+as a trade.
+
+#### The decision
+
+**One continuous brand screen owns the whole pre-content span.** From app
+start, through auth restore, through the boot binding, to Home — mounted once,
+never unmounted and remounted in between, never followed by a second
+full-screen loading treatment.
+
+Consequences, stated so they are chosen rather than discovered:
+
+- **A returning user sees one screen**, start to finish. This is the case the
+  user reported and the one that matters most, because it is every open after
+  the first.
+- **A first-run user sees the brand screen briefly, then Welcome.** The user
+  asked for no loading "at app start"; this is the one residue of that, and it
+  is the price of not flashing the login screen at everyone else. It reads as
+  the app launching, which is what it is.
+- **The 800ms floor now spans a longer window**, so in practice it will be
+  invisible more often — the floor is already satisfied by real work before it
+  becomes a wait. §10.28's floor-not-duration rule is unchanged.
+
+#### The first-run download view is not a second loader, and stays
+
+`DriveDownloadScreen` (§10.26) may follow the brand screen on a genuinely
+fresh sign-in. That is allowed and is not what this section forbids: it is a
+progress screen with real content — how many files, how far along, an honest
+failure with retry — not a loading treatment. **The handoff must be seamless**:
+no flash of Home, no gap, no third spinner between them.
+
+#### Done when
+
+- A cold open by a signed-in user shows exactly one full-screen treatment
+  before Home, with no visual change of treatment mid-span.
+- A first-run user never sees two.
+- The §10.9 boot flash does not return — verified by a test, since that is a
+  regression this change is structurally positioned to cause.
+- The brand → download-view handoff on a fresh sign-in shows no intermediate
+  state.
+
+#### Blast radius
+
+`src/features/auth/RequireAuth.tsx`, `src/features/boot/BootGate.tsx` and
+`BootScreen.tsx`, `src/router.tsx`, `src/features/sync/FirstSyncGate.tsx`.
+No store, no schema, no data path. It is a composition change, which is
+exactly why it needs the boot-flash regression test above rather than a
+careful read.
+
+### 10.30 The light theme, and the picker it unblocks
+
+Wave 4.1. Specced 2026-08-20; the user reports the light palette is designed.
+**The palette values are not yet in this repo** — see "What is still needed"
+below. No code written yet.
+
+§10.24 refused to ship a theme picker, and was right to: `index.html`
+hardcodes `<html class="dark">`, and every `chart-*` token in the light
+palette was the scaffold's zero-chroma grey. Offering `claro` would have
+shipped a control that visibly lies when tapped; offering `sistema` was worse,
+handing the broken palette to anyone whose phone is on light without their
+having chosen it.
+
+- **Goal:** light is a real, designed theme, and the picker G2 withheld can
+  ship honestly.
+- **Done when:** `claro`, `oscuro` and `sistema` all render a correct app;
+  nothing renders grey that should carry a category tint; and
+  `Preferencias.tema` — a field that already exists and already syncs — finally
+  drives something.
+
+#### What is already true, and must not be redone
+
+The user closed the prerequisite that had to land first: **`:root`'s five
+`chart-*` tokens now carry the same values `.dark` does**, because a category
+tint is an identity, not a decoration. Nothing else in the light palette was
+touched, deliberately, so there is nothing to undo. Do not "fix" those five by
+re-deriving lighter variants without an explicit decision — that reverts a
+recorded one (`docs/pendientes-usuario.md` item 7).
+
+#### What this section covers
+
+- **The surfaces, borders and the three text tiers** in `:root`, from the
+  design.
+- **Removing the hardcoded `class="dark"`** from `index.html` and resolving
+  the theme from `Preferencias.tema`, with `sistema` following
+  `prefers-color-scheme` live (a user changing their phone's theme mid-session
+  must not need a reload).
+- **The picker itself**, in Personalizar (§10.24's `OptionList`, which Track AC
+  just gave real keyboard behaviour).
+- **No flash of the wrong theme at boot.** This is the same shape as the
+  language flash §12 accepted (2026-08-20) and must get the opposite answer,
+  because a full-screen colour inversion is not a subtle flicker. The theme
+  must be resolvable **synchronously at first paint**, before React renders —
+  which means it cannot wait on `Config` resolving from IndexedDB the way
+  `idioma` does. The honest mechanism is a tiny inline script in `index.html`
+  reading a synchronously-available value, exactly the pattern the language
+  flash's own §12 entry names as the fix it could not afford there.
+  **Note the constraint this creates:** the chosen theme must live somewhere
+  readable synchronously at boot. `AGENTS.md` §7 bans `localStorage` for
+  _sensitive_ data; a theme preference is not sensitive, and this is the one
+  place that distinction earns its keep. Record the choice explicitly rather
+  than letting it look like a violation.
+
+#### The contrast check the user still owes
+
+The five category tints were picked against a dark background. `#f5b93f` and
+`#2fd896` are the two most likely to fail against a light surface. This is a
+human judgment against real screens, not something an agent should assert —
+until it happens, ship light knowing the tints are unverified there, and say
+so in the track's report rather than silently.
+
+#### What is still needed before this can be dispatched
+
+**The design file itself.** `docs/ui/README.md` refers to `Moneta.dc.html` as
+though it were readable, and it is not in this repo — it lives only in the
+Claude Design canvas, which an agent session cannot reach (403). Every
+implementation of a designed screen has so far worked from prose descriptions
+in that folder rather than the artboards. **Export `Moneta.dc.html` into
+`docs/ui/`** and this stops being a recurring cost for every future design
+track, not just this one.
+
+#### Blast radius
+
+`src/styles/index.css` (`:root` only — `.dark` is correct and stays),
+`index.html`, the theme-resolution module, `PreferencesEditor`/`OptionList`'s
+theme row, and `docs/ui/design-tokens.md`. No schema change: `tema` already
+exists on `Preferencias`.
+
 ### Wave 3 — staging and dependencies
 
 Not everything runs in parallel. A track in a later stage is **blocked** until
@@ -6271,6 +6430,31 @@ export/index.ts:49` all still inline `format(date, 'yyyy-MM-dd')` instead
   - `bun run check` verified green on the fixed branch: 131 files / 1374
     tests. Verbatim output kept in this review's own report, not restated
     here.
+
+- 2026-08-20 — **The returning-user screen (§10.21) and the light palette
+  (§10.30) are designed; the brand mark is deferred and ships as a
+  placeholder** (user). The mark was the smallest item and became the one
+  blocking nothing — `BootScreen` already renders `APP_NAME`'s initial in the
+  gradient square `ScreenLoading` uses, which is deliberately structured so a
+  real mark replaces one square's contents rather than the screen. It stays
+  open (`docs/pendientes-usuario.md` item 8) and stays low.
+- 2026-08-20 — **Notifications: deferred, explicitly not discarded** (user,
+  answering the canvas-vs-code question §12 has carried since Wave 2). The
+  artboard stays. Recording the constraint with it so a future reader does not
+  read "kept" as "approved": there is no backend (§6), so there is no push.
+  Anything shippable is either local-only (a scheduled reminder from a service
+  worker, no server, real but narrow) or needs §6's stateless-function
+  exception argued explicitly. Do not implement from the artboard alone.
+- 2026-08-20 — **Receipt scanning: postponed, artboard kept** (user). Unchanged
+  in substance from §11 2026-08-18 — on-device OCR is unreliable on thermal
+  paper and the good on-device path is desktop-only, missing this app's
+  target. The artboard stays as a record of the idea. Do not restart the
+  research without a real platform change.
+- 2026-08-20 — **Wave 4 stage 4 (`Activo`/patrimonio, voice, groups) is
+  deprioritized to last** (user), below the designed-surface work now in Wave
+  4.1. Not cut — `Activo` in particular is half of §4's data model with zero
+  UI, and it keeps its place in the plan and still needs its own §10 spec
+  before anyone builds it.
 
 ## 12. Backlog (pending verification / deferred work)
 

@@ -437,11 +437,11 @@ consistent" passes it every time.
 
 **Stage 4 — after the app persists:**
 
-| Track                     | Notes                                                                                                                                                                                                |
-| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **`Activo` / patrimonio** | The assets half of §4, with **zero** UI today — no screen, no write path, no `outbox.ts` union member. Confirmed real missing scope on 2026-08-20, deferred rather than cut. Needs its own §10 spec. |
-| **Voice**                 | An addition to F's sheet, so it cannot precede it. Architecture already resolved (§11, 2026-08-18): Web Speech API + a client-side parser, on-device, no backend.                                    |
-| **H — groups / "Áreas"**  | Last, per the user. Needs its schema addendum (`Grupo` type, or `extra` on `Categoria`) written **before** implementing — do not invent the shape inline.                                            |
+| Track                     | Notes                                                                                                                                                                                                                                                         |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`Activo` / patrimonio** | Deprioritized to last by the user (2026-08-20), not cut. The assets half of §4, with **zero** UI today — no screen, no write path, no `outbox.ts` union member. Confirmed real missing scope on 2026-08-20, deferred rather than cut. Needs its own §10 spec. |
+| **Voice**                 | An addition to F's sheet, so it cannot precede it. Architecture already resolved (§11, 2026-08-18): Web Speech API + a client-side parser, on-device, no backend.                                                                                             |
+| **H — groups / "Áreas"**  | Last, per the user. Needs its schema addendum (`Grupo` type, or `extra` on `Categoria`) written **before** implementing — do not invent the shape inline.                                                                                                     |
 
 ### Before any of this is dispatched
 
@@ -473,6 +473,75 @@ login marker), and §10.20's registry already holds the account name to greet
 them with. Pairs with persisting guest mode, which §10.18 unblocked — decide
 the two together. See `specs.md` §11 (2026-08-19) for the rule this belongs
 to, which is bigger than the screen.
+
+---
+
+## Wave 4.1 — the designed surface (planned 2026-08-20, user + operator)
+
+Raised by the user after using the merged stage-3 build and doing the design
+work. Same shape as Waves 2.1/2.2/3.1: small, user-driven, sequenced ahead of
+the bigger plan because it is what they actually see.
+
+**Placed before Wave 5 (hardening) deliberately.** Hardening is real and stays
+next, but nothing in it is newly reachable: Track Z shipped the validation it
+could not ship without, which was the whole point of that split. These four
+items are visible on every single app open.
+
+**Specs are written. No code yet — the user asked for specs only.**
+
+| Track                           | Spec                | Priority | Owns                                                                                                                                               |
+| ------------------------------- | ------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **AD — the cold-start surface** | §10.29 + §10.21     | 1        | `RequireAuth.tsx`, `src/features/boot/**`, `src/features/sync/FirstSyncGate.tsx`, `router.tsx`, `src/features/auth/**`                             |
+| **AE — the light theme**        | §10.30              | 2        | `src/styles/index.css` (`:root` only), `index.html`, the theme-resolution module, the theme row in `PreferencesEditor`, `docs/ui/design-tokens.md` |
+| **AF — the PIN screens**        | §10.2 (polished UI) | 3        | `src/features/lock/**`, `src/features/profile/SecuritySection.tsx`                                                                                 |
+
+### Why AD is one track and not two
+
+§10.29 (one loading moment) and §10.21 (the returning-user screen) both live in
+the **same span of time** — from app launch to Home — and both edit
+`RequireAuth.tsx`. Splitting them puts two writers on one file for one
+user-visible sequence, which is precisely the ownership mistake `AGENTS.md`
+records from Wave 3 stage 1. One track owns the cold start end to end:
+what shows while auth resolves, how a returning user is greeted, and the
+handoff into the first-run download view.
+
+AD carries a **mandatory regression test for §10.9's boot flash** — a
+returning user's app must never flash the Welcome screen. This change is
+structurally positioned to reintroduce it, and a careful read is not
+sufficient evidence.
+
+### AE and AF are independent of AD and of each other
+
+No file overlap. AE is styling plus a synchronously-resolvable theme value;
+AF is the lock feature folder plus the guest branch §12 files
+(`SecuritySection` shows a guest a control that can only fail).
+
+**AF implements a recorded user decision:** a guest gets **no PIN, biometrics
+at most** (§11, 2026-08-20). Where the platform has no biometrics, a guest
+sees nothing — never a PIN, and never today's control that only errors.
+
+### Blocked on one thing, and it is cheap
+
+**`Moneta.dc.html` is not in this repo.** `docs/ui/README.md` refers to it as
+if it were readable; it lives only in the Claude Design canvas, which an agent
+session cannot fetch (403, verified 2026-08-20). Every designed screen so far
+has been implemented from prose in `docs/ui/` rather than the artboards, and
+AD/AE/AF are all design-driven. Exporting the file into `docs/ui/` removes
+this cost permanently, for every future design track — not just these three.
+
+### Deliberately not in this wave
+
+- **The brand mark** — deferred by the user; `BootScreen`'s placeholder is
+  structured so a real mark replaces one square's contents (§11, 2026-08-20).
+- **Notifications** — kept in the canvas, not built. There is no backend, so
+  there is no push (§6); anything shippable is local-only or needs §6's
+  exception argued.
+- **Receipt scanning** — postponed, artboard kept as a record.
+- **The account chooser** — the user is designing it, and the operator has
+  asked which of two different things it is before it gets a spec: a mock of
+  Google's own popup (which we never render, and cannot) or **our own profile
+  switcher** (which we very much need — it is the answer to the guest cliff,
+  `docs/pendientes-usuario.md` item 6).
 
 ---
 
