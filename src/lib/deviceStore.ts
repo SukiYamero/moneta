@@ -37,6 +37,13 @@ export type ProfileRow = {
 }
 // Short and filename-safe on purpose (specs.md §10.19: `mov-<device>-<YYYY-MM>.json`).
 export type DeviceIdRow = { id: number; value: string }
+// `sync/tip.ts`'s cache of "the last hlc this device knows about, per
+// entity" — a transport-layer cache (what pull last merged), never
+// `schema.ts` data, so it belongs beside every other device-local signal in
+// this database rather than on a profile's own db.ts connection. `id` is
+// `${entity}:${entityId}` (e.g. `movimiento:3f9c…`, or the fixed
+// `config:config` for the whole-Config entity — specs.md §12's known gap).
+export type SyncTipRow = { id: string; hlc: string }
 
 const MARKER_ID = 1 as const
 const DRIVE_DECISION_ID = 1 as const
@@ -59,6 +66,7 @@ export const deviceDb = new Dexie('kurobello-device') as Dexie & {
   anchor: EntityTable<AnchorRow, 'id'>
   profiles: EntityTable<ProfileRow, 'id'>
   deviceId: EntityTable<DeviceIdRow, 'id'>
+  syncTips: EntityTable<SyncTipRow, 'id'>
 }
 deviceDb.version(1).stores({ marker: 'id' })
 // Additive: `marker` keeps its v1 definition unchanged — same reasoning as
@@ -85,6 +93,23 @@ deviceDb.version(4).stores({
   anchor: 'id',
   profiles: 'id, kind, lastUsedAt',
   deviceId: 'id',
+})
+// Additive again: `syncTips` (`sync/tip.ts`) — closes a real gap found while
+// building replay (specs.md §11, 2026-08-19): `outbox.ts`'s `basedOn`
+// originally only ever looked at this device's own outbox history, so a
+// device that pulled a newer version from Drive and then deleted it locally
+// would stamp a stale `basedOn`, causing a false "concurrent delete-vs-edit"
+// revival on the next merge. This table is what a pull writes to and what
+// `outbox.ts` now also reads, so `basedOn` reflects the best of both: this
+// device's own not-yet-pushed history AND what its last pull actually
+// taught it. Every earlier table restated unchanged.
+deviceDb.version(5).stores({
+  marker: 'id',
+  driveDecision: 'id',
+  anchor: 'id',
+  profiles: 'id, kind, lastUsedAt',
+  deviceId: 'id',
+  syncTips: 'id',
 })
 
 export const hasLoggedInBefore = async (): Promise<boolean> => {

@@ -10,6 +10,7 @@ import {
   removeOperations,
   useOutboxStore,
 } from '@/lib/outbox'
+import { __clearKnownTipsForTests, recordKnownTip } from '@/lib/sync/tip'
 
 const movimiento = (overrides: Partial<Movimiento> = {}): Movimiento => ({
   id: crypto.randomUUID(),
@@ -26,6 +27,7 @@ const movimiento = (overrides: Partial<Movimiento> = {}): Movimiento => ({
 afterEach(async () => {
   await db.outbox.clear()
   await deviceDb.deviceId.clear()
+  await __clearKnownTipsForTests()
   __resetDeviceIdForTests()
   __resetOutboxClockForTests()
   useOutboxStore.setState({ dirty: false })
@@ -53,6 +55,33 @@ describe('enqueueOperation', () => {
 
     const edited = { ...m, monto: 2000 }
     await enqueueOperation({ entity: 'movimiento', op: 'put', payload: edited })
+    const entries = await listPendingOperations()
+    const second = entries.find((e) => e.hlc !== first?.hlc)
+
+    expect(second?.basedOn).toBe(first?.hlc)
+  })
+
+  it("chains basedOn to a tip learned from a pull, not just this device's own outbox history", async () => {
+    // The bug this closes (specs.md §11, 2026-08-19): a device that pulled a
+    // newer version it never queued locally must still base its next op on
+    // it, or a later delete looks falsely concurrent with an edit it saw.
+    const m = movimiento()
+    await recordKnownTip('movimiento', m.id, '000000005-0000-remotedev')
+
+    await enqueueOperation({ entity: 'movimiento', op: 'del', payload: { id: m.id } })
+    const [entry] = await listPendingOperations()
+
+    expect(entry?.basedOn).toBe('000000005-0000-remotedev')
+  })
+
+  it("prefers this device's own more recent outbox history over a stale pulled tip", async () => {
+    const m = movimiento()
+    await recordKnownTip('movimiento', m.id, '000000001-0000-remotedev') // stale — from before this device's own edit below
+
+    await enqueueOperation({ entity: 'movimiento', op: 'put', payload: m })
+    const [first] = await listPendingOperations()
+
+    await enqueueOperation({ entity: 'movimiento', op: 'del', payload: { id: m.id } })
     const entries = await listPendingOperations()
     const second = entries.find((e) => e.hlc !== first?.hlc)
 
