@@ -82,4 +82,20 @@ describe('SettingsScreen', () => {
     await user.click(screen.getByRole('button', { name: /volver/i }))
     expect(mockNavigate).toHaveBeenCalledWith(-1)
   })
+
+  // specs.md §12, 2026-08-20: `CategoriesSection`/`PreferencesEditor` reuse
+  // `ProfileSectionHeading` — a hardcoded `<h3>` built for `ProfileSheet.tsx`,
+  // where its own `<h2>` sits above it. Reused directly under this screen's
+  // `<h1>`, that skips a level. Each section gets its own `<h2>` here
+  // instead, so a real `<h3>` inside it (this file mocks both sections away,
+  // so it can't see that `<h3>` — `CategoriesSection.test.tsx`/
+  // `PreferencesEditor.test.tsx` own that) nests correctly.
+  it('supplies an <h2> for each section, so the real heading below never skips a level', () => {
+    mockStore({ status: 'ready', config: CONFIG_SEMILLA })
+    renderScreen()
+    const h1 = screen.getByRole('heading', { level: 1 })
+    const h2s = screen.getAllByRole('heading', { level: 2 })
+    expect(h1).toBeInTheDocument()
+    expect(h2s).toHaveLength(2)
+  })
 })

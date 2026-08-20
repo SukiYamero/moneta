@@ -27,4 +27,37 @@ describe('OptionList', () => {
     render(<OptionList items={items} value="a" onChange={vi.fn()} aria-label="Options" />)
     for (const radio of screen.getAllByRole('radio')) expect(radio).toHaveClass('min-h-11')
   })
+
+  // specs.md §12, 2026-08-20: `role="radiogroup"`/`role="radio"` promises
+  // one tab stop with roving `tabIndex`, and arrow keys moving focus —
+  // `SegmentedControl` already implements this contract; `OptionList` was
+  // announcing the role without it.
+  describe('roving tabIndex + arrow-key contract (APG radiogroup, vertical)', () => {
+    it('gives only the selected option tabIndex 0, every other -1', () => {
+      render(<OptionList items={items} value="b" onChange={vi.fn()} aria-label="Options" />)
+      expect(screen.getByRole('radio', { name: 'Option A' })).toHaveAttribute('tabIndex', '-1')
+      expect(screen.getByRole('radio', { name: 'Option B' })).toHaveAttribute('tabIndex', '0')
+    })
+
+    it('moves selection with ArrowDown/ArrowUp, wrapping at the edges', async () => {
+      const user = userEvent.setup()
+      const onChange = vi.fn()
+      render(<OptionList items={items} value="b" onChange={onChange} aria-label="Options" />)
+
+      screen.getByRole('radio', { name: 'Option B' }).focus()
+      await user.keyboard('{ArrowDown}')
+
+      expect(onChange).toHaveBeenCalledWith('a')
+    })
+
+    it('moves DOM focus onto the newly-selected option via a ref, not DOM traversal', async () => {
+      const user = userEvent.setup()
+      render(<OptionList items={items} value="a" onChange={vi.fn()} aria-label="Options" />)
+
+      screen.getByRole('radio', { name: 'Option A' }).focus()
+      await user.keyboard('{ArrowDown}')
+
+      expect(screen.getByRole('radio', { name: 'Option B' })).toHaveFocus()
+    })
+  })
 })

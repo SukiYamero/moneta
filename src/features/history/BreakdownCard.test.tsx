@@ -22,6 +22,7 @@ describe('BreakdownCard', () => {
         onBdTypeChange={vi.fn()}
         moneda="COP"
         categorias={[]}
+        otherCurrencies={[]}
       />,
     )
 
@@ -40,6 +41,7 @@ describe('BreakdownCard', () => {
         onBdTypeChange={vi.fn()}
         moneda="COP"
         categorias={[]}
+        otherCurrencies={[]}
       />,
     )
 
@@ -61,6 +63,7 @@ describe('BreakdownCard', () => {
         onBdTypeChange={vi.fn()}
         moneda="COP"
         categorias={categorias}
+        otherCurrencies={[]}
       />,
     )
 
@@ -79,10 +82,50 @@ describe('BreakdownCard', () => {
         onBdTypeChange={vi.fn()}
         moneda="COP"
         categorias={[]}
+        otherCurrencies={[]}
       />,
     )
 
     expect(screen.getByText('Sin categoría')).toBeInTheDocument()
     expect(screen.queryByText('cat_missing')).not.toBeInTheDocument()
+  })
+
+  // specs.md §10.27: a total scoped to `monedaPrincipal` must never look
+  // like the whole picture when it isn't — the screen says so.
+  describe('other-currency note', () => {
+    it('renders nothing when otherCurrencies is empty (the common case)', () => {
+      render(
+        <BreakdownCard
+          scope="dia"
+          totals={totals}
+          breakdown={[]}
+          bdType="gasto"
+          onBdTypeChange={vi.fn()}
+          moneda="COP"
+          categorias={[]}
+          otherCurrencies={[]}
+        />,
+      )
+
+      expect(screen.queryByText(/USD/)).not.toBeInTheDocument()
+    })
+
+    it('names the other currencies when the period has movements in them', () => {
+      render(
+        <BreakdownCard
+          scope="dia"
+          totals={totals}
+          breakdown={[]}
+          bdType="gasto"
+          onBdTypeChange={vi.fn()}
+          moneda="COP"
+          categorias={[]}
+          otherCurrencies={['USD', 'MXN']}
+        />,
+      )
+
+      expect(screen.getByText(/USD/)).toBeInTheDocument()
+      expect(screen.getByText(/MXN/)).toBeInTheDocument()
+    })
   })
 })

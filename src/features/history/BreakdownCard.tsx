@@ -25,6 +25,13 @@ export interface BreakdownCardProps {
    * resolving it to a name/icon/color needs this in scope from the caller.
    */
   categorias: Categoria[]
+  /**
+   * Currencies present in the viewed period other than `moneda`
+   * (`movimientoStats.otherCurrencies`, specs.md §10.27) — `totals`/
+   * `breakdown` above already exclude these; empty in the common case
+   * where nothing needs to render.
+   */
+  otherCurrencies: Moneda[]
 }
 
 const MIN_BAR_PERCENT = 3
@@ -37,8 +44,9 @@ export const BreakdownCard = ({
   onBdTypeChange,
   moneda,
   categorias,
+  otherCurrencies,
 }: BreakdownCardProps) => {
-  const { t } = useTranslation(['history', 'tags'])
+  const { t } = useTranslation(['history', 'tags', 'common'])
   const { locale } = useLocaleFormatting()
 
   const balanceLabel: Record<Periodo, string> = {
@@ -56,6 +64,15 @@ export const BreakdownCard = ({
   const balanceNegative = totals.balance < 0
   const emptyMessage =
     bdType === 'ingreso' ? t('breakdown.emptyIngreso') : t('breakdown.emptyGasto')
+
+  // `Intl.ListFormat`, not a hand-joined string: "USD and MXN" vs "USD, MXN
+  // y BRL" is locale-specific punctuation/conjunction data, the same reason
+  // `formatMonto` builds off `formatToParts` rather than string-prepending
+  // (specs.md §10.7).
+  const otherCurrenciesLabel =
+    otherCurrencies.length > 0
+      ? new Intl.ListFormat(locale, { style: 'short', type: 'conjunction' }).format(otherCurrencies)
+      : null
 
   return (
     <div className="mb-3.5 rounded-3xl border border-border-subtle bg-card p-4">
@@ -82,6 +99,12 @@ export const BreakdownCard = ({
           </div>
         </div>
       </div>
+
+      {otherCurrenciesLabel && (
+        <p className="mt-2 text-xs font-medium text-fg-tertiary">
+          {t('common:otherCurrencyNote', { currencies: otherCurrenciesLabel })}
+        </p>
+      )}
 
       <div className="mt-4 border-t border-border-subtle pt-3.5">
         <div className="mb-3 flex items-center gap-2.5">

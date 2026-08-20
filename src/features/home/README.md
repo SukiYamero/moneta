@@ -7,7 +7,15 @@ Track L).
 - `useHomeDashboard.ts` — the only place Home reads data. Subscribes to
   `src/lib/dataStore.ts`, triggers `load()` on mount, and derives every
   figure through `src/lib/movimientoStats.ts`'s pure functions (never a
-  local sum/aggregation). Returns render-ready data plus `status`/`error`/
+  local sum/aggregation). `totals`/`week.chart`/`week.totalGastos` are all
+  scoped to `Config.preferencias.monedaPrincipal` (`movimientoStats`'
+  `moneda` argument, `specs.md` §10.27) — never a raw sum over every
+  `Movimiento` regardless of currency. Also returns `otherCurrencies`
+  (`movimientoStats.otherCurrencies`), the currencies present besides
+  `monedaPrincipal`, empty in the common single-currency case — `Home.tsx`
+  (`src/routes/`) renders a note from it when non-empty, rather than
+  silently excluding those movements from the total with no explanation.
+  Returns render-ready data plus `status`/`error`/
   `retry` for the three non-happy states, and `categorias` (`Config.categorias`,
   falling back to `CONFIG_SEMILLA.categorias` before load) — `Movimiento.categoria`
   is an id (`specs.md` §10.22), and `RecentMovimientos`/`MovimientoRow` need

@@ -10,6 +10,12 @@ and the movements list for the currently viewed period.
   Reads through `useDataStore` (same instance as Home/Search) and derives
   every number via `movimientoStats.ts` (`periodRange`/`filterByRange`/
   `totals`/`breakdownBy`) — it never computes a total or a share itself.
+  `totals`/`breakdownBy` are scoped to `Config.preferencias.monedaPrincipal`
+  (`specs.md` §10.27) — the period's movements in another currency are
+  never folded into that sum. `otherCurrencies(periodMovimientos,
+monedaPrincipal)` (also `movimientoStats.ts`) feeds `BreakdownCard`'s note
+  when the viewed period has movements in another currency; empty in the
+  common case where nothing needs to render.
   The period nav, scope tabs and picker strip render unconditionally
   (defaulting to `CONFIG_SEMILLA.preferencias` before `config` loads, the
   same fallback Home/Search use) — only the breakdown card + movements list
@@ -58,7 +64,11 @@ and the movements list for the currently viewed period.
   (`specs.md` §10.22) — takes a required `categorias: Categoria[]` prop
   (`HistoryScreen` supplies `Config.categorias`) and resolves it via
   `movimientoView.resolveCategoria`, rendering the resolved name (or a
-  translated "sin categoría") rather than the raw id.
+  translated "sin categoría") rather than the raw id. Also takes a required
+  `otherCurrencies: Moneda[]` prop (`specs.md` §10.27); when non-empty it
+  renders a short `common:otherCurrencyNote` line naming them
+  (`Intl.ListFormat`, not a hand-joined string — same reasoning as
+  `formatMonto`'s `formatToParts` use) — never a second competing total.
 
 Not built: a hide/show-amounts toggle (the design draws one) — masking the
 movements list would need a prop `MovimientoRow` doesn't have, and adding

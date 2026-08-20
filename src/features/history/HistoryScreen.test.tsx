@@ -115,8 +115,8 @@ describe('HistoryScreen', () => {
       const movimientos = (await fakeRepo.movimientos.list()).items
       const config = await fakeRepo.getConfig()
       const range = periodRange(periodo, seedTodayIso, config.preferencias.primerDiaSemana)
-      const expected = totals(filterByRange(movimientos, range))
       const moneda = config.preferencias.monedaPrincipal
+      const expected = totals(filterByRange(movimientos, range), moneda)
 
       // getAllByText, not getByText: when ingresos is 0 the balance figure
       // and the gasto mini-total render the identical "$ -X" text, which is
@@ -141,7 +141,12 @@ describe('HistoryScreen', () => {
     const config = await fakeRepo.getConfig()
     const range = periodRange('mes', seedTodayIso, config.preferencias.primerDiaSemana)
     const periodMovimientos = filterByRange(movimientos, range)
-    const ingresoBreakdown = breakdownBy(periodMovimientos, 'categoria', 'ingreso')
+    const ingresoBreakdown = breakdownBy(
+      periodMovimientos,
+      'categoria',
+      'ingreso',
+      config.preferencias.monedaPrincipal,
+    )
     const topIngreso = ingresoBreakdown[0]
     expect(topIngreso).toBeDefined()
 
@@ -188,8 +193,8 @@ describe('HistoryScreen', () => {
     const movimientos = (await fakeRepo.movimientos.list()).items
     const config = await fakeRepo.getConfig()
     const range = periodRange('mes', seedTodayIso, config.preferencias.primerDiaSemana)
-    const expected = totals(filterByRange(movimientos, range))
     const moneda = config.preferencias.monedaPrincipal
+    const expected = totals(filterByRange(movimientos, range), moneda)
 
     expect(screen.getByText(new RegExp(`^[A-Z][a-z]+ \\d{4}$`))).toBeInTheDocument()
     // Device region is stubbed to CO (src/test/setup.ts); it's independent

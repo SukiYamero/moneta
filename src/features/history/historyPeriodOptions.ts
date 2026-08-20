@@ -12,7 +12,7 @@ import {
   type Locale,
 } from 'date-fns'
 import type { Movimiento, Periodo } from '@/lib/schema'
-import { type DateRange, filterByRange, periodRange } from '@/lib/movimientoStats'
+import { type DateRange, filterByRange, periodRange, toIsoDate } from '@/lib/movimientoStats'
 
 export interface PeriodOption {
   /** ISO `yyyy-mm-dd` — any date that resolves back to this option's own period via `periodRange`. */
@@ -22,9 +22,6 @@ export interface PeriodOption {
   hasData: boolean
   selected: boolean
 }
-
-const ISO_DATE_FORMAT = 'yyyy-MM-dd'
-const toIsoDate = (date: Date): string => format(date, ISO_DATE_FORMAT)
 
 const hasMovements = (movimientos: Movimiento[], range: DateRange): boolean =>
   filterByRange(movimientos, range).length > 0

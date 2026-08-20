@@ -1,5 +1,5 @@
-import { endOfMonth, endOfYear, format, startOfMonth, startOfYear, subDays } from 'date-fns'
-import type { DateRange } from '@/lib/movimientoStats'
+import { endOfMonth, endOfYear, startOfMonth, startOfYear, subDays } from 'date-fns'
+import { toIsoDate, type DateRange } from '@/lib/movimientoStats'
 
 export type DateRangePreset = 'all' | '7d' | '30d' | 'month' | 'year' | 'custom'
 
@@ -7,9 +7,6 @@ export interface CustomRange {
   from: string
   to: string
 }
-
-const ISO_DATE_FORMAT = 'yyyy-MM-dd'
-const toIsoDate = (date: Date): string => format(date, ISO_DATE_FORMAT)
 
 const swapIfReversed = (custom: CustomRange): DateRange =>
   custom.from <= custom.to ? custom : { from: custom.to, to: custom.from }

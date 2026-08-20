@@ -1,6 +1,7 @@
 {
   "common": {
     "loading": "Carregando…",
+    "otherCurrencyNote": "Também há movimentos em {{currencies}}, que não estão incluídos neste total.",
     "error": {
       "title": "Não foi possível abrir o app",
       "retry": "Tentar novamente",

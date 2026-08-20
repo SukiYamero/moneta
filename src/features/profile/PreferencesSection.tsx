@@ -4,9 +4,8 @@ import { Link } from 'react-router'
 import { useDataStore } from '@/lib/dataStore'
 import { LOCALE_LABEL } from '@/lib/i18n/localeLabels'
 import { resolveActiveLocale } from '@/lib/i18n/localeResolution'
+import { WEEK_START_KEY } from '@/lib/weekStart'
 import { ProfileSectionHeading } from '@/features/profile/ProfileSectionHeading'
-
-const WEEK_START_KEY: Record<0 | 1, 'sunday' | 'monday'> = { 0: 'sunday', 1: 'monday' }
 
 /** The theme row: never a Link — there is nowhere to send it (Prerequisite 3). */
 const InertRow = ({ label, value }: { label: string; value: string }) => (

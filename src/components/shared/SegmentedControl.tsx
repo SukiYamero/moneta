@@ -1,5 +1,5 @@
-import { useRef, type KeyboardEvent } from 'react'
 import { cn } from '@/lib/utils'
+import { useRovingRadioGroup } from '@/components/shared/useRovingRadioGroup'
 
 export interface SegmentedControlOption<T extends string> {
   value: T
@@ -13,31 +13,6 @@ export interface SegmentedControlProps<T extends string> {
   onChange: (value: T) => void
   'aria-label': string
   className?: string
-}
-
-type ArrowKey = 'ArrowLeft' | 'ArrowRight'
-
-const ARROW_DELTA: Record<ArrowKey, number> = {
-  ArrowLeft: -1,
-  ArrowRight: 1,
-}
-
-const isArrowKey = (key: string): key is ArrowKey => {
-  return key === 'ArrowLeft' || key === 'ArrowRight'
-}
-
-/** Steps from `from` in `delta` direction, wrapping, skipping disabled options. `null` if every option is disabled. */
-const findNextEnabledIndex = <T extends string>(
-  options: SegmentedControlOption<T>[],
-  from: number,
-  delta: number,
-): number | null => {
-  const count = options.length
-  for (let step = 1; step <= count; step++) {
-    const index = (((from + delta * step) % count) + count) % count
-    if (!options[index]?.disabled) return index
-  }
-  return null
 }
 
 /**
@@ -55,23 +30,12 @@ export const SegmentedControl = <T extends string>({
   'aria-label': ariaLabel,
   className,
 }: SegmentedControlProps<T>) => {
-  const buttonRefs = useRef<(HTMLButtonElement | null)[]>([])
-  const selectedIndex = Math.max(
-    0,
-    options.findIndex((o) => o.value === value),
+  const { buttonRefs, selectedIndex, handleKeyDown } = useRovingRadioGroup(
+    options,
+    value,
+    onChange,
+    'horizontal',
   )
-
-  const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
-    if (!isArrowKey(event.key)) return
-    event.preventDefault()
-    const delta = ARROW_DELTA[event.key]
-    const nextIndex = findNextEnabledIndex(options, selectedIndex, delta)
-    if (nextIndex === null) return
-    const next = options[nextIndex]
-    if (!next) return
-    onChange(next.value)
-    buttonRefs.current[nextIndex]?.focus()
-  }
 
   return (
     <div

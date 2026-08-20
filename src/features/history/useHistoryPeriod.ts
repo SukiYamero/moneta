@@ -1,9 +1,7 @@
 import { useCallback, useState } from 'react'
-import { addDays, addMonths, addWeeks, addYears, format, getYear, parseISO } from 'date-fns'
+import { addDays, addMonths, addWeeks, addYears, getYear, parseISO } from 'date-fns'
 import type { Periodo } from '@/lib/schema'
-
-const ISO_DATE_FORMAT = 'yyyy-MM-dd'
-const toIsoDate = (date: Date): string => format(date, ISO_DATE_FORMAT)
+import { toIsoDate } from '@/lib/movimientoStats'
 
 // One calendar step per periodo — moving the anchor this way and letting
 // `periodRange` (movimientoStats.ts) recompute the exact bounds is what

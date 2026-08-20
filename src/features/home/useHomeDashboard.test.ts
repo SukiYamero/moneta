@@ -96,7 +96,9 @@ describe('useHomeDashboard', () => {
     const { result } = renderHook(() => useHomeDashboard())
     await waitFor(() => expect(result.current.status).toBe('ready'))
 
-    expect(result.current.totals).toEqual(totals(movimientos))
+    expect(result.current.totals).toEqual(
+      totals(movimientos, CONFIG_SEMILLA.preferencias.monedaPrincipal),
+    )
   })
 
   it('surfaces a load failure as a RepoErrorCode, and retry() re-fetches', async () => {
@@ -125,5 +127,55 @@ describe('useHomeDashboard', () => {
 
     expect(result.current.weekStripDays).toHaveLength(7)
     expect(result.current.week.chart).toHaveLength(7)
+  })
+
+  // specs.md §10.27: the exact failure scenario the fix targets — a user
+  // switches monedaPrincipal after already having COP movements. The
+  // headline total must never add the two currencies together.
+  describe('currency-correct totals (specs.md §10.27)', () => {
+    it('excludes movements in a currency other than monedaPrincipal from the totals', async () => {
+      const config: Config = {
+        ...CONFIG_SEMILLA,
+        preferencias: { ...CONFIG_SEMILLA.preferencias, monedaPrincipal: 'USD' },
+      }
+      const movimientos = [
+        movimiento({ tipo: 'ingreso', monto: 500_000, moneda: 'COP' }),
+        movimiento({ tipo: 'ingreso', monto: 100, moneda: 'USD' }),
+      ]
+      mGetRepo.mockReturnValue(makeRepo({ movimientos, config }))
+
+      const { result } = renderHook(() => useHomeDashboard())
+      await waitFor(() => expect(result.current.status).toBe('ready'))
+
+      expect(result.current.totals).toEqual({ ingresos: 100, gastos: 0, balance: 100 })
+    })
+
+    // The other edge case: the user just switched currencies and has no
+    // movements yet in the new one — zero is the correct, honest total,
+    // not a fallback to summing whatever else exists.
+    it('totals zero, correctly, when nothing matches monedaPrincipal yet', async () => {
+      const config: Config = {
+        ...CONFIG_SEMILLA,
+        preferencias: { ...CONFIG_SEMILLA.preferencias, monedaPrincipal: 'USD' },
+      }
+      const movimientos = [movimiento({ tipo: 'ingreso', monto: 500_000, moneda: 'COP' })]
+      mGetRepo.mockReturnValue(makeRepo({ movimientos, config }))
+
+      const { result } = renderHook(() => useHomeDashboard())
+      await waitFor(() => expect(result.current.status).toBe('ready'))
+
+      expect(result.current.totals).toEqual({ ingresos: 0, gastos: 0, balance: 0 })
+      expect(result.current.otherCurrencies).toEqual(['COP'])
+    })
+
+    it('exposes an empty otherCurrencies when every movement matches monedaPrincipal', async () => {
+      const movimientos = [movimiento({ tipo: 'ingreso', monto: 500_000, moneda: 'COP' })]
+      mGetRepo.mockReturnValue(makeRepo({ movimientos }))
+
+      const { result } = renderHook(() => useHomeDashboard())
+      await waitFor(() => expect(result.current.status).toBe('ready'))
+
+      expect(result.current.otherCurrencies).toEqual([])
+    })
   })
 })

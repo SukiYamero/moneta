@@ -112,7 +112,17 @@ Categoria[]` prop (no default, same no-silent-fallback rule as
   arrow-key navigation), no screen-specific option assumptions. Per-option
   `disabled` (arrow-key nav skips disabled options); keyboard focus moves
   via refs on each segment, not DOM traversal. Same invisible-padding
-  touch-target treatment as `TagChip`.
+  touch-target treatment as `TagChip`. The roving-`tabIndex`/arrow-key
+  mechanics live in `useRovingRadioGroup.ts` (below), shared with
+  `src/features/settings/OptionList.tsx`'s vertical list — the two used to
+  implement the same `radiogroup`/`radio` contract separately, and only one
+  of them had the keyboard behaviour the role promises (`specs.md` §12,
+  2026-08-20).
+- `useRovingRadioGroup.ts` — the APG "radio group" keyboard/focus contract
+  (one tab stop, arrow keys move focus and selection together), factored
+  out of `SegmentedControl.tsx` so `OptionList.tsx` shares it instead of
+  reimplementing it. Takes an `orientation` (`'horizontal'` | `'vertical'`)
+  to pick the arrow-key pair per the APG spec (Left/Right vs. Up/Down).
 - `TextField.tsx` — labelled text input: `Label`/`Input` association via
   `useId()` (or a caller-supplied `id`), `aria-invalid`/`aria-describedby`
   wired to an optional `error` rendered as `role="alert"`, 44px touch
