@@ -212,11 +212,21 @@ body {
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  /* A category's colour is the same in both themes, on purpose (user
+     decision, 2026-08-20): the tint is an identity — Comida is amber
+     wherever you look at it — so it must not change when the theme does.
+     These were the scaffold's zero-chroma greys, which made every chip,
+     row avatar and breakdown bar render grey in light mode and silently
+     killed the scan-by-colour affordance §10.8/§10.22 exist for. Nothing
+     else in the light palette is designed yet and none of it is touched
+     here; this is the minimum that has to already be true the day a light
+     theme lands. Contrast against a light surface is unverified — see
+     specs.md §12 before shipping light mode. */
+  --chart-1: #2fd896;
+  --chart-2: #7ba7f0;
+  --chart-3: #f5b93f;
+  --chart-4: #fb8989;
+  --chart-5: #c084fc;
   --radius: 0.625rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);

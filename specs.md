@@ -2463,11 +2463,15 @@ silently change how money is formatted.
 
 #### Prerequisite 3 — no theme picker ships this track
 
-`index.html` hardcodes `<html class="dark">`. Every `chart-*` token in `:root`
-(light) is still the scaffold's zero-chroma grey, while `.dark` carries the
-real palette (§12). So light mode is not "unstyled" — it is **colorless**:
-every category tint, every chip, every breakdown bar renders grey, and the
-scan-by-color affordance §10.8/§10.22 exist for silently stops working.
+`index.html` hardcodes `<html class="dark">`, so `tema` has no runtime effect
+at all today.
+
+**Category colours are no longer part of this problem** (user decision,
+2026-08-20): `:root`'s `chart-*` tokens now match `.dark`'s, so a tint is the
+same colour in both themes. What is still missing is everything else — the
+light palette's surfaces, borders and text tiers are unreviewed shadcn
+scaffold, and the five tints' contrast against a light surface has never been
+checked.
 
 **Decision: `tema` gets no control until a light design exists.** Offering
 `claro` ships a screen that visibly lies the moment it is tapped; offering
@@ -2656,9 +2660,17 @@ flip rather than a bug report after it:
 3. **Ship the flip and leave someone staring at an empty account** — ruled
    out. The conclusion they will draw is that the app lost their data.
 
-**This is a product decision and it belongs to the user, not the operator.**
-It is filed in `docs/pendientes-usuario.md`; the flip does not happen until it
-is answered.
+**Decided 2026-08-20 (user): it does not gate the flip.** Nothing is in
+production and nothing will be until the app is finished, so there is no live
+user who can fall off this cliff today — blocking the app's own real data on a
+launch-time decision would stall the build for nothing. It stays filed in
+`docs/pendientes-usuario.md` and §12 as work that must be done **before the
+first real user signs in**. That is a real deadline; it is just not this one.
+
+**What is not deferred with it:** the honest empty state above. That one is
+reachable by the developer the moment the stub flips, and an app that shows
+zeros with no explanation teaches its own author the wrong thing about whether
+it works.
 
 #### Blast radius
 
@@ -5197,6 +5209,27 @@ CategoryIconKey` (new `src/features/tags/categoryIcons.ts`, a curated
   affordance already carries the meaning. Worth revisiting only if the app
   gains a screen-reader-dependent audience, which nothing currently indicates.
 
+- 2026-08-20 — **A category's colour is the same in light and dark (user
+  decision).** The tint is an identity, not a theme accent: Comida is amber
+  wherever you look at it, so it must not change when the theme does.
+  `:root`'s `--chart-1..5` now carry the same values as `.dark`'s instead of
+  the scaffold's greys. **Deliberately minimal**: nothing else in the light
+  palette was touched, because the user is designing it and a half-guessed
+  palette would be something to undo rather than build on. The one caveat is
+  recorded rather than glossed: these five were picked against a dark
+  background and their contrast on a light surface is unverified (§12).
+
+- 2026-08-20 — **The guest cliff is a pre-launch TODO, not a gate on the
+  `repoProvider` flip (user decision).** §10.25 originally blocked the flip on
+  it. The user's reasoning closes it cleanly: **nothing is in production and
+  nothing will be until the app is finished**, so there is no live user who can
+  fall off this cliff, and blocking the app's own data on a decision that only
+  matters at launch would stall the build for nothing. It stays recorded — in
+  §12 and in `docs/pendientes-usuario.md` — as work that must be done **before
+  the first real user signs in**, which is a real deadline, just not this one.
+  What is _not_ deferred is the honest empty state after the flip: that one is
+  reachable by the developer on day one.
+
 ## 12. Backlog (pending verification / deferred work)
 
 - **`dataStore.updateConfig`'s `onSuccess` blindly trusts its own write's
@@ -5354,18 +5387,19 @@ CategoryIconKey` (new `src/features/tags/categoryIcons.ts`, a curated
   says so out loud. Revisit only if Drive slips far enough that the window
   stops being temporary.
 
-- **The light theme has no category colors at all — the `chart-*` tokens are
-  still the scaffold's zero-chroma greys.** `src/styles/index.css` defines
-  `--chart-1..5` as `oklch(0.87 0 0)`…`oklch(0.269 0 0)` in `:root` (light)
-  while `.dark` carries the design's real palette (`#2fd896`, `#7ba7f0`,
-  `#f5b93f`, `#fb8989`, `#c084fc`). Every category tint therefore renders
-  grey in light mode — the movement-row avatars, the tag chips, and the
-  History breakdown bars alike. Since `preferencias.tema` defaults to
-  `sistema`, a user on a light OS gets a colorless app and the
-  "scan by color" affordance silently does not work. Pre-existing, not
-  introduced by any Wave 2/2.1 track, and it needs **design values**, not a
-  code decision: the design canvas is dark-only today. Blocking for anyone
-  who ships light mode; harmless until then.
+- **The light theme is still undesigned, but its category colours are no
+  longer wrong** (updated 2026-08-20). `--chart-1..5` in `:root` were the
+  scaffold's zero-chroma greys, so every category tint, chip and breakdown bar
+  rendered grey in light mode. The user decided a category's colour is an
+  identity and must be **identical in both themes**, so `:root` now carries the
+  same five values `.dark` does. **What remains open, and it is narrower than
+  before:** (a) the rest of the light palette — surfaces, borders, text tiers —
+  is still unreviewed shadcn scaffold and needs design values; (b) **the five
+  tints' contrast against a light surface is unverified** — they were chosen
+  against a dark background, and `#f5b93f`/`#2fd896` in particular are the ones
+  to check first. Whoever ships light mode verifies contrast before shipping,
+  and adjusts the _light_ values only if it fails — the dark ones are the
+  design's own.
 
 - ✅ **`BreakdownCard.tsx`'s fourth private tint → token table is gone** —
   closed 2026-08-20 (Wave 4 cross-track pass). `tintClasses.ts` gained the

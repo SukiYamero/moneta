@@ -76,7 +76,7 @@ It was left out of the 2026-08-19 split — the user took two screens, the
 operator pushed five — so it currently has no owner. Decide: user designs it, or
 the operator pushes a mock like the others.
 
-### 6. The guest cliff — decide before the `repoProvider` flip — `owner: user`
+### 6. The guest cliff — must be answered before launch, not before the flip — `owner: user`
 
 `specs.md` §10.25 and §12. Someone who used the app as a guest for a month
 signs in with Google and lands in a **fresh, empty profile** — their month is
@@ -92,10 +92,13 @@ lost their data. §12 names two acceptable answers and one that is not:
   honest, but does not actually get them back to it.
 - **Ship the flip and say nothing** — ruled out.
 
-**The flip does not happen until this is answered.** Which means the app does
-not start using real data until this is answered.
+**Updated 2026-08-20 (user): this no longer gates the `repoProvider` flip.**
+Nothing is in production and nothing will be until the app is finished, so
+there is no live user who can hit this today. It stays open as work that must
+land **before the first real user signs in** — the deadline is launch, not this
+wave. Asked again each session until it is answered.
 
-### 7. Light theme has no design, and that now blocks a control — `owner: user`
+### 7. The light palette itself, and a contrast check on the tints — `owner: user`
 
 `specs.md` §10.24 Prerequisite 3 and §12. `index.html` hardcodes
 `<html class="dark">`, and every `chart-*` token in the light palette is still
@@ -108,9 +111,17 @@ control that visibly lies when tapped; offering `sistema` is worse, since it
 hands the broken palette to anyone whose phone is on light without them
 choosing it.
 
-This needs **design values**, not a code decision. Either a light palette gets
-designed in the canvas, or we decide the app is deliberately dark-only and say
-so in the UI instead of storing a `tema` preference that has no effect.
+**Updated 2026-08-20 (user): the user is designing the light theme, and
+category colours are already handled.** A tint is an identity, so `:root`'s
+`chart-*` tokens now carry the same five values `.dark` does — that was the
+minimum that had to be true before a light theme lands, and nothing else in the
+palette was touched, deliberately, so there is nothing to undo.
+
+**What is still yours:** the light palette itself (surfaces, borders, text
+tiers), and a contrast check on those five tints against a light surface —
+they were picked against a dark background, and `#f5b93f` and `#2fd896` are the
+two to look at first. Until that exists, Track G2 still ships no theme
+picker.
 
 ---
 
