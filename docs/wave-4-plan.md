@@ -199,10 +199,44 @@ asserting the fix.
 | ----- | ----------------------------------------------------------- |
 | Z     | ✅ merged `498632a` + seam fix `8806321` + review `8a7d8ce` |
 | G1    | ✅ merged `1fdfeb0` + review `ca9c545`                      |
-| —     | ✅ operator cross-track pass (layer guard + tint table)     |
+| —     | ✅ stage-1 cross-track pass (layer guard + tint table)      |
 | —     | ✅ stage-2 groundwork `ab78db8` (the two contended files)   |
-| F     | active — `../moneta-worktrees/track-f`                      |
-| G2    | active — `../moneta-worktrees/track-g2`                     |
+| F     | ✅ merged `11a6541` + review `266332f`                      |
+| G2    | ✅ merged `17a9efd` + review `d5d60a6`                      |
+| —     | ✅ stage-2 cross-track pass `372b231`                       |
+
+**Stage 2 is complete.** The `repoProvider` flip (§10.25) remains — unblocked,
+and needing the honest empty state to land with it.
+
+### What the stage-2 cross-track pass found
+
+1. **`Preferencias.idioma` reached the store unvalidated.** Track G2 added the
+   field; Track Z owns the validator; neither could close it, which is the
+   definition of a seam. A hand-edited `idioma: "klingon"` rendered a blank
+   value in the profile row. Fixed as a _sanitizer_, matching
+   `sanitizeCategoria`'s shape one function away, rather than a rejection that
+   would take a whole config down with a bad language tag.
+2. **A cold boot shows the detected language before the stored one** — the
+   same shape as the week-boundary flash this wave fixed, given the opposite
+   answer on purpose, because this one has no narrow version. Filed with the
+   reasoning so the asymmetry reads as a decision rather than an oversight.
+
+**Checked and clean:** one `CategoryFormModal` serving both the picker flow and
+the settings CRUD (no second editor); one amount parser; the boot-detect and
+stored-locale paths converge through `resolveActiveLocale` rather than
+disagreeing.
+
+### What the per-track reviewers did that is worth keeping
+
+Both refused to take a report at its word. The Track F reviewer _reproduced_
+the operator's `AmountField` lead before fixing it, and found it worse than
+described — a visible red flash, not an ARIA nit. The Track G2 reviewer
+distrusted a mock-based test and wrote a scratch test against the real
+Dexie path instead. Both declined to pad: each reported categories with
+nothing in them as empty.
+
+The authoritative worktree log stays in `docs/waves.md`; this table is the
+per-track execution view.
 
 The authoritative worktree log stays in `docs/waves.md`; this table is the
 per-track execution view.

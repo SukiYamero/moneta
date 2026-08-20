@@ -363,6 +363,12 @@ its own code review applied, plus an operator cross-track pass over the seams.
 | **Z — Drive sync engine** | §10.19 ✅ written | `repo.drive.ts`, the sync engine + flush triggers, `bootstrap.ts`, §4's layout. **No screens.**   |
 | **G1 — category picker**  | §10.22 ✅ written | `src/features/tags/**` + the taxonomy-reference sweep — see `wave-4-plan.md` §2 for the full list |
 
+**Stage 2 — ✅ COMPLETE (merged to `main`, 2026-08-20):** F and G2, each with
+its own code review applied, plus an operator groundwork commit before dispatch
+and a cross-track pass after. The `repoProvider` flip (§10.25) is the one item
+left: it is unblocked now that creating a movement works, and needs the honest
+empty state to land with it.
+
 **Stage 2 — blocked on stage 1:**
 
 | Track                            | Spec              | Owns                                                                                                     |
@@ -476,10 +482,7 @@ Check this table against `git worktree list` at the start of any parallel
 session; prune anything stale (merged-but-not-removed, or on disk but
 missing/finished here).
 
-| Path                           | Branch     | Track | Status |
-| ------------------------------ | ---------- | ----- | ------ |
-| `../moneta-worktrees/track-f`  | `track-f`  | F     | active |
-| `../moneta-worktrees/track-g2` | `track-g2` | G2    | active |
+_Empty — every Wave 4 stage-2 worktree was removed when its branch merged._
 
 Paths are relative to the repo root (`web/moneta`), i.e. a sibling
 `web/moneta-worktrees/` directory outside the repo — deliberately not nested
