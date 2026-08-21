@@ -214,12 +214,12 @@ Per `AGENTS.md`, non-optional:
 
 ## 6. Status
 
-| Track | Branch           | Worktree                             | Status               |
-| ----- | ---------------- | ------------------------------------ | -------------------- |
-| AD    | `track-ad-boot`  | `../moneta-worktrees/track-ad-boot`  | active               |
-| AE    | `track-ae-light` | `../moneta-worktrees/track-ae-light` | active               |
-| AF    | `track-af-pin`   | `../moneta-worktrees/track-af-pin`   | active               |
-| AG    | —                | —                                    | stage 2, not started |
+| Track | Branch           | Worktree                           | Status                                                |
+| ----- | ---------------- | ---------------------------------- | ----------------------------------------------------- |
+| AD    | `track-ad-boot`  | removed                            | **merged 2026-08-20**, review in flight (`review-ad`) |
+| AE    | `track-ae-light` | removed                            | **merged 2026-08-20**, review in flight (`review-ae`) |
+| AF    | `track-af-pin`   | `../moneta-worktrees/track-af-pin` | active                                                |
+| AG    | —                | —                                  | stage 2, not started                                  |
 
 ## 7. Operator debt from stage 1 (do not lose these)
 
