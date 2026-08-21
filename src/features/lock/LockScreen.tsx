@@ -1,54 +1,118 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { Fingerprint, LockKeyhole } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useLockStore } from '@/lib/lockStore'
+import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
+import { PinDots } from '@/features/lock/PinDots'
+import { PIN_LENGTH, PinPad } from '@/features/lock/PinPad'
 import { unlockErrorCopy } from '@/features/lock/errorCopy'
+
+export const IconTile = ({ children }: { children: ReactNode }) => (
+  <div className="relative flex items-center justify-center">
+    <div
+      aria-hidden="true"
+      className="absolute size-32 rounded-full bg-[radial-gradient(circle,_color-mix(in_oklch,var(--primary)_32%,transparent),_transparent_70%)]"
+    />
+    <div className="relative flex size-16 items-center justify-center rounded-3xl bg-[linear-gradient(135deg,var(--primary),color-mix(in_oklch,var(--primary),black_18%))] shadow-[0_14px_32px_-8px_color-mix(in_oklch,var(--primary)_55%,transparent)]">
+      {children}
+    </div>
+  </div>
+)
 
 const LockScreen = () => {
   const { t } = useTranslation('lock')
   const phase = useLockStore((s) => s.phase)
-  // Gated on whether *this vault* enrolled biometrics, not just whether the
-  // platform supports it — a user who declined biometrics at enrollment
-  // must not see a button that always fails (specs.md §11, 2026-08-19,
-  // finding 9).
   const biometricEnrolled = useLockStore((s) => s.biometricEnrolled)
   const unlockPin = useLockStore((s) => s.unlockPin)
   const unlockBiometric = useLockStore((s) => s.unlockBiometric)
   const error = useLockStore((s) => s.error)
+  const clearError = useLockStore((s) => s.clearError)
+  const reset = useLockStore((s) => s.reset)
   const [pin, setPin] = useState('')
+  const [forgotOpen, setForgotOpen] = useState(false)
+  const submittingRef = useRef(false)
+
+  const handleChange = (next: string) => {
+    if (error) clearError()
+    setPin(next)
+  }
+
+  useEffect(() => {
+    if (pin.length !== PIN_LENGTH || submittingRef.current) return
+    submittingRef.current = true
+    void unlockPin(pin).finally(() => {
+      submittingRef.current = false
+      setPin('')
+    })
+  }, [pin, unlockPin])
 
   if (phase !== 'locked') return null
 
+  const confirmForgot = () => {
+    setForgotOpen(false)
+    void reset()
+  }
+
   return (
-    <div className="flex min-h-dvh flex-col items-center justify-center gap-4 p-6">
+    <div className="flex min-h-dvh flex-col items-center justify-center gap-6 p-6 text-center">
+      <IconTile>
+        <LockKeyhole aria-hidden="true" className="size-8 text-primary-foreground" />
+      </IconTile>
+      <div className="space-y-2">
+        <h1 className="text-xl font-extrabold tracking-tight">{t('screen.title')}</h1>
+        <p className="text-sm font-medium text-muted-foreground">
+          {biometricEnrolled ? t('screen.subtitleBiometric') : t('screen.subtitlePin')}
+        </p>
+      </div>
       {biometricEnrolled && (
         <button
           type="button"
-          className="min-h-11 rounded-md border px-4"
+          className="flex min-h-11 items-center gap-2 rounded-full border border-border-subtle px-5 text-sm font-bold"
           onClick={() => void unlockBiometric()}
         >
+          <Fingerprint aria-hidden="true" className="size-4" />
           {t('screen.biometricCta')}
         </button>
       )}
-      <label className="flex flex-col gap-1">
-        <span>{t('screen.pinLabel')}</span>
+      <label className="flex flex-col items-center gap-4">
+        <span className="sr-only">{t('screen.pinLabel')}</span>
+        <PinDots length={PIN_LENGTH} filled={pin.length} error={!!error} />
         <input
           inputMode="numeric"
           pattern="\d*"
-          maxLength={4}
+          maxLength={PIN_LENGTH}
           value={pin}
-          onChange={(e) => setPin(e.target.value.replaceAll(/\D/g, '').slice(0, 4))}
-          className="min-h-11 rounded-md border px-3 text-center tracking-widest"
+          onChange={(e) => handleChange(e.target.value.replaceAll(/\D/g, '').slice(0, PIN_LENGTH))}
+          className="sr-only"
+          aria-label={t('screen.pinLabel')}
         />
       </label>
+      {/* Reserved height (design export: 20px) so an error appearing never
+          shifts the keypad below it. */}
+      <div className="flex h-5 items-center" aria-hidden={!error}>
+        {error && (
+          <p role="alert" className="text-sm text-destructive">
+            {t(unlockErrorCopy(error))}
+          </p>
+        )}
+      </div>
+      <PinPad value={pin} onChange={handleChange} maxLength={PIN_LENGTH} />
       <button
         type="button"
-        className="min-h-11 rounded-md border px-4"
-        disabled={pin.length !== 4}
-        onClick={() => void unlockPin(pin)}
+        className="min-h-11 text-sm font-bold text-muted-foreground underline underline-offset-4"
+        onClick={() => setForgotOpen(true)}
       >
-        {t('screen.unlockCta')}
+        {t('screen.forgotCta')}
       </button>
-      {error && <p role="alert">{t(unlockErrorCopy(error))}</p>}
+      <ConfirmDialog
+        open={forgotOpen}
+        onClose={() => setForgotOpen(false)}
+        onConfirm={confirmForgot}
+        title={t('forgotConfirm.title')}
+        description={t('forgotConfirm.description')}
+        confirmLabel={t('forgotConfirm.confirmCta')}
+        cancelLabel={t('forgotConfirm.cancelCta')}
+      />
     </div>
   )
 }

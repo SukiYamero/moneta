@@ -437,17 +437,48 @@
   },
   "lock": {
     "screen": {
+      "title": "Enter your PIN",
+      "subtitlePin": "Enter your 4-digit PIN",
+      "subtitleBiometric": "Use your fingerprint or enter your PIN",
       "pinLabel": "PIN",
       "biometricCta": "Unlock with biometrics",
-      "unlockCta": "Unlock"
+      "deleteCta": "Delete",
+      "forgotCta": "Forgot my PIN",
+      "guestTitle": "Confirm it's you",
+      "guestSubtitle": "Use your fingerprint or Face ID to continue",
+      "guestRetryCta": "Try again"
+    },
+    "forgotConfirm": {
+      "title": "Reset access?",
+      "description": "Without the PIN we can't open this device's data: it'll be deleted and you'll need to sign in again.",
+      "confirmCta": "Delete and sign out",
+      "cancelCta": "Cancel"
     },
     "settings": {
-      "activeNote": "Lock active",
+      "panelTitle": "PIN lock",
+      "panelSubtitle": "Protect the app on this device",
+      "back": "Back",
+      "pinRowLabel": "Ask for PIN on open",
+      "pinRowSubcopy": "4 digits, only on this phone",
+      "changePinCta": "Change PIN",
       "lockNowCta": "Lock now",
-      "disableCta": "Disable",
-      "pinLabel": "PIN (4 digits)",
-      "biometricToggleLabel": "Use biometrics",
-      "enableCta": "Enable lock"
+      "footerPolicy": "Your PIN is stored only on this device. If you forget it you can disable it from the lock screen.",
+      "statusActive": "On",
+      "statusInactive": "Off",
+      "biometricRowLabel": "Also use biometrics",
+      "biometricRowSubcopy": "Unlock faster with your fingerprint or Face ID",
+      "guestRowLabel": "Fingerprint lock",
+      "guestRowSubcopy": "Ask for your fingerprint or Face ID when reopening the app"
+    },
+    "setup": {
+      "kickerNew": "New PIN",
+      "kickerChange": "Change PIN",
+      "close": "Close",
+      "titleCreate": "Choose a 4-digit PIN",
+      "titleConfirm": "Repeat your PIN",
+      "hintCreate": "You'll need it every time you open the app.",
+      "hintConfirm": "To confirm you remember it.",
+      "mismatch": "The PINs don't match"
     },
     "dismiss": "Close",
     "errors": {

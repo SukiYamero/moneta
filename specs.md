@@ -6887,6 +6887,46 @@ export/index.ts:49` all still inline `format(date, 'yyyy-MM-dd')` instead
   readable form; `docs/ui/moneta-theme.css` is the design's own token table
   lifted verbatim.
 
+- 2026-08-20 — **Track AF, Wave 4.1, half 1: the PIN surface built from the
+  design export (§10.2, §10.2.1).** `LockScreen`/`LockSettings` rebuilt in
+  full: `LockScreen` is now the icon-tile-with-glow shell, dynamic
+  subtitle, `PinDots`, a reserved-height error line, `PinPad` (auto-submits
+  at 4 digits — no separate "Unlock" button, matching the export), and
+  "Olvidé mi PIN" below the pad opening the shared `ConfirmDialog` whose
+  destructive action is the existing `lockStore.reset()` (vault wipe +
+  forced re-login) — not a new mechanism, exactly as §10.2.1 specifies.
+  `LockSettings` is now the account lock's full-screen settings panel
+  (new `FullScreenPanel` shell, `src/features/lock/`, two consumers only so
+  not promoted to `src/components/shared/`), reached from a new row in
+  `SecuritySection` carrying the `lockStateLabel` "Activado"/"Desactivado"
+  chip. New `PinSetup.tsx` is the create/confirm two-step flow (kicker
+  "Nuevo PIN"/"Cambiar PIN"), reusing `lockStore.enable(pin, biometric)` for
+  both first-time setup and "change PIN" — a change is not a distinct code
+  path, `enable()` already always writes a brand-new vault. `SecuritySection`
+  now gates on `authStore.status === 'authenticated'`, closing the §12
+  backlog item ("a guest is shown a lock control that can only fail") by
+  construction for half 1, independent of whether half 2 ships.
+  **Token substitution, per the operator decisions already recorded before
+  dispatch:** the export's literal hexes for the destructive "Borrar y
+  salir" button are not reproduced — `ConfirmDialog` (already
+  `--destructive`-token-based) is reused verbatim rather than hand-styled,
+  per the brief's explicit instruction not to build a second confirm. The
+  "Bloquear ahora" tinted button uses `bg-primary/10 text-primary` (the same
+  opacity-tint pattern `AppLock`'s own error banner already uses for
+  `--destructive`), not the export's `var(--mn-tint12)`/`var(--mn-accent-2)`
+  literals, since those tokens don't exist in this app's palette.
+  **A real bug found chasing test flakiness, not just a test artifact:**
+  `FullScreenPanel`'s inherited `useOverlay` behavior (same as
+  `BottomSheet`/`CenterModal`) steals initial focus to the panel's first
+  focusable descendant one `requestAnimationFrame` after mount. `PinSetup`'s
+  first focusable descendant is the X-close button, which sits before the
+  PIN input in DOM order — leaving the default meant that rAF could steal
+  focus away from the input mid-keystroke for a real keyboard/screen-reader
+  user typing a PIN quickly, not only in a test's `user.type()`. Fixed by
+  passing `initialFocus` pointing at the PIN input itself, so the rAF lands
+  where PIN entry actually happens. `bun run check` green (132 files, 1394
+  tests) before this entry was written.
+
 ## 12. Backlog (pending verification / deferred work)
 
 - **The Add sheet's "gear into `/settings`" entry point was never actually
@@ -7588,6 +7628,16 @@ SupportedLocale = detectLocale()`, and looks up each section/category's
   under-describes it, which is the dangerous direction for a validation file
   (a future reader may add the check the comment implies is missing, or route
   around the file believing it does less than it does).
+- ✅ **CLOSED 2026-08-20 (Track AF, Wave 4.1, half 1, §10.2.1).**
+  `SecuritySection.tsx` now renders nothing at all unless
+  `authStore.status === 'authenticated'` — a guest sees no "Seguridad"
+  section, not a control that errors when tapped. The re-sweep this entry
+  asked for found no third instance: `LockScreen.tsx`'s own biometric-CTA
+  gate (`biometricEnrolled`, not `biometricAvailable`) and this section gate
+  are the only two places offering the lock at all. The product question
+  this entry deferred to the user is answered too (§10.2.1, user
+  2026-08-20): a guest gets biometrics or nothing, never a PIN — closing
+  `docs/pendientes-usuario.md` item 9. Original entry kept for the record:
 - **A guest is shown a lock control that can only fail.** CONFIRMED by the
   operator 2026-08-20, tracing a user question about forgotten PINs.
   `lockStore.enable` throws `NO_SESSION_ERROR` when there is no session

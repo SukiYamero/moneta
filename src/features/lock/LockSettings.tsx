@@ -1,27 +1,41 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
+import { ChevronLeft, LockKeyhole } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useLockStore } from '@/lib/lockStore'
 import { Button } from '@/components/ui/button'
-import { enableLockErrorCopy } from '@/features/lock/errorCopy'
+import { Toggle } from '@/components/shared/Toggle'
+import { FullScreenPanel } from '@/features/lock/FullScreenPanel'
+import { PinSetup } from '@/features/lock/PinSetup'
 
-export const LockSettings = () => {
+export interface LockSettingsProps {
+  open: boolean
+  onClose: () => void
+}
+
+/**
+ * The account PIN lock's full-screen settings panel (design export §4),
+ * reached by tapping the "Bloqueo con PIN" row in `SecuritySection`. Turning
+ * the toggle off reuses `lockStore.reset()` — the same vault-wipe +
+ * forced-relogin action "Olvidé mi PIN" offers on `LockScreen` — matching
+ * the behavior the prior `/kit`-only harness already shipped and tested:
+ * this is a PIN-lock feature, not a general app setting, so removing it
+ * removes the one thing the vault exists to cache (specs.md §10.2).
+ */
+export const LockSettings = ({ open, onClose }: LockSettingsProps) => {
   const { t } = useTranslation('lock')
+  const titleId = useId()
   const enabled = useLockStore((s) => s.enabled)
-  const biometricAvailable = useLockStore((s) => s.biometricAvailable)
-  const enable = useLockStore((s) => s.enable)
   const lock = useLockStore((s) => s.lock)
   const reset = useLockStore((s) => s.reset)
-  const [pin, setPin] = useState('')
-  const [biometric, setBiometric] = useState(false)
-  // `true` triggers the fallback key (errors.disableDefault) — resetVault()
-  // only ever fails with an opaque storage error (no named class, no
-  // lookup-worthy taxonomy — unlike enable()'s NO_SESSION_ERROR), so the
-  // fallback is the whole mapping this path needs.
+  const [setupMode, setSetupMode] = useState<'new' | 'change' | null>(null)
   const [disableFailed, setDisableFailed] = useState(false)
-  const [enableError, setEnableError] = useState<string | null>(null)
 
-  const onReset = async () => {
+  const onToggle = async (next: boolean) => {
     setDisableFailed(false)
+    if (next) {
+      setSetupMode('new')
+      return
+    }
     try {
       await reset()
     } catch {
@@ -29,73 +43,76 @@ export const LockSettings = () => {
     }
   }
 
-  if (enabled) {
-    return (
-      <div className="flex flex-col items-center gap-3">
-        <p className="text-muted-foreground text-sm">{t('settings.activeNote')}</p>
-        <div className="flex gap-2">
-          <Button type="button" size="touch" onClick={() => lock()}>
-            {t('settings.lockNowCta')}
-          </Button>
-          <Button type="button" variant="destructive" size="touch" onClick={() => void onReset()}>
-            {t('settings.disableCta')}
-          </Button>
+  return (
+    <FullScreenPanel open={open} onClose={onClose} labelledBy={titleId}>
+      <div className="flex items-center gap-2.5 px-5 pb-3.5">
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label={t('settings.back')}
+          className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg bg-secondary text-foreground"
+        >
+          <ChevronLeft className="size-4" />
+        </button>
+        <div className="min-w-0 flex-1">
+          <h1 id={titleId} className="truncate text-xl font-extrabold tracking-tight">
+            {t('settings.panelTitle')}
+          </h1>
+          <p className="text-sm font-medium text-muted-foreground">{t('settings.panelSubtitle')}</p>
+        </div>
+      </div>
+
+      <div className="flex flex-1 flex-col gap-4 px-5 pb-8">
+        <div className="flex flex-col gap-4 rounded-3xl border border-border-subtle bg-card px-4 py-3.75">
+          <div className="flex items-center gap-3">
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+              <LockKeyhole aria-hidden="true" className="size-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-bold">{t('settings.pinRowLabel')}</p>
+              <p className="text-ms font-medium text-fg-tertiary">{t('settings.pinRowSubcopy')}</p>
+            </div>
+            <Toggle
+              checked={enabled}
+              onCheckedChange={(next) => void onToggle(next)}
+              aria-label={t('settings.pinRowLabel')}
+            />
+          </div>
+          {enabled && (
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="touch"
+                className="flex-1"
+                onClick={() => setSetupMode('change')}
+              >
+                {t('settings.changePinCta')}
+              </Button>
+              <Button
+                type="button"
+                size="touch"
+                className="flex-1 bg-primary/10 text-primary hover:bg-primary/20"
+                onClick={() => lock()}
+              >
+                {t('settings.lockNowCta')}
+              </Button>
+            </div>
+          )}
         </div>
         {disableFailed && (
-          <p role="alert" className="text-destructive text-sm">
+          <p role="alert" className="text-sm text-destructive">
             {t('errors.disableDefault')}
           </p>
         )}
+        <p className="text-ms font-medium text-fg-tertiary">{t('settings.footerPolicy')}</p>
       </div>
-    )
-  }
 
-  const onEnable = async () => {
-    setEnableError(null)
-    try {
-      await enable(pin, biometric && biometricAvailable)
-      setPin('')
-    } catch (e) {
-      setEnableError(e instanceof Error ? e.message : '')
-    }
-  }
-
-  return (
-    <div className="flex flex-col items-center gap-3">
-      <label className="flex flex-col gap-1">
-        <span className="text-sm">{t('settings.pinLabel')}</span>
-        <input
-          inputMode="numeric"
-          pattern="\d*"
-          maxLength={4}
-          value={pin}
-          onChange={(e) => setPin(e.target.value.replaceAll(/\D/g, '').slice(0, 4))}
-          className="min-h-11 rounded-md border px-3 text-center tracking-widest"
-        />
-      </label>
-      {biometricAvailable && (
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={biometric}
-            onChange={(e) => setBiometric(e.target.checked)}
-          />
-          {t('settings.biometricToggleLabel')}
-        </label>
-      )}
-      <Button
-        type="button"
-        size="touch"
-        disabled={pin.length !== 4}
-        onClick={() => void onEnable()}
-      >
-        {t('settings.enableCta')}
-      </Button>
-      {enableError !== null && (
-        <p role="alert" className="text-destructive text-sm">
-          {t(enableLockErrorCopy(enableError))}
-        </p>
-      )}
-    </div>
+      <PinSetup
+        open={setupMode !== null}
+        onClose={() => setSetupMode(null)}
+        mode={setupMode ?? 'new'}
+      />
+    </FullScreenPanel>
   )
 }
