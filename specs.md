@@ -3436,8 +3436,23 @@ question.
 
 #### 3. Switching asks for the PIN when one is set
 
-**Decided by the user 2026-08-20:** choosing a different profile shows the PIN
-screen if the device has one configured, and goes straight through if not.
+**Decided by the user 2026-08-20, then revised the same day: no PIN when
+switching.** The first instruction was that a switch shows the PIN screen when
+one is configured. Presented with what that costs — see the vault problem
+below — the user chose the simpler rule instead: **the PIN protects opening the
+app, not moving inside it.** Once you are past the lock you have already
+authenticated; switching profiles is navigation.
+
+**The consequence, accepted knowingly and recorded so it is not later read as
+an oversight:** somebody holding your unlocked phone can see every profile on
+it, including the account you are not currently using. That is the same
+exposure the lock already accepts for the movements themselves (§11,
+2026-08-20: the local data is not encrypted at rest for anyone), so it adds no
+new class of risk — it widens an existing one.
+
+**Kept below because it is why the first instruction was not simply
+implemented**, and because a per-profile lock remains the honest answer if this
+ever needs to be stronger:
 
 **This is the delicate part of the whole section and needs care rather than a
 faithful reading of that sentence.** The lock is **device-scoped**: one vault,
@@ -3502,6 +3517,91 @@ the lock's switch gate, and the `profile` i18n namespace. **Schema note:** the
 owner marker lives in the profile database, not in `schema.ts`'s `Config` — it
 describes the container, not the user's data, and must not become a synced
 field.
+
+### 10.32 Bringing guest data into an account — the prompt, and why it is a prompt
+
+Wave 4.1, Track AG. Specced 2026-08-20 from a user question. No code yet.
+
+A guest records a month of expenses, then signs in with Google. Today the
+device ends up with **two profiles**: the local one holding that month, and a
+new, empty Google one. The data is not duplicated — it is **stranded**, and the
+person lands on a dashboard of zeros at the exact moment they expected to see
+their money.
+
+`docs/pendientes-usuario.md` item 6 and §12 have carried this as "the guest
+cliff" since Wave 3, framed as a recovery problem: the profile switcher lets
+them get back. The user's own question reframed it better. **The moment of
+signing in is the moment the month disappears from the screen**, and a
+recovery path they have to discover is a worse answer than not losing it.
+
+- **Goal:** signing in never looks like the app forgot you.
+- **User story:** "I used it as a guest for a month, then signed in with
+  Google. It asked if I wanted to bring my movements along. I said yes."
+- **Done when:** a guest with local data who signs in is asked, once; choosing
+  yes leaves every movement present under the account and queued for Drive;
+  choosing no leaves them exactly where they were, reachable through the
+  switcher (§10.31).
+
+#### Why it is asked and not done automatically
+
+**Decided 2026-08-20 (user), and the reasoning matters more than the
+decision:** bringing the movements into an account means **uploading them to
+that person's Drive**. Someone who chose guest mode may have chosen it
+precisely to keep their money off Drive — §10.10 exists because that is a
+legitimate way to use this app, not a lesser one.
+
+Moving their data on their behalf would silently spend the exact consent guest
+mode withholds. So the prompt is not politeness; it is the consent boundary,
+and "always migrate" was rejected on that basis rather than on taste.
+
+#### What the prompt has to say
+
+- **How much**, concretely — a count of movements, not "your data". A person
+  decides differently about 3 and about 180.
+- **Where it goes**, plainly: into this account, and therefore into their
+  Drive.
+- **What "no" means**, without threat: the data stays on this device, in its
+  own profile, and remains reachable (§10.31's switcher is what makes that
+  sentence true — do not promise it before that ships).
+
+**Asked once**, at first sign-in with local data present, never re-offered on
+every session. A dismissal is an answer.
+
+#### Edge cases
+
+- **The account already has data in Drive.** Adoption is a merge, not a
+  replace: §10.19's operation log is append-only and HLC-ordered, and movement
+  ids are `crypto.randomUUID()`, so there is nothing to collide. Both months
+  end up present. This must be true rather than assumed — it gets a test.
+- **Offline at sign-in.** The move is local; the push follows when there is
+  network. The prompt must not claim the upload already happened.
+- **Nothing local to bring.** No prompt at all — the overwhelmingly common
+  case for a first-ever sign-in.
+- **Adoption interrupted** (a tab closed mid-move). It must be resumable or
+  atomic, never half-moved: half a month in each profile is worse than either
+  outcome. This is the one part of this section that can lose data, so it is
+  written test-first.
+- **The emptied guest profile stays.** It is the default local profile and
+  always exists; it simply has no movements left. Do not delete it.
+
+#### What this does and does not close
+
+It closes the **common** path of the guest cliff — the one a real person walks.
+It does **not** close the general case, which is broader than guest: every
+account ever signed into leaves a profile behind, and only §10.31's switcher
+reaches those. Both are needed; this one prevents, that one recovers.
+
+#### Blast radius
+
+`src/lib/profiles/**`, `src/lib/authStore.ts` (the sign-in moment), a new
+adoption module beside the registry, `src/lib/outbox.ts` (enqueuing the moved
+movements), and one new prompt UI. **No `schema.ts` change** — the movements
+are unchanged; only which database holds them.
+
+**There is no design for this screen**, verified against the export: the
+canvas's "Usar estos datos" belongs to the receipt-scan flow, not to profiles.
+Operator-designed from existing components, same posture as the biometric row
+(§10.2.1).
 
 ### Wave 3 — staging and dependencies
 
