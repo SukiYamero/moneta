@@ -19,35 +19,26 @@ nobody else can make, and verification that needs a human in a browser.
 
 ## Open
 
-### 2. Design the returning-user screen in the canvas — `owner: user`
+### 3. Three canvas-vs-code questions, two of them cosmetic — `owner: user`
 
-Spec is written: `specs.md` §10.21. A person who has used the app for months and
-reopens it must never see the first-run pitch — it reads as "everything reset".
+Asked 2026-08-19. **The two that mattered are resolved**, recorded here so
+they are not re-asked:
 
-Note the canvas's existing **"AUTH: ACCOUNT CHOOSER"** is _not_ this: it is a
-mock of Google's own popup, which we never render ourselves.
+- **Drive status row — resolved 2026-08-20.** The canvas was ahead and the
+  code caught up: Track AB shipped the row in the profile sheet (§10.26).
+- **"AUTH: ACCOUNT CHOOSER" — resolved 2026-08-20.** It is a mock of Google's
+  own dialog, which we never render. What the user actually wanted from it
+  became Track AG (§10.31, the profile switcher).
 
-### 3. Four canvas-vs-code questions still unanswered — `owner: user`
+What is still genuinely open is only what to do with two artboards, and
+neither blocks any code:
 
-Asked 2026-08-19, still open. Each one is a "which side is authoritative"
-question that `AGENTS.md` says must not be resolved by assumption:
-
-- **Drive status row.** The canvas has it in the profile sheet; the code does
-  not. `specs.md` §12 has carried it since Wave 2 — here the canvas is ahead
-  and the code should catch up. Confirm and it becomes a build task.
-  **Now urgent, 2026-08-20:** §10.26 (Track AB) needs somewhere to render sync
-  state, and this row is the place the design already put it. The operator's
-  reading is that the canvas is authoritative here — the code simply never
-  caught up — and Track AB proceeds on that reading. Say so if it is wrong:
-  it is a row in the profile sheet, cheap to move, expensive to build twice.
 - **"Notificaciones" preference.** No notification system exists, and with no
   backend there can be no push (§6). Remove from the canvas, or keep it as
   aspirational knowing it needs an explicit §6 exception?
 - **"Escaneo de factura" screen.** Receipt scanning is deferred _indefinitely_
   (§11, 2026-08-18). Keep the artboard as a memory of the idea, or remove it so
   nobody implements it by mistake?
-- **"AUTH: ACCOUNT CHOOSER".** A mock of Google's own popup — never
-  implementable by us. Keep for flow storytelling, or remove?
 
 ### 4. Verify `connectDrive` against a real Drive — `owner: user`
 
@@ -57,6 +48,8 @@ human in the OAuth popup.
 The check: first run creates the `KuroBello` folder plus its files; a second run
 **reuses them without duplicating** (find-before-create). Confirm and §12's item
 closes.
+
+**Asked again 2026-08-20 (Wave 4.1 dispatch): not tested yet.** Stays open.
 
 ### 5. Who designs the first-run download view? — `owner: undecided`
 
@@ -77,6 +70,11 @@ rather than argues with it.
 good enough to keep, or replaces it. The ownership question is answered; the
 screen is not signed off.
 
+**Asked again 2026-08-20 (Wave 4.1 dispatch): the user has not seen it running
+yet.** Stays open. Track AD owns the handoff _into_ this screen and is
+explicitly forbidden from redesigning the screen itself while it waits for the
+user's own eye.
+
 ### 6. The guest cliff — must be answered before launch, not before the flip — `owner: user`
 
 `specs.md` §10.25 and §12. Someone who used the app as a guest for a month
@@ -93,13 +91,105 @@ lost their data. §12 names two acceptable answers and one that is not:
   honest, but does not actually get them back to it.
 - **Ship the flip and say nothing** — ruled out.
 
+**Updated 2026-08-20 (Wave 4.1): both halves are now specified and owned.**
+§10.32 prevents the cliff (a guest signing in is _asked_ whether to bring their
+movements into the account — a prompt rather than an automatic move, because
+adopting means uploading to that person's Drive and guest mode is precisely the
+consent that withholds), and §10.31 recovers from it (the profile switcher).
+Both are Track AG, stage 2 of Wave 4.1. **The item stays open until the user has
+used the built flow** — the plan being right is not the same as the person
+getting their month back.
+
 **Updated 2026-08-20 (user): this no longer gates the `repoProvider` flip.**
 Nothing is in production and nothing will be until the app is finished, so
 there is no live user who can hit this today. It stays open as work that must
 land **before the first real user signs in** — the deadline is launch, not this
 wave. Asked again each session until it is answered.
 
-### 7. The light palette itself, and a contrast check on the tints — `owner: user`
+### 8. The brand mark — now only the PWA icon — `owner: user`
+
+Raised 2026-08-20, when the user chose a fixed brand moment at boot (§10.28).
+The screen needs a mark and there isn't one: §12 has carried "App icon for the
+brand" since Wave 1 and the PWA still ships the scaffold `favicon.svg`.
+
+Built meanwhile from `APP_NAME` and the existing type/colour tokens, composed
+to read as deliberate rather than unfinished, and structured so a real mark
+drops in without a redesign. Note `AGENTS.md`: the display name is provisional
+and lives only in `src/lib/branding.ts` — a mark that bakes the current name
+into the artwork inherits that provisionality, so a wordmark and a symbol are
+worth separating.
+
+The same asset closes the PWA icon item, so it is one piece of work, not two.
+
+**Rescoped 2026-08-20:** the boot screen this item was raised for **no longer
+exists** — §10.29 deleted it the same day (the user saw two loaders in the
+running app, and the design export has no splash artboard at all). What remains
+is the PWA icon, plus the small mark the export does use on the auth screens,
+which Track AD builds with Lucide from `APP_NAME` per `AGENTS.md`. A real
+designed mark still replaces it without a redesign.
+
+---
+
+## Closed
+
+### 1. Design the PIN screens in the canvas — closed 2026-08-20 (user)
+
+The user reports the PIN design is done, covering both the unlock states and
+the forgotten-PIN path.
+
+**Unblocked 2026-08-20, and the reason is worth keeping:** this item sat
+waiting on an artifact link because the canvas file (`Moneta.dc.html`) is not
+in this repo and the live canvas is unreachable to an agent session (403,
+verified). Versioning the export instead removed the dependency entirely —
+`docs/ui/design-export-reference.md` §4 documents all four PIN artboards
+(settings panel, lock screen, setup, and the "Olvidé mi PIN" confirm) in
+enough detail to implement, so Track AF was dispatched without the link ever
+arriving. The one thing the export genuinely does not contain is any biometric
+UI, confirmed by exhaustive search — which is why §10.2.1 assigns that half to
+the operator.
+
+### 9. Should a guest be able to set a PIN? — closed 2026-08-20 (user)
+
+**Decided: no PIN for a guest. Biometrics at most.** Raised the same day, from
+the user's own question about forgotten PINs, and answered the same day.
+
+The reasoning it resolves: a guest lockout has no honest recovery, because
+re-entry cannot be "sign in with Google" when there is no Google — leaving
+only "wipe their data" (brutal) or "let them in anyway" (decoration).
+Biometrics sidesteps it: there is nothing to forget, so there is no lockout to
+recover from.
+
+**What the operator told the user before they decided, recorded so the
+limitation is not rediscovered as a bug:** for a guest this is a UI gate, not
+a cryptographic boundary. There is no session, so there is no token to wrap
+with the WebAuthn PRF secret — and the local financial data is not encrypted
+at rest for anyone, guest or signed-in (§10.2 put "encrypting the local
+financial-data cache" explicitly out of scope). It genuinely defends against
+the realistic threat — someone picking up an unlocked phone — and does not
+defend against someone who knows to open IndexedDB. Closing that second gap
+means encrypting the local cache, which is separate, deferred work.
+
+**Still to build** (not a user item — filed for the implementing track): the
+guest branch of the lock UI, which today shows a control that can only fail
+(`specs.md` §12). With this decision it shows a biometric option where the
+platform supports it, and nothing where it does not — never a PIN.
+
+### 2. Design the returning-user screen in the canvas — closed 2026-08-20 (user)
+
+**The design already existed and nobody had looked.** The versioned export
+(`docs/ui/design-export-reference.md` §3) contains a complete `AUTH: RETURN`
+artboard — small brand mark, greeting by first name, an account card with an
+expired chip, "Continuar como <name>", "Usar otra cuenta" — matching §10.21
+closely. Asked directly, the user confirmed Track AD builds from it.
+
+Two divergences from the artboard are deliberate and recorded in
+`docs/wave-4.1-plan.md` §3: the expired chip uses the `--warning` token instead
+of the export's untokenized `#E8B84B`, and the reassurance line is **gated on
+local data actually being present** rather than rendered unconditionally the
+way the artboard does — the export has no branch for "the data isn't there",
+and §10.21 is explicit that this exact class of claim must stay true.
+
+### 7. The light palette itself, and a contrast check on the tints — closed 2026-08-20 (user)
 
 `specs.md` §10.24 Prerequisite 3 and §12. `index.html` hardcodes
 `<html class="dark">`, and every `chart-*` token in the light palette is still
@@ -128,56 +218,3 @@ variants holding hue and saturation are decided in §10.30.
 **Two are worth your eye once you can see them running**, and neither blocks:
 `#f72121` (the rose had nowhere to go but pure red) and `#af7809` (any yellow
 earning contrast on white goes brown).
-
-### 8. The brand mark for the boot screen — `owner: user`
-
-Raised 2026-08-20, when the user chose a fixed brand moment at boot (§10.28).
-The screen needs a mark and there isn't one: §12 has carried "App icon for the
-brand" since Wave 1 and the PWA still ships the scaffold `favicon.svg`.
-
-Built meanwhile from `APP_NAME` and the existing type/colour tokens, composed
-to read as deliberate rather than unfinished, and structured so a real mark
-drops in without a redesign. Note `AGENTS.md`: the display name is provisional
-and lives only in `src/lib/branding.ts` — a mark that bakes the current name
-into the artwork inherits that provisionality, so a wordmark and a symbol are
-worth separating.
-
-The same asset closes the PWA icon item, so it is one piece of work, not two.
-
----
-
-## Closed
-
-### 1. Design the PIN screens in the canvas — closed 2026-08-20 (user)
-
-The user reports the PIN design is done, covering both the unlock states and
-the forgotten-PIN path. **The canvas file (`Moneta.dc.html`) does not live in
-this repo**, so implementing it needs the artifact link or the new artboard
-names from the user — asked 2026-08-20, still needed before the track can be
-dispatched.
-
-### 9. Should a guest be able to set a PIN? — closed 2026-08-20 (user)
-
-**Decided: no PIN for a guest. Biometrics at most.** Raised the same day, from
-the user's own question about forgotten PINs, and answered the same day.
-
-The reasoning it resolves: a guest lockout has no honest recovery, because
-re-entry cannot be "sign in with Google" when there is no Google — leaving
-only "wipe their data" (brutal) or "let them in anyway" (decoration).
-Biometrics sidesteps it: there is nothing to forget, so there is no lockout to
-recover from.
-
-**What the operator told the user before they decided, recorded so the
-limitation is not rediscovered as a bug:** for a guest this is a UI gate, not
-a cryptographic boundary. There is no session, so there is no token to wrap
-with the WebAuthn PRF secret — and the local financial data is not encrypted
-at rest for anyone, guest or signed-in (§10.2 put "encrypting the local
-financial-data cache" explicitly out of scope). It genuinely defends against
-the realistic threat — someone picking up an unlocked phone — and does not
-defend against someone who knows to open IndexedDB. Closing that second gap
-means encrypting the local cache, which is separate, deferred work.
-
-**Still to build** (not a user item — filed for the implementing track): the
-guest branch of the lock UI, which today shows a control that can only fail
-(`specs.md` §12). With this decision it shows a biometric option where the
-platform supports it, and nothing where it does not — never a PIN.
