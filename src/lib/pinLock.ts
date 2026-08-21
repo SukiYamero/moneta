@@ -8,6 +8,8 @@ import {
   deviceDb,
   getGuestLock,
   GUEST_LOCK_ID,
+  hasLoggedInBefore,
+  hasUsedGuestBefore,
   setGuestLock,
   touchGuestLockActive,
 } from '@/lib/deviceStore'
@@ -410,6 +412,17 @@ export const isBackgroundExpired = async (now: number = Date.now()): Promise<boo
 // the credential gates is the UI only, never a cryptographic boundary
 // (specs.md §11, 2026-08-20) — do not let this grow into encrypting the
 // local database; that is separate, deferred work (specs.md §12).
+
+// Thin re-exports, same reasoning as markGuestLockActive below: lockStore's
+// cold-start guest gate (specs.md §10.33) needs to know whether the account
+// or guest marker exists on this device before it decides whether the
+// guest lock should gate the boot at all ("account wins on restore" — a
+// device that also carries the account marker must not be gated behind a
+// guest credential it will never actually need). These are auth-domain
+// signals, not lock ones, but routing them through here keeps lockStore.ts
+// talking to one module for every device-storage read instead of reaching
+// past it into deviceStore.ts directly.
+export { hasLoggedInBefore, hasUsedGuestBefore }
 
 const registerGuestCredential = async (): Promise<Bytes | null> => {
   const created = (await navigator.credentials.create({

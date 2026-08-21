@@ -13,8 +13,11 @@ import { hasVault, resetVault, updateSession } from '@/lib/pinLock'
 import { resolveGoogleProfile, touchLastUsed, DEFAULT_PROFILE_ID } from '@/lib/profiles'
 import {
   clearDriveDecision,
+  clearGuestUsed,
   getDriveDecision,
   hasLoggedInBefore,
+  hasUsedGuestBefore,
+  markGuestUsed,
   markLoggedIn,
   setDriveDecision,
 } from '@/lib/deviceStore'
@@ -313,6 +316,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // gates on (specs.md §11, 2026-08-19). markLoggedIn() self-catches, so
       // this can never fail the login it rides on.
       await markLoggedIn()
+      // specs.md §10.33 decision 2: signing in with Google is one of the two
+      // ways a guest marker is cleared — a stale one outliving the choice
+      // would send this now-signed-in user back into guest mode on the next
+      // cold start. Unconditional (not "only if status was 'guest'"):
+      // clearGuestUsed() self-catches and clearing an absent marker is a
+      // no-op, so there's no case where guarding this saves anything.
+      await clearGuestUsed()
     } catch (e) {
       if (generation !== authGeneration) return
       set({ status: 'error', session: null, user: null, drive: null, error: errorMessage(e) })
@@ -340,6 +350,26 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ status: 'authenticating' })
     const generation = authGeneration
     if (!(await hasLoggedInBefore())) {
+      // specs.md §10.33: the account marker wins when both exist (checked
+      // above, so this branch only runs when it's absent) — a device with
+      // no account history but a guest marker is a returning guest, not a
+      // first-ever visit, and must land directly on 'guest', never
+      // WelcomeScreen. Mirrors continueAsGuest()'s own reset shape (no
+      // session/user/drive to restore — a guest never had any).
+      if (await hasUsedGuestBefore()) {
+        if (generation !== authGeneration) return
+        set({
+          status: 'guest',
+          user: null,
+          session: null,
+          drive: null,
+          error: null,
+          driveOptIn: 'pending',
+          driveConnecting: false,
+          driveError: null,
+        })
+        return
+      }
       if (generation !== authGeneration) return
       set({ status: 'idle' })
       return
@@ -460,6 +490,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     // identical reason login()/restore() await syncProfileForAccount()
     // first — see this function's own doc comment above.
     await touchLastUsed(DEFAULT_PROFILE_ID)
+    // specs.md §10.33: the device-local signal restore() reads on a later
+    // cold start to recognise a returning guest — awaited before the status
+    // flip for the same reason touchLastUsed() is (this function's own doc
+    // comment above): nothing downstream races on it this session, but
+    // keeping every write that must land before `status: 'guest'` becomes
+    // observable in one place is simpler than deciding, per write, whether
+    // it happens to matter this time. markGuestUsed() self-catches, so a
+    // storage failure here degrades to "not remembered next time", never to
+    // failing this entry.
+    await markGuestUsed()
     if (generation !== authGeneration) return
     set({
       status: 'guest',

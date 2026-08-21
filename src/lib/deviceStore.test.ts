@@ -3,12 +3,15 @@ import {
   __resetDeviceIdForTests,
   clearDriveDecision,
   clearGuestLock,
+  clearGuestUsed,
   clearLoggedIn,
   deviceDb,
   getDeviceId,
   getDriveDecision,
   getGuestLock,
   hasLoggedInBefore,
+  hasUsedGuestBefore,
+  markGuestUsed,
   markLoggedIn,
   setDriveDecision,
   setGuestLock,
@@ -19,6 +22,7 @@ afterEach(async () => {
   await clearLoggedIn()
   await clearDriveDecision()
   await clearGuestLock()
+  await clearGuestUsed()
   await deviceDb.deviceId.clear()
   __resetDeviceIdForTests()
 })
@@ -116,6 +120,74 @@ test('clearLoggedIn is safe to fire-and-forget: a delete failure is caught and l
   const spy = vi.spyOn(deviceDb.marker, 'delete').mockRejectedValue(new Error('IDB blocked'))
 
   await expect(clearLoggedIn()).resolves.toBeUndefined()
+  expect(warn).toHaveBeenCalled()
+
+  spy.mockRestore()
+  warn.mockRestore()
+})
+
+// specs.md §10.33: a second, independent device-history marker — "this
+// device last used the app as a guest" — that RequireAuth/lockStore now
+// consult alongside the login marker. Presence-only, like driveDecision/
+// guestLock below (no second state to distinguish, unlike loggedInBefore's
+// boolean field), so a distinct table rather than a field on `marker`.
+test('no guest marker on a fresh device', async () => {
+  expect(await hasUsedGuestBefore()).toBe(false)
+})
+
+test('markGuestUsed sets the marker', async () => {
+  await markGuestUsed()
+  expect(await hasUsedGuestBefore()).toBe(true)
+})
+
+test('clearGuestUsed removes the marker', async () => {
+  await markGuestUsed()
+  await clearGuestUsed()
+  expect(await hasUsedGuestBefore()).toBe(false)
+})
+
+test('clearGuestUsed on an already-clear marker is a no-op, not an error', async () => {
+  await expect(clearGuestUsed()).resolves.toBeUndefined()
+  expect(await hasUsedGuestBefore()).toBe(false)
+})
+
+test('the login marker and the guest marker are independent', async () => {
+  await markLoggedIn()
+  await markGuestUsed()
+
+  await clearGuestUsed()
+
+  expect(await hasLoggedInBefore()).toBe(true)
+  expect(await hasUsedGuestBefore()).toBe(false)
+})
+
+test('hasUsedGuestBefore degrades to false on a storage read failure', async () => {
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  const spy = vi.spyOn(deviceDb.guestMarker, 'get').mockRejectedValue(new Error('IDB blocked'))
+
+  expect(await hasUsedGuestBefore()).toBe(false)
+  expect(warn).toHaveBeenCalled()
+
+  spy.mockRestore()
+  warn.mockRestore()
+})
+
+test('markGuestUsed is safe to fire-and-forget: a write failure is caught and logged, not thrown', async () => {
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  const spy = vi.spyOn(deviceDb.guestMarker, 'put').mockRejectedValue(new Error('IDB blocked'))
+
+  await expect(markGuestUsed()).resolves.toBeUndefined()
+  expect(warn).toHaveBeenCalled()
+
+  spy.mockRestore()
+  warn.mockRestore()
+})
+
+test('clearGuestUsed is safe to fire-and-forget: a delete failure is caught and logged, not thrown', async () => {
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  const spy = vi.spyOn(deviceDb.guestMarker, 'delete').mockRejectedValue(new Error('IDB blocked'))
+
+  await expect(clearGuestUsed()).resolves.toBeUndefined()
   expect(warn).toHaveBeenCalled()
 
   spy.mockRestore()

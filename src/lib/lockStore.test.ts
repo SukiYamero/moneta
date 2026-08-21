@@ -18,6 +18,8 @@ const pinLock = {
   verifyGuestLock: vi.fn(),
   markGuestLockActive: vi.fn(),
   isGuestLockBackgroundExpired: vi.fn(),
+  hasLoggedInBefore: vi.fn(),
+  hasUsedGuestBefore: vi.fn(),
 }
 const hydrate = vi.fn()
 const logout = vi.fn()
@@ -62,6 +64,7 @@ afterEach(async () => {
   const { useLockStore } = await import('@/lib/lockStore')
   useLockStore.setState({
     phase: 'unknown',
+    lockKind: null,
     biometricAvailable: false,
     biometricEnrolled: false,
     guestLockEnabled: false,
@@ -78,6 +81,15 @@ describe('useLockStore', () => {
     await useLockStore.getState().init()
     expect(useLockStore.getState().phase).toBe('locked')
     expect(useLockStore.getState().biometricAvailable).toBe(true)
+    expect(useLockStore.getState().lockKind).toBe('account')
+  })
+
+  test('init sets no lockKind when it lands on unlocked', async () => {
+    pinLock.hasVault.mockResolvedValue(false)
+    pinLock.isBiometricAvailable.mockResolvedValue(false)
+    const { useLockStore } = await import('@/lib/lockStore')
+    await useLockStore.getState().init()
+    expect(useLockStore.getState().lockKind).toBeNull()
   })
 
   test('init forgets any DEK before landing on the locked phase', async () => {
@@ -176,6 +188,82 @@ describe('useLockStore', () => {
     expect(useLockStore.getState().biometricEnrolled).toBe(false)
   })
 
+  // specs.md §10.33: with guest status now restorable, the guest lock can
+  // stand in front of a cold start — but only when there's no account
+  // marker (the account wins on restore) and the platform credential can
+  // actually still succeed (there's no PIN fallback for a guest, so a dead
+  // credential must never gate anything).
+  describe('the cold-start guest gate (specs.md §10.33)', () => {
+    test('gates the cold start on the guest lock when there is no account marker and the platform capability is live', async () => {
+      pinLock.hasVault.mockResolvedValue(false)
+      pinLock.isBiometricAvailable.mockResolvedValue(true)
+      pinLock.hasLoggedInBefore.mockResolvedValue(false)
+      pinLock.hasUsedGuestBefore.mockResolvedValue(true)
+      pinLock.hasGuestLock.mockResolvedValue(true)
+      const { useLockStore } = await import('@/lib/lockStore')
+
+      await useLockStore.getState().init()
+
+      const s = useLockStore.getState()
+      expect(s.phase).toBe('locked')
+      expect(s.lockKind).toBe('guest')
+      expect(s.guestLockEnabled).toBe(true)
+      expect(pinLock.forgetDek).toHaveBeenCalledOnce()
+    })
+
+    test('does not gate the cold start behind the guest lock when the account marker is present, even with a guest lock enrolled', async () => {
+      pinLock.hasVault.mockResolvedValue(false)
+      pinLock.isBiometricAvailable.mockResolvedValue(true)
+      pinLock.hasLoggedInBefore.mockResolvedValue(true)
+      pinLock.hasUsedGuestBefore.mockResolvedValue(true)
+      pinLock.hasGuestLock.mockResolvedValue(true)
+      const { useLockStore } = await import('@/lib/lockStore')
+
+      await useLockStore.getState().init()
+
+      const s = useLockStore.getState()
+      expect(s.phase).toBe('unlocked')
+      expect(s.lockKind).toBeNull()
+      expect(pinLock.hasGuestLock).not.toHaveBeenCalled()
+    })
+
+    test('does not gate the cold start when the guest marker is absent, even if a guest lock row exists', async () => {
+      pinLock.hasVault.mockResolvedValue(false)
+      pinLock.isBiometricAvailable.mockResolvedValue(true)
+      pinLock.hasLoggedInBefore.mockResolvedValue(false)
+      pinLock.hasUsedGuestBefore.mockResolvedValue(false)
+      const { useLockStore } = await import('@/lib/lockStore')
+
+      await useLockStore.getState().init()
+
+      expect(useLockStore.getState().phase).toBe('unlocked')
+      expect(pinLock.hasGuestLock).not.toHaveBeenCalled()
+    })
+
+    // The named edge case (specs.md §10.33): a revoked credential or a
+    // disabled sensor must never lock a guest out of their own local data —
+    // there is no PIN fallback to recover with (specs.md §10.2.1). Live
+    // capability, not the stored enrollment alone, decides.
+    test('degrades to unlocked and clears the stale enrollment when the platform capability is gone', async () => {
+      pinLock.hasVault.mockResolvedValue(false)
+      pinLock.isBiometricAvailable.mockResolvedValue(false)
+      pinLock.hasLoggedInBefore.mockResolvedValue(false)
+      pinLock.hasUsedGuestBefore.mockResolvedValue(true)
+      pinLock.hasGuestLock.mockResolvedValue(true)
+      pinLock.disableGuestLock.mockResolvedValue(undefined)
+      const { useLockStore } = await import('@/lib/lockStore')
+
+      await useLockStore.getState().init()
+
+      const s = useLockStore.getState()
+      expect(s.phase).toBe('unlocked')
+      expect(s.lockKind).toBeNull()
+      expect(s.guestLockEnabled).toBe(false)
+      expect(pinLock.disableGuestLock).toHaveBeenCalled()
+      expect(pinLock.forgetDek).not.toHaveBeenCalled()
+    })
+  })
+
   test('enable throws when there is no session', async () => {
     const { useLockStore } = await import('@/lib/lockStore')
     await expect(useLockStore.getState().enable('1234', false)).rejects.toThrow('lock: no session')
@@ -230,9 +318,11 @@ describe('useLockStore', () => {
   test('unlockPin hydrates auth and unlocks', async () => {
     pinLock.unlockWithPin.mockResolvedValue({ session, user })
     const { useLockStore } = await import('@/lib/lockStore')
+    useLockStore.setState({ lockKind: 'account' })
     await useLockStore.getState().unlockPin('1234')
     expect(hydrate).toHaveBeenCalledWith(session, user)
     expect(useLockStore.getState().phase).toBe('unlocked')
+    expect(useLockStore.getState().lockKind).toBeNull()
   })
 
   test('unlockBiometric hydrates auth and unlocks', async () => {
@@ -380,6 +470,7 @@ describe('useLockStore', () => {
     useLockStore.setState({ phase: 'unlocked' })
     await useLockStore.getState().onVisible()
     expect(useLockStore.getState().phase).toBe('locked')
+    expect(useLockStore.getState().lockKind).toBe('account')
     expect(pinLock.forgetDek).toHaveBeenCalledOnce()
   })
 
@@ -476,19 +567,24 @@ describe('useLockStore', () => {
     test('unlockGuest unlocks on a successful assertion', async () => {
       pinLock.verifyGuestLock.mockResolvedValue(undefined)
       const { useLockStore } = await import('@/lib/lockStore')
-      useLockStore.setState({ phase: 'locked', error: 'stale' })
+      useLockStore.setState({ phase: 'locked', lockKind: 'guest', error: 'stale' })
 
       await useLockStore.getState().unlockGuest()
 
       expect(useLockStore.getState().phase).toBe('unlocked')
       expect(useLockStore.getState().error).toBeNull()
+      expect(useLockStore.getState().lockKind).toBeNull()
     })
 
     // No lockout: a failed guest assertion is retriable, never a wipe — it
     // gates the UI only, never a cryptographic boundary (specs.md §11,
-    // 2026-08-20), so there's nothing to throttle.
+    // 2026-08-20), so there's nothing to throttle. isBiometricAvailable()
+    // still reports true here (the platform capability is fine) — this is
+    // a genuine wrong/cancelled attempt, not the "capability gone" case
+    // below, so it must stay retriable rather than degrading.
     test('unlockGuest sets an error and stays locked on a failed assertion, never wiping anything', async () => {
       pinLock.verifyGuestLock.mockRejectedValue(new Error('lock: guest biometric unavailable'))
+      pinLock.isBiometricAvailable.mockResolvedValue(true)
       const { useLockStore } = await import('@/lib/lockStore')
       useLockStore.setState({ phase: 'locked', error: null })
 
@@ -498,6 +594,38 @@ describe('useLockStore', () => {
       expect(useLockStore.getState().error).toBe('lock: guest biometric unavailable')
       expect(pinLock.resetVault).not.toHaveBeenCalled()
       expect(logout).not.toHaveBeenCalled()
+      expect(pinLock.disableGuestLock).not.toHaveBeenCalled()
+    })
+
+    // The same edge case as the cold-start gate above, but for the
+    // background-relock path (specs.md §10.33 sweep: AF's original guest
+    // lock had no way out of a genuinely broken credential either — this
+    // closes that shape everywhere the guest lock can fire, not just at
+    // boot). WebAuthn deliberately can't distinguish "no matching
+    // credential" from "user cancelled" (privacy — an attacker must not be
+    // able to tell which), so the platform capability check is the only
+    // signal safe to act on automatically; a plain wrong/cancelled attempt
+    // above must stay retriable.
+    test('unlockGuest degrades to unlocked and clears the stale enrollment when the platform capability is gone', async () => {
+      pinLock.verifyGuestLock.mockRejectedValue(new Error('AbortError'))
+      pinLock.isBiometricAvailable.mockResolvedValue(false)
+      pinLock.disableGuestLock.mockResolvedValue(undefined)
+      const { useLockStore } = await import('@/lib/lockStore')
+      useLockStore.setState({
+        phase: 'locked',
+        lockKind: 'guest',
+        guestLockEnabled: true,
+        error: null,
+      })
+
+      await useLockStore.getState().unlockGuest()
+
+      const s = useLockStore.getState()
+      expect(s.phase).toBe('unlocked')
+      expect(s.lockKind).toBeNull()
+      expect(s.guestLockEnabled).toBe(false)
+      expect(s.error).toBeNull()
+      expect(pinLock.disableGuestLock).toHaveBeenCalled()
     })
 
     test('onHidden touches the guest lock, not the account vault, for a guest', async () => {
@@ -530,6 +658,7 @@ describe('useLockStore', () => {
       await useLockStore.getState().onVisible()
 
       expect(useLockStore.getState().phase).toBe('locked')
+      expect(useLockStore.getState().lockKind).toBe('guest')
       expect(pinLock.isBackgroundExpired).not.toHaveBeenCalled()
     })
 

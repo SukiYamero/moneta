@@ -78,6 +78,18 @@ Shared stores, helpers, and the Drive/auth/lock logic layer. No UI here.
   also calls `boot.ts`'s `invalidateBootForSignOut()` — see that function's
   own comment for why a stale `useBootStore` status is otherwise a second,
   independent way the same class of bug resurfaces.
+  `continueAsGuest()` also calls `deviceStore.markGuestUsed()` (`specs.md`
+  §10.33) — the device-local signal `restore()` and `RequireAuth` both read
+  to recognise a returning guest, alongside `touchLastUsed`, awaited before
+  the same `status` flip for the same race-avoidance reason. `restore()`
+  gained a second branch: when `hasLoggedInBefore()` is false (checked
+  first — the account marker wins whenever both exist), it now also checks
+  `hasUsedGuestBefore()` and lands directly on `status: 'guest'` rather than
+  `'idle'`. `login()`'s success path calls `clearGuestUsed()` unconditionally
+  (self-catching, so a no-op when there was nothing to clear) — signing in
+  with Google is one of the two ways §10.33 requires the guest marker to be
+  cleared, since a marker that outlives the choice would send a signed-in
+  user back into guest mode on the next cold start.
 - `drive.ts` — thin Drive REST client: find/create/read/write/delete a
   file or folder, `listFiles()` (paginated `files.list`, the sync engine's
   revision check), `upsertJsonFile`/`upsertTextFile` (find-or-create-then-
@@ -152,13 +164,38 @@ name>>` table (`specs.md` §10.22 Decision 6/§10.25 addendum) — ids never
   2026-08-19). `onHidden`/`onVisible` are identity-branched (`specs.md`
   §10.2.1): an account's background timeout guards the PIN vault's
   `lastActiveAt`, a guest's guards the session-less `guestLockEnabled` row
-  instead — the two never coexist for one tab. `guestLockEnabled` is never
-  set by `init()` (guest status isn't known at boot — it's chosen from
-  `WelcomeScreen`, after `init()` already settled); callers refresh it
-  explicitly via `initGuestLock()` once `authStore.status === 'guest'`
-  (`SecuritySection` does this on mount). `unlockGuest()` has no
+  instead — the two never coexist for one tab. `unlockGuest()` has no
   lockout/reset counterpart to `resume()`'s: a failed guest assertion is
-  just retriable, there is nothing to throttle or wipe.
+  just retriable, there is nothing to throttle or wipe — **unless** the
+  live platform capability (`isBiometricAvailable()`) is gone, in which
+  case it self-heals (clears the stale enrollment) and unlocks rather than
+  leaving a guest stuck behind a credential that can never succeed again
+  (`specs.md` §10.33 — WebAuthn deliberately can't distinguish "no matching
+  credential" from "user cancelled," so the platform check is the only
+  signal safe to act on automatically).
+  `lockKind: 'account' | 'guest' | null` (`specs.md` §10.33) records which
+  credential is gating the _current_ `phase: 'locked'` — `LockScreen`
+  dispatches on this, not `authStore.status`, because `init()`'s cold-start
+  guest gate below can lock the app before `authStore` has resolved
+  anything at all (`AppLock` renders nothing but `LockScreen` while locked,
+  so a guest's own restoration in `authStore.restore()` never gets the
+  chance to run first). `onVisible()`'s background re-lock sets it too, for
+  one consistent signal regardless of which path locked the app.
+  `init()` also now considers a **cold-start guest gate**: when there's no
+  account vault, it reads `hasLoggedInBefore()`/`hasUsedGuestBefore()`
+  (re-exported from `deviceStore.ts` via `pinLock.ts`, keeping every
+  device-storage read behind that one module) and, only when there's no
+  account marker (**the account wins on restore** — a device that also
+  carries it will have `authStore.restore()` try that path, never guest),
+  checks `hasGuestLock()` — and, critically, live `isBiometricAvailable()`
+  too, not just the stored enrollment, so a sensor disabled since
+  enrollment degrades to unlocked (clearing the stale row) instead of
+  gating a cold start behind a dead credential. `guestLockEnabled` is set
+  from this check when it fires, but is otherwise still refreshed on
+  demand via `initGuestLock()` once `authStore.status === 'guest'`
+  (`SecuritySection` does this on mount) — guest status genuinely isn't
+  known this early for every path (WelcomeScreen's "Continue as guest"
+  still resolves after `init()`).
 - `deviceStore.ts` — a separate, tiny Dexie database (`kurobello-device`,
   distinct from `db.ts`'s `kurobello`), the canonical home for every
   non-secret, per-device signal. Four live here: the login marker
@@ -193,7 +230,21 @@ name>>` table (`specs.md` §10.22 Decision 6/§10.25 addendum) — ids never
   is exported alongside a raw `GUEST_LOCK_ID` specifically so
   `pinLock.ts`'s `isGuestLockBackgroundExpired` can bypass that self-catch
   and read `deviceDb.guestLock` directly — a storage failure there needs to
-  propagate, not be swallowed (see `pinLock.ts`'s own entry above).
+  propagate, not be swallowed (see `pinLock.ts`'s own entry above). `v8`
+  adds `guestMarker` (`hasUsedGuestBefore`/`markGuestUsed`/`clearGuestUsed`,
+  `specs.md` §10.33) — the guest counterpart to the login marker: "has this
+  device used guest mode before," nothing about a person. Presence-only
+  (like `driveDecision`/`guestLock`, not a boolean field like `marker`'s
+  `loggedInBefore` — there's exactly one state to record), read by
+  `authStore.restore()`/`RequireAuth` (directly) and by `lockStore.init()`'s
+  cold-start guest gate (via `pinLock.ts`'s thin re-export, keeping that
+  store talking to one module for every device-storage read). Cleared
+  unconditionally by `authStore.login()` on success — the one action behind
+  both "sign in with Google" from `WelcomeScreen` and the profile screen's
+  guest-mode exit (`specs.md` §10.10/§10.18 — there is no separate exit
+  action, `IdentitySection`'s guest row calls the exact same `login()`); a
+  marker that outlived the choice would send a signed-in user back into
+  guest mode on the next cold start.
 - `networkStore.ts` — a small, self-initialising zustand store (attaches
   `online`/`offline` listeners at module scope, since `main.tsx` is another
   track's file) owning the online/offline hint plus the 7-hour offline

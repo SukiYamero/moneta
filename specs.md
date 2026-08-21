@@ -7244,6 +7244,103 @@ export/index.ts:49` all still inline `format(date, 'yyyy-MM-dd')` instead
   `bun run check` green: 139 files, 1469 tests, the same 2 pre-existing
   `react/only-export-components` warnings.
 
+- 2026-08-20 — **§10.33 implemented (Track AH).** `deviceStore.ts` gained a
+  `guestMarker` table (`v8`, presence-only like `driveDecision`/`guestLock`
+  — one state to record, so no boolean field the way `marker.loggedInBefore`
+  needs one): `hasUsedGuestBefore`/`markGuestUsed`/`clearGuestUsed`.
+  `authStore.continueAsGuest()` marks it (awaited before the `status` flip,
+  same posture as its existing `touchLastUsed` call); `login()`'s success
+  path clears it unconditionally (self-catching `clearGuestUsed()` makes
+  clearing an absent marker a no-op, so there's no need to guard on "was
+  this session ever a guest" — matches the cross-track note above: the
+  guest marker, not `lockStore.guestLockEnabled`, is what owns this
+  responsibility). `restore()` gained a guest branch, reached only when
+  `hasLoggedInBefore()` is false (checked first — **the account wins**:
+  a device carrying both markers always takes the existing account-restore
+  path, never guest, matching §10.33's own edge case). `RequireAuth`'s
+  "has this device been used before" signal is now
+  `hasLoggedInBefore() || hasUsedGuestBefore()` (one `Promise.all`, still
+  sequenced before `restore()` is even called, for the same race reason the
+  single-marker version already documented) — gates the skeleton for a
+  returning guest exactly like a returning account holder, and the
+  boot-flash regression suite (`RequireAuth.test.tsx`) was extended with a
+  returning-guest variant and deliberately regressed once (reverting the
+  `||` to the account marker alone) to confirm it still fails for the right
+  reason before being restored.
+
+  **The cold-start guest gate, and the structural problem it exposed.**
+  `AppLock` renders **nothing but `LockScreen`** while `phase === 'locked'`
+  — `RouterProvider`/`RequireAuth` don't mount at all until `lockStore`
+  leaves the locked phase. So a guest lock gating a cold start cannot rely
+  on `authStore.status === 'guest'` to pick the right `LockScreen` shell,
+  the way the pre-existing background-relock path safely did (by the time
+  that path fires, `status` is already resolved) — at cold start, `status`
+  is still `'idle'` the entire time the guest is looking at the lock
+  screen. Fixed by giving `lockStore` its own signal, independent of
+  `authStore` entirely: a new `lockKind: 'account' | 'guest' | null` field,
+  set by whichever code path decided to lock (`init()`'s cold-start gate,
+  or `onVisible()`'s background re-lock) and read by `LockScreen` instead
+  of `authStore.status`. `init()`'s gate itself only fires when there's no
+  account vault **and** no account login marker (account wins, same
+  priority as `restore()`'s branch above) **and** the guest marker is set
+  **and** `hasGuestLock()` is enrolled **and** — the load-bearing part —
+  live `isBiometricAvailable()` still reports true, not just the stored
+  enrollment: a sensor disabled or reset since enrollment self-heals
+  (clears the stale row) and lands unlocked instead of gating a cold start
+  behind a credential that can never succeed again.
+
+  **Sweep finding (fix the shape, not the instance): the same dead end
+  existed on the background-relock path too, pre-dating this track.**
+  AF's original `unlockGuest()` had no distinction between "wrong/cancelled
+  attempt, retry" and "the credential is fundamentally gone" — a genuinely
+  revoked credential or disabled sensor left a guest stuck on `LockScreen`
+  with a retry button that could never succeed, no different in kind from
+  the cold-start case this track was built to fix. Closed the same way in
+  both places: `unlockGuest()`'s catch now checks live
+  `isBiometricAvailable()` and, if false, self-heals and unlocks instead of
+  setting a retriable error. **What makes this the _only_ safe automatic
+  signal, not merely the simplest one:** WebAuthn deliberately cannot
+  distinguish "no matching credential" from "user cancelled the prompt" —
+  this is intentional in the spec, so an attacker probing a device can't
+  learn which accounts have credentials enrolled. Auto-unlocking on _any_
+  failed assertion would therefore make the guest lock trivially bypassable
+  by anyone who just cancels the OS prompt, defeating the one thing it
+  promises against its own stated threat model (picking up the phone) — so
+  only the coarser, safely-distinguishable platform-capability signal is
+  used, never the assertion's own error. **Residual gap, accepted, not
+  fixable by this mechanism:** a credential individually revoked while the
+  platform _still reports_ general capability (uncommon, but not provably
+  impossible depending on OS/browser) remains undetectable and therefore
+  still retriable-forever in that narrow case — filed in §12 rather than
+  silently left.
+
+  **The synchronous `localStorage` mirror, escalated from stage 1 (§8.1
+  above), considered and NOT built.** The trade named in the escalation —
+  a second home for a signal that must not drift, against removing a blank
+  frame — was resolved against building it: `AppLock` already renders a
+  blank frame of its own, for an entirely separate and unavoidable reason
+  (`lockStore.init()`'s vault-existence check, a real IndexedDB/WebAuthn
+  read this track does not own), **before `RequireAuth` even mounts**. So
+  the real cold-start sequence today is already blank (`AppLock`'s vault
+  check) → blank (`RequireAuth`'s marker check) → skeleton → content, and
+  mirroring the login/guest markers to `localStorage` only removes the
+  _second_, smaller blank frame — the first, larger one (an unavoidable
+  async storage/WebAuthn read gating whether `LockScreen` even has a
+  chance to render) remains regardless. This track also doubles what would
+  need mirroring (two markers, not the theme's one), which doubles the
+  clearing surface that must stay in lockstep with `deviceStore.ts`
+  (`markLoggedIn`/`clearLoggedIn`/`markGuestUsed`/`clearGuestUsed` across
+  `login()`/`continueAsGuest()`/`restore()`'s branches) rather than the
+  theme's single `Preferencias.tema` write path. A UX win measured in a
+  single IndexedDB round trip, hidden behind a strictly larger existing
+  blank frame this track does not touch, did not clear the bar against
+  `AGENTS.md`'s single-source-of-truth rule. Not revisited unless
+  `AppLock`'s own blank frame is separately addressed, at which point the
+  calculus changes and this should be reconsidered.
+
+  `bun run check` green: 140 files, 1495 tests, the same 2 pre-existing
+  `react/only-export-components` warnings.
+
 ## 12. Backlog (pending verification / deferred work)
 
 - **The Add sheet's "gear into `/settings`" entry point was never actually
@@ -8130,6 +8227,26 @@ string` on `ProfileRecord`/`deviceStore.ts`'s `ProfileRow` (a Dexie version
   bump, additive), written wherever `syncProfileForAccount` already runs —
   out of scope for Track AD, whose file ownership this wave excludes
   `deviceStore.ts` from writing to.
+- **A guest's biometric credential individually revoked while the platform
+  still reports general capability is undetectable, and therefore stays
+  retriable-forever rather than degrading.** Found implementing §10.33's
+  cold-start guest gate (Track AH, 2026-08-20). `lockStore.unlockGuest()`
+  now self-heals (clears the stale enrollment, unlocks) when live
+  `isBiometricAvailable()` reports the platform capability is gone — this
+  closes the common "sensor disabled/reset" shape of a dead-end lock, at
+  both the cold-start gate and the pre-existing background-relock path. It
+  does **not** close the narrower case where only this one credential was
+  individually revoked (e.g. removed from the OS credential manager) while
+  `isBiometricAvailable()` still returns true for the platform generally —
+  that case is, by WebAuthn's own deliberate design, indistinguishable from
+  a plain wrong attempt or a cancelled prompt (the spec withholds this
+  distinction so an attacker probing a device can't learn which credentials
+  exist), so there is no live signal this code could safely act on without
+  also making the lock trivially bypassable by cancelling the OS prompt.
+  Not a defect to fix inside `lockStore.ts` — any real fix would need a
+  different recovery surface entirely (e.g. an explicit "reset guest lock"
+  action reachable without unlocking first), which is a product decision,
+  not a bug.
 
 ### Development waves (parallel tracks, sequencing, worktree log)
 

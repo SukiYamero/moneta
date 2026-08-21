@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useAuthStore } from '@/lib/authStore'
-import { hasLoggedInBefore } from '@/lib/deviceStore'
+import { hasLoggedInBefore, hasUsedGuestBefore } from '@/lib/deviceStore'
 import { WelcomeScreen } from '@/features/auth/WelcomeScreen'
 import { DrivePermissionScreen } from '@/features/auth/DrivePermissionScreen'
 import { ReturningUserScreen } from '@/features/auth/ReturningUserScreen'
@@ -14,14 +14,15 @@ export const RequireAuth = ({ children }: { children: ReactNode }) => {
   const status = useAuthStore((s) => s.status)
   const driveOptIn = useAuthStore((s) => s.driveOptIn)
 
-  // Whether this device has ever completed a Google login (specs.md §10.29):
-  // the one signal that decides what covers the pre-content span. `null`
-  // means genuinely not known yet — a real IndexedDB read, not a microtask,
-  // so there is a real (if brief) window where neither answer is safe to
-  // assume. Read independently of `restore()`'s own internal check of the
-  // same marker (authStore.ts, not owned by this track) rather than trusting
-  // the two to resolve in lockstep — see the effect below for why they are
-  // sequenced, not run in parallel.
+  // Whether this device has been used before — by either path (specs.md
+  // §10.33): a completed Google login, or a prior guest entry. The one
+  // signal that decides what covers the pre-content span. `null` means
+  // genuinely not known yet — two real IndexedDB reads, not a microtask, so
+  // there is a real (if brief) window where no answer is safe to assume.
+  // Read independently of `restore()`'s own internal checks of the same two
+  // markers (authStore.ts, not owned by this track) rather than trusting
+  // them to resolve in lockstep — see the effect below for why they are
+  // sequenced, not run in parallel with restore() itself.
   const [returning, setReturning] = useState<boolean | null>(null)
   // Distinct from `status === 'authenticating'`: that value means both
   // "restore() is running" and, after a failed silent reattempt, briefly
@@ -39,15 +40,21 @@ export const RequireAuth = ({ children }: { children: ReactNode }) => {
     if (attemptedBoot.current) return
     attemptedBoot.current = true
     void (async () => {
-      // Sequenced, not `Promise.all`-ed: if this resolved in parallel with
-      // restore()'s own internal marker read, a returning device could see
+      // Sequenced (this Promise.all is between RequireAuth's own two marker
+      // reads, not against restore() — restore() is still only started once
+      // both have resolved), not run in parallel with restore()'s own
+      // internal marker reads: if it were, a returning device could see
       // `returning` still `null` for a moment *after* `status` has already
       // left 'idle' — landing on the "not known yet" branch even though
-      // restore() itself already proved the marker true, showing nothing
-      // (or worse, the wrong screen) for a returning user. Reading it first,
-      // then only starting restore() once it's known, makes that race
-      // structurally impossible instead of merely unlikely.
-      const before = await hasLoggedInBefore()
+      // restore() itself already proved a marker true, showing nothing (or
+      // worse, the wrong screen) for a returning user. Reading both first,
+      // then only starting restore() once the combined answer is known,
+      // makes that race structurally impossible instead of merely unlikely.
+      const [loggedInBefore, usedGuestBefore] = await Promise.all([
+        hasLoggedInBefore(),
+        hasUsedGuestBefore(),
+      ])
+      const before = loggedInBefore || usedGuestBefore
       if (useAuthStore.getState().status === 'idle') {
         // Kicked off before the state update below commits (both still
         // synchronous, no `await` between them) — restore() flips `status`

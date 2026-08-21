@@ -12,8 +12,15 @@ dev/test-harness layout.
   `unlockErrorCopy`) whenever `phase !== 'locked' && error` — the one place
   a lockout or failed session-restore message survives the same `set()`
   that unmounts `LockScreen` (`specs.md` §11, 2026-08-19).
-- `LockScreen.tsx` — dispatches on `authStore.status === 'guest'` between two
-  shells sharing `IconTile` (accent-glow icon tile, exported for reuse):
+- `LockScreen.tsx` — dispatches on `lockStore.lockKind === 'guest'` (not
+  `authStore.status`, specs.md §10.33) between two shells sharing `IconTile`
+  (accent-glow icon tile, exported for reuse). `lockKind` rather than
+  `authStore.status`: `lockStore.init()`'s cold-start guest gate (below) can
+  lock the app before `authStore` has resolved anything at all — `AppLock`
+  renders nothing but `LockScreen` while `phase === 'locked'`, so a guest's
+  own restoration in `authStore.restore()` never gets the chance to run
+  first. `onVisible()`'s background re-lock sets `lockKind` too, so both
+  entry paths agree on one signal.
   - `AccountLockScreen` (default): dynamic subtitle (biometric-enrolled vs.
     PIN-only), `PinDots`, a reserved-height error line, `PinPad`
     (auto-submits once 4 digits are entered — no separate "Unlock" button,
@@ -29,15 +36,26 @@ dev/test-harness layout.
     biometric with no network still unlocks cleanly (`specs.md` §10.11) —
     see `@/lib/lockStore`'s own comment on why `SESSION_RESTORE_ERROR` is a
     defensive invariant, not a live path, for the offline case.
-  - `GuestLockScreen` (`specs.md` §10.2.1): biometric-only, no keypad, no
-    "Olvidé mi PIN" — a guest's credential gates the UI, not a
+  - `GuestLockScreen` (`specs.md` §10.2.1/§10.33): biometric-only, no
+    keypad, no "Olvidé mi PIN" — a guest's credential gates the UI, not a
     cryptographic boundary, so there is no vault to wipe that would help a
     failed attempt; retrying the OS prompt is the only recovery, offered as
     a visible retry button. Tries the ceremony once automatically on mount.
-    This branch **only ever mounts from an already-active guest session's
-    own background timeout** (`lockStore.onVisible`) — a guest is never
-    gated at cold start, since guest status itself isn't persisted across a
-    reload (a separate, known gap, out of this track's ownership).
+    This branch mounts either from `lockStore.init()`'s **cold-start guest
+    gate** — guest status now persists across a reload (`specs.md` §10.33),
+    so a returning guest with the lock enabled can be gated before the app
+    renders anything else, the way this screen's own copy has always
+    claimed — or from an already-active guest session's background timeout
+    (`lockStore.onVisible`), same as before. Either way, a failed assertion
+    whose cause is the _platform capability itself being gone_ (a disabled
+    sensor, a wiped credential store) degrades to unlocked rather than
+    retriable: `lockStore.unlockGuest()` checks live
+    `isBiometricAvailable()` on failure and, if it's false, clears the
+    stale enrollment and lets the guest in — there is no PIN fallback for a
+    guest by design (§10.2.1), so a dead credential must never be a dead
+    end. WebAuthn deliberately can't distinguish "no matching credential"
+    from "user cancelled" (privacy), which is why the platform check —
+    not the assertion's own error — is what decides.
 - `LockSettings.tsx` — the account lock's full-screen settings panel
   (`FullScreenPanel`, back-arrow header), reached by tapping the
   "Bloqueo con PIN" row in `src/features/profile/SecuritySection.tsx`. One

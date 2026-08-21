@@ -80,8 +80,17 @@ export type SyncFileCacheRow = { id: string; modifiedTime: string; file: unknown
 // mirrors `LockVault.lastActiveAt`'s role for the account path's 7-minute
 // background-timeout re-lock (`pinLock.ts`'s `BACKGROUND_TIMEOUT_MS`).
 export type GuestLockRow = { id: number; credentialId: Uint8Array; lastActiveAt: number }
+// The second half of "has this device been used before" (specs.md §10.33):
+// a device-local signal, independent of the login marker, recording only
+// that a guest entered the app here, never anything about a person.
+// Presence-only, like driveDecision/guestLock's own rows — there is exactly
+// one state to record, so no boolean field is needed the way `marker`
+// carries `loggedInBefore` (which distinguishes "never checked" from
+// "checked and false", a distinction this signal doesn't have).
+export type GuestMarkerRow = { id: number }
 
 const MARKER_ID = 1 as const
+const GUEST_MARKER_ID = 1 as const
 const DRIVE_DECISION_ID = 1 as const
 const DEVICE_ID_ROW = 1 as const
 const DEVICE_ID_LENGTH = 8
@@ -105,6 +114,7 @@ export const deviceDb = new Dexie('kurobello-device') as Dexie & {
   syncTips: EntityTable<SyncTipRow, 'id'>
   syncFileCache: EntityTable<SyncFileCacheRow, 'id'>
   guestLock: EntityTable<GuestLockRow, 'id'>
+  guestMarker: EntityTable<GuestMarkerRow, 'id'>
 }
 deviceDb.version(1).stores({ marker: 'id' })
 // Additive: `marker` keeps its v1 definition unchanged — same reasoning as
@@ -181,6 +191,21 @@ deviceDb.version(7).stores({
   syncFileCache: 'id',
   guestLock: 'id',
 })
+// Additive again: `guestMarker` (this module, `specs.md` §10.33) — "this
+// device last used the app as a guest," so a returning guest is
+// recognised the same way a returning account holder already is. Every
+// earlier table restated unchanged.
+deviceDb.version(8).stores({
+  marker: 'id',
+  driveDecision: 'id',
+  anchor: 'id',
+  profiles: 'id, kind, lastUsedAt',
+  deviceId: 'id',
+  syncTips: 'id',
+  syncFileCache: 'id',
+  guestLock: 'id',
+  guestMarker: 'id',
+})
 
 export const hasLoggedInBefore = async (): Promise<boolean> => {
   try {
@@ -210,6 +235,40 @@ export const clearLoggedIn = async (): Promise<void> => {
     await deviceDb.marker.delete(MARKER_ID)
   } catch (e) {
     console.warn('device: could not clear the login marker', e)
+  }
+}
+
+// The guest counterpart to the three functions above (specs.md §10.33):
+// presence of the row is the whole signal, so a read failure and "never
+// used guest mode" both degrade to `false` the same way hasLoggedInBefore
+// degrades to "no marker" — a blocked read can only ever suppress the
+// returning-guest path, never fabricate one.
+export const hasUsedGuestBefore = async (): Promise<boolean> => {
+  try {
+    return (await deviceDb.guestMarker.get(GUEST_MARKER_ID)) !== undefined
+  } catch (e) {
+    console.warn('device: could not read the guest marker, treating as never used', e)
+    return false
+  }
+}
+
+export const markGuestUsed = async (): Promise<void> => {
+  try {
+    await deviceDb.guestMarker.put({ id: GUEST_MARKER_ID })
+  } catch (e) {
+    // Best-effort, same posture as markLoggedIn: losing this write just
+    // means the next cold start treats this device as never having used
+    // guest mode, landing on WelcomeScreen again rather than silently
+    // misrepresenting anything.
+    console.warn('device: could not persist the guest marker', e)
+  }
+}
+
+export const clearGuestUsed = async (): Promise<void> => {
+  try {
+    await deviceDb.guestMarker.delete(GUEST_MARKER_ID)
+  } catch (e) {
+    console.warn('device: could not clear the guest marker', e)
   }
 }
 

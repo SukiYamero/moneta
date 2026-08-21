@@ -475,7 +475,7 @@
       "biometricRowLabel": "Also use biometrics",
       "biometricRowSubcopy": "Unlock faster with your fingerprint or Face ID",
       "guestRowLabel": "Fingerprint lock",
-      "guestRowSubcopy": "Asks again if you leave the app in the background a while"
+      "guestRowSubcopy": "Asks for it when you open the app, and again if you leave it in the background a while"
     },
     "setup": {
       "kickerNew": "New PIN",

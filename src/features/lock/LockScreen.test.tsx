@@ -19,7 +19,11 @@ const reset = vi.fn()
 const clearError = vi.fn()
 let error: string | null = null
 let biometricEnrolled = false
-let authStatus = 'authenticated'
+// Which credential is gating the locked phase (specs.md §10.33) — LockScreen
+// dispatches on this, not authStore.status, because the cold-start guest
+// gate (lockStore.init()) can lock the app before authStore has resolved
+// anything at all.
+let lockKind: 'account' | 'guest' = 'account'
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -27,7 +31,7 @@ beforeEach(() => {
   unlockGuest.mockResolvedValue(undefined)
   error = null
   biometricEnrolled = false
-  authStatus = 'authenticated'
+  lockKind = 'account'
 })
 vi.mock('@/lib/lockStore', () => ({
   LOCKED_OUT_ERROR: 'locked out',
@@ -36,6 +40,9 @@ vi.mock('@/lib/lockStore', () => ({
   useLockStore: (selector: (s: unknown) => unknown) =>
     selector({
       phase: 'locked',
+      get lockKind() {
+        return lockKind
+      },
       biometricAvailable: false,
       get biometricEnrolled() {
         return biometricEnrolled
@@ -48,14 +55,6 @@ vi.mock('@/lib/lockStore', () => ({
       unlockGuest,
       reset,
       clearError,
-    }),
-}))
-vi.mock('@/lib/authStore', () => ({
-  useAuthStore: (selector: (s: unknown) => unknown) =>
-    selector({
-      get status() {
-        return authStatus
-      },
     }),
 }))
 
@@ -123,7 +122,7 @@ test('cancelling the forgot-PIN dialog leaves the vault untouched', async () => 
 // that would help — the credential gates the UI, not a cryptographic
 // boundary).
 test('a guest never sees the PIN keypad or "Olvidé mi PIN" — biometric only', () => {
-  authStatus = 'guest'
+  lockKind = 'guest'
   render(<LockScreen />)
   expect(screen.queryByLabelText(T('lock:screen.pinLabel'))).not.toBeInTheDocument()
   expect(screen.queryByRole('button', { name: T('lock:screen.forgotCta') })).not.toBeInTheDocument()
@@ -131,13 +130,13 @@ test('a guest never sees the PIN keypad or "Olvidé mi PIN" — biometric only',
 })
 
 test('a guest lock screen tries the biometric ceremony once on mount', () => {
-  authStatus = 'guest'
+  lockKind = 'guest'
   render(<LockScreen />)
   expect(unlockGuest).toHaveBeenCalledOnce()
 })
 
 test('a guest can retry the biometric ceremony', async () => {
-  authStatus = 'guest'
+  lockKind = 'guest'
   const user = userEvent.setup()
   render(<LockScreen />)
   unlockGuest.mockClear()
@@ -146,7 +145,7 @@ test('a guest can retry the biometric ceremony', async () => {
 })
 
 test('a guest sees an actionable error for a failed biometric attempt', () => {
-  authStatus = 'guest'
+  lockKind = 'guest'
   error = 'lock: guest biometric unavailable'
   render(<LockScreen />)
   expect(screen.getByRole('alert')).toHaveTextContent(T('lock:errors.biometricUnavailable'))

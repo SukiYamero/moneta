@@ -28,6 +28,9 @@ vi.mock('@/lib/deviceStore', () => ({
   getDriveDecision: vi.fn(),
   setDriveDecision: vi.fn(),
   clearDriveDecision: vi.fn(),
+  hasUsedGuestBefore: vi.fn(),
+  markGuestUsed: vi.fn(),
+  clearGuestUsed: vi.fn(),
 }))
 
 let networkOnline = true
@@ -50,8 +53,11 @@ import { hasVault, resetVault, updateSession } from '@/lib/pinLock'
 import { resolveGoogleProfile, touchLastUsed } from '@/lib/profiles'
 import {
   clearDriveDecision,
+  clearGuestUsed,
   getDriveDecision,
   hasLoggedInBefore,
+  hasUsedGuestBefore,
+  markGuestUsed,
   markLoggedIn,
   setDriveDecision,
 } from '@/lib/deviceStore'
@@ -71,6 +77,9 @@ const mMarkLoggedIn = vi.mocked(markLoggedIn)
 const mGetDriveDecision = vi.mocked(getDriveDecision)
 const mSetDriveDecision = vi.mocked(setDriveDecision)
 const mClearDriveDecision = vi.mocked(clearDriveDecision)
+const mHasUsedGuestBefore = vi.mocked(hasUsedGuestBefore)
+const mMarkGuestUsed = vi.mocked(markGuestUsed)
+const mClearGuestUsed = vi.mocked(clearGuestUsed)
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -91,6 +100,9 @@ beforeEach(() => {
   // other behaviors (silent-auth success/failure) stay reachable; the
   // marker-gating tests below override this explicitly.
   mHasLoggedInBefore.mockResolvedValue(true)
+  // Default: this device has never used guest mode — the restore() guest-
+  // branch tests below override this explicitly.
+  mHasUsedGuestBefore.mockResolvedValue(false)
   // Default: no persisted Drive decision on this device — most tests exercise
   // something other than the persistence itself, so they see the pre-existing
   // 'pending' behavior unless they override this explicitly.
@@ -289,6 +301,30 @@ describe('useAuthStore.login', () => {
     await useAuthStore.getState().login()
 
     expect(mMarkLoggedIn).not.toHaveBeenCalled()
+  })
+
+  // specs.md §10.33 decision 2: signing in with Google is one of the two
+  // ways a guest marker is cleared — a stale marker surviving this would
+  // send a signed-in user back into guest mode on the next cold start. Not
+  // conditioned on having actually been a guest this session: clearing an
+  // absent marker is a no-op (clearGuestUsed self-catches), so always
+  // clearing on a successful login is simpler than tracking "was this
+  // session ever a guest" and just as correct.
+  it('clears the guest marker on a successful login', async () => {
+    mToken.mockResolvedValue({ accessToken: 'tok', expiresAt: 1 })
+    mUser.mockResolvedValue({ email: 'a@b.com', name: 'Ana' })
+
+    await useAuthStore.getState().login()
+
+    expect(mClearGuestUsed).toHaveBeenCalled()
+  })
+
+  it('does not clear the guest marker when login fails', async () => {
+    mToken.mockRejectedValue(new Error('access: access_denied'))
+
+    await useAuthStore.getState().login()
+
+    expect(mClearGuestUsed).not.toHaveBeenCalled()
   })
 
   it('reports a successful login to the network store', async () => {
@@ -578,6 +614,62 @@ describe('useAuthStore.restore', () => {
     expect(s.drive).toBeNull()
     expect(s.driveError).toBeNull()
     warn.mockRestore()
+  })
+
+  // specs.md §10.33: restore() now answers a second question — "has this
+  // device used guest mode before" — for a device that has never logged in
+  // with Google. A returning guest must land directly on `status: 'guest'`,
+  // never WelcomeScreen, exactly as a returning account holder lands on
+  // 'authenticated' or the returning-user screen.
+  describe('the guest marker (specs.md §10.33)', () => {
+    it('enters guest status when no account marker exists but the guest marker does', async () => {
+      mHasLoggedInBefore.mockResolvedValue(false)
+      mHasUsedGuestBefore.mockResolvedValue(true)
+
+      await useAuthStore.getState().restore()
+
+      const s = useAuthStore.getState()
+      expect(s.status).toBe('guest')
+      expect(s.user).toBeNull()
+      expect(s.session).toBeNull()
+      expect(mToken).not.toHaveBeenCalled()
+    })
+
+    it('falls back to idle when neither marker is set (a genuine first visit)', async () => {
+      mHasLoggedInBefore.mockResolvedValue(false)
+      mHasUsedGuestBefore.mockResolvedValue(false)
+
+      await useAuthStore.getState().restore()
+
+      expect(useAuthStore.getState().status).toBe('idle')
+      expect(mToken).not.toHaveBeenCalled()
+    })
+
+    // specs.md §10.33 edge case: "both markers set" — the account wins.
+    // The account marker alone must be enough to take the existing
+    // account-restore branch; the guest marker being *also* true must not
+    // short-circuit it into guest status instead.
+    it('attempts the account restore when both markers are set, never guest status', async () => {
+      mHasLoggedInBefore.mockResolvedValue(true)
+      mHasUsedGuestBefore.mockResolvedValue(true)
+      mToken.mockResolvedValue({ accessToken: 'tok', expiresAt: 1 })
+      mUser.mockResolvedValue({ email: 'a@b.com', name: 'Ana' })
+
+      await useAuthStore.getState().restore()
+
+      expect(mToken).toHaveBeenCalledWith('')
+      expect(useAuthStore.getState().status).toBe('authenticated')
+    })
+
+    it('does not enter guest status when the account restore fails, even with a guest marker present', async () => {
+      mHasLoggedInBefore.mockResolvedValue(true)
+      mHasUsedGuestBefore.mockResolvedValue(true)
+      mToken.mockRejectedValue(new Error('access: no session'))
+
+      await useAuthStore.getState().restore()
+
+      expect(useAuthStore.getState().status).toBe('idle')
+    })
   })
 
   // docs/wave-3-audit-runtime.md finding 1 / specs.md §10.11: the actual
@@ -1201,6 +1293,16 @@ describe('useAuthStore.continueAsGuest', () => {
     await useAuthStore.getState().continueAsGuest()
 
     expect(mTouchLastUsed).toHaveBeenCalledWith('kurobello')
+  })
+
+  // specs.md §10.33: the device-local signal a returning guest is
+  // recognised by (RequireAuth's own read, and restore()'s guest branch
+  // above) — without this, choosing "continue as guest" would never
+  // persist past a reload.
+  it('marks this device as having used guest mode', async () => {
+    await useAuthStore.getState().continueAsGuest()
+
+    expect(mMarkGuestUsed).toHaveBeenCalled()
   })
 
   // CONFIRMED by src/features/boot/guestBootRace.test.tsx (a real-registry,
