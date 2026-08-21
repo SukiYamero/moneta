@@ -246,6 +246,52 @@ Full design: `docs/superpowers/specs/2026-06-26-pin-lock-design.md`.
   refresh path — both ride with the polished UI; the polished lock-screen visual
   design; `repo.ts` CRUD; encrypting the local financial-data cache.
 
+#### 10.2.1 The lock's two identities — decided 2026-08-20 (user), Track AF
+
+**A signed-in account gets the PIN (with biometrics as the fast path). A guest
+gets biometrics or nothing — never a PIN.**
+
+The guest half closes a hole by design rather than by patch: a guest lockout
+has no honest recovery, because re-entry cannot be "sign in with Google" when
+there is no Google. **A finger cannot be forgotten**, so removing the PIN from
+the guest path removes the need for a recovery that could never exist. Where
+the device has no biometric capability, a guest sees **no lock option at all** —
+not a disabled control, not an error, absent (which also closes §12's "a guest
+is shown a lock control that can only fail").
+
+**"Olvidé mi PIN"** (present in the design, absent from the code) is not a new
+mechanism: it opens a confirm whose destructive action is the same vault wipe
+plus forced Google re-login the code already performs after five failed
+attempts. The change is that it stops being something a user discovers by
+failing and becomes an exit that is offered. It is therefore **account-only by
+construction** — the path that needs it is the only one that has it.
+
+##### The technical wrinkle this creates, named so the track does not discover it
+
+`lockStore.enable()` today is `enable({ pin, session, user, biometric })` and
+**throws `NO_SESSION_ERROR` when there is no session** — the vault exists to
+encrypt an OAuth token, and envelope encryption assumes there is something to
+wrap. A guest has no session and no token.
+
+So a biometric-only guest lock is **not the existing path with the PIN branch
+hidden**; it is a session-less lock path that does not exist yet. WebAuthn can
+mint a device-scoped credential without an account, so it is buildable — but
+the track must decide _what the credential gates_, and the honest answer is
+already recorded (§11, 2026-08-20): for a guest it gates the UI, and it is not
+a cryptographic boundary, because the local financial data is not encrypted at
+rest for anyone. **Do not let this quietly grow into encrypting the local
+database** — that is filed for analysis in §12 and must not be decided inside
+a UI track.
+
+##### The biometric offer UI
+
+**Decided 2026-08-20 (user): the operator designs it** from existing components
+and tokens, and the user replaces it if they disagree. The design export
+contains no biometric UI anywhere — verified by exhaustive search. The real
+surface is small: a row with a toggle inside Seguridad, plus the operating
+system's own prompt, which the phone draws and we never style. `docs/ui/`
+records this as operator-designed rather than extracted.
+
 ### 10.3 Data port (`Repo`)
 
 - **Goal:** a single storage-agnostic contract the rest of the app depends on

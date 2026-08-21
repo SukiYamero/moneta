@@ -118,11 +118,16 @@ category colours are already handled.** A tint is an identity, so `:root`'s
 minimum that had to be true before a light theme lands, and nothing else in the
 palette was touched, deliberately, so there is nothing to undo.
 
-**What is still yours:** the light palette itself (surfaces, borders, text
-tiers), and a contrast check on those five tints against a light surface —
-they were picked against a dark background, and `#f5b93f` and `#2fd896` are the
-two to look at first. Until that exists, Track G2 still ships no theme
-picker.
+**Closed 2026-08-20.** The palette arrived with the design export
+(`docs/ui/moneta-theme.css`), and the operator ran the contrast check as
+measurement rather than judgment — correcting its own earlier guess that
+`#f5b93f` and `#2fd896` were "the two to look at": **all five tints fail on
+light**, 1.62–2.32 against a 3.0 threshold, measured in their real usage. Light
+variants holding hue and saturation are decided in §10.30.
+
+**Two are worth your eye once you can see them running**, and neither blocks:
+`#f72121` (the rose had nowhere to go but pure red) and `#af7809` (any yellow
+earning contrast on white goes brown).
 
 ### 8. The brand mark for the boot screen — `owner: user`
 
