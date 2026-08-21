@@ -686,9 +686,13 @@ Check this table against `git worktree list` at the start of any parallel
 session; prune anything stale (merged-but-not-removed, or on disk but
 missing/finished here).
 
-| Path                               | Branch         | Status |
-| ---------------------------------- | -------------- | ------ |
-| `../moneta-worktrees/track-af-pin` | `track-af-pin` | active |
+| Path                                 | Branch           | Status |
+| ------------------------------------ | ---------------- | ------ |
+| `../moneta-worktrees/track-ah-guest` | `track-ah-guest` | active |
+
+Wave 4.1 stage 1 (2026-08-20): AD, AE and AF each merged with its own review
+pass applied, plus an operator cross-track pass — every worktree removed. AH
+(§10.33) is the mid-wave addition the stage's own seam produced.
 
 Wave 4 stage 3, step 2: AB = §10.26 sync goes live (merged and removed
 2026-08-20, along with its own review pass); AC = §10.27 + the review debt
