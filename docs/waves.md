@@ -487,7 +487,10 @@ next, but nothing in it is newly reachable: Track Z shipped the validation it
 could not ship without, which was the whole point of that split. These four
 items are visible on every single app open.
 
-**Specs are written. No code yet — the user asked for specs only.**
+**Specs are written. Stage 1 (AD, AE, AF) is in flight since 2026-08-20;
+AG is stage 2. Execution detail — staging, file ownership, the conflict hunt
+and the operator decisions taken before dispatch — lives in
+[`wave-4.1-plan.md`](wave-4.1-plan.md).**
 
 | Track                           | Spec                | Priority | Owns                                                                                                                                               |
 | ------------------------------- | ------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -652,10 +655,11 @@ Check this table against `git worktree list` at the start of any parallel
 session; prune anything stale (merged-but-not-removed, or on disk but
 missing/finished here).
 
-| Path | Branch | Status |
-| ---- | ------ | ------ |
-
-_(empty — every track's worktree merged and was removed)_
+| Path                                 | Branch           | Status |
+| ------------------------------------ | ---------------- | ------ |
+| `../moneta-worktrees/track-ad-boot`  | `track-ad-boot`  | active |
+| `../moneta-worktrees/track-ae-light` | `track-ae-light` | active |
+| `../moneta-worktrees/track-af-pin`   | `track-af-pin`   | active |
 
 Wave 4 stage 3, step 2: AB = §10.26 sync goes live (merged and removed
 2026-08-20, along with its own review pass); AC = §10.27 + the review debt
