@@ -494,6 +494,7 @@ items are visible on every single app open.
 | **AD — the cold-start surface** | §10.29 + §10.21     | 1        | `RequireAuth.tsx`, `src/features/boot/**`, `src/features/sync/FirstSyncGate.tsx`, `router.tsx`, `src/features/auth/**`                             |
 | **AE — the light theme**        | §10.30              | 2        | `src/styles/index.css` (`:root` only), `index.html`, the theme-resolution module, the theme row in `PreferencesEditor`, `docs/ui/design-tokens.md` |
 | **AF — the PIN screens**        | §10.2 (polished UI) | 3        | `src/features/lock/**`, `src/features/profile/SecuritySection.tsx`                                                                                 |
+| **AG — the profile switcher**   | §10.31              | 4        | `src/lib/profiles/**`, `ProfilesSection.tsx`, `outbox.ts` + `sync/engine.ts` (the profile-scoped reference), the lock's switch gate                |
 
 ### Why AD is one track and not two
 
@@ -520,14 +521,56 @@ AF is the lock feature folder plus the guest branch §12 files
 at most** (§11, 2026-08-20). Where the platform has no biometrics, a guest
 sees nothing — never a PIN, and never today's control that only errors.
 
-### Blocked on one thing, and it is cheap
+### AD deletes a screen this project built today
 
-**`Moneta.dc.html` is not in this repo.** `docs/ui/README.md` refers to it as
-if it were readable; it lives only in the Claude Design canvas, which an agent
-session cannot fetch (403, verified 2026-08-20). Every designed screen so far
-has been implemented from prose in `docs/ui/` rather than the artboards, and
-AD/AE/AF are all design-driven. Exporting the file into `docs/ui/` removes
-this cost permanently, for every future design track — not just these three.
+§10.29 was revised the same day it was written: **there is no full-screen
+loading screen.** The design export has no splash artboard at all and answers
+"busy" with a three-state inline pill, and the user — who had decided the
+800ms brand moment that morning — reversed it after opening the built app and
+seeing two loaders. `BootScreen.tsx` and its floor are **deleted**, not
+reworked. The boot _sequence_ (§10.28) is untouched and correct; only the
+screen covering it goes.
+
+What replaces it is not another loader: the app's own skeleton covers the
+pre-content span, so the transition into real data is a fill rather than a
+swap. §10.9's Tier 1 boot flash is still not available as a trade — AD's
+mandatory regression test is what keeps that true.
+
+### AG is not "a screen nobody designed"
+
+`docs/pendientes-usuario.md` item 6 has priced the profile switcher as
+expensive since Wave 3. It is not: `ProfilesSection` already lists profiles
+and marks the active one, `ProfileRecord` already carries the account key, and
+`boot.ts` already owns a rebind path proven twice by review. What is missing is
+an explicit active-profile pointer (today it is inferred by recency) and a tap
+handler.
+
+**AG deliberately makes a deferred bug reachable and must close it**: §12's
+"a push in flight drains the wrong profile's outbox" needs a fast
+logout+relogin race today; a switcher makes it a button. Same shape as the seed
+taxonomy becoming reachable at the flip — the fix lands with the feature that
+exposes it, or the feature is wrong.
+
+### The design has gaps, and they are named rather than guessed
+
+From `docs/ui/design-export-reference.md`: **no boot/download artboard**
+(resolved above by deleting the screen), **no biometric UI anywhere** — awkward,
+because biometrics-only is precisely what was decided for guests the same day —
+and **no guest flow at all**, though guest mode shipped in Wave 2.2. The
+returning-user screen renders "Tus datos siguen acá, intactos"
+unconditionally, which is the dishonest-copy shape §10.21 itself warns
+against; it needs a gate at implementation time, not a faithful copy.
+
+### One thing is no longer blocking
+
+**Resolved 2026-08-20:** the design export is versioned at
+`docs/ui/Moneta_ Expense Manager UI.zip`, its token table lifted verbatim to
+`docs/ui/moneta-theme.css`, and the four areas Wave 4.1 needs extracted into
+`docs/ui/design-export-reference.md`. The canvas itself stays unreachable to an
+agent session (403, verified), which is why the export is versioned rather than
+linked. `docs/ui/README.md` had referred to `Moneta.dc.html` as though it were
+readable since Wave 1, and every designed screen through Wave 4 was in fact
+built from prose.
 
 ### Deliberately not in this wave
 
@@ -537,11 +580,10 @@ this cost permanently, for every future design track — not just these three.
   there is no push (§6); anything shippable is local-only or needs §6's
   exception argued.
 - **Receipt scanning** — postponed, artboard kept as a record.
-- **The account chooser** — the user is designing it, and the operator has
-  asked which of two different things it is before it gets a spec: a mock of
-  Google's own popup (which we never render, and cannot) or **our own profile
-  switcher** (which we very much need — it is the answer to the guest cliff,
-  `docs/pendientes-usuario.md` item 6).
+- **The account chooser as a Google-popup mock** — resolved 2026-08-20: the
+  user had thought it meant several saved Google accounts, and it does not.
+  The export's "Elige una cuenta" is Google's own dialog, which we never
+  render. What was actually wanted became Track AG above.
 
 ---
 
