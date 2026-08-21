@@ -438,9 +438,6 @@
       "heading": "Preferences",
       "language": {
         "device": "Follow the device"
-      },
-      "theme": {
-        "note": "The app is dark-only for now — light mode is coming with its own design."
       }
     },
     "retry": "Retry"

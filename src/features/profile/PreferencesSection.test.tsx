@@ -20,10 +20,10 @@ const config = (overrides: Partial<Config['preferencias']> = {}): Config => ({
 const renderSection = () => render(<PreferencesSection />, { wrapper: MemoryRouter })
 
 describe('PreferencesSection', () => {
-  it('shows an em dash for currency/weekStart until Config has loaded', () => {
+  it('shows an em dash for theme/currency/weekStart until Config has loaded', () => {
     useDataStore.setState({ config: null })
     renderSection()
-    expect(screen.getAllByText('—')).toHaveLength(2)
+    expect(screen.getAllByText('—')).toHaveLength(3)
   })
 
   it('renders the current moneda/primer día values, translated', () => {
@@ -45,26 +45,17 @@ describe('PreferencesSection', () => {
     expect(screen.getByText('Español')).toBeInTheDocument()
   })
 
-  // Prerequisite 3 (specs.md §10.24): `index.html` hardcodes dark, so the
-  // row must never repeat a stored `tema` that has no effect — it always
-  // reads "Oscuro", even for a config seeded with a different value.
-  it('always shows the theme as Oscuro, regardless of the stored tema — the app has no light palette yet', () => {
+  it('shows the stored tema, translated', () => {
     useDataStore.setState({ config: config({ tema: 'claro' }) })
     renderSection()
-    expect(screen.getByText('Oscuro')).toBeInTheDocument()
+    expect(screen.getByText('Claro')).toBeInTheDocument()
   })
 
-  it('makes currency/weekStart/idioma real links into /settings — the entry point', () => {
+  it('makes tema/currency/weekStart/idioma real links into /settings — the entry point', () => {
     useDataStore.setState({ config: config() })
     renderSection()
     const links = screen.getAllByRole('link')
-    expect(links).toHaveLength(3)
+    expect(links).toHaveLength(4)
     for (const link of links) expect(link).toHaveAttribute('href', '/settings')
-  })
-
-  it('keeps the theme row plain text — an honest stub, not a dead control', () => {
-    useDataStore.setState({ config: config() })
-    renderSection()
-    expect(screen.getByText('Tema').closest('a, button')).toBeNull()
   })
 })

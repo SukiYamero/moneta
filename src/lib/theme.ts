@@ -11,7 +11,7 @@ export type ResolvedTheme = Exclude<Theme, 'sistema'>
  * (`AGENTS.md` §7's ban is on sensitive data); see specs.md §11 for the
  * explicit record. `index.html`'s inline script duplicates this literal
  * key (it runs before the module graph loads, so it can't import it) —
- * `theme.boot-script.test.ts` asserts the two stay in sync.
+ * `themeBootScript.test.ts` asserts the two stay in sync.
  */
 export const THEME_STORAGE_KEY = 'kurobello-theme'
 
@@ -20,8 +20,11 @@ const DARK_MEDIA_QUERY = '(prefers-color-scheme: dark)'
 // Matches `--background` in `.dark`/`:root` (src/styles/index.css) — kept
 // as a literal here because the CSS token system doesn't reach `<meta
 // name="theme-color">`, the one other place this app already accepted a
-// hardcoded hex for the same reason (this file's own history).
-const THEME_COLOR: Record<ResolvedTheme, string> = {
+// hardcoded hex for the same reason (this file's own history). `index.html`'s
+// inline script duplicates both values too, for the same reason it
+// duplicates `THEME_STORAGE_KEY` — `themeBootScript.test.ts` checks all
+// three stay in sync.
+export const THEME_COLOR: Record<ResolvedTheme, string> = {
   oscuro: '#0c0d10',
   claro: '#f4f3ef',
 }
