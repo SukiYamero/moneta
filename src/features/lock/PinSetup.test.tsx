@@ -123,6 +123,38 @@ test('shows an actionable error when enable() fails, never the raw message', asy
   expect(screen.queryByText(/no session to protect/i)).not.toBeInTheDocument()
 })
 
+// The pad is already disabled during a pending enable() (`disabled={submitting}`
+// above); the biometric toggle shares the same dependency in the auto-submit
+// effect (`[pin, step, firstPin, biometric]`), so toggling it while a first
+// call is in flight re-fires the effect and calls enable() a second time,
+// concurrently, with a different biometric value — a real WebAuthn ceremony
+// leaves this window open for several seconds, not a contrived race.
+test('the biometric toggle is disabled while a submission is in flight, so it cannot double-submit enable()', async () => {
+  biometricAvailable = true
+  let resolveEnable: () => void = () => {}
+  enable.mockReturnValue(
+    new Promise<void>((resolve) => {
+      resolveEnable = resolve
+    }),
+  )
+  const user = userEvent.setup()
+  render(<PinSetup open onClose={vi.fn()} mode="new" />)
+
+  await typePin(user, '1234')
+  await waitFor(() =>
+    expect(screen.getByRole('heading', { name: T('lock:setup.titleConfirm') })).toBeInTheDocument(),
+  )
+  await typePin(user, '1234')
+
+  const toggle = await screen.findByRole('switch', { name: T('lock:settings.biometricRowLabel') })
+  await waitFor(() => expect(toggle).toBeDisabled())
+
+  await user.click(toggle)
+  expect(enable).toHaveBeenCalledTimes(1)
+
+  resolveEnable()
+})
+
 test('the X-close button resets and closes the panel', async () => {
   const onClose = vi.fn()
   const user = userEvent.setup()

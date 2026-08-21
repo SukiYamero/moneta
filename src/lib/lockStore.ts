@@ -189,9 +189,19 @@ export const useLockStore = create<LockState>((set, get) => ({
     await enableGuestLockCredential()
     set({ guestLockEnabled: true })
   },
+  // Re-reads hasGuestLock() after clearing rather than assuming success:
+  // deviceStore.ts's clearGuestLock() self-catches (the file's established
+  // posture for every device signal, specs.md §10.2.1), so a storage
+  // failure there resolves silently instead of throwing here. Setting
+  // `guestLockEnabled: false` unconditionally would then lie about what's
+  // actually in the row — docs/error-handling.md §4's "never leave
+  // persisted state inconsistent with what the UI believes" — and the
+  // toggle would spring back to "on" the next time initGuestLock() reads
+  // the truth. Reading fresh, the same idiom initGuestLock() already uses,
+  // makes the two impossible to disagree.
   disableGuestLock: async () => {
     await disableGuestLockCredential()
-    set({ guestLockEnabled: false })
+    set({ guestLockEnabled: await hasGuestLock() })
   },
   unlockPin: (pin) => resume(set, () => unlockWithPin(pin)),
   unlockBiometric: () => resume(set, () => unlockWithBiometric()),

@@ -132,7 +132,14 @@ name>>` table (`specs.md` §10.22 Decision 6/§10.25 addendum) — ids never
   through `getGuestLock()`'s self-catching wrapper), mirroring
   `isBackgroundExpired`'s own raw `db.vault.get()` read — both need a
   storage failure to _propagate_, not be swallowed into "not expired", so
-  `lockStore.onVisible` can fail closed.
+  `lockStore.onVisible` can fail closed. `enableGuestLock` re-reads
+  `hasGuestLock()` after `setGuestLock()` and throws if it's still `false`:
+  `setGuestLock` self-catches, so without this check a storage failure there
+  would resolve as a successful enrollment — the unsafe direction, since
+  `isGuestLockBackgroundExpired` then reads the missing row as "never
+  expired" and would never re-lock. `lockStore.disableGuestLock` makes the
+  matching read after clearing instead of assuming success, for the same
+  reason in the other direction.
 - `lockStore.ts` — zustand store wrapping `pinLock.ts`: lock phase, throttle,
   biometric availability (`biometricAvailable` — platform capability — vs
   `biometricEnrolled` — this vault's own enrollment, see `specs.md` §11,

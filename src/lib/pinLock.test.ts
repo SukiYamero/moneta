@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { db } from '@/lib/db'
+import { deviceDb } from '@/lib/deviceStore'
 import {
   enableLock,
   hasVault,
@@ -376,6 +377,24 @@ describe('guest biometric lock (session-less, specs.md §10.2.1)', () => {
     })
     await expect(enableGuestLock()).rejects.toBeInstanceOf(GuestBiometricUnavailableError)
     expect(await hasGuestLock()).toBe(false)
+  })
+
+  // deviceStore.ts's setGuestLock() self-catches a storage failure — without
+  // this check, enableGuestLock() would resolve successfully even though the
+  // row never landed, leaving lockStore.guestLockEnabled `true` while
+  // isGuestLockBackgroundExpired() reads "no row" as "never expired" and
+  // never re-locks: a guest believing background re-lock is on when it
+  // silently isn't, the unsafe direction.
+  test('a credential that registers but silently fails to persist throws, not a false success', async () => {
+    mockWebAuthn(undefined)
+    const putSpy = vi.spyOn(deviceDb.guestLock, 'put').mockRejectedValue(new Error('IDB blocked'))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    await expect(enableGuestLock()).rejects.toThrow()
+    expect(await hasGuestLock()).toBe(false)
+
+    putSpy.mockRestore()
+    warn.mockRestore()
   })
 
   test('verifyGuestLock succeeds against the enrolled credential', async () => {

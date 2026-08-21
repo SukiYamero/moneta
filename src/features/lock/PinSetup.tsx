@@ -35,6 +35,14 @@ export const PinSetup = ({ open, onClose, mode }: PinSetupProps) => {
   const [mismatch, setMismatch] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  // Mirrors `LockScreen`'s `AccountLockScreen` guard: `submitting` alone
+  // disables the pad/input/toggle in the DOM, but the effect below still
+  // re-runs on every `biometric` change, and disabling every input that
+  // could flip a dependency is easy to miss (the toggle already did, once —
+  // see its own `disabled={submitting}`). A ref checked at the top of the
+  // effect is the one guard that can't be bypassed by a future input this
+  // effect gains a dependency on.
+  const submittingRef = useRef(false)
   // `useOverlay`'s default initial focus is the panel's first focusable
   // descendant (the X-close button, which sits before the hidden PIN
   // input in DOM order) — steered here instead, at the actual PIN input,
@@ -63,7 +71,7 @@ export const PinSetup = ({ open, onClose, mode }: PinSetupProps) => {
   }
 
   useEffect(() => {
-    if (pin.length !== PIN_LENGTH) return
+    if (pin.length !== PIN_LENGTH || submittingRef.current) return
     if (step === 'create') {
       setFirstPin(pin)
       setPin('')
@@ -75,6 +83,7 @@ export const PinSetup = ({ open, onClose, mode }: PinSetupProps) => {
       setPin('')
       return
     }
+    submittingRef.current = true
     setSubmitting(true)
     void enable(firstPin, biometric)
       .then(() => {
@@ -85,7 +94,10 @@ export const PinSetup = ({ open, onClose, mode }: PinSetupProps) => {
         setSubmitError(e instanceof Error ? e.message : '')
         setPin('')
       })
-      .finally(() => setSubmitting(false))
+      .finally(() => {
+        submittingRef.current = false
+        setSubmitting(false)
+      })
     // resetLocal/onClose/enable are stable across a single setup session's
     // re-renders in practice; re-running this effect only on the values that
     // actually change (pin, step, firstPin, biometric) keeps a stray parent
@@ -162,6 +174,7 @@ export const PinSetup = ({ open, onClose, mode }: PinSetupProps) => {
             <Toggle
               checked={biometric}
               onCheckedChange={setBiometric}
+              disabled={submitting}
               aria-label={t('settings.biometricRowLabel')}
             />
           </div>
