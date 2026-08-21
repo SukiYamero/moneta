@@ -217,7 +217,7 @@ Per `AGENTS.md`, non-optional:
 | Track | Branch           | Worktree                           | Status                                                |
 | ----- | ---------------- | ---------------------------------- | ----------------------------------------------------- |
 | AD    | `track-ad-boot`  | removed                            | **merged 2026-08-20**, review in flight (`review-ad`) |
-| AE    | `track-ae-light` | removed                            | **merged 2026-08-20**, review in flight (`review-ae`) |
+| AE    | `track-ae-light` | removed                            | ✅ **merged + reviewed 2026-08-20**                   |
 | AF    | `track-af-pin`   | `../moneta-worktrees/track-af-pin` | active                                                |
 | AG    | —                | —                                  | stage 2, not started                                  |
 

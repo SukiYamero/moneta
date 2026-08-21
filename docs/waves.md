@@ -674,7 +674,6 @@ missing/finished here).
 | Path                               | Branch         | Status                    |
 | ---------------------------------- | -------------- | ------------------------- |
 | `../moneta-worktrees/review-ad`    | `review-ad`    | active (AD's review pass) |
-| `../moneta-worktrees/review-ae`    | `review-ae`    | active (AE's review pass) |
 | `../moneta-worktrees/track-af-pin` | `track-af-pin` | active                    |
 
 Wave 4 stage 3, step 2: AB = §10.26 sync goes live (merged and removed
