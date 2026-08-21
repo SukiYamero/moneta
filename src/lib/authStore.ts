@@ -11,8 +11,8 @@ import { bootstrap, type DriveLayout } from '@/lib/bootstrap'
 import { invalidateBootForSignOut } from '@/lib/boot'
 import { hasVault, resetVault, updateSession } from '@/lib/pinLock'
 import {
-  adoptGuestMovements,
   countGuestMovements,
+  finishConsentedAdoption,
   getProfile,
   resolveGoogleProfile,
   setActiveProfileId,
@@ -29,6 +29,7 @@ import {
   markAdoptionDeclined,
   markGuestUsed,
   markLoggedIn,
+  setAdoptionConsent,
   setDriveDecision,
 } from '@/lib/deviceStore'
 import { useNetworkStore } from '@/lib/networkStore'
@@ -668,10 +669,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   // (docs/error-handling.md's case 6): a failure here must never look like
   // the *identity* layer failed and boot the user back to a login screen.
   // `pendingAdoption` is deliberately left set on failure (not cleared) so
-  // the prompt UI can offer a retry rather than silently losing the offer;
-  // `adoptGuestMovements` itself is safe to call again after any
-  // interruption (its own module comment) — a failed attempt here is
-  // exactly that kind of interruption.
+  // the prompt UI can offer a retry rather than silently losing the offer.
+  //
+  // specs.md §11 (2026-08-21, the operator's resumability decision):
+  // `setAdoptionConsent` persists the "yes" itself — durably, in
+  // deviceStore.ts, *before* the move starts — which is what lets
+  // `profiles/adoption.ts`'s `resumePendingAdoption` finish an interrupted
+  // move on a later boot with no new prompt: the consent already given
+  // covers completing it, not just this one attempt. `finishConsentedAdoption`
+  // (not `adoptGuestMovements` directly) is what clears that marker once
+  // the move actually lands, the same pairing the silent boot-time resume
+  // uses — one place owns "when is this consent fulfilled," not two.
   acceptGuestAdoption: async () => {
     const pending = get().pendingAdoption
     if (!pending) return
@@ -679,7 +687,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       const target = await getProfile(pending.profileId)
       if (!target) throw new Error('adoption: target profile no longer exists in the registry')
-      await adoptGuestMovements(target)
+      await setAdoptionConsent({ profileId: target.id, accountKey: target.accountKey })
+      await finishConsentedAdoption(target)
       set({ adoptionBusy: false, pendingAdoption: null })
     } catch (e) {
       set({ adoptionBusy: false, adoptionError: errorMessage(e) })

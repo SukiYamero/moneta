@@ -269,7 +269,15 @@ profileOwner.ts` owns reading/writing it (`ensureOwnerMarker`/
   "already answered the guest-data adoption prompt with no" marker,
   presence-only like `guestMarker`, since "nothing local left to bring"
   already suppresses the prompt on its own once an acceptance empties the
-  local profile.
+  local profile. `v10` adds `adoptionConsent` (`specs.md` §10.32/§11,
+  2026-08-21) — the other half of the same decision: a durable "yes,"
+  written the moment it's given (`profiles/adoption.ts`'s
+  `resumePendingAdoption` reads it, `authStore.ts`'s `acceptGuestAdoption`
+  writes it via `setAdoptionConsent`/`clearAdoptionConsent`), naming which
+  profile (id + account key) the consent was for, so an adoption
+  interrupted before it finishes can be completed on a later boot with no
+  new prompt — resuming an already-consented move is completion, not a new
+  offer, and only ever resumes into the profile it was actually given for.
 - `networkStore.ts` — a small, self-initialising zustand store (attaches
   `online`/`offline` listeners at module scope, since `main.tsx` is another
   track's file) owning the online/offline hint plus the 7-hour offline
@@ -473,6 +481,12 @@ database, repo }` together (`getActiveProfileRepo()` is a thin
   resets it back to `'idle'`, and `authStore.ts`'s `logout()` is its one
   caller (found and fixed during Track AB's own review, `specs.md` §11,
   2026-08-20). Consumed by `BootGate`, own `README.md` there.
+  On every genuine (re)bind — never the same-profile no-op path — it also
+  fires `profiles/adoption.ts`'s `resumePendingAdoption(binding.profile)`
+  fire-and-forget (`specs.md` §10.32/§11, 2026-08-21): a guest-data
+  adoption already consented to but interrupted before it finished gets
+  another silent, promptless chance to complete, without adding latency to
+  every boot for the overwhelmingly common case of nothing pending.
 - `profiles/` — the device-scoped profile registry, the owner marker, and
   the switcher (`specs.md` §10.15, §10.31). One dexie database per profile
   (via `db.ts`'s `createProfileDb()`); the registry itself lives in

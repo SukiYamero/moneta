@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { db } from '@/lib/db'
 import type { Movimiento } from '@/lib/schema'
+import { clearAdoptionConsent, getAdoptionConsent, setAdoptionConsent } from '@/lib/deviceStore'
 import {
   __clearProfileDatabaseCacheForTests,
   __clearRegistryForTests,
@@ -8,7 +9,12 @@ import {
   registerProfile,
 } from '@/lib/profiles'
 import type { ProfileRecord } from '@/lib/profiles'
-import { adoptGuestMovements, countGuestMovements } from '@/lib/profiles/adoption'
+import {
+  adoptGuestMovements,
+  countGuestMovements,
+  finishConsentedAdoption,
+  resumePendingAdoption,
+} from '@/lib/profiles/adoption'
 
 const TARGET_DB_NAME = 'kurobello-adoption-test'
 
@@ -42,6 +48,7 @@ afterEach(async () => {
   await targetDb.outbox.clear()
   __clearProfileDatabaseCacheForTests(TARGET_DB_NAME)
   await __clearRegistryForTests()
+  await clearAdoptionConsent()
 })
 
 describe('countGuestMovements', () => {
@@ -173,5 +180,171 @@ describe('adoptGuestMovements', () => {
     const result = await adoptGuestMovements(target)
 
     expect(result).toEqual({ movedCount: 0 })
+  })
+})
+
+// specs.md §10.32/§11 (2026-08-21): "yes" is consent for the whole move, not
+// merely for whichever attempt happened to be running when the tab closed
+// — finishing it later needs no new prompt. `finishConsentedAdoption` is
+// the "do the move, then forget we owed it" pair shared by the
+// user-initiated accept (`authStore.ts`) and the silent resume below.
+describe('finishConsentedAdoption', () => {
+  it('moves the movements and only then clears the consent marker', async () => {
+    const target = await registerTarget()
+    await db.movimientos.bulkPut([movimiento({ id: 'm1' })])
+    await setAdoptionConsent({ profileId: target.id, accountKey: target.accountKey })
+
+    const result = await finishConsentedAdoption(target)
+
+    expect(result).toEqual({ movedCount: 1 })
+    expect(await getAdoptionConsent()).toBeUndefined()
+  })
+
+  // The ordering matters: clearing the marker before the move is confirmed
+  // would strand an interruption with no record that anything was ever
+  // consented to — the exact "half-moved, and now untraceable" failure
+  // §10.32 rules out.
+  it('leaves the consent marker in place when the move itself fails', async () => {
+    const target = await registerTarget()
+    const targetDb = getProfileDatabase(TARGET_DB_NAME)
+    await db.movimientos.bulkPut([movimiento({ id: 'm1' })])
+    await setAdoptionConsent({ profileId: target.id, accountKey: target.accountKey })
+    const addSpy = vi.spyOn(targetDb.outbox, 'add').mockRejectedValueOnce(new Error('tab closed'))
+
+    await expect(finishConsentedAdoption(target)).rejects.toThrow()
+
+    expect(await getAdoptionConsent()).toEqual({
+      id: 1,
+      profileId: target.id,
+      accountKey: target.accountKey,
+    })
+
+    addSpy.mockRestore()
+  })
+})
+
+// specs.md §10.32/§11 (2026-08-21): resuming an adoption already consented
+// to is completion, not a new offer — it runs silently, on boot, with no
+// prompt and no special "resume" argument, driven only by whatever
+// `deviceStore.ts`'s `adoptionConsent` marker says is still owed.
+describe('resumePendingAdoption', () => {
+  it('does nothing when there is no pending consent', async () => {
+    const target = await registerTarget()
+    await db.movimientos.bulkPut([movimiento()])
+
+    await resumePendingAdoption(target)
+
+    expect(await db.movimientos.toArray()).toHaveLength(1) // untouched — nothing was ever consented to
+  })
+
+  it('moves the data and clears the consent marker on an uninterrupted resume', async () => {
+    const target = await registerTarget()
+    await db.movimientos.bulkPut([movimiento({ id: 'm1' })])
+    await setAdoptionConsent({ profileId: target.id, accountKey: target.accountKey })
+
+    await resumePendingAdoption(target)
+
+    const targetDb = getProfileDatabase(TARGET_DB_NAME)
+    expect((await targetDb.movimientos.toArray()).map((m) => m.id)).toEqual(['m1'])
+    expect(await db.movimientos.toArray()).toEqual([])
+    expect(await getAdoptionConsent()).toBeUndefined()
+  })
+
+  // The interrupted-then-resumed case (specs.md §10.32's own "this is the
+  // one part of this section that can lose data"), now attacked at the
+  // whole-system level rather than only the function level: the first
+  // "boot" hits the exact same interruption `adoptGuestMovements`'s own
+  // test simulates, and the second — with no special argument, driven only
+  // by the still-present marker — finishes the job.
+  it('finishes an adoption interrupted mid-move when resumed silently on a later boot, with no prompt', async () => {
+    const target = await registerTarget()
+    const targetDb = getProfileDatabase(TARGET_DB_NAME)
+    await db.movimientos.bulkPut([movimiento({ id: 'm1' }), movimiento({ id: 'm2' })])
+    await setAdoptionConsent({ profileId: target.id, accountKey: target.accountKey })
+
+    const addSpy = vi.spyOn(targetDb.outbox, 'add').mockRejectedValueOnce(new Error('tab closed'))
+
+    // First "boot" after the interruption: resumePendingAdoption never
+    // throws (it's a silent background task, not a user-facing action) —
+    // but the underlying move genuinely fails, and neither side loses data.
+    await expect(resumePendingAdoption(target)).resolves.toBeUndefined()
+    expect((await db.movimientos.toArray()).map((m) => m.id).toSorted()).toEqual(
+      ['m1', 'm2'].toSorted(),
+    )
+    expect((await targetDb.movimientos.toArray()).map((m) => m.id).toSorted()).toEqual(
+      ['m1', 'm2'].toSorted(),
+    )
+    expect(await getAdoptionConsent()).toBeDefined() // still pending — not cleared on failure
+
+    addSpy.mockRestore()
+
+    // Second "boot": same consent, no new prompt, no special argument.
+    await resumePendingAdoption(target)
+
+    expect(await db.movimientos.toArray()).toEqual([])
+    expect((await targetDb.movimientos.toArray()).map((m) => m.id).toSorted()).toEqual(
+      ['m1', 'm2'].toSorted(),
+    )
+    expect(await getAdoptionConsent()).toBeUndefined()
+  })
+
+  // The consent boundary itself: "yes" was given for *this* account. If the
+  // person signs into a different one before the resume runs, moving the
+  // data there would spend consent that was never given for it.
+  it('does not move data when the recorded consent names a different profile than the one now active', async () => {
+    const consented = await registerProfile({
+      id: 'adopt-target',
+      label: 'Ana',
+      kind: 'google',
+      databaseName: TARGET_DB_NAME,
+      accountKey: 'ana@example.com',
+    })
+    const OTHER_DB_NAME = 'kurobello-adoption-other'
+    const other = await registerProfile({
+      id: 'adopt-other',
+      label: 'Beto',
+      kind: 'google',
+      databaseName: OTHER_DB_NAME,
+      accountKey: 'beto@example.com',
+    })
+    await db.movimientos.bulkPut([movimiento({ id: 'm1' })])
+    await setAdoptionConsent({ profileId: consented.id, accountKey: consented.accountKey })
+
+    await resumePendingAdoption(other)
+
+    expect(await db.movimientos.toArray()).toHaveLength(1) // untouched
+    const otherDb = getProfileDatabase(OTHER_DB_NAME)
+    expect(await otherDb.movimientos.toArray()).toEqual([]) // nothing moved into the wrong account
+    expect(await getAdoptionConsent()).toEqual({
+      id: 1,
+      profileId: consented.id,
+      accountKey: consented.accountKey,
+    }) // left in place — still resumable once the right profile is active again
+
+    __clearProfileDatabaseCacheForTests(OTHER_DB_NAME)
+  })
+
+  // Both fields name the target (specs.md §10.32/§11: "profile id + account
+  // key," not merely one) — a matching id with a mismatched account key
+  // must be rejected exactly like an outright different profile.
+  it('does not move data when the profile id matches but the account key does not', async () => {
+    const target = await registerTarget() // accountKey undefined
+    await db.movimientos.bulkPut([movimiento({ id: 'm1' })])
+    await setAdoptionConsent({ profileId: target.id, accountKey: 'ana@example.com' })
+
+    await resumePendingAdoption(target)
+
+    expect(await db.movimientos.toArray()).toHaveLength(1)
+    const targetDb = getProfileDatabase(TARGET_DB_NAME)
+    expect(await targetDb.movimientos.toArray()).toEqual([])
+  })
+
+  it('does nothing when there is no active profile to compare against', async () => {
+    await db.movimientos.bulkPut([movimiento({ id: 'm1' })])
+    await setAdoptionConsent({ profileId: 'adopt-target', accountKey: 'ana@example.com' })
+
+    await resumePendingAdoption(null)
+
+    expect(await db.movimientos.toArray()).toHaveLength(1)
   })
 })

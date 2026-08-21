@@ -113,11 +113,34 @@ switchProfile`.
   valid count, so swallowing a storage failure into it would be
   indistinguishable from "genuinely no local data"); its one caller,
   `authStore.ts`'s `checkGuestAdoption`, is what decides how to degrade it.
+
+  **`finishConsentedAdoption(target)`/`resumePendingAdoption(activeProfile)`**
+  (`specs.md` §10.32/§11, 2026-08-21 — the resumability fix): function-level
+  resumability alone left a real gap — nothing ever called
+  `adoptGuestMovements` again after the exact interruption §10.32 names, so
+  `deviceStore.ts` gained a durable `adoptionConsent` marker
+  (`profileId`+`accountKey`) written the moment "yes" is tapped, before the
+  move starts. `finishConsentedAdoption` is "run the move, then — only once
+  it lands — clear that marker," shared by the user-initiated accept and
+  the silent resume so one place owns when a consent counts as fulfilled.
+  `resumePendingAdoption` is the entry point `boot.ts` calls, fire-and-forget,
+  once per genuine (re)bind: no-op with no pending consent; a consent naming
+  a _different_ profile id or account key than the one now active is left
+  untouched (resuming it would spend consent never given for that account) —
+  it stays valid indefinitely, so switching back to the originally-consented
+  profile later (including via `switchProfile.ts`, which reuses the same
+  boot path) still resumes it. Self-catching: a fire-and-forget background
+  task must never fail the boot it rides on. Takes a `ProfileRecord`, not a
+  `ProfileBinding` — the same cycle-avoidance reasoning as `switchProfile.ts`
+  above (`repoProvider.ts` imports the `@/lib/profiles` barrel this module
+  is re-exported from).
+
 - `index.ts` — the public barrel: profile types, the registry functions
   (including the active-profile pointer and `removeProfile`), and
   `getProfileDatabase()`/`ensureOwnerMarker`/`readOwnerMarker`/
-  `adoptGuestMovements`/`countGuestMovements`. Not `switchToProfile` — see
-  `switchProfile.ts`'s own entry above.
+  `adoptGuestMovements`/`countGuestMovements`/`finishConsentedAdoption`/
+  `resumePendingAdoption`. Not `switchToProfile` — see `switchProfile.ts`'s
+  own entry above.
 
 Consumed by `src/lib/repoProvider.ts`'s `resolveActiveProfileBinding()`,
 called once per boot by `src/lib/boot.ts` (`specs.md` §10.28) — its result is

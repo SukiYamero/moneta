@@ -8,6 +8,7 @@ vi.mock('@/lib/repoProvider', () => ({
 }))
 vi.mock('@/lib/toastStore', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/lib/outbox', () => ({ setOutboxDatabase: vi.fn() }))
+vi.mock('@/lib/profiles', () => ({ resumePendingAdoption: vi.fn() }))
 
 import type { Repo } from '@/lib/repo'
 import { RepoError } from '@/lib/repo'
@@ -21,6 +22,7 @@ import {
 import { CONFIG_SEMILLA } from '@/lib/schema'
 import { useDataStore } from '@/lib/dataStore'
 import { setOutboxDatabase } from '@/lib/outbox'
+import { resumePendingAdoption } from '@/lib/profiles'
 import { __resetBootStoreForTests, invalidateBootForSignOut, useBootStore } from '@/lib/boot'
 
 const mResolveBinding = vi.mocked(resolveActiveProfileBinding)
@@ -28,6 +30,7 @@ const mBindActiveProfile = vi.mocked(bindActiveProfile)
 const mGetActiveProfileBinding = vi.mocked(getActiveProfileBinding)
 const mGetRepo = vi.mocked(getRepo)
 const mSetOutboxDatabase = vi.mocked(setOutboxDatabase)
+const mResumePendingAdoption = vi.mocked(resumePendingAdoption)
 
 const makeRepo = (readyError?: unknown): Repo =>
   ({
@@ -56,6 +59,10 @@ beforeEach(() => {
   useDataStore.setState({ movimientos: [], activos: [], config: null, status: 'idle', error: null })
   useBootStore.setState({ status: 'idle', error: null })
   mGetActiveProfileBinding.mockReturnValue(null)
+  // Fire-and-forget in boot.ts (never awaited) — an unmocked rejection here
+  // would surface as a noisy unhandled-rejection warning in every test that
+  // doesn't care about this call, not a real assertion failure.
+  mResumePendingAdoption.mockResolvedValue(undefined)
 })
 
 afterEach(() => {
@@ -80,9 +87,12 @@ describe('useBootStore.run()', () => {
     expect(mSetOutboxDatabase).toHaveBeenCalledWith(binding.database)
     expect(useBootStore.getState().status).toBe('ready')
     expect(useDataStore.getState().status).toBe('ready')
+    // specs.md §10.32/§11 (2026-08-21): every genuine (re)bind gives a
+    // consented-but-unfinished adoption another chance to finish, silently.
+    expect(mResumePendingAdoption).toHaveBeenCalledWith(binding.profile)
   })
 
-  it('is idempotent: a second call for the same already-bound profile does not reload or re-announce running', async () => {
+  it('is idempotent: a second call for the same already-bound profile does not reload, re-announce running, or re-attempt an adoption resume', async () => {
     const repo = makeRepo()
     const binding = makeBinding('kurobello', repo)
     mResolveBinding.mockResolvedValue(binding)
@@ -91,6 +101,7 @@ describe('useBootStore.run()', () => {
     await useBootStore.getState().run()
     mGetActiveProfileBinding.mockReturnValue(binding)
     const loadSpy = vi.spyOn(useDataStore.getState(), 'load')
+    mResumePendingAdoption.mockClear()
 
     const statusesSeen: string[] = []
     const unsub = useBootStore.subscribe((s) => statusesSeen.push(s.status))
@@ -99,6 +110,10 @@ describe('useBootStore.run()', () => {
 
     expect(loadSpy).not.toHaveBeenCalled()
     expect(statusesSeen).not.toContain('running')
+    // No-op remount (e.g. navigating between top-level routes with the same
+    // profile already bound) must not re-check for a pending adoption on
+    // every render — only a genuine (re)bind does.
+    expect(mResumePendingAdoption).not.toHaveBeenCalled()
   })
 
   // specs.md §10.28's highest-risk edge case: signing out and into a

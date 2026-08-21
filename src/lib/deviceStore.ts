@@ -102,11 +102,25 @@ export type ActiveProfileRow = { id: number; profileId: string }
 // suppresses the prompt on its own (`adoption.ts`'s own count check), and
 // an accepted adoption empties the local profile, which does the same.
 export type AdoptionDeclinedRow = { id: number }
+// The other half of the same decision, the one that *doesn't* empty the
+// local profile (specs.md §10.32/§11, 2026-08-21): "yes" recorded durably,
+// at the moment it's given, so an adoption interrupted before it finishes
+// (a tab closed mid-move) can be completed on a later boot without asking
+// again — consent was already given for *this* profile, so finishing is
+// not a new offer. `profileId`/`accountKey` name the target it was given
+// for (mirroring `ProfileRecord`'s own fields, same posture as `ProfileRow`
+// above): `profiles/adoption.ts`'s `resumePendingAdoption` only ever
+// resumes into a profile matching both, never merely "whatever's active
+// now" — the one way this could silently spend consent that was never
+// given. Single synthetic row, like every other device-wide answer here:
+// only one adoption is ever "the" pending one at a time.
+export type AdoptionConsentRow = { id: number; profileId: string; accountKey?: string }
 
 const MARKER_ID = 1 as const
 const GUEST_MARKER_ID = 1 as const
 const DRIVE_DECISION_ID = 1 as const
 const ADOPTION_DECLINED_ID = 1 as const
+const ADOPTION_CONSENT_ID = 1 as const
 const DEVICE_ID_ROW = 1 as const
 const DEVICE_ID_LENGTH = 8
 const DEVICE_ID_ALPHABET = '0123456789abcdefghijklmnopqrstuvwxyz'
@@ -132,6 +146,7 @@ export const deviceDb = new Dexie('kurobello-device') as Dexie & {
   guestMarker: EntityTable<GuestMarkerRow, 'id'>
   activeProfile: EntityTable<ActiveProfileRow, 'id'>
   adoptionDeclined: EntityTable<AdoptionDeclinedRow, 'id'>
+  adoptionConsent: EntityTable<AdoptionConsentRow, 'id'>
 }
 deviceDb.version(1).stores({ marker: 'id' })
 // Additive: `marker` keeps its v1 definition unchanged — same reasoning as
@@ -239,6 +254,24 @@ deviceDb.version(9).stores({
   activeProfile: 'id',
   adoptionDeclined: 'id',
 })
+// Additive again: `adoptionConsent` (this module's own `AdoptionConsentRow`
+// comment, specs.md §10.32/§11 2026-08-21) — the persisted "yes" that lets
+// an interrupted adoption resume across a reload. Every earlier table
+// restated unchanged.
+deviceDb.version(10).stores({
+  marker: 'id',
+  driveDecision: 'id',
+  anchor: 'id',
+  profiles: 'id, kind, lastUsedAt',
+  deviceId: 'id',
+  syncTips: 'id',
+  syncFileCache: 'id',
+  guestLock: 'id',
+  guestMarker: 'id',
+  activeProfile: 'id',
+  adoptionDeclined: 'id',
+  adoptionConsent: 'id',
+})
 
 export const hasLoggedInBefore = async (): Promise<boolean> => {
   try {
@@ -328,6 +361,45 @@ export const markAdoptionDeclined = async (): Promise<void> => {
     // means the prompt can reappear on a later sign-in, not that anything
     // already declined gets silently undone.
     console.warn('device: could not persist the adoption decision', e)
+  }
+}
+
+// specs.md §10.32/§11 (2026-08-21): the persisted "yes" — see
+// `AdoptionConsentRow`'s own comment above for why this exists and what it
+// must and must not do. Absence means "nothing pending," the overwhelmingly
+// common state, same posture as every other presence-optional signal here.
+export const getAdoptionConsent = async (): Promise<AdoptionConsentRow | undefined> => {
+  try {
+    return await deviceDb.adoptionConsent.get(ADOPTION_CONSENT_ID)
+  } catch (e) {
+    console.warn('device: could not read the adoption consent, treating as none pending', e)
+    return undefined
+  }
+}
+
+// Self-catching, same posture as `markAdoptionDeclined`: if this write
+// fails, the move that follows it still runs and, uninterrupted, still
+// finishes correctly — a broken write here only means *this one* attempt
+// loses its durability guarantee if it happens to also be interrupted,
+// which is exactly the pre-existing (un-resumable) behavior, not a new
+// failure mode. It must never block the "yes" tap over a storage hiccup
+// unrelated to the person's money.
+export const setAdoptionConsent = async (target: Omit<AdoptionConsentRow, 'id'>): Promise<void> => {
+  try {
+    await deviceDb.adoptionConsent.put({ id: ADOPTION_CONSENT_ID, ...target })
+  } catch (e) {
+    console.warn('device: could not persist the adoption consent', e)
+  }
+}
+
+export const clearAdoptionConsent = async (): Promise<void> => {
+  try {
+    await deviceDb.adoptionConsent.delete(ADOPTION_CONSENT_ID)
+  } catch (e) {
+    // Best-effort: a failed clear just leaves the marker in place, and
+    // `resumePendingAdoption` re-running it on a later boot is always a
+    // safe no-op once the move is actually done — self-healing, not stuck.
+    console.warn('device: could not clear the adoption consent', e)
   }
 }
 

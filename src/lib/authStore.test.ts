@@ -21,7 +21,7 @@ vi.mock('@/lib/profiles', () => ({
   resolveGoogleProfile: vi.fn(),
   setActiveProfileId: vi.fn(),
   getProfile: vi.fn(),
-  adoptGuestMovements: vi.fn(),
+  finishConsentedAdoption: vi.fn(),
   countGuestMovements: vi.fn(),
   DEFAULT_PROFILE_ID: 'kurobello',
 }))
@@ -36,6 +36,7 @@ vi.mock('@/lib/deviceStore', () => ({
   clearGuestUsed: vi.fn(),
   hasDeclinedAdoption: vi.fn(),
   markAdoptionDeclined: vi.fn(),
+  setAdoptionConsent: vi.fn(),
 }))
 
 let networkOnline = true
@@ -56,8 +57,8 @@ import { bootstrap } from '@/lib/bootstrap'
 import { invalidateBootForSignOut } from '@/lib/boot'
 import { hasVault, resetVault, updateSession } from '@/lib/pinLock'
 import {
-  adoptGuestMovements,
   countGuestMovements,
+  finishConsentedAdoption,
   getProfile,
   resolveGoogleProfile,
   setActiveProfileId,
@@ -72,6 +73,7 @@ import {
   markAdoptionDeclined,
   markGuestUsed,
   markLoggedIn,
+  setAdoptionConsent,
   setDriveDecision,
 } from '@/lib/deviceStore'
 import { useAuthStore } from '@/lib/authStore'
@@ -94,7 +96,8 @@ const mHasUsedGuestBefore = vi.mocked(hasUsedGuestBefore)
 const mMarkGuestUsed = vi.mocked(markGuestUsed)
 const mClearGuestUsed = vi.mocked(clearGuestUsed)
 const mGetProfile = vi.mocked(getProfile)
-const mAdoptGuestMovements = vi.mocked(adoptGuestMovements)
+const mFinishConsentedAdoption = vi.mocked(finishConsentedAdoption)
+const mSetAdoptionConsent = vi.mocked(setAdoptionConsent)
 const mCountGuestMovements = vi.mocked(countGuestMovements)
 const mHasDeclinedAdoption = vi.mocked(hasDeclinedAdoption)
 const mMarkAdoptionDeclined = vi.mocked(markAdoptionDeclined)
@@ -132,7 +135,8 @@ beforeEach(() => {
   mCountGuestMovements.mockResolvedValue(0)
   mHasDeclinedAdoption.mockResolvedValue(false)
   mGetProfile.mockResolvedValue(undefined)
-  mAdoptGuestMovements.mockResolvedValue({ movedCount: 0 })
+  mFinishConsentedAdoption.mockResolvedValue({ movedCount: 0 })
+  mSetAdoptionConsent.mockResolvedValue(undefined)
   useAuthStore.setState({
     status: 'idle',
     user: null,
@@ -580,7 +584,8 @@ describe('useAuthStore.acceptGuestAdoption / declineGuestAdoption', () => {
   it('does nothing when there is no pending offer', async () => {
     useAuthStore.setState({ pendingAdoption: null })
     await useAuthStore.getState().acceptGuestAdoption()
-    expect(mAdoptGuestMovements).not.toHaveBeenCalled()
+    expect(mSetAdoptionConsent).not.toHaveBeenCalled()
+    expect(mFinishConsentedAdoption).not.toHaveBeenCalled()
   })
 
   it('moves the movements and clears the pending offer on success', async () => {
@@ -589,18 +594,43 @@ describe('useAuthStore.acceptGuestAdoption / declineGuestAdoption', () => {
       label: 'Ana',
       kind: 'google',
       databaseName: 'kurobello-p1',
+      accountKey: 'a@b.com',
       createdAt: 'T',
       lastUsedAt: 'T',
     })
-    mAdoptGuestMovements.mockResolvedValue({ movedCount: 3 })
+    mFinishConsentedAdoption.mockResolvedValue({ movedCount: 3 })
 
     await useAuthStore.getState().acceptGuestAdoption()
 
-    expect(mAdoptGuestMovements).toHaveBeenCalledWith(expect.objectContaining({ id: 'p1' }))
+    expect(mFinishConsentedAdoption).toHaveBeenCalledWith(expect.objectContaining({ id: 'p1' }))
     const s = useAuthStore.getState()
     expect(s.pendingAdoption).toBeNull()
     expect(s.adoptionBusy).toBe(false)
     expect(s.adoptionError).toBeNull()
+  })
+
+  // specs.md §11 (2026-08-21): the "yes" tap is what makes an interrupted
+  // move resumable across a reload, so it must be persisted durably —
+  // deviceStore.ts, not just zustand — and it must be persisted *before*
+  // the move starts, or an interruption in that gap would have nothing to
+  // resume from.
+  it('persists the consent for the target profile before attempting the move', async () => {
+    mGetProfile.mockResolvedValue({
+      id: 'p1',
+      label: 'Ana',
+      kind: 'google',
+      databaseName: 'kurobello-p1',
+      accountKey: 'a@b.com',
+      createdAt: 'T',
+      lastUsedAt: 'T',
+    })
+
+    await useAuthStore.getState().acceptGuestAdoption()
+
+    expect(mSetAdoptionConsent).toHaveBeenCalledWith({ profileId: 'p1', accountKey: 'a@b.com' })
+    expect(mSetAdoptionConsent.mock.invocationCallOrder[0]!).toBeLessThan(
+      mFinishConsentedAdoption.mock.invocationCallOrder[0]!,
+    )
   })
 
   it('surfaces a failure through adoptionError, isolated from status/error, and keeps the offer for a retry', async () => {
@@ -612,7 +642,7 @@ describe('useAuthStore.acceptGuestAdoption / declineGuestAdoption', () => {
       createdAt: 'T',
       lastUsedAt: 'T',
     })
-    mAdoptGuestMovements.mockRejectedValue(new Error('tab closed'))
+    mFinishConsentedAdoption.mockRejectedValue(new Error('tab closed'))
 
     await useAuthStore.getState().acceptGuestAdoption()
 
@@ -620,6 +650,10 @@ describe('useAuthStore.acceptGuestAdoption / declineGuestAdoption', () => {
     expect(s.adoptionError).toBe('tab closed')
     expect(s.pendingAdoption).toEqual({ profileId: 'p1', count: 3 }) // kept, so a retry is possible
     expect(s.status).not.toBe('error') // isolated from the identity-level status
+    // The consent write itself is not the thing that failed — it must
+    // still be in place, exactly what lets a boot-time resume finish this
+    // later even if the person never taps retry.
+    expect(mSetAdoptionConsent).toHaveBeenCalledWith({ profileId: 'p1', accountKey: undefined })
   })
 
   it('declineGuestAdoption clears the offer and persists the decision, touching nothing local', () => {
@@ -627,7 +661,8 @@ describe('useAuthStore.acceptGuestAdoption / declineGuestAdoption', () => {
 
     const s = useAuthStore.getState()
     expect(s.pendingAdoption).toBeNull()
-    expect(mAdoptGuestMovements).not.toHaveBeenCalled()
+    expect(mSetAdoptionConsent).not.toHaveBeenCalled()
+    expect(mFinishConsentedAdoption).not.toHaveBeenCalled()
     expect(mMarkAdoptionDeclined).toHaveBeenCalled()
   })
 })

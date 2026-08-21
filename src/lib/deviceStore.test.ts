@@ -1,11 +1,13 @@
 import { afterEach, expect, test, vi } from 'vitest'
 import {
   __resetDeviceIdForTests,
+  clearAdoptionConsent,
   clearDriveDecision,
   clearGuestLock,
   clearGuestUsed,
   clearLoggedIn,
   deviceDb,
+  getAdoptionConsent,
   getDeviceId,
   getDriveDecision,
   getGuestLock,
@@ -13,6 +15,7 @@ import {
   hasUsedGuestBefore,
   markGuestUsed,
   markLoggedIn,
+  setAdoptionConsent,
   setDriveDecision,
   setGuestLock,
   touchGuestLockActive,
@@ -23,6 +26,7 @@ afterEach(async () => {
   await clearDriveDecision()
   await clearGuestLock()
   await clearGuestUsed()
+  await clearAdoptionConsent()
   await deviceDb.deviceId.clear()
   __resetDeviceIdForTests()
 })
@@ -343,6 +347,83 @@ test('getDeviceId is safe to fire-and-forget on a persist failure: still resolve
   const id = await getDeviceId()
 
   expect(id).toMatch(/^[0-9a-z]{8}$/)
+  expect(warn).toHaveBeenCalled()
+
+  spy.mockRestore()
+  warn.mockRestore()
+})
+
+// specs.md §10.32/§11 (2026-08-21): the persisted "yes, bring these
+// movements into that account" consent — deviceStore.ts, not zustand,
+// specifically so it survives the interruption it exists to let
+// `profiles/adoption.ts`'s `resumePendingAdoption` recover from.
+test('no adoption consent on a fresh device', async () => {
+  expect(await getAdoptionConsent()).toBeUndefined()
+})
+
+test('setAdoptionConsent persists the target profile id and account key', async () => {
+  await setAdoptionConsent({ profileId: 'p1', accountKey: 'ana@example.com' })
+
+  expect(await getAdoptionConsent()).toEqual({
+    id: 1,
+    profileId: 'p1',
+    accountKey: 'ana@example.com',
+  })
+})
+
+test('setAdoptionConsent overwrites a previous consent', async () => {
+  await setAdoptionConsent({ profileId: 'p1', accountKey: 'ana@example.com' })
+  await setAdoptionConsent({ profileId: 'p2', accountKey: 'beto@example.com' })
+
+  expect(await getAdoptionConsent()).toEqual({
+    id: 1,
+    profileId: 'p2',
+    accountKey: 'beto@example.com',
+  })
+})
+
+test('clearAdoptionConsent removes the consent', async () => {
+  await setAdoptionConsent({ profileId: 'p1', accountKey: 'ana@example.com' })
+  await clearAdoptionConsent()
+  expect(await getAdoptionConsent()).toBeUndefined()
+})
+
+test('clearAdoptionConsent on an already-clear consent is a no-op, not an error', async () => {
+  await expect(clearAdoptionConsent()).resolves.toBeUndefined()
+  expect(await getAdoptionConsent()).toBeUndefined()
+})
+
+test('getAdoptionConsent degrades to undefined on a storage read failure', async () => {
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  const spy = vi.spyOn(deviceDb.adoptionConsent, 'get').mockRejectedValue(new Error('IDB blocked'))
+
+  expect(await getAdoptionConsent()).toBeUndefined()
+  expect(warn).toHaveBeenCalled()
+
+  spy.mockRestore()
+  warn.mockRestore()
+})
+
+test('setAdoptionConsent is safe to fire-and-forget: a write failure is caught and logged, not thrown', async () => {
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  const spy = vi.spyOn(deviceDb.adoptionConsent, 'put').mockRejectedValue(new Error('IDB blocked'))
+
+  await expect(
+    setAdoptionConsent({ profileId: 'p1', accountKey: 'ana@example.com' }),
+  ).resolves.toBeUndefined()
+  expect(warn).toHaveBeenCalled()
+
+  spy.mockRestore()
+  warn.mockRestore()
+})
+
+test('clearAdoptionConsent is safe to fire-and-forget: a delete failure is caught and logged, not thrown', async () => {
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  const spy = vi
+    .spyOn(deviceDb.adoptionConsent, 'delete')
+    .mockRejectedValue(new Error('IDB blocked'))
+
+  await expect(clearAdoptionConsent()).resolves.toBeUndefined()
   expect(warn).toHaveBeenCalled()
 
   spy.mockRestore()

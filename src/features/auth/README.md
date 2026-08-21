@@ -94,7 +94,11 @@ Onboarding screens and the route guard that sits in front of the app.
   `authStore.acceptGuestAdoption()` (busy state via `adoptionBusy`, an
   error via `adoptionError` that keeps the offer open for a retry rather
   than dismissing it); "No" calls `declineGuestAdoption()`, which touches
-  nothing local — only records the device won't be asked again. There is
+  nothing local — only records the device won't be asked again.
+  `acceptGuestAdoption()` also persists the consent itself
+  (`deviceStore.ts`'s `adoptionConsent`, `specs.md` §11 2026-08-21) before
+  the move starts — what lets `boot.ts` finish the move silently on a later
+  boot if this tab closes mid-move, with no second prompt. There is
   no design for this screen (verified against the export — the canvas's
   "Usar estos datos" belongs to the receipt-scan flow), built from
   `CenterModal` and the tokens, same posture as §10.2.1's biometric row.

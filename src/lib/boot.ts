@@ -7,6 +7,7 @@ import {
 } from '@/lib/repoProvider'
 import { setOutboxDatabase } from '@/lib/outbox'
 import { useDataStore } from '@/lib/dataStore'
+import { resumePendingAdoption } from '@/lib/profiles'
 
 // The boot sequence (specs.md §10.28): resolve the active profile, bind it,
 // load its data, then let the app render — run once, unlocked, before any
@@ -46,6 +47,16 @@ const runOnce = async (
   setOutboxDatabase(binding.database)
 
   if (!isRebind && get().status === 'ready') return
+
+  // specs.md §10.32/§11 (2026-08-21): finishes a guest-data adoption the
+  // person already consented to but that didn't finish before this device
+  // last closed. Consent was already given, so this needs no prompt — it
+  // is completion, not a new offer — and runs once per genuine (re)bind
+  // (login, restore, hydrate, a §10.31 switch), never on the no-op remount
+  // the early return above already short-circuits. Fire-and-forget: this
+  // must never slow down or fail the boot it rides on (it self-catches
+  // internally), only ever finish a move that was already promised.
+  void resumePendingAdoption(binding.profile)
 
   set({ status: 'running', error: null })
   // A rebind (signing out and into a different account, specs.md §10.28's
