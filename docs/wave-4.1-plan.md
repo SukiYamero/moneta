@@ -214,12 +214,13 @@ Per `AGENTS.md`, non-optional:
 
 ## 6. Status
 
-| Track | Branch           | Worktree                           | Status                              |
-| ----- | ---------------- | ---------------------------------- | ----------------------------------- |
-| AD    | `track-ad-boot`  | removed                            | ✅ **merged + reviewed 2026-08-20** |
-| AE    | `track-ae-light` | removed                            | ✅ **merged + reviewed 2026-08-20** |
-| AF    | `track-af-pin`   | `../moneta-worktrees/track-af-pin` | active                              |
-| AG    | —                | —                                  | stage 2, not started                |
+| Track | Branch           | Worktree | Status                              |
+| ----- | ---------------- | -------- | ----------------------------------- |
+| AD    | `track-ad-boot`  | removed  | ✅ **merged + reviewed 2026-08-20** |
+| AE    | `track-ae-light` | removed  | ✅ **merged + reviewed 2026-08-20** |
+| AF    | `track-af-pin`   | removed  | ✅ **merged + reviewed 2026-08-20** |
+| AH    | —                | —        | §10.33, next (added mid-wave)       |
+| AG    | —                | —        | after AH                            |
 
 ## 7. Operator debt from stage 1 (do not lose these)
 
@@ -243,7 +244,10 @@ Neither is a defect in the track that surfaced it; both are cross-cutting and
 were correctly _not_ acted on by a reviewer scoped to one track.
 
 1. **Mirror the login marker for a synchronous read, the way the theme now
-   is.** `RequireAuth` renders a genuinely blank frame while
+   is. — RESOLVED 2026-08-20: folded into Track AH (§10.33), not a separate
+   pass.** AH already rewrites what the cold start knows and already touches
+   both `deviceStore.ts` and `RequireAuth.tsx`; splitting the two would put
+   two writers on one question. Original finding follows. `RequireAuth` renders a genuinely blank frame while
    `hasLoggedInBefore()` resolves from IndexedDB, so a returning user's real
    sequence is blank → skeleton → content. Track AE established the pattern
    that removes it (§10.30: a non-sensitive device signal may be mirrored to
