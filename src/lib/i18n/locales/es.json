@@ -428,9 +428,6 @@
       "heading": "Preferencias",
       "language": {
         "device": "Seguir el dispositivo"
-      },
-      "theme": {
-        "note": "La app es oscura por ahora — el modo claro llega con su propio diseño."
       }
     },
     "retry": "Reintentar"

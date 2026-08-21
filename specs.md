@@ -6920,6 +6920,37 @@ export/index.ts:49` all still inline `format(date, 'yyyy-MM-dd')` instead
   (unowned by any Wave 4.1 track) still renders as inert with a
   "dark-only for now" note that this change makes false.
 
+- 2026-08-20 — **Track AE review (§10.30): the pre-paint script also
+  corrects `meta[name="theme-color"]`, two stale test-filename comments
+  fixed, and `PreferencesSection.tsx`'s stale `tema` row closed.** The
+  `<meta name="theme-color">` tag stayed hardcoded `#0c0d10` at first paint
+  even for a resolved-light session — the inline script toggled `.dark` but
+  never touched the meta tag, and `applyTheme()` (which does) only runs
+  once `syncStoredTheme()` has a caller, itself still pending on Track AD's
+  `main.tsx` wiring. Confirmed by reading, not just suspected: fixed by
+  moving the `theme-color` meta tag before the inline script (so it exists
+  in the DOM when the script queries for it) and having the script set its
+  `content` alongside the `.dark` class, duplicating `theme.ts`'s
+  `THEME_COLOR` hexes the same way it already duplicates
+  `THEME_STORAGE_KEY` — `themeBootScript.test.ts` now guards both.
+  `index.html`/`theme.ts` both named a test file `theme.boot-script.test.ts`
+  that doesn't exist (`themeBootScript.test.ts` does) — fixed both
+  comments. Checked but not changed: `--warning`'s light value
+  (`#af7809`, `--chart-3`'s light hex rather than `--mn-danger`'s
+  dark→light pair) — its dark hex is already, literally, `--chart-3`'s
+  (`#f5b93f`, not `--mn-danger`'s `#fb8989`), so reusing `--chart-3`'s light
+  value preserves an identity that already held in `.dark`; the alternative
+  reading (adapt every one of the four from `--mn-danger`) would have
+  broken it. `docs/ui/design-export-reference.md` §1 already flags this as
+  the intended reading, not a guess. Also checked and found correct as-is:
+  `syncStoredTheme()`'s `dataStore`/`matchMedia` subscriptions never
+  unsubscribe, matching `syncStoredLocale.ts`'s identical shape — both are
+  meant to live for the app's lifetime, called once from `main.tsx`, so
+  this isn't a leak; and the sweep for theme-invariant hardcoded colors
+  (`AGENTS.md`'s "fix the shape" instinct) found only the already-known
+  exceptions (Google brand colors in `WelcomeScreen.tsx`, the modal scrims
+  in `BottomSheet.tsx`/`CenterModal.tsx`) — nothing new.
+
 ## 12. Backlog (pending verification / deferred work)
 
 - **The Add sheet's "gear into `/settings`" entry point was never actually
@@ -7766,17 +7797,16 @@ SupportedLocale = detectLocale()`, and looks up each section/category's
   but picking a theme in Settings has no visible effect and nothing persists
   for the next launch.
 
-- **`src/features/profile/PreferencesSection.tsx`'s `tema` row is now stale
-  copy, not owned by any Wave 4.1 track.** It renders `tema` as a
-  permanently inert row with `settings:preferences.theme.note` ("the app is
-  dark-only for now") — true before Track AE's light theme shipped, false
-  now that `/settings` has a real `claro`/`oscuro`/`sistema` picker. Fixing
-  it means either turning this row into a `Link` to `/settings` (matching
-  `LinkedRow`'s existing pattern for the other three preferences) or
-  removing the note, plus retiring the now-unused `settings:preferences.theme.note`
-  key — a small change, but to a file and a `profile`-namespace string
-  neither Track AE (owns `settings` only) nor any other Wave 4.1 track was
-  assigned.
+- ✅ **`src/features/profile/PreferencesSection.tsx`'s `tema` row was stale
+  copy** — closed 2026-08-20 (Track AE review). Turned into a `Link` to
+  `/settings`, matching `LinkedRow`'s existing pattern for the other three
+  preferences, reusing the already-existing `profile:preferences.theme.*`
+  labels (no new `profile`-namespace string needed); retired the now-unused
+  `settings:preferences.theme.note` key from all four locale files. Left
+  unowned by any Wave 4.1 track (the file is `profile`'s, the note lived in
+  `settings`, and `profile` was Track AF's namespace this wave) — the
+  reviewer was explicitly authorized to close it because no live track
+  owned it.
 
 ### Development waves (parallel tracks, sequencing, worktree log)
 

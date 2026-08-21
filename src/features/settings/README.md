@@ -63,13 +63,11 @@ No number-format overrides here (separators/decimals) — `Intl` already
 derives those from the locale (`specs.md` §10.7); a manual override would be
 a second source of truth for formatting.
 
-**A known gap this track could not close:** `PreferencesSection.tsx`
-(`src/features/profile/`, not owned by this track) still renders `tema` as
-an inert row with a "the app is dark-only for now" note
-(`settings:preferences.theme.note`) — accurate before this theme picker
-shipped, false now. Fixing it means editing a file and a `profile`-namespace
-label this track doesn't own; flagged for the operator rather than edited
-unilaterally.
+`PreferencesSection.tsx` (`src/features/profile/`) links `tema` into
+`/settings` the same way it does the other three preferences, now that this
+screen's picker is real; the review that closed this file's gap retired
+`settings:preferences.theme.note` (the now-false "dark-only for now" copy)
+along with it.
 
 Writes go through `dataStore` exclusively (`updateConfig` for preferences,
 `upsertCategoria`/`archiveCategoria`/`deleteCategoria` for the list) —
