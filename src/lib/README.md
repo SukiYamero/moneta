@@ -21,6 +21,25 @@ Shared stores, helpers, and the Drive/auth/lock logic layer. No UI here.
 - `i18n/` — the translation table (`react-i18next`/`i18next`, bundled JSON,
   four locales: `es`/`en`/`es-AR`/`pt-BR`, `es` base and fallback, key parity
   across all four enforced by a test). Own `README.md`.
+- `theme.ts` — pure `Preferencias['tema']` resolution: `systemTheme()`
+  (`prefers-color-scheme`), `resolveTheme()`, `applyTheme()` (toggles
+  `.dark`, the class Tailwind's `dark:` variant is wired to, plus the
+  `theme-color` meta tag), `persistTheme()` (mirrors `tema` to
+  `localStorage` under `THEME_STORAGE_KEY` — a theme preference isn't
+  sensitive data, which is what makes that legitimate here specifically,
+  `specs.md` §11 2026-08-20). `index.html`'s inline pre-paint script
+  duplicates the storage key literally (it runs before the module graph
+  loads) — `themeBootScript.test.ts` keeps the two from drifting apart.
+- `syncStoredTheme.ts` — the `dataStore` subscription that actually applies
+  a resolved `tema` to the document once `Config` loads, and keeps
+  `sistema` tracking `prefers-color-scheme` live. Own module rather than
+  folded into `theme.ts`, mirroring the `i18n/localeResolution.ts` (pure) /
+  `i18n/syncStoredLocale.ts` (subscription) split for `idioma`. **Not yet
+  called from `main.tsx`** — that file belongs to another track this wave
+  (`docs/wave-4.1-plan.md` §2); until the one-line `syncStoredTheme()` call
+  lands there (next to the existing `syncStoredLocale()`), nothing invokes
+  this subscription at all, so picking a theme in `PreferencesEditor`
+  writes `Preferencias.tema` but the `.dark` class never actually moves.
 - `auth.ts` — GIS token-client wrapper: identity scopes at login, Drive
   scopes requested incrementally via `connectDrive`.
 - `authStore.ts` — zustand store wrapping `auth.ts`; owns session status and

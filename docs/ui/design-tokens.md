@@ -23,11 +23,40 @@ color system for components to accidentally miss. Extra tokens
 the design uses more foreground/status/surface tiers than shadcn's default
 slot set has room for — five text tiers, not one `muted-foreground`.
 
-**Light theme is an unspecified placeholder.** No light design exists yet.
-`Config.preferencias.tema` (`schema.ts`) already plans for `claro | oscuro |
-sistema`, so `:root` keeps shadcn's neutral scaffold values rather than
-being left broken — replace them with real values once a light design
-lands (own spec, own decision-log entry when it happens).
+**Light theme is real, mapped from the design export (specs.md §10.30).**
+`:root` carries the light values; `.dark` is untouched. The mapping came
+from `docs/ui/design-export-reference.md` §1: the app's shipped `.dark`
+block was diffed hex-by-hex against `docs/ui/moneta-theme.css`'s dark
+column, every value matched, and that same formula was applied mechanically
+to the light column — not re-guessed per token. Four exceptions the mapping
+alone couldn't resolve, all decided by the user 2026-08-20 and recorded in
+`specs.md` §10.30, not to be "fixed" back toward the export's raw numbers:
+
+- The five `chart-*` tints. The export's own light values, measured in real
+  usage (`text-chart-N` on `bg-chart-N/15` over a white card, WCAG 3.0),
+  fail contrast outright (1.62–2.32 against a 3.0 threshold). The fix holds
+  each tint's hue/saturation and lowers lightness to the minimum that
+  passes — the same operation the design itself already performs on the
+  accent (`#2FD896` dark → `#12A873` light) — landing at `#1c9465`,
+  `#4180e9`, `#af7809`, `#f72121`, `#a958fb`.
+- `--destructive`/`--danger-strong`/`--danger-foreground`/`--warning` have
+  no light source in the export at all (their dark values trace to a
+  literal hex hardcoded once in the export's markup, not a `--mn-*`
+  variable). Adapted from `--mn-danger`'s own dark→light pair (`#FB8989` →
+  `#CF4B4B`) and, for `--warning`, from `--chart-3`'s light value (their
+  dark hexes are identical, `#f5b93f`).
+- `--muted`/`--accent`/`--secondary` all landing on the same `#FFFFFF` as
+  `--card` is confirmed correct, not a mapping bug — the design's own light
+  palette reuses the card slot the same way `.dark` already does.
+
+**The theme mechanism** — `src/lib/theme.ts` (pure resolution) +
+`src/lib/syncStoredTheme.ts` (the `dataStore` subscription that applies a
+resolved `tema`, mirroring `src/lib/i18n/syncStoredLocale.ts`'s split for
+`idioma`) + a synchronous inline script in `index.html` that resolves the
+theme before React renders, so a returning user never sees a full-screen
+colour flash. The app's `.dark`-class convention wins over the design's own
+`data-mn-theme` attribute — Tailwind v4's `dark:` variant is already wired
+to the class everywhere.
 
 **Google's brand SVG colors** (the "G" logo on the auth screens) are the
 one deliberate exception — they're a third-party mark with fixed legal

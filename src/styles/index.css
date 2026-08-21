@@ -188,77 +188,77 @@ body {
   }
 }
 
-/* Light theme is an UNSPECIFIED PLACEHOLDER — no light design exists yet
-   (specs.md §11, 2026-08-18). `Preferencias.tema` in schema.ts already plans
-   for 'claro' | 'oscuro' | 'sistema', so the slots stay populated with
-   shadcn's neutral scaffold values rather than left broken; replace these
-   with real values once a light design lands, never let it silently rot. */
+/* Light theme = the real palette, mapped from the design export's --mn-*
+   token table (docs/ui/moneta-theme.css, validated hex-by-hex against the
+   already-shipped .dark block — docs/ui/design-export-reference.md §1).
+   specs.md §10.30 records the four exceptions to a straight mapping: the
+   five chart-* tints are the design's own dark values pushed to the
+   minimum lightness that clears WCAG 3.0 on a white card (not the export's
+   raw light pair, which fails contrast outright); --destructive/
+   --danger-strong/--danger-foreground/--warning have no light source in
+   the export and are adapted from --mn-danger's own dark→light pair
+   (#FB8989 → #CF4B4B) and from --chart-3's already-fixed light value
+   (--warning shares --mn-danger's — and --chart-3's — literal dark hex);
+   --muted/--accent/--secondary collapsing to the same #FFFFFF as --card is
+   confirmed correct, not a bug — the design's own light palette reuses the
+   card slot the same way .dark already does. */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  /* A category's colour is the same in both themes, on purpose (user
-     decision, 2026-08-20): the tint is an identity — Comida is amber
-     wherever you look at it — so it must not change when the theme does.
-     These were the scaffold's zero-chroma greys, which made every chip,
-     row avatar and breakdown bar render grey in light mode and silently
-     killed the scan-by-colour affordance §10.8/§10.22 exist for. Nothing
-     else in the light palette is designed yet and none of it is touched
-     here; this is the minimum that has to already be true the day a light
-     theme lands. Contrast against a light surface is unverified — see
-     specs.md §12 before shipping light mode. */
-  --chart-1: #2fd896;
-  --chart-2: #7ba7f0;
-  --chart-3: #f5b93f;
-  --chart-4: #fb8989;
-  --chart-5: #c084fc;
+  --background: #f4f3ef;
+  --foreground: #1b1c19;
+  --card: #ffffff;
+  --card-foreground: #1b1c19;
+  --popover: #f0efe9;
+  --popover-foreground: #1b1c19;
+  --primary: #12a873;
+  --primary-foreground: #ffffff;
+  --secondary: #ffffff;
+  --secondary-foreground: #1b1c19;
+  --muted: #ffffff;
+  --muted-foreground: #71736b;
+  --accent: #ffffff;
+  --accent-foreground: #1b1c19;
+  --destructive: #cf4b4b;
+  --border: rgba(28, 28, 20, 0.07);
+  --input: rgba(28, 28, 20, 0.09);
+  --ring: rgba(18, 168, 115, 0.5);
+  --chart-1: #1c9465;
+  --chart-2: #4180e9;
+  --chart-3: #af7809;
+  --chart-4: #f72121;
+  --chart-5: #a958fb;
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar: #ffffff;
+  --sidebar-foreground: #1b1c19;
+  --sidebar-primary: #12a873;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f0efe9;
+  --sidebar-accent-foreground: #1b1c19;
+  --sidebar-border: rgba(28, 28, 20, 0.07);
+  --sidebar-ring: rgba(18, 168, 115, 0.5);
 
-  --fg-secondary: oklch(0.556 0 0);
-  --fg-tertiary: oklch(0.556 0 0);
-  --fg-faint: oklch(0.708 0 0);
-  --fg-disabled: oklch(0.708 0 0);
-  --success: oklch(0.72 0.19 155);
-  --success-strong: oklch(0.72 0.19 155);
-  --success-foreground: oklch(0.145 0 0);
-  --danger: oklch(0.704 0.191 22.216);
-  --danger-strong: oklch(0.577 0.245 27.325);
-  --danger-foreground: oklch(0.985 0 0);
-  --info: oklch(0.708 0.15 250);
-  --warning: oklch(0.75 0.15 75);
-  --canvas: oklch(1 0 0);
-  --surface-sunken: oklch(0.97 0 0);
-  --border-subtle: oklch(0.922 0 0);
-  --border-strong: oklch(0.85 0 0);
-  --border-hover: oklch(0.75 0 0);
+  --fg-secondary: #3c3e39;
+  --fg-tertiary: #585a52;
+  --fg-faint: #8a8c83;
+  --fg-disabled: #9ea096;
+  --success: #0e9765;
+  --success-strong: #12a873;
+  --success-foreground: #ffffff;
+  --danger: #cf4b4b;
+  --danger-strong: #cf4b4b;
+  --danger-foreground: #ffffff;
+  --info: #3d74c4;
+  --warning: #af7809;
+  --canvas: #f4f3ef;
+  --surface-sunken: #ffffff;
+  --border-subtle: rgba(28, 28, 20, 0.045);
+  --border-strong: rgba(28, 28, 20, 0.11);
+  --border-hover: rgba(28, 28, 20, 0.16);
 }
 
 /* Dark theme = the real KuroBello palette, extracted from the Claude Design
    canvas (project 18d93152-c2e6-4bde-8eff-f944b1537ad8, Moneta.dc.html,
-   2026-08-18). This is the ONLY designed theme today — see specs.md §11. */
+   2026-08-18). Unchanged by the light theme above (specs.md §10.30) — do
+   not touch this block for a light-theme change. */
 .dark {
   --background: #0c0d10;
   --foreground: #f4f4f5;

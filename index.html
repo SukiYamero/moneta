@@ -1,7 +1,33 @@
 <!doctype html>
-<html lang="es" class="dark">
+<html lang="es">
   <head>
     <meta charset="UTF-8" />
+    <!--
+      Resolves the theme synchronously, before CSS paints anything —
+      specs.md §10.30. Must be a classic (non-module) inline script: a
+      module script is deferred until the document is parsed, which is
+      exactly the delay this exists to avoid. Duplicates two literals that
+      can't be imported this early: the localStorage key from
+      src/lib/theme.ts's THEME_STORAGE_KEY, and the 'oscuro'/'claro'
+      domain values from Preferencias['tema'] (src/lib/schema.ts) —
+      theme.boot-script.test.ts asserts this file stays byte-for-byte in
+      sync with THEME_STORAGE_KEY so the two can't silently drift.
+    -->
+    <script>
+      ;(function () {
+        var stored = null
+        try {
+          stored = localStorage.getItem('kurobello-theme')
+        } catch (e) {}
+        var tema = stored === 'claro' || stored === 'oscuro' ? stored : 'sistema'
+        var dark =
+          tema === 'oscuro' ||
+          (tema === 'sistema' &&
+            window.matchMedia &&
+            window.matchMedia('(prefers-color-scheme: dark)').matches)
+        if (dark) document.documentElement.classList.add('dark')
+      })()
+    </script>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#0c0d10" />

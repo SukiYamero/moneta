@@ -12,11 +12,11 @@ const SKELETON_ROW_KEYS = ['row-1', 'row-2', 'row-3'] as const
 
 /**
  * `/settings` — a route, not an overlay (specs.md §10.24), reached from
- * `PreferencesSection`'s three writable rows. Two sections:
- * `CategoriesSection` (reuses `CategoryFormModal`, §10.22) and
- * `PreferencesEditor` (`primerDiaSemana`/`idioma`/`monedaPrincipal`, all
- * writing through `dataStore.updateConfig`, §10.13's one write path — no
- * theme control, Prerequisite 3). `dataStore.load()` is once-per-session
+ * `PreferencesSection`'s writable rows. Two sections: `CategoriesSection`
+ * (reuses `CategoryFormModal`, §10.22) and `PreferencesEditor`
+ * (`tema`/`primerDiaSemana`/`idioma`/`monedaPrincipal`, all writing through
+ * `dataStore.updateConfig`, §10.13's one write path). `dataStore.load()` is
+ * once-per-session
  * and usually already resolved by the time this route is reached (Home is
  * the index route), but this screen doesn't assume that — a direct/deep
  * link still gets Tier 2 skeletons while `status` is pending, matching
