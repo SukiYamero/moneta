@@ -27,6 +27,8 @@ export { ensureOwnerMarker, readOwnerMarker } from '@/lib/profiles/profileOwner'
 export {
   adoptGuestMovements,
   countGuestMovements,
+  finishConsentedAdoption,
+  resumePendingAdoption,
   type AdoptionResult,
 } from '@/lib/profiles/adoption'
 // `switchToProfile` (profiles/switchProfile.ts) is deliberately NOT

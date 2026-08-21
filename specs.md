@@ -3571,6 +3571,13 @@ and "always migrate" was rejected on that basis rather than on taste.
 **Asked once**, at first sign-in with local data present, never re-offered on
 every session. A dismissal is an answer.
 
+**Addendum, 2026-08-21 (operator decision, §11):** "asked once" governs the
+_offer_ — the "yes"/"no" question itself. It does not mean an interrupted
+"yes" is abandoned. Finishing a move the person already consented to is
+completion, not a new offer, and runs with no prompt at all — see the
+"Adoption interrupted" edge case below, now resolved rather than merely
+required.
+
 #### Edge cases
 
 - **The account already has data in Drive.** Adoption is a merge, not a
@@ -3585,6 +3592,26 @@ every session. A dismissal is an answer.
   atomic, never half-moved: half a month in each profile is worse than either
   outcome. This is the one part of this section that can lose data, so it is
   written test-first.
+
+  **Resolved 2026-08-21 (operator decision, §11), closing a gap the Track AG
+  review found:** the original implementation made `adoptGuestMovements`
+  resumable at the _function_ level (safe to call again after any
+  interruption) but nothing ever called it again after the interruption
+  this bullet names — `authStore.ts` only checked for a pending adoption
+  from `login()`, and the in-memory offer didn't survive a reload. The
+  requirement above was true of the mechanism, not of the whole system.
+  Closed by persisting the consent itself (`deviceStore.ts`'s
+  `adoptionConsent`, written the moment "yes" is tapped, before the move
+  starts) and resuming it silently — no prompt — on the next boot/rebind
+  that lands back on the profile it named. The operator's own reasoning:
+  **resuming an interrupted adoption is not a new consent**, since the
+  person already agreed to move _these_ movements into _that_ account;
+  finishing the move spends nothing they didn't already give. What would
+  spend consent they never gave is resuming into a _different_ account —
+  guarded by comparing both the profile id and its account key against the
+  one now active, never merely "whatever's active." See §11, 2026-08-21 for
+  the full implementation.
+
 - **The emptied guest profile stays.** It is the default local profile and
   always exists; it simply has no movements left. Do not delete it.
 
@@ -3601,6 +3628,10 @@ reaches those. Both are needed; this one prevents, that one recovers.
 adoption module beside the registry, `src/lib/outbox.ts` (enqueuing the moved
 movements), and one new prompt UI. **No `schema.ts` change** — the movements
 are unchanged; only which database holds them.
+
+**Extended 2026-08-21** (the resumability fix, §11): `src/lib/deviceStore.ts`
+(the persisted consent marker) and `src/lib/boot.ts` (the silent resume hook,
+fired once per genuine bind/rebind).
 
 **There is no design for this screen**, verified against the export: the
 canvas's "Usar estos datos" belongs to the receipt-scan flow, not to profiles.
@@ -7537,6 +7568,18 @@ authStore`), caught by a batch of test files failing on
 
 ## 12. Backlog (pending verification / deferred work)
 
+- ✅ **CLOSED 2026-08-21 — operator decision + implementation, full
+  reasoning in §11 ("The §12 adoption-resume gap closed").** Resuming an
+  interrupted adoption is not a new consent, so it needed no product
+  decision about re-prompting — only a durable record of the consent
+  already given. `deviceStore.ts`'s `adoptionConsent` marker (written at
+  the "yes" tap, before the move starts) plus `boot.ts`'s silent,
+  self-catching resume hook (`profiles/adoption.ts`'s
+  `resumePendingAdoption`, fired once per genuine bind/rebind) close it —
+  resuming only when the active profile matches both the recorded profile
+  id and account key, never merely "whatever's active now." Original entry
+  kept for the record:
+
 - **An adoption interrupted by a closed tab is never automatically
   retried** (found by the Track AG review, 2026-08-21 — full reasoning in
   §11). `profiles/adoption.ts`'s `adoptGuestMovements` is resumable by
@@ -8564,6 +8607,102 @@ string` on `ProfileRecord`/`deviceStore.ts`'s `ProfileRow` (a Dexie version
     than reasoning about it, still passes unmodified.
   - `bun run check` green: 145 files, 1,546 tests (2 new, both regression
     tests for the fixes above).
+
+- 2026-08-21 — **The §12 adoption-resume gap closed: operator decision +
+  implementation.** The Track AG review (immediately above) found that
+  `adoptGuestMovements` was resumable at the function level but nothing in
+  the app ever called it again after the interruption specs.md §10.32
+  itself names ("a tab closed mid-move") — only `login()` checked for a
+  pending adoption, `restore()`/`hydrate()` deliberately didn't, and the
+  in-memory offer didn't survive a reload.
+  - **The decision (operator):** resuming an interrupted adoption is not a
+    new consent, so it needs no new prompt. The person already agreed to
+    move _these_ movements into _that_ account; finishing the move spends
+    consent already given, not a fresh one. What _would_ spend consent
+    never given is resuming into a different account — the one thing the
+    fix must refuse.
+  - **`deviceStore.ts`'s new `adoptionConsent` table (v10)** — a single
+    synthetic row (`profileId`, `accountKey`), the same shape/posture as
+    every other device-wide signal in this file. Written by
+    `authStore.ts`'s `acceptGuestAdoption` the moment "yes" is tapped,
+    _before_ the move starts (`setAdoptionConsent`) — this is what survives
+    the interruption a purely in-memory `pendingAdoption` couldn't.
+    Self-catching, matching every sibling function in the file: a failed
+    write here only costs _this one_ attempt its durability guarantee if it
+    also happens to be interrupted, which is the pre-existing (un-resumable)
+    behavior, not a new failure mode — it must never block the "yes" tap
+    over an unrelated storage hiccup.
+  - **`profiles/adoption.ts` gained two functions.**
+    `finishConsentedAdoption(target)` is "run the move, then — only once it
+    actually lands — clear the consent," shared by the user-initiated
+    accept and the silent resume, so exactly one place owns "when is this
+    consent fulfilled" rather than two call sites each needing to remember
+    the pairing. `resumePendingAdoption(activeProfile)` is the entry point:
+    no pending consent → no-op; consent naming a _different_ profile id or
+    account key than the one now active → leave the marker and the data
+    alone, log why (`console.info`, not a warning — this is an expected
+    "not yet," not a failure), and rely on the marker staying valid
+    indefinitely (it isn't time-boxed) so switching back to the originally-
+    consented profile later — including via §10.31's switcher, which reuses
+    this same boot path — still resumes it correctly; a match → call
+    `finishConsentedAdoption`, self-catching (a fire-and-forget background
+    task must never fail the boot it rides on — a failure here just leaves
+    the marker for the next boot to try again). Takes a `ProfileRecord`
+    parameter rather than looking up the active profile itself, deliberately:
+    `boot.ts` (its one caller) already has it from the bind this runs
+    alongside, and pulling in `repoProvider.ts` here would reopen the exact
+    `@/lib/profiles` barrel cycle `switchProfile.ts` already had to route
+    around (`repoProvider.ts` → the barrel → `adoption.ts`).
+  - **`boot.ts`'s `runOnce()`** calls `resumePendingAdoption(binding.profile)`
+    fire-and-forget (`void`, never awaited — this must not add latency to
+    every boot for the overwhelmingly common case of nothing pending), once
+    per genuine (re)bind — placed _after_ the existing no-op short-circuit
+    (`!isRebind && status === 'ready'`), so a `BootGate` remount on the same
+    already-bound profile (e.g. navigating between `/` and `/settings`)
+    doesn't re-check on every render, only an actual login/restore/hydrate/
+    switch does.
+  - **Where the resume hook lives, and why not `authStore.ts`'s
+    `restore()`/`hydrate()`** (the track's own original reasoning for
+    keeping the _offer_ out of those two): that reasoning was about not
+    popping an unprompted modal mid-session, which no longer applies here —
+    there is no prompt at all, only a silent background move. `boot.ts` was
+    chosen anyway, over adding the same check to three separate authStore.ts
+    entry points (`login`/`restore`/`hydrate`), because it is the one place
+    every one of those paths — plus a §10.31 switch — already funnels
+    through to resolve and bind a profile; one hook there covers all of them
+    identically, with no risk of one entry point's copy drifting from
+    another's, and needs no `authStore.ts` coupling at all (`boot.ts` never
+    imports it) since the account-match guard only needs the bound
+    `ProfileRecord`'s own `accountKey` field, never the live Google session.
+  - **TDD**, per the operator's brief: the three named cases —
+    interrupted-then-resumed, wrong-account, and completion-clears-the-marker
+    — were written first in `profiles/adoption.test.ts` and watched fail
+    (`resumePendingAdoption is not a function`) before any implementation
+    landed; same for `deviceStore.test.ts`'s new table (watched fail on the
+    missing `deviceDb.adoptionConsent`/exports). `boot.test.ts`'s wiring
+    assertion (`resumePendingAdoption` called once per genuine bind, not on
+    a no-op remount) was written and verified green after the `boot.ts`
+    change rather than before it — a real deviation from strict red-green
+    for that one file, noted rather than glossed over; it is plumbing
+    around the three money-critical cases above, not one of them.
+  - **A known, accepted narrow gap, not closed here:** the consent marker
+    is a single synthetic row — "the" pending adoption, not one per profile.
+    Two different accounts each separately consenting to adopt the _same_
+    still-present local snapshot (possible today independent of this fix,
+    since nothing deletes the guest data until its own `bulkDelete` lands)
+    would have the second account's `setAdoptionConsent` overwrite the
+    first's still-pending marker. This never loses locally-visible data —
+    by the time a second account could even be offered the prompt, the
+    first account's `bulkPut` step (fast, first, and by far the most likely
+    to have completed) already has a full copy — but the first account's
+    outbox enqueue could be left permanently unfinished if interrupted at
+    exactly that point and never revisited. Consistent with every other
+    device-wide marker in this file (`adoptionDeclined`, `activeProfile`)
+    already being single-slot, not a new class of limitation; not fixed
+    here since the operator's brief describes a single profile+account pair
+    by name ("The record must name which profile was the target") and a
+    per-profile consent table is a real design change, not a bug fix.
+  - `bun run check` green: 145 files, 1,563 tests (17 new).
 
 ### Development waves (parallel tracks, sequencing, worktree log)
 
