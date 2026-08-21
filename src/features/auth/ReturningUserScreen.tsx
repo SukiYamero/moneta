@@ -5,6 +5,7 @@ import { useAuthStore } from '@/lib/authStore'
 import { listProfiles, type ProfileRecord } from '@/lib/profiles'
 import { getInitials } from '@/features/home/homeView'
 import { loginErrorCopy } from '@/features/auth/errorCopy'
+import { GoogleSignInButton } from '@/features/auth/GoogleSignInButton'
 
 const firstNameOf = (fullName: string): string => fullName.trim().split(/\s+/)[0] ?? ''
 
@@ -105,18 +106,11 @@ export const ReturningUserScreen = () => {
             {t(loginErrorCopy(error))}
           </p>
         ) : null}
-        <button
-          type="button"
-          onClick={() => void login()}
-          disabled={busy}
-          className="flex h-14 items-center justify-center gap-3 rounded-2xl bg-white text-base font-bold text-neutral-900 shadow-[0_8px_24px_rgba(0,0,0,.3)] transition-opacity disabled:opacity-60"
-        >
-          {busy
-            ? t('welcome.connecting')
-            : firstName
-              ? t('return.continueCtaNamed', { name: firstName })
-              : t('return.continueCtaGeneric')}
-        </button>
+        <GoogleSignInButton onClick={() => void login()} busy={busy}>
+          {firstName
+            ? t('return.continueCtaNamed', { name: firstName })
+            : t('return.continueCtaGeneric')}
+        </GoogleSignInButton>
         <button
           type="button"
           onClick={() => void login()}

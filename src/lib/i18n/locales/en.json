@@ -29,7 +29,7 @@
       "greetingNamed": "Welcome back, {{name}}",
       "greetingGeneric": "Welcome back",
       "subtitle": "Your session expired for security.",
-      "reassurance": "If you had data saved, it's still on this device.",
+      "reassurance": "Signing back in won't touch anything already on this device.",
       "expiredChip": "Expired",
       "continueCtaNamed": "Continue as {{name}}",
       "continueCtaGeneric": "Continue with Google",

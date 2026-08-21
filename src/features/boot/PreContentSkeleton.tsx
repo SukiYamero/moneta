@@ -17,6 +17,15 @@ const noop = () => {}
  * is still resolving) and `BootGate` (while the profile/data bind is still
  * running), so the two spans render the same output and the handoff between
  * them is never itself a visual change.
+ *
+ * The `BottomNav` is real chrome, but `inert` here: its Home/History/Search
+ * tabs are genuine `NavLink`s and would otherwise navigate the router while
+ * this span is still up (the layout route's `RequireAuth`/`BootGate` don't
+ * remount on that navigation, so the tap would silently redirect where the
+ * app lands once it finishes booting, without changing anything on screen
+ * in the meantime) — and the Add/Profile buttons are wired to `noop` since
+ * their sheets need feature state this span doesn't have. `inert` keeps
+ * both non-interactive without a different visual treatment.
  */
 export const PreContentSkeleton = () => (
   <div className="relative flex min-h-dvh flex-col bg-background text-foreground">
@@ -25,6 +34,8 @@ export const PreContentSkeleton = () => (
         <HomeLoadingState />
       </main>
     </div>
-    <BottomNav profileOpen={false} onOpenProfile={noop} addOpen={false} onOpenAdd={noop} />
+    <div inert>
+      <BottomNav profileOpen={false} onOpenProfile={noop} addOpen={false} onOpenAdd={noop} />
+    </div>
   </div>
 )

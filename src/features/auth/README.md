@@ -51,11 +51,21 @@ Onboarding screens and the route guard that sits in front of the app.
   `login()` — GIS's own popup is the real account chooser, this app has no
   separate one. No guest option, no value proposition, no legal copy.
   Degrades to a generic greeting/CTA (no name) when the registry has nothing
-  yet or ever — never a blank. The reassurance line is worded to stay true
-  whether or not local data actually survived ("si tenías datos guardados,
-  siguen en este dispositivo"), not asserted unconditionally the way the
-  export's mock copy does — the dishonest-UI class of defect §10.21 names
-  explicitly.
+  yet or ever — never a blank. The reassurance line ("volver a iniciar
+  sesión no toca lo que ya está guardado en este dispositivo") claims only
+  what signing back in does, never what state local storage is currently
+  in — the marker only proves a session once existed, not that data
+  survived (a browser can evict IndexedDB), so a line that asserts survival
+  ("si tenías datos guardados, siguen en este dispositivo") is unsafe even
+  phrased conditionally: it is false in exactly the eviction case §10.21
+  warns about. This is the dishonest-UI class of defect §10.21 names
+  explicitly, and the reason it isn't gated on an actual local-data check is
+  that the screen has no repo access yet at this point in boot (§10.21's own
+  blast radius keeps this track out of `dataStore`).
+- `GoogleSignInButton.tsx` — the shared white/G-mark button surface both
+  `WelcomeScreen` and `ReturningUserScreen` render for their primary CTA
+  (busy label swap included), so the one Google-branded control in the app
+  has one definition instead of two independently hand-rolled copies.
 - `errorCopy.ts` — maps a raw `AuthError`/`DriveError` message to a
   translation key in the `auth` namespace's `errors` group
   (`loginErrorCopy`, `driveErrorCopy`) — never the raw message

@@ -29,7 +29,7 @@
       "greetingNamed": "Hola de nuevo, {{name}}",
       "greetingGeneric": "Hola de nuevo",
       "subtitle": "Tu sesión caducó por seguridad.",
-      "reassurance": "Si tenías datos guardados, siguen en este dispositivo.",
+      "reassurance": "Volver a iniciar sesión no toca lo que ya está guardado en este dispositivo.",
       "expiredChip": "Caducada",
       "continueCtaNamed": "Continuar como {{name}}",
       "continueCtaGeneric": "Continuar con Google",

@@ -119,11 +119,14 @@ describe('ReturningUserScreen', () => {
   })
 
   // specs.md §10.21: the reassurance line must be true whether or not local
-  // data actually survived — worded conditionally rather than asserted
-  // unconditionally (the export's own dishonest-UI gap).
-  it('words the reassurance line conditionally rather than asserting data is present', async () => {
+  // data actually survived. "If you had data, it's still here" is not safe
+  // wording — the login marker only proves a session once existed, so that
+  // claim is false in exactly the eviction case the spec warns about. What
+  // signing back in does to local data is verifiable without checking the
+  // store at all: it never touches it.
+  it('reassures with a claim that is true regardless of whether local data survived', async () => {
     render(<ReturningUserScreen />)
     await waitFor(() => expect(screen.getByRole('heading')).toBeInTheDocument())
-    expect(screen.getByText(/si tenías datos guardados/i)).toBeInTheDocument()
+    expect(screen.getByText(/no toca lo que ya está guardado/i)).toBeInTheDocument()
   })
 })
