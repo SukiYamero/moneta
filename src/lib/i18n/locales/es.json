@@ -444,17 +444,48 @@
   },
   "lock": {
     "screen": {
+      "title": "Ingresá tu PIN",
+      "subtitlePin": "Ingresá tu PIN de 4 dígitos",
+      "subtitleBiometric": "Usá tu huella o ingresá tu PIN",
       "pinLabel": "PIN",
       "biometricCta": "Desbloquear con biometría",
-      "unlockCta": "Desbloquear"
+      "deleteCta": "Borrar",
+      "forgotCta": "Olvidé mi PIN",
+      "guestTitle": "Confirmá tu identidad",
+      "guestSubtitle": "Usá tu huella o Face ID para continuar",
+      "guestRetryCta": "Reintentar"
+    },
+    "forgotConfirm": {
+      "title": "¿Restablecer el acceso?",
+      "description": "Sin el PIN no podemos abrir los datos de este dispositivo: se van a borrar y vas a tener que iniciar sesión de nuevo.",
+      "confirmCta": "Borrar y salir",
+      "cancelCta": "Cancelar"
     },
     "settings": {
-      "activeNote": "Bloqueo activo",
+      "panelTitle": "Bloqueo con PIN",
+      "panelSubtitle": "Protegé la app en este dispositivo",
+      "back": "Atrás",
+      "pinRowLabel": "Pedir PIN al abrir",
+      "pinRowSubcopy": "4 dígitos, solo en este teléfono",
+      "changePinCta": "Cambiar PIN",
       "lockNowCta": "Bloquear ahora",
-      "disableCta": "Desactivar",
-      "pinLabel": "PIN (4 dígitos)",
-      "biometricToggleLabel": "Usar biometría",
-      "enableCta": "Activar bloqueo"
+      "footerPolicy": "El PIN se guarda solo en este dispositivo. Si lo olvidás podés desactivarlo desde la pantalla de bloqueo.",
+      "statusActive": "Activado",
+      "statusInactive": "Desactivado",
+      "biometricRowLabel": "Usar también biometría",
+      "biometricRowSubcopy": "Desbloqueá más rápido con tu huella o Face ID",
+      "guestRowLabel": "Bloqueo con huella",
+      "guestRowSubcopy": "Pedí tu huella o Face ID al volver a abrir la app"
+    },
+    "setup": {
+      "kickerNew": "Nuevo PIN",
+      "kickerChange": "Cambiar PIN",
+      "close": "Cerrar",
+      "titleCreate": "Elegí un PIN de 4 dígitos",
+      "titleConfirm": "Repetí tu PIN",
+      "hintCreate": "Lo vas a necesitar cada vez que abras la app.",
+      "hintConfirm": "Para confirmar que lo recordás.",
+      "mismatch": "Los PIN no coinciden"
     },
     "dismiss": "Cerrar",
     "errors": {

@@ -19,6 +19,11 @@ const UNLOCK_ERROR_KEY: Record<string, LockErrorKey> = {
   [LOCKED_OUT_ERROR]: 'errors.lockedOut',
   'lock: wrong pin': 'errors.wrongPin',
   'lock: biometric unavailable': 'errors.biometricUnavailable',
+  // GuestBiometricUnavailableError's own message (pinLock.ts) — the guest
+  // path (specs.md §10.2.1) has no PIN to fall back to, so this reuses the
+  // account path's "biometrics aren't available" copy rather than adding a
+  // near-duplicate locale key for the same meaning.
+  'lock: guest biometric unavailable': 'errors.biometricUnavailable',
   [SESSION_RESTORE_ERROR]: 'errors.sessionRestoreFailed',
 }
 

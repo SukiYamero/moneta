@@ -9,9 +9,9 @@ import type { ToastMessageKey } from '@/lib/toastStore'
 // `AppLock.test.tsx`'s own `T` helper already uses for toast copy.
 const T = (key: Extract<ToastMessageKey, `lock:${string}`>): string => i18next.t(key)
 
-const enable = vi.fn()
-const lock = vi.fn()
+const lockFn = vi.fn()
 const reset = vi.fn()
+const enable = vi.fn()
 
 let state: Record<string, unknown> = {}
 vi.mock('@/lib/lockStore', () => ({
@@ -23,54 +23,55 @@ vi.mock('@/lib/lockStore', () => ({
 
 import { LockSettings } from '@/features/lock/LockSettings'
 
-test('activating with a 4-digit PIN calls enable', async () => {
-  state = { enabled: false, biometricAvailable: false, enable, lock, reset }
+const baseState = { enabled: false, biometricAvailable: false, lock: lockFn, reset, enable }
+
+test('turning the toggle on opens PIN setup instead of enabling directly', async () => {
+  state = { ...baseState }
   const user = userEvent.setup()
-  render(<LockSettings />)
-  await user.type(screen.getByLabelText(T('lock:settings.pinLabel')), '1234')
-  await user.click(screen.getByRole('button', { name: T('lock:settings.enableCta') }))
-  expect(enable).toHaveBeenCalledWith('1234', false)
+  render(<LockSettings open onClose={vi.fn()} />)
+  await user.click(screen.getByRole('switch', { name: T('lock:settings.pinRowLabel') }))
+  expect(screen.getByText(T('lock:setup.titleCreate'))).toBeInTheDocument()
+  expect(enable).not.toHaveBeenCalled()
 })
 
-test('when enabled, "Lock now" re-locks', async () => {
-  state = { enabled: true, biometricAvailable: false, enable, lock, reset }
+test('when enabled, "Cambiar PIN" opens PIN setup in change mode', async () => {
+  state = { ...baseState, enabled: true }
   const user = userEvent.setup()
-  render(<LockSettings />)
+  render(<LockSettings open onClose={vi.fn()} />)
+  await user.click(screen.getByRole('button', { name: T('lock:settings.changePinCta') }))
+  expect(screen.getByRole('dialog', { name: T('lock:setup.kickerChange') })).toBeInTheDocument()
+})
+
+test('when enabled, "Bloquear ahora" re-locks', async () => {
+  state = { ...baseState, enabled: true }
+  const user = userEvent.setup()
+  render(<LockSettings open onClose={vi.fn()} />)
   await user.click(screen.getByRole('button', { name: T('lock:settings.lockNowCta') }))
-  expect(lock).toHaveBeenCalled()
+  expect(lockFn).toHaveBeenCalled()
 })
 
-test('shows an actionable error when enabling fails — never the raw message', async () => {
-  const failingEnable = vi.fn().mockRejectedValue(new Error('lock: no session to protect'))
-  state = { enabled: false, biometricAvailable: false, enable: failingEnable, lock, reset }
+test('turning the toggle off disables the lock via reset()', async () => {
+  state = { ...baseState, enabled: true }
   const user = userEvent.setup()
-  render(<LockSettings />)
-  await user.type(screen.getByLabelText(T('lock:settings.pinLabel')), '1234')
-  await user.click(screen.getByRole('button', { name: T('lock:settings.enableCta') }))
-  expect(await screen.findByRole('alert')).toHaveTextContent(T('lock:errors.noSession'))
-  expect(screen.queryByText(/no session to protect/i)).not.toBeInTheDocument()
+  render(<LockSettings open onClose={vi.fn()} />)
+  await user.click(screen.getByRole('switch', { name: T('lock:settings.pinRowLabel') }))
+  expect(reset).toHaveBeenCalled()
 })
 
-// Finding 5: "Desactivar" called `void reset()` directly, with no local
-// try/catch — docs/error-handling.md §7 permits a bare `void action()` only
-// when the store action self-catches, and reset() doesn't (resetVault()'s
-// db.vault.delete can throw under the same storage conditions as finding 1).
-// Give it the same local-handler shape "Activar lock" already has.
-test('shows an actionable error when disabling the lock fails, instead of failing silently', async () => {
+test('shows an actionable error when disabling the lock fails', async () => {
   const failingReset = vi.fn().mockRejectedValue(new Error('IDB blocked'))
-  state = { enabled: true, biometricAvailable: false, enable, lock, reset: failingReset }
+  state = { ...baseState, enabled: true, reset: failingReset }
   const user = userEvent.setup()
-  render(<LockSettings />)
-  await user.click(screen.getByRole('button', { name: T('lock:settings.disableCta') }))
+  render(<LockSettings open onClose={vi.fn()} />)
+  await user.click(screen.getByRole('switch', { name: T('lock:settings.pinRowLabel') }))
   expect(await screen.findByRole('alert')).toHaveTextContent(T('lock:errors.disableDefault'))
 })
 
-test('"Desactivar" clears any previous error once it succeeds', async () => {
-  const okReset = vi.fn().mockResolvedValue(undefined)
-  state = { enabled: true, biometricAvailable: false, enable, lock, reset: okReset }
+test('the back button closes the panel', async () => {
+  state = { ...baseState }
+  const onClose = vi.fn()
   const user = userEvent.setup()
-  render(<LockSettings />)
-  await user.click(screen.getByRole('button', { name: T('lock:settings.disableCta') }))
-  expect(okReset).toHaveBeenCalled()
-  expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  render(<LockSettings open onClose={onClose} />)
+  await user.click(screen.getByRole('button', { name: T('lock:settings.back') }))
+  expect(onClose).toHaveBeenCalled()
 })
