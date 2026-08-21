@@ -84,9 +84,10 @@ device-scoped databases because this step was skipped.
   itself must change, it stops and escalates: `docs/pendientes-usuario.md`
   item 5 is still open (the user has not yet seen it running) and a track
   must not redesign a screen awaiting the user's own eye.
-- **`src/components/shared/**`— AD only, additively.** The export uses one
-brand mark on Welcome / Return / Drive-permission. If AD extracts it, it is
-a new file; AE and AF add nothing there. AF's keypad lives inside`src/features/lock/`, not in shared — it has exactly one consumer.
+- **The `src/components/shared/` tree — AD only, and additively.** The export
+  uses one brand mark on Welcome / Return / Drive-permission. If AD extracts
+  it, it is a new file; AE and AF add nothing there. AF's keypad lives inside
+  `src/features/lock/`, not in shared — it has exactly one consumer.
 - **`src/routes/Kit.tsx` — nobody.** No stage-1 track adds a primitive that
   belongs in the gallery. If one thinks it does, escalate rather than edit.
 - **`src/lib/boot.ts` — AD, and AG must wait.** AD reshapes the gate above
