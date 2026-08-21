@@ -108,6 +108,37 @@ describe('RequireAuth', () => {
     expect(screen.getByText('secret')).toBeInTheDocument()
   })
 
+  // specs.md §10.32: a modal over the settled app, not a second full-screen
+  // gate — children render underneath it, not instead of it.
+  it('renders the guest-adoption prompt alongside children, once Drive opt-in is resolved, when there is a pending offer', () => {
+    useAuthStore.setState({
+      status: 'authenticated',
+      driveOptIn: 'connected',
+      pendingAdoption: { profileId: 'p1', count: 4 },
+    })
+    render(
+      <RequireAuth>
+        <div>secret</div>
+      </RequireAuth>,
+    )
+    expect(screen.getByText('secret')).toBeInTheDocument()
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+  })
+
+  it('renders no adoption dialog when there is nothing pending — the overwhelmingly common case', () => {
+    useAuthStore.setState({
+      status: 'authenticated',
+      driveOptIn: 'connected',
+      pendingAdoption: null,
+    })
+    render(
+      <RequireAuth>
+        <div>secret</div>
+      </RequireAuth>,
+    )
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
   it('renders authenticated children instantly, never gated on the returning-device marker', () => {
     // Already 'authenticated' at mount (e.g. a lock-screen unlock handoff) —
     // must not wait on hasLoggedInBefore() at all, which this test leaves

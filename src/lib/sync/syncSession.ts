@@ -1,5 +1,5 @@
 import { DRIVE_SCOPES, requestAccessToken } from '@/lib/auth'
-import { useAuthStore } from '@/lib/authStore'
+import { accountKeyOf, useAuthStore } from '@/lib/authStore'
 import { i18next } from '@/lib/i18n'
 import { isSupportedLocale, type SupportedLocale } from '@/lib/i18n/resources'
 import { useOutboxStore } from '@/lib/outbox'
@@ -63,19 +63,28 @@ const reacquireDriveToken = async (): Promise<string | null> => {
  * Eligible only with a Drive-scoped session (`drive !== null` — set only by
  * `connectDrive()`/`reacquireDriveIfNeeded()`, always alongside the
  * matching `session`, so the two are never mismatched — see
- * `authStore.ts`'s own comments) and an active profile already bound by the
- * boot sequence. A guest (`status !== 'authenticated'`) and a signed-in
- * user who never connected Drive (`drive === null`) both resolve to `null`
- * here, which is what keeps `startSyncTriggers`' every trigger a safe
- * no-op for them — specs.md §10.26's "a guest must never start triggers"
- * is enforced by never handing them a context, not by a separate guard.
+ * `authStore.ts`'s own comments), an active profile already bound by the
+ * boot sequence, and — specs.md §10.31 §4 — that bound profile actually
+ * belonging to the currently authenticated account. Before the switcher
+ * existed the bound profile and the authenticated account were always the
+ * same thing by construction; the switcher breaks that assumption on
+ * purpose ("switching to a Google profile you are not currently signed
+ * into shows its local data with sync off"), so this can no longer be
+ * inferred from `status`/`drive` alone. A guest (`status !== 'authenticated'`),
+ * a signed-in user who never connected Drive (`drive === null`), and a
+ * profile switched away from the signed-in account's own all resolve to
+ * `null` here, which is what keeps `startSyncTriggers`' every trigger a
+ * safe no-op for them — specs.md §10.26's "a guest must never start
+ * triggers" is enforced by never handing them a context, not by a separate
+ * guard.
  */
 export const getSyncContext = async (): Promise<SyncContext | null> => {
-  const { status, drive, session } = useAuthStore.getState()
+  const { status, drive, session, user } = useAuthStore.getState()
   if (status !== 'authenticated' || drive === null || session === null) return null
 
   const binding = getActiveProfileBinding()
   if (!binding) return null
+  if (binding.profile.accountKey !== accountKeyOf(user)) return null
 
   const token =
     Date.now() >= session.expiresAt - TOKEN_REFRESH_SKEW_MS

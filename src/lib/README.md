@@ -49,47 +49,57 @@ Shared stores, helpers, and the Drive/auth/lock logic layer. No UI here.
 - `auth.ts` — GIS token-client wrapper: identity scopes at login, Drive
   scopes requested incrementally via `connectDrive`.
 - `authStore.ts` — zustand store wrapping `auth.ts`; owns session status and
-  triggers `bootstrap.ts` through `connectDrive`. Also owns
-  `continueAsGuest()`, the guest entry path (`status: 'guest'`, distinct
-  from `'authenticated'` — never a synthesized user, `specs.md` §10.10) —
-  it also touches the default local profile's recency
-  (`profiles.touchLastUsed(DEFAULT_PROFILE_ID)`), so `getActiveProfile()`'s
-  purely-recency resolution can't land a guest in whatever Google account
-  was last signed out of (`specs.md` §10.28). `continueAsGuest()` is `async`
-  internally (typed `() => void` on `AuthState` — callers stay
-  fire-and-forget) specifically to `await` that touch _before_ the `status`
-  flip, not after: `status: 'guest'` is what `RequireAuth` renders
-  `BootGate` on, and `BootGate`'s effect reads the registry close enough
-  behind it that the unawaited shape lost that race on every run (found and
-  fixed during this track's own review — see `specs.md` §11, 2026-08-20).
-  `restore()`/`hydrate()` no longer gate entry on a network call
-  (`specs.md` §10.11): a returning user reaches `authenticated` from local
-  evidence alone (the device's login marker, or the PIN-vault's cached
+  triggers `bootstrap.ts` through `connectDrive`. Exports `accountKeyOf(user)`
+  (`user.sub ?? user.email`, `specs.md` §11 2026-08-19's `sub`-over-`email`
+  reasoning) so `sync/syncSession.ts` and `profiles/switchProfile.ts` can
+  compare "is the bound profile the currently authenticated account's own"
+  without each re-deriving the same fallback. Also owns `continueAsGuest()`,
+  the guest entry path (`status: 'guest'`, distinct from `'authenticated'` —
+  never a synthesized user, `specs.md` §10.10) — it also sets the explicit
+  active-profile pointer to the default local profile
+  (`profiles.setActiveProfileId(DEFAULT_PROFILE_ID)`, `specs.md` §10.31 §1),
+  so `getActiveProfile()` can't land a guest in whatever Google account was
+  last signed out of. This replaced a `touchLastUsed(DEFAULT_PROFILE_ID)`
+  recency-race workaround that only existed because the active profile used
+  to be inferred by recency alone — with an explicit pointer, recency is
+  purely the fallback for a device that never opened the switcher.
+  `continueAsGuest()` is `async` internally (typed `() => void` on
+  `AuthState` — callers stay fire-and-forget) specifically to `await` that
+  pointer write _before_ the `status` flip, not after: `status: 'guest'` is
+  what `RequireAuth` renders `BootGate` on, and `BootGate`'s effect reads the
+  registry close enough behind it that the unawaited shape lost that race on
+  every run (found and fixed during Track AF's own review — see `specs.md`
+  §11, 2026-08-20). `restore()`/`hydrate()` no longer gate entry on a network
+  call (`specs.md` §10.11): a returning user reaches `authenticated` from
+  local evidence alone (the device's login marker, or the PIN-vault's cached
   session/profile) when offline, with `fetchGoogleUser()` running as a
   best-effort background refresh, never a blocking gate. `login()`/
   `restore()`'s online branch resolve the account's profile-registry entry
-  (`syncProfileForAccount`) _before_ flipping `status` to `'authenticated'`,
-  not after (`specs.md` §10.28) — otherwise `src/lib/boot.ts` could read the
-  active-profile registry the instant `status` flips and resolve whichever
-  profile recency last pointed at, not the one that just signed in.
-  `hydrate()` needs no equivalent reordering: `lockStore.resume()` already
-  awaits its whole promise before leaving `phase: 'locked'`, so the profile
-  sync is done before anything below the lock screen can render. `logout()`
-  also calls `boot.ts`'s `invalidateBootForSignOut()` — see that function's
-  own comment for why a stale `useBootStore` status is otherwise a second,
-  independent way the same class of bug resurfaces.
+  and set the active-profile pointer (`syncProfileForAccount`) _before_
+  flipping `status` to `'authenticated'`, not after (`specs.md` §10.28) —
+  otherwise `src/lib/boot.ts` could read the active-profile registry the
+  instant `status` flips and resolve whichever profile was previously
+  active, not the one that just signed in. `hydrate()` needs no equivalent
+  reordering: `lockStore.resume()` already awaits its whole promise before
+  leaving `phase: 'locked'`, so the profile sync is done before anything
+  below the lock screen can render. `logout()` also calls `boot.ts`'s
+  `invalidateBootForSignOut()` — see that function's own comment for why a
+  stale `useBootStore` status is otherwise a second, independent way the
+  same class of bug resurfaces.
   `continueAsGuest()` also calls `deviceStore.markGuestUsed()` (`specs.md`
   §10.33) — the device-local signal `restore()` and `RequireAuth` both read
-  to recognise a returning guest, alongside `touchLastUsed`, awaited before
-  the same `status` flip for the same race-avoidance reason. `restore()`
-  gained a second branch: when `hasLoggedInBefore()` is false (checked
-  first — the account marker wins whenever both exist), it now also checks
-  `hasUsedGuestBefore()` and lands directly on `status: 'guest'` rather than
-  `'idle'`. `login()`'s success path calls `clearGuestUsed()` unconditionally
-  (self-catching, so a no-op when there was nothing to clear) — signing in
-  with Google is one of the two ways §10.33 requires the guest marker to be
-  cleared, since a marker that outlives the choice would send a signed-in
-  user back into guest mode on the next cold start.
+  to recognise a returning guest, alongside the pointer write, awaited
+  before the same `status` flip for the same race-avoidance reason.
+  `restore()` gained a second branch: when `hasLoggedInBefore()` is false
+  (checked first — the account marker wins whenever both exist), it now
+  also checks `hasUsedGuestBefore()` and lands directly on `status: 'guest'`
+  rather than `'idle'`. `login()`'s success path also checks for local
+  guest data to offer for adoption (`specs.md` §10.32, see `profiles/
+adoption.ts`'s own comment) before calling `clearGuestUsed()`
+  unconditionally (self-catching, so a no-op when there was nothing to
+  clear) — signing in with Google is one of the two ways §10.33 requires
+  the guest marker to be cleared, since a marker that outlives the choice
+  would send a signed-in user back into guest mode on the next cold start.
 - `drive.ts` — thin Drive REST client: find/create/read/write/delete a
   file or folder, `listFiles()` (paginated `files.list`, the sync engine's
   revision check), `upsertJsonFile`/`upsertTextFile` (find-or-create-then-
@@ -131,7 +141,14 @@ name>>` table (`specs.md` §10.22 Decision 6/§10.25 addendum) — ids never
   database of their own as first built. `createProfileDb(name)` is the factory behind it
   (`specs.md` §10.15): `db` is `createProfileDb('kurobello')`, the frozen
   first profile, and every additional profile calls the same factory
-  against a suffixed name via `profiles/`.
+  against a suffixed name via `profiles/`. `v4` additively adds
+  `profileOwner` (`specs.md` §10.31 §2) — a single-row owner marker
+  (`kind`/`accountKey`/`createdAt`) written inside each profile's own
+  database, not only the device-scoped registry, so a database can identify
+  itself if the registry is ever lost or corrupted. `profiles/
+profileOwner.ts` owns reading/writing it (`ensureOwnerMarker`/
+  `readOwnerMarker`); `repoProvider.ts`'s `resolveActiveProfileBinding()`
+  ensures it on every bind.
 - `pinLock.ts` — WebCrypto envelope encryption for the cached token
   (PIN + optional biometric via WebAuthn PRF). The vault's plaintext is a
   versioned envelope (`{ v: 2, session, user }`, decoded backward-compatibly
@@ -244,7 +261,15 @@ name>>` table (`specs.md` §10.22 Decision 6/§10.25 addendum) — ids never
   guest-mode exit (`specs.md` §10.10/§10.18 — there is no separate exit
   action, `IdentitySection`'s guest row calls the exact same `login()`); a
   marker that outlived the choice would send a signed-in user back into
-  guest mode on the next cold start.
+  guest mode on the next cold start. `v9` adds two more: `activeProfile`
+  (`specs.md` §10.31 §1) — the explicit active-profile pointer,
+  `profiles/profileRegistry.ts`'s own table (`getActiveProfileId`/
+  `setActiveProfileId`), consulted before that module's old recency-only
+  resolution; and `adoptionDeclined` (`specs.md` §10.32) — the device-wide
+  "already answered the guest-data adoption prompt with no" marker,
+  presence-only like `guestMarker`, since "nothing local left to bring"
+  already suppresses the prompt on its own once an acceptance empties the
+  local profile.
 - `networkStore.ts` — a small, self-initialising zustand store (attaches
   `online`/`offline` listeners at module scope, since `main.tsx` is another
   track's file) owning the online/offline hint plus the 7-hour offline
@@ -399,7 +424,22 @@ name>>` table (`specs.md` §10.22 Decision 6/§10.25 addendum) — ids never
   pull exists (see `lastHlcFor`'s own comment for the traced bug).
   `observeRemoteHlc`/`clampOutboxClockToServer` expose the one clock
   instance this module owns to `sync/engine.ts`, since nothing else may
-  mutate it directly.
+  mutate it directly. `enqueueOperation`/`listPendingOperations`/
+  `removeOperations` all take an **optional** `database: ProfileDb` — every
+  ordinary caller (`dataStore.ts`'s write path, `bootstrap.ts`, the
+  sign-out confirm count) omits it and reads/writes whatever
+  `setOutboxDatabase()` currently points to, but `sync/engine.ts`'s
+  `pull()`/`push()` pass the pulling/pushing profile's own database
+  explicitly (`specs.md` §10.31 edge case, the traced bug this closes,
+  §12 2026-08-20): a Drive round trip is long enough for a profile switch
+  to redirect the module-level binding mid-flight, and a call already in
+  progress for profile A must keep reading/writing profile A's own table
+  regardless of what the module points to by the time it resumes —
+  otherwise `push()`'s final `removeOperations` could drain the _new_
+  profile's outbox instead, stranding A's already-uploaded ops as
+  permanently "pending." `profiles/adoption.ts` (`specs.md` §10.32) is the
+  other caller that passes an explicit database — it writes directly into a
+  profile that may not be the active one at all.
 - `repoProvider.ts` — the single swap point every screen reads through,
   never importing `repo.fake.ts`/`repo.local.ts` directly. `getRepo(): Repo`
   is synchronous and serves the binding `src/lib/boot.ts` establishes once
@@ -407,33 +447,42 @@ name>>` table (`specs.md` §10.22 Decision 6/§10.25 addendum) — ids never
   fake repo) if called before that binding exists, which every real call
   site can't do: they all render behind `BootGate`.
   `resolveActiveProfileBinding()` resolves the active profile, opens its
-  database and returns `{ profile, database, repo }` together
-  (`getActiveProfileRepo()` is a thin convenience wrapper around it for a
-  caller that only wants the repo); `bindActiveProfile()`/
-  `getActiveProfileBinding()` are the module-level binding `getRepo()`
-  reads and `boot.ts` writes.
+  database, ensures its owner marker (`profiles/profileOwner.ts`'s
+  `ensureOwnerMarker`, `specs.md` §10.31 §2) and returns `{ profile,
+database, repo }` together (`getActiveProfileRepo()` is a thin
+  convenience wrapper around it for a caller that only wants the repo);
+  `bindActiveProfile()`/`getActiveProfileBinding()` are the module-level
+  binding `getRepo()` reads and `boot.ts` writes.
 - `boot.ts` — the boot sequence (`specs.md` §10.28): `useBootStore.run()`
   resolves the active profile, binds it (`repoProvider.bindActiveProfile()`)
   and redirects the outbox to it (`outbox.setOutboxDatabase()`), resets and
-  reloads `dataStore` on a genuine rebind (switching accounts — never on a
-  same-profile repeat call, which is an idempotent no-op so navigating
-  between top-level routes can't re-trigger a reload), then lands in
-  `'ready'` or `'error'`. Its concurrency guard is a plain module variable,
-  not the public `status` field — `status` only flips to `'running'` when a
-  reload is actually about to happen, which is what lets
-  `src/features/boot/BootGate.tsx` skip the brand screen entirely on a
-  same-profile remount. That same `status` is a module-global singleton,
-  though, so a stale `'ready'` left over from a _previous_ session is
-  otherwise indistinguishable from "already ready for the profile this
-  mount is about to resolve" — `invalidateBootForSignOut()` resets it back
-  to `'idle'`, and `authStore.ts`'s `logout()` is its one caller (found and
-  fixed during this track's own review, `specs.md` §11, 2026-08-20).
-  Consumed by `BootGate`, own `README.md` there.
-- `profiles/` — the device-scoped profile registry (`specs.md` §10.15). One
-  dexie database per profile (via `db.ts`'s `createProfileDb()`); the
-  registry itself lives in `deviceStore.ts`'s shared `kurobello-device`
-  connection (its `profiles` table). `getActiveProfile()` resolves which one
-  is active by recency, with no switcher UI yet. Own `README.md`.
+  reloads `dataStore` on a genuine rebind (switching accounts, or a profile
+  switch — never on a same-profile repeat call, which is an idempotent
+  no-op so navigating between top-level routes can't re-trigger a reload),
+  then lands in `'ready'` or `'error'`. `profiles/switchProfile.ts` (`specs.md`
+  §10.31) is what reuses this path for a deliberate switch: it sets the
+  explicit active-profile pointer, then calls `useBootStore.getState().run()`
+  directly — the exact same rebind, not a second one. Its concurrency guard
+  is a plain module variable, not the public `status` field — `status` only
+  flips to `'running'` when a reload is actually about to happen, which is
+  what lets `src/features/boot/BootGate.tsx` skip the brand screen entirely
+  on a same-profile remount. That same `status` is a module-global
+  singleton, though, so a stale `'ready'` left over from a _previous_
+  session is otherwise indistinguishable from "already ready for the
+  profile this mount is about to resolve" — `invalidateBootForSignOut()`
+  resets it back to `'idle'`, and `authStore.ts`'s `logout()` is its one
+  caller (found and fixed during Track AB's own review, `specs.md` §11,
+  2026-08-20). Consumed by `BootGate`, own `README.md` there.
+- `profiles/` — the device-scoped profile registry, the owner marker, and
+  the switcher (`specs.md` §10.15, §10.31). One dexie database per profile
+  (via `db.ts`'s `createProfileDb()`); the registry itself lives in
+  `deviceStore.ts`'s shared `kurobello-device` connection (its `profiles`
+  table). `getActiveProfile()` consults an explicit active-profile pointer
+  first (`profiles/profileRegistry.ts`'s `getActiveProfileId`/
+  `setActiveProfileId`, on the same connection's `activeProfile` table),
+  falling back to recency only for a device that has never made an
+  explicit choice. `profiles/switchProfile.ts`'s `switchToProfile()` is the
+  switcher itself. Own `README.md`.
 - `repo.contract.ts` — shared `Repo` behavior every implementation must
   agree on (`testRepoContract()`), invoked from `repo.local.test.ts`,
   `repo.fake.test.ts`, and `repo.drive.test.ts` (`docs/error-handling.md`

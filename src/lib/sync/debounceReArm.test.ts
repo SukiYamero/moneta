@@ -14,16 +14,17 @@ vi.mock('@/lib/drive', () => ({
 }))
 
 import { findFile, upsertJsonFile } from '@/lib/drive'
-import { db } from '@/lib/db'
 import {
   __clearRegistryForTests,
   getProfile,
+  getProfileDatabase,
   registerProfile,
   setDriveFolderId,
 } from '@/lib/profiles'
 import type { ProfileRecord } from '@/lib/profiles'
 import {
   __resetOutboxClockForTests,
+  __resetOutboxDatabaseForTests,
   enqueueOperation,
   setOutboxDatabase,
   useOutboxStore,
@@ -46,14 +47,19 @@ beforeEach(async () => {
   })
   await setDriveFolderId(reg.id, 'FOLD')
   profile = (await getProfile('pDebounce'))!
-  setOutboxDatabase(db)
+  // specs.md §10.31 edge case: push() now reads/writes the pushing
+  // profile's own database explicitly, so the outbox redirect below must
+  // point at that same database, not the frozen default — matching what
+  // boot.ts's real rebind always does.
+  setOutboxDatabase(getProfileDatabase('kurobello-debounce-test'))
 })
 
 afterEach(async () => {
   await __clearRegistryForTests()
   await __clearKnownTipsForTests()
-  await db.outbox.clear()
+  await getProfileDatabase('kurobello-debounce-test').outbox.clear()
   __resetOutboxClockForTests()
+  __resetOutboxDatabaseForTests()
   useOutboxStore.setState({ dirty: false })
   useSyncStore.setState({ phase: 'idle', pullProgress: null, lastError: null })
 })
@@ -117,7 +123,9 @@ describe('trigger wiring: re-arming the debounce (lead 2 — Track AB review)', 
     await vi.waitFor(() => expect(findResolvers).toHaveLength(2))
     findResolvers[1]?.(null)
 
-    await vi.waitFor(async () => expect(await db.outbox.toArray()).toEqual([]))
+    await vi.waitFor(async () =>
+      expect(await getProfileDatabase('kurobello-debounce-test').outbox.toArray()).toEqual([]),
+    )
 
     handle.stop()
   })

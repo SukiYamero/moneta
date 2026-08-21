@@ -5,6 +5,7 @@ import {
   DEFAULT_PROFILE_DATABASE_NAME,
   DEFAULT_PROFILE_ID,
   getActiveProfile,
+  getActiveProfileId,
   getProfile,
   listProfiles,
   makeProfileDatabaseName,
@@ -12,6 +13,7 @@ import {
   recordSuccessfulPush,
   registerProfile,
   resolveGoogleProfile,
+  setActiveProfileId,
   setDriveFolderId,
   touchLastUsed,
 } from '@/lib/profiles/profileRegistry'
@@ -224,4 +226,100 @@ test('a profile with no watermark yet has undefined driveFolderId/lastPushAt/las
   expect(active.driveFolderId).toBeUndefined()
   expect(active.lastPushAt).toBeUndefined()
   expect(active.lastPullAt).toBeUndefined()
+})
+
+// specs.md §10.31 §1: the explicit active-profile pointer. Recency stays
+// only as the fallback for a device that has never made an explicit choice
+// — this is what lets a user who switches to an *older* profile and closes
+// the app land back in the one they chose, not the one used most recently
+// before that.
+test('getActiveProfileId is undefined on a device that has never set the pointer', async () => {
+  expect(await getActiveProfileId()).toBeUndefined()
+})
+
+test('the explicit pointer wins over recency once set', async () => {
+  await getActiveProfile() // adopts the default first
+  await registerProfile({
+    id: 'p2',
+    label: 'Cuenta de Google',
+    kind: 'google',
+    databaseName: makeProfileDatabaseName('p2'),
+  })
+  // p2 is now the most recently *touched* — but the pointer says otherwise.
+  await touchLastUsed('p2')
+  await setActiveProfileId(DEFAULT_PROFILE_ID)
+
+  const active = await getActiveProfile()
+  expect(active.id).toBe(DEFAULT_PROFILE_ID)
+  expect(await getActiveProfileId()).toBe(DEFAULT_PROFILE_ID)
+})
+
+test('a pointer naming a since-removed profile falls back to recency, not a throw', async () => {
+  await getActiveProfile() // adopts the default first
+  await setActiveProfileId('a-profile-that-was-never-registered')
+
+  const active = await getActiveProfile()
+  expect(active.id).toBe(DEFAULT_PROFILE_ID)
+})
+
+test('setActiveProfileId is safe to fire-and-forget: a write failure is caught and logged, not thrown', async () => {
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  const spy = vi.spyOn(deviceDb.activeProfile, 'put').mockRejectedValue(new Error('IDB blocked'))
+
+  await expect(setActiveProfileId(DEFAULT_PROFILE_ID)).resolves.toBeUndefined()
+  expect(warn).toHaveBeenCalled()
+
+  spy.mockRestore()
+  warn.mockRestore()
+})
+
+test('getActiveProfileId degrades to undefined, falling back to recency, on a storage read failure', async () => {
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  const spy = vi.spyOn(deviceDb.activeProfile, 'get').mockRejectedValue(new Error('IDB blocked'))
+
+  expect(await getActiveProfileId()).toBeUndefined()
+  expect(warn).toHaveBeenCalled()
+
+  spy.mockRestore()
+  warn.mockRestore()
+})
+
+// specs.md §10.31 edge case: offering removal for a profile whose database
+// is gone, so a dangling registry row doesn't linger forever.
+test('removeProfile deletes the profile from the registry', async () => {
+  await registerProfile({
+    id: 'p-remove',
+    label: 'Gone',
+    kind: 'google',
+    databaseName: makeProfileDatabaseName('p-remove'),
+  })
+  const { removeProfile } = await import('@/lib/profiles/profileRegistry')
+
+  await removeProfile('p-remove')
+
+  expect(await getProfile('p-remove')).toBeUndefined()
+})
+
+test('removeProfile refuses to remove the frozen default profile', async () => {
+  await getActiveProfile() // adopts the default profile
+  const { removeProfile } = await import('@/lib/profiles/profileRegistry')
+
+  await removeProfile(DEFAULT_PROFILE_ID)
+
+  expect(await getProfile(DEFAULT_PROFILE_ID)).toBeDefined()
+})
+
+test('removeProfile clears a pointer aimed at the profile it just removed', async () => {
+  await registerProfile({
+    id: 'p-remove-2',
+    label: 'Gone',
+    kind: 'google',
+    databaseName: makeProfileDatabaseName('p-remove-2'),
+  })
+  await setActiveProfileId('p-remove-2')
+  const { removeProfile } = await import('@/lib/profiles/profileRegistry')
+
+  await removeProfile('p-remove-2')
+
+  expect(await getActiveProfileId()).toBeUndefined()
 })

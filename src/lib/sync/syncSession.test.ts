@@ -127,6 +127,44 @@ describe('getSyncContext', () => {
 
     await expect(getSyncContext()).resolves.toBeNull()
   })
+
+  // specs.md §10.31 §4: the switcher can bind a profile that belongs to a
+  // *different* account than the one currently authenticated ("switching to
+  // a Google profile you are not currently signed into shows its local data
+  // with sync off") — before the switcher existed this could never happen,
+  // so `status`/`drive` alone used to be sufficient.
+  it('is null when the bound profile belongs to an account other than the one currently authenticated', async () => {
+    useAuthStore.setState({
+      status: 'authenticated',
+      drive: { folderId: 'F' },
+      session: FRESH_SESSION,
+      user: { sub: 'sub-currently-signed-in', email: 'signed-in@example.com', name: 'Signed In' },
+    })
+    mGetActiveProfileBinding.mockReturnValue({
+      profile: { ...profile, accountKey: 'sub-a-different-account' },
+      database: {} as never,
+      repo: {} as never,
+    })
+
+    await expect(getSyncContext()).resolves.toBeNull()
+  })
+
+  it('returns a context when the bound profile does belong to the currently authenticated account', async () => {
+    useAuthStore.setState({
+      status: 'authenticated',
+      drive: { folderId: 'F' },
+      session: FRESH_SESSION,
+      user: { sub: 'sub-1', email: 'a@b.com', name: 'Ana' },
+    })
+    mGetActiveProfileBinding.mockReturnValue({
+      profile: { ...profile, accountKey: 'sub-1' },
+      database: {} as never,
+      repo: {} as never,
+    })
+
+    const ctx = await getSyncContext()
+    expect(ctx?.profile.accountKey).toBe('sub-1')
+  })
 })
 
 describe('startSyncSession / stopSyncSession', () => {

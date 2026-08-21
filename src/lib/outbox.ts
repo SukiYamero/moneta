@@ -91,6 +91,21 @@ export const clampOutboxClockToServer = async (serverNowMs: number): Promise<voi
   c.clampToServer(serverNowMs)
 }
 
+/**
+ * Resolves which outbox table a call should actually touch — the given
+ * `database`'s own `outbox` table if one was passed, the module's current
+ * redirect otherwise. specs.md §10.31 edge case: `sync/engine.ts`'s
+ * `push()`/`pull()` span a Drive round trip, and a profile switch can
+ * redirect `setOutboxDatabase()` mid-flight — reading the module-level
+ * `entries` binding *after* that await resumes would then touch whatever
+ * profile is newly active, not the profile the call was actually made for.
+ * Every caller that already has its own `profile`/`database` in hand
+ * (engine.ts) passes it explicitly and is immune to the redirect; every
+ * other caller (bootstrap.ts, the sign-out confirm count) keeps reading
+ * "whatever's currently active," which is what they mean.
+ */
+const tableFor = (database?: ProfileDb): typeof entries => database?.outbox ?? entries
+
 // basedOn is the best hlc this device knows for the entity: the greater of
 // (a) the last op *this device's own outbox* recorded for it, and (b) the
 // last hlc `sync/tip.ts` learned from a pull (or from a just-pushed op —
@@ -105,14 +120,16 @@ export const clampOutboxClockToServer = async (serverNowMs: number): Promise<voi
 // for a genuine conflict) would fire on a case that was never one, silently
 // un-deleting something the user just removed. hlc strings compare
 // correctly as plain strings (hlc.ts), so "the greater of two" is just `>`.
-const lastHlcFor = async (entity: string, entityId: string): Promise<Hlc | null> => {
+const lastHlcFor = async (
+  entity: string,
+  entityId: string,
+  database?: ProfileDb,
+): Promise<Hlc | null> => {
+  const table = tableFor(database)
   const [ownHistory, pulledTip] = await Promise.all([
     (async (): Promise<Hlc | null> => {
       try {
-        const rows = await entries
-          .where('[entity+entityId]')
-          .equals([entity, entityId])
-          .sortBy('hlc')
+        const rows = await table.where('[entity+entityId]').equals([entity, entityId]).sortBy('hlc')
         return rows.at(-1)?.hlc ?? null
       } catch (e) {
         console.warn('outbox: could not read prior operations for basedOn, treating as unseen', e)
@@ -162,11 +179,25 @@ void refreshDirty()
 // a success-shaped value for a failure") lets the caller decide what a
 // permanently-unsynced write means to the user, instead of that failure
 // living only in a console a user never opens.
-export const enqueueOperation = async (operation: OutboxOperation): Promise<boolean> => {
+//
+// `database` (specs.md §10.32): an optional target other than "whatever the
+// module is currently redirected to" — the guest-data adoption path writes
+// straight into a profile that isn't (yet, or ever) the active one, without
+// waiting for `setOutboxDatabase()` to point at it first. Every existing
+// caller (`dataStore.ts`, via the repo write path) omits it and keeps
+// writing to the active profile exactly as before; only omitting it also
+// updates `useOutboxStore`'s `dirty` flag, since that flag describes the
+// *currently displayed* profile's pending state, not whichever database an
+// out-of-band write happened to target.
+export const enqueueOperation = async (
+  operation: OutboxOperation,
+  database?: ProfileDb,
+): Promise<boolean> => {
+  const table = tableFor(database)
   const entityId = entityIdOf(operation)
   try {
     const [basedOn, { hlc, device }] = await Promise.all([
-      lastHlcFor(operation.entity, entityId),
+      lastHlcFor(operation.entity, entityId, database),
       nextHlc(),
     ])
     const entry: OutboxEntry = {
@@ -179,8 +210,8 @@ export const enqueueOperation = async (operation: OutboxOperation): Promise<bool
       enqueuedAt: Date.now(),
       operation,
     }
-    await entries.add(entry)
-    useOutboxStore.setState({ dirty: true })
+    await table.add(entry)
+    if (!database) useOutboxStore.setState({ dirty: true })
     return true
   } catch (e) {
     console.warn('outbox: could not enqueue operation, this device will not sync it', e)
@@ -188,20 +219,42 @@ export const enqueueOperation = async (operation: OutboxOperation): Promise<bool
   }
 }
 
-/** In hlc order — the total order §10.19's replay rule needs. */
-export const listPendingOperations = async (): Promise<OutboxEntry[]> => {
+/**
+ * In hlc order — the total order §10.19's replay rule needs.
+ *
+ * `database` (specs.md §10.31 edge case): `sync/engine.ts`'s `pull()`/
+ * `push()` pass the pushing/pulling profile's own database explicitly,
+ * rather than reading whatever the module is *currently* redirected to —
+ * a Drive round trip is long enough for a profile switch to redirect
+ * `setOutboxDatabase()` mid-flight, and a call already in progress for
+ * profile A must keep reading profile A's own outbox regardless. Every
+ * other caller (`bootstrap.ts`, the sign-out confirm count) omits it and
+ * keeps reading "whichever profile is active right now," which is what
+ * they mean.
+ */
+export const listPendingOperations = async (database?: ProfileDb): Promise<OutboxEntry[]> => {
+  const table = tableFor(database)
   try {
-    return await entries.orderBy('hlc').toArray()
+    return await table.orderBy('hlc').toArray()
   } catch (e) {
     console.warn('outbox: could not read pending operations', e)
     return []
   }
 }
 
-/** For a future flush to acknowledge a successful push. Not called by anything yet. */
-export const removeOperations = async (ids: string[]): Promise<void> => {
+/**
+ * For a flush to acknowledge a successful push. `database` — same reasoning
+ * as `listPendingOperations` above, and the actual fix for the traced bug
+ * (specs.md §12, 2026-08-20): without it, a push already in flight for
+ * profile A whose Drive round trip outlasts a switch to profile B would
+ * call `bulkDelete` against B's table (via the module-level redirect),
+ * silently no-op (A's ids don't exist there), and leave A's
+ * already-uploaded ops stuck "pending" forever.
+ */
+export const removeOperations = async (ids: string[], database?: ProfileDb): Promise<void> => {
+  const table = tableFor(database)
   try {
-    await entries.bulkDelete(ids)
+    await table.bulkDelete(ids)
   } catch (e) {
     console.warn('outbox: could not clear pushed operations, they will be retried', e)
     return

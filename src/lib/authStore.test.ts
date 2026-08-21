@@ -19,7 +19,10 @@ vi.mock('@/lib/boot', () => ({ invalidateBootForSignOut: vi.fn() }))
 vi.mock('@/lib/pinLock', () => ({ hasVault: vi.fn(), updateSession: vi.fn(), resetVault: vi.fn() }))
 vi.mock('@/lib/profiles', () => ({
   resolveGoogleProfile: vi.fn(),
-  touchLastUsed: vi.fn(),
+  setActiveProfileId: vi.fn(),
+  getProfile: vi.fn(),
+  adoptGuestMovements: vi.fn(),
+  countGuestMovements: vi.fn(),
   DEFAULT_PROFILE_ID: 'kurobello',
 }))
 vi.mock('@/lib/deviceStore', () => ({
@@ -31,6 +34,8 @@ vi.mock('@/lib/deviceStore', () => ({
   hasUsedGuestBefore: vi.fn(),
   markGuestUsed: vi.fn(),
   clearGuestUsed: vi.fn(),
+  hasDeclinedAdoption: vi.fn(),
+  markAdoptionDeclined: vi.fn(),
 }))
 
 let networkOnline = true
@@ -50,13 +55,21 @@ import { AuthError, requestAccessToken, fetchGoogleUser } from '@/lib/auth'
 import { bootstrap } from '@/lib/bootstrap'
 import { invalidateBootForSignOut } from '@/lib/boot'
 import { hasVault, resetVault, updateSession } from '@/lib/pinLock'
-import { resolveGoogleProfile, touchLastUsed } from '@/lib/profiles'
+import {
+  adoptGuestMovements,
+  countGuestMovements,
+  getProfile,
+  resolveGoogleProfile,
+  setActiveProfileId,
+} from '@/lib/profiles'
 import {
   clearDriveDecision,
   clearGuestUsed,
   getDriveDecision,
+  hasDeclinedAdoption,
   hasLoggedInBefore,
   hasUsedGuestBefore,
+  markAdoptionDeclined,
   markGuestUsed,
   markLoggedIn,
   setDriveDecision,
@@ -71,7 +84,7 @@ const mUpdateSession = vi.mocked(updateSession)
 const mResetVault = vi.mocked(resetVault)
 const mInvalidateBootForSignOut = vi.mocked(invalidateBootForSignOut)
 const mResolveGoogleProfile = vi.mocked(resolveGoogleProfile)
-const mTouchLastUsed = vi.mocked(touchLastUsed)
+const mSetActiveProfileId = vi.mocked(setActiveProfileId)
 const mHasLoggedInBefore = vi.mocked(hasLoggedInBefore)
 const mMarkLoggedIn = vi.mocked(markLoggedIn)
 const mGetDriveDecision = vi.mocked(getDriveDecision)
@@ -80,6 +93,11 @@ const mClearDriveDecision = vi.mocked(clearDriveDecision)
 const mHasUsedGuestBefore = vi.mocked(hasUsedGuestBefore)
 const mMarkGuestUsed = vi.mocked(markGuestUsed)
 const mClearGuestUsed = vi.mocked(clearGuestUsed)
+const mGetProfile = vi.mocked(getProfile)
+const mAdoptGuestMovements = vi.mocked(adoptGuestMovements)
+const mCountGuestMovements = vi.mocked(countGuestMovements)
+const mHasDeclinedAdoption = vi.mocked(hasDeclinedAdoption)
+const mMarkAdoptionDeclined = vi.mocked(markAdoptionDeclined)
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -107,6 +125,14 @@ beforeEach(() => {
   // something other than the persistence itself, so they see the pre-existing
   // 'pending' behavior unless they override this explicitly.
   mGetDriveDecision.mockResolvedValue(undefined)
+  // Default: no local guest data and no prior decline — most login() tests
+  // exercise something other than adoption, so `pendingAdoption` stays null
+  // (§10.32's "nothing local to bring → no prompt at all") unless a test
+  // overrides this explicitly.
+  mCountGuestMovements.mockResolvedValue(0)
+  mHasDeclinedAdoption.mockResolvedValue(false)
+  mGetProfile.mockResolvedValue(undefined)
+  mAdoptGuestMovements.mockResolvedValue({ movedCount: 0 })
   useAuthStore.setState({
     status: 'idle',
     user: null,
@@ -116,6 +142,9 @@ beforeEach(() => {
     driveOptIn: 'pending',
     driveConnecting: false,
     driveError: null,
+    pendingAdoption: null,
+    adoptionBusy: false,
+    adoptionError: null,
   })
 })
 
@@ -479,6 +508,127 @@ describe('useAuthStore.login', () => {
     await useAuthStore.getState().login()
 
     expect(useAuthStore.getState().driveOptIn).toBe('dismissed')
+  })
+
+  // specs.md §10.32: "at first sign-in with local data present, asked once."
+  describe('guest-data adoption prompt', () => {
+    it('offers adoption when the local profile has movements and the device has never declined', async () => {
+      mToken.mockResolvedValue({ accessToken: 'tok', expiresAt: 1 })
+      mUser.mockResolvedValue({ sub: 'sub-1', email: 'a@b.com', name: 'Ana' })
+      mCountGuestMovements.mockResolvedValue(3)
+
+      await useAuthStore.getState().login()
+
+      expect(useAuthStore.getState().pendingAdoption).toEqual({ profileId: 'p1', count: 3 })
+    })
+
+    it('never offers adoption when there is nothing local to bring — the common first-sign-in case', async () => {
+      mToken.mockResolvedValue({ accessToken: 'tok', expiresAt: 1 })
+      mUser.mockResolvedValue({ sub: 'sub-1', email: 'a@b.com', name: 'Ana' })
+      mCountGuestMovements.mockResolvedValue(0)
+
+      await useAuthStore.getState().login()
+
+      expect(useAuthStore.getState().pendingAdoption).toBeNull()
+    })
+
+    it('never re-offers adoption once this device has already declined', async () => {
+      mToken.mockResolvedValue({ accessToken: 'tok', expiresAt: 1 })
+      mUser.mockResolvedValue({ sub: 'sub-1', email: 'a@b.com', name: 'Ana' })
+      mCountGuestMovements.mockResolvedValue(5)
+      mHasDeclinedAdoption.mockResolvedValue(true)
+
+      await useAuthStore.getState().login()
+
+      expect(useAuthStore.getState().pendingAdoption).toBeNull()
+    })
+
+    it('does not fail or block login when the adoption check itself fails', async () => {
+      mToken.mockResolvedValue({ accessToken: 'tok', expiresAt: 1 })
+      mUser.mockResolvedValue({ sub: 'sub-1', email: 'a@b.com', name: 'Ana' })
+      mCountGuestMovements.mockRejectedValue(new Error('IDB blocked'))
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+      await expect(useAuthStore.getState().login()).resolves.toBeUndefined()
+
+      expect(useAuthStore.getState().status).toBe('authenticated')
+      expect(useAuthStore.getState().pendingAdoption).toBeNull()
+      warn.mockRestore()
+    })
+
+    it('reads local guest data directly, not the guest-used device marker clearGuestUsed() is about to clear', async () => {
+      // Regression guard for the exact seam specs.md names: the adoption
+      // check and clearGuestUsed() both fire inside the same login(), and
+      // neither may depend on the other's signal.
+      mToken.mockResolvedValue({ accessToken: 'tok', expiresAt: 1 })
+      mUser.mockResolvedValue({ sub: 'sub-1', email: 'a@b.com', name: 'Ana' })
+      mCountGuestMovements.mockResolvedValue(1)
+
+      await useAuthStore.getState().login()
+
+      expect(mClearGuestUsed).toHaveBeenCalled()
+      expect(useAuthStore.getState().pendingAdoption).toEqual({ profileId: 'p1', count: 1 })
+    })
+  })
+})
+
+describe('useAuthStore.acceptGuestAdoption / declineGuestAdoption', () => {
+  beforeEach(() => {
+    useAuthStore.setState({ pendingAdoption: { profileId: 'p1', count: 3 } })
+  })
+
+  it('does nothing when there is no pending offer', async () => {
+    useAuthStore.setState({ pendingAdoption: null })
+    await useAuthStore.getState().acceptGuestAdoption()
+    expect(mAdoptGuestMovements).not.toHaveBeenCalled()
+  })
+
+  it('moves the movements and clears the pending offer on success', async () => {
+    mGetProfile.mockResolvedValue({
+      id: 'p1',
+      label: 'Ana',
+      kind: 'google',
+      databaseName: 'kurobello-p1',
+      createdAt: 'T',
+      lastUsedAt: 'T',
+    })
+    mAdoptGuestMovements.mockResolvedValue({ movedCount: 3 })
+
+    await useAuthStore.getState().acceptGuestAdoption()
+
+    expect(mAdoptGuestMovements).toHaveBeenCalledWith(expect.objectContaining({ id: 'p1' }))
+    const s = useAuthStore.getState()
+    expect(s.pendingAdoption).toBeNull()
+    expect(s.adoptionBusy).toBe(false)
+    expect(s.adoptionError).toBeNull()
+  })
+
+  it('surfaces a failure through adoptionError, isolated from status/error, and keeps the offer for a retry', async () => {
+    mGetProfile.mockResolvedValue({
+      id: 'p1',
+      label: 'Ana',
+      kind: 'google',
+      databaseName: 'kurobello-p1',
+      createdAt: 'T',
+      lastUsedAt: 'T',
+    })
+    mAdoptGuestMovements.mockRejectedValue(new Error('tab closed'))
+
+    await useAuthStore.getState().acceptGuestAdoption()
+
+    const s = useAuthStore.getState()
+    expect(s.adoptionError).toBe('tab closed')
+    expect(s.pendingAdoption).toEqual({ profileId: 'p1', count: 3 }) // kept, so a retry is possible
+    expect(s.status).not.toBe('error') // isolated from the identity-level status
+  })
+
+  it('declineGuestAdoption clears the offer and persists the decision, touching nothing local', () => {
+    useAuthStore.getState().declineGuestAdoption()
+
+    const s = useAuthStore.getState()
+    expect(s.pendingAdoption).toBeNull()
+    expect(mAdoptGuestMovements).not.toHaveBeenCalled()
+    expect(mMarkAdoptionDeclined).toHaveBeenCalled()
   })
 })
 
@@ -1280,19 +1430,17 @@ describe('useAuthStore.continueAsGuest', () => {
     expect(useAuthStore.getState().driveOptIn).toBe('pending')
   })
 
-  // CONFIRMED gap (specs.md §10.28): the registry resolves the active
-  // profile purely by recency (`profiles/profileRegistry.ts`'s
-  // `getActiveProfile()`) — with no account-aware signal of its own for
-  // guest. Without this, a device that signed out of a Google account and
-  // then chose "continue as guest" would still resolve to that account's
-  // profile (touched more recently than the default local one), and the
-  // boot sequence would read/write a guest's movements into the signed-out
-  // account's local database. Mirrors `syncProfileForAccount`'s own touch
-  // for the Google path, applied to the one profile guest ever uses.
-  it('touches the default local profile so recency-based resolution cannot land a guest in a stale Google profile', async () => {
+  // specs.md §10.31 §1: the explicit active-profile pointer. Without this,
+  // a device that signed out of a Google account and then chose "continue
+  // as guest" would resolve that account's profile on the next boot — it
+  // was touched more recently than the default local one — and read/write
+  // a guest's movements into the signed-out account's local database.
+  // Mirrors `syncProfileForAccount`'s own pointer write for the Google
+  // path, applied to the one profile guest ever uses.
+  it('sets the active-profile pointer to the default local profile so a stale Google profile cannot win', async () => {
     await useAuthStore.getState().continueAsGuest()
 
-    expect(mTouchLastUsed).toHaveBeenCalledWith('kurobello')
+    expect(mSetActiveProfileId).toHaveBeenCalledWith('kurobello')
   })
 
   // specs.md §10.33: the device-local signal a returning guest is
@@ -1306,22 +1454,23 @@ describe('useAuthStore.continueAsGuest', () => {
   })
 
   // CONFIRMED by src/features/boot/guestBootRace.test.tsx (a real-registry,
-  // real-BootGate integration test): a build that flipped `status` to
-  // 'guest' *before* this touch landed lost the race against BootGate's
-  // effect-driven registry read on every run, not intermittently — status
-  // must not flip until the touch has actually resolved.
-  it('awaits the touch before flipping status, so a reader of status cannot observe "guest" before the registry reflects it', async () => {
-    let resolveTouch: () => void = () => {}
-    mTouchLastUsed.mockReturnValue(
+  // real-BootGate integration test, against what used to be a recency
+  // touch instead of the explicit pointer write): a build that flipped
+  // `status` to 'guest' before this write landed lost the race against
+  // BootGate's effect-driven registry read on every run, not
+  // intermittently — status must not flip until the write has resolved.
+  it('awaits the pointer write before flipping status, so a reader of status cannot observe "guest" before the registry reflects it', async () => {
+    let resolveWrite: () => void = () => {}
+    mSetActiveProfileId.mockReturnValue(
       new Promise<void>((resolve) => {
-        resolveTouch = resolve
+        resolveWrite = resolve
       }),
     )
 
     const pending = useAuthStore.getState().continueAsGuest()
     expect(useAuthStore.getState().status).not.toBe('guest')
 
-    resolveTouch()
+    resolveWrite()
     await pending
 
     expect(useAuthStore.getState().status).toBe('guest')

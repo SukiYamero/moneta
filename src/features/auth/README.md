@@ -15,7 +15,9 @@ Onboarding screens and the route guard that sits in front of the app.
 - `RequireAuth.tsx` — route guard, rebuilt for specs.md §10.29 (one loading
   moment, not two): `status === 'guest'` or `'authenticated'` render
   `children`/`DrivePermissionScreen` immediately, with no dependency on
-  anything below. Below that, the render depends on "has this device been
+  anything below (the `'authenticated'` branch also renders
+  `GuestAdoptionPrompt` alongside `children` once `driveOptIn` is resolved
+  — specs.md §10.32, that component's own entry below has the detail). Below that, the render depends on "has this device been
   used before" — `hasLoggedInBefore() || hasUsedGuestBefore()`
   (`@/lib/deviceStore`, both read independently here via one `Promise.all`,
   not inferred from `authStore.restore()`'s own internal checks of the same
@@ -82,6 +84,20 @@ Onboarding screens and the route guard that sits in front of the app.
   explicitly, and the reason it isn't gated on an actual local-data check is
   that the screen has no repo access yet at this point in boot (§10.21's own
   blast radius keeps this track out of `dataStore`).
+- `GuestAdoptionPrompt.tsx` — specs.md §10.32: asked once, at first sign-in,
+  when the local/guest profile has movements and the device hasn't already
+  declined (`authStore.ts`'s `pendingAdoption`, set inside `login()`). Not
+  a full-screen gate like `DrivePermissionScreen` above — `RequireAuth`
+  renders it _alongside_ `children`, as a `CenterModal` over the already-
+  settled app, since Home is real and usable underneath while the person
+  decides. Renders nothing when there is no pending offer. "Yes" calls
+  `authStore.acceptGuestAdoption()` (busy state via `adoptionBusy`, an
+  error via `adoptionError` that keeps the offer open for a retry rather
+  than dismissing it); "No" calls `declineGuestAdoption()`, which touches
+  nothing local — only records the device won't be asked again. There is
+  no design for this screen (verified against the export — the canvas's
+  "Usar estos datos" belongs to the receipt-scan flow), built from
+  `CenterModal` and the tokens, same posture as §10.2.1's biometric row.
 - `GoogleSignInButton.tsx` — the shared white/G-mark button surface both
   `WelcomeScreen` and `ReturningUserScreen` render for their primary CTA
   (busy label swap included), so the one Google-branded control in the app

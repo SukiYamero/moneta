@@ -1,5 +1,6 @@
 import { getActiveProfile, getProfileDatabase, touchLastUsed } from '@/lib/profiles'
 import type { ProfileRecord } from '@/lib/profiles'
+import { ensureOwnerMarker } from '@/lib/profiles/profileOwner'
 import type { ProfileDb } from '@/lib/db'
 import type { Repo } from '@/lib/repo'
 import { createLocalRepo } from '@/lib/repo.local'
@@ -19,6 +20,19 @@ export const resolveActiveProfileBinding = async (): Promise<ProfileBinding> => 
   const profile = await getActiveProfile()
   await touchLastUsed(profile.id)
   const database = getProfileDatabase(profile.databaseName)
+  // specs.md §10.31 §2: every bind ensures this database's own owner marker
+  // exists — idempotent, so a profile bound many times over its life only
+  // ever writes this once. Self-catching (never throws) and awaited so the
+  // write has landed before this binding is handed back — the switcher's
+  // pre-switch "is the target's database gone" check reads this same
+  // marker on a *different* profile before calling this function for it,
+  // so ordering here only matters for this profile's own next read, not a
+  // race with the switcher.
+  await ensureOwnerMarker(database, {
+    kind: profile.kind,
+    accountKey: profile.accountKey,
+    createdAt: profile.createdAt,
+  })
   const repo = createLocalRepo(database)
   return { profile, database, repo }
 }

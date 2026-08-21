@@ -43,6 +43,16 @@
       "popupFailedToOpen": "Your browser blocked the Google window. Check your pop-up blocker.",
       "loginDefault": "We couldn't sign you in. Try again.",
       "driveDefault": "We couldn't connect to Drive. Try again."
+    },
+    "adoption": {
+      "title": "Bring your movements into this account?",
+      "description_one": "You have {{count}} movement saved only on this device. Bringing it in keeps it under this account and queues it for your Drive.",
+      "description_other": "You have {{count}} movements saved only on this device. Bringing them in keeps them under this account and queues them for your Drive.",
+      "declineNote": "If you say no, they stay on this device, in their own profile, and you can still reach them anytime.",
+      "acceptCta": "Yes, bring them",
+      "declineCta": "No, leave them here",
+      "moving": "Moving…",
+      "error": "Couldn't bring your movements over. Try again."
     }
   },
   "driveConsent": {
@@ -268,6 +278,13 @@
       "kind": {
         "local": "On this device",
         "google": "Google account"
+      },
+      "localLabel": "This device",
+      "goneDialog": {
+        "title": "This profile's data is gone",
+        "description": "Its storage was cleared on this device. It can be removed from the list.",
+        "removeCta": "Remove",
+        "cancelCta": "Cancel"
       }
     },
     "sync": {
@@ -393,7 +410,8 @@
       "syncing": "Syncing…",
       "offline": "Offline — will sync when reconnected",
       "lastSync": "Last synced: {{when}}",
-      "neverSynced": "Not synced yet"
+      "neverSynced": "Not synced yet",
+      "differentAccount": "Sync off — this profile uses a different account"
     },
     "notices": {
       "revived_one": "A movement you deleted came back: another device edited it after you deleted it.",

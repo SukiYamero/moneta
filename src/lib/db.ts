@@ -32,12 +32,32 @@ type VaultRow = LockVault & { id: number }
 // keyed by a fixed synthetic id — same pattern as VaultRow above.
 export type ConfigRow = Config & { id: number }
 
+// specs.md §10.31 §2: an owner marker written *inside* each profile's own
+// database, not only in the device-scoped registry (`profiles/
+// profileRegistry.ts`'s `ProfileRecord`). The registry is a single point of
+// truth — lose or corrupt it and every `kurobello-<id>` database becomes an
+// unattributable blob. This is the few bytes that let a database identify
+// itself without the registry. Describes the *container*, not the user's
+// data: kept off `schema.ts`'s `Config` and never becomes a synced field
+// (`sync/opLog.ts` has no envelope for it). A local copy of `ProfileKind`,
+// not an import from `profiles/profileRegistry.ts` — same reasoning
+// `deviceStore.ts`'s own `ProfileRow` gives for not importing it either:
+// this module stays the generic storage layer, the domain type lives where
+// its meaning is owned.
+export type ProfileOwnerRow = {
+  id: number
+  kind: 'local' | 'google'
+  accountKey?: string
+  createdAt: string
+}
+
 export type ProfileDb = Dexie & {
   vault: EntityTable<VaultRow, 'id'>
   movimientos: EntityTable<Movimiento, 'id'>
   activos: EntityTable<Activo, 'id'>
   config: EntityTable<ConfigRow, 'id'>
   outbox: EntityTable<OutboxEntry, 'id'>
+  profileOwner: EntityTable<ProfileOwnerRow, 'id'>
 }
 
 // Builds one profile's local database against an arbitrary Dexie name
@@ -94,6 +114,19 @@ export const createProfileDb = (name: string): ProfileDb => {
       'id, fechaActualizacion, seccion, [seccion+fechaActualizacion], [fechaActualizacion+id], [seccion+fechaActualizacion+id]',
     config: 'id',
     outbox: 'id, hlc, [entity+entityId]',
+  })
+
+  // Additive: `profileOwner` (specs.md §10.31 §2) — the in-database owner
+  // marker. Every earlier table restated unchanged.
+  database.version(4).stores({
+    vault: 'id',
+    movimientos:
+      'id, fecha, seccion, [seccion+fecha], [fecha+createdAt], [seccion+fecha+createdAt]',
+    activos:
+      'id, fechaActualizacion, seccion, [seccion+fechaActualizacion], [fechaActualizacion+id], [seccion+fechaActualizacion+id]',
+    config: 'id',
+    outbox: 'id, hlc, [entity+entityId]',
+    profileOwner: 'id',
   })
 
   return database

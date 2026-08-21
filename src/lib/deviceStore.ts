@@ -88,10 +88,25 @@ export type GuestLockRow = { id: number; credentialId: Uint8Array; lastActiveAt:
 // carries `loggedInBefore` (which distinguishes "never checked" from
 // "checked and false", a distinction this signal doesn't have).
 export type GuestMarkerRow = { id: number }
+// The explicit active-profile pointer (specs.md §10.31 §1) — set only by a
+// deliberate choice (signing in, entering guest mode, the switcher), read
+// by `profiles/profileRegistry.ts`'s `getActiveProfile()` before it falls
+// back to its old recency-only resolution. Kept as its own table rather
+// than folded onto `ProfileRow` — this is a device-wide fact ("which
+// profile"), not a per-profile one.
+export type ActiveProfileRow = { id: number; profileId: string }
+// A guest's device-wide "bring this local data into the account I just
+// signed into?" answer (specs.md §10.32). Presence-only, like
+// `driveDecision`/`guestMarker`'s own rows: there is exactly one state
+// worth remembering — a decline — since "nothing local to bring" already
+// suppresses the prompt on its own (`adoption.ts`'s own count check), and
+// an accepted adoption empties the local profile, which does the same.
+export type AdoptionDeclinedRow = { id: number }
 
 const MARKER_ID = 1 as const
 const GUEST_MARKER_ID = 1 as const
 const DRIVE_DECISION_ID = 1 as const
+const ADOPTION_DECLINED_ID = 1 as const
 const DEVICE_ID_ROW = 1 as const
 const DEVICE_ID_LENGTH = 8
 const DEVICE_ID_ALPHABET = '0123456789abcdefghijklmnopqrstuvwxyz'
@@ -115,6 +130,8 @@ export const deviceDb = new Dexie('kurobello-device') as Dexie & {
   syncFileCache: EntityTable<SyncFileCacheRow, 'id'>
   guestLock: EntityTable<GuestLockRow, 'id'>
   guestMarker: EntityTable<GuestMarkerRow, 'id'>
+  activeProfile: EntityTable<ActiveProfileRow, 'id'>
+  adoptionDeclined: EntityTable<AdoptionDeclinedRow, 'id'>
 }
 deviceDb.version(1).stores({ marker: 'id' })
 // Additive: `marker` keeps its v1 definition unchanged — same reasoning as
@@ -206,6 +223,22 @@ deviceDb.version(8).stores({
   guestLock: 'id',
   guestMarker: 'id',
 })
+// Additive again: `activeProfile` (specs.md §10.31 §1, this module's own
+// `ActiveProfileRow` comment) and `adoptionDeclined` (specs.md §10.32).
+// Every earlier table restated unchanged.
+deviceDb.version(9).stores({
+  marker: 'id',
+  driveDecision: 'id',
+  anchor: 'id',
+  profiles: 'id, kind, lastUsedAt',
+  deviceId: 'id',
+  syncTips: 'id',
+  syncFileCache: 'id',
+  guestLock: 'id',
+  guestMarker: 'id',
+  activeProfile: 'id',
+  adoptionDeclined: 'id',
+})
 
 export const hasLoggedInBefore = async (): Promise<boolean> => {
   try {
@@ -269,6 +302,32 @@ export const clearGuestUsed = async (): Promise<void> => {
     await deviceDb.guestMarker.delete(GUEST_MARKER_ID)
   } catch (e) {
     console.warn('device: could not clear the guest marker', e)
+  }
+}
+
+// specs.md §10.32: the device-wide "asked once" answer for the guest-data
+// adoption prompt. Absence means "never declined" — a device that has never
+// been asked, and one that was asked and said yes, are indistinguishable
+// here on purpose: `adoption.ts`'s own count check already suppresses the
+// prompt once there is nothing local left to bring, so this row only ever
+// needs to remember the one answer that *doesn't* empty the local profile.
+export const hasDeclinedAdoption = async (): Promise<boolean> => {
+  try {
+    return (await deviceDb.adoptionDeclined.get(ADOPTION_DECLINED_ID)) !== undefined
+  } catch (e) {
+    console.warn('device: could not read the adoption decision, treating as never declined', e)
+    return false
+  }
+}
+
+export const markAdoptionDeclined = async (): Promise<void> => {
+  try {
+    await deviceDb.adoptionDeclined.put({ id: ADOPTION_DECLINED_ID })
+  } catch (e) {
+    // Best-effort, same posture as markGuestUsed: losing this write just
+    // means the prompt can reappear on a later sign-in, not that anything
+    // already declined gets silently undone.
+    console.warn('device: could not persist the adoption decision', e)
   }
 }
 

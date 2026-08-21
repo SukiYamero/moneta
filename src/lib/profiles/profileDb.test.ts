@@ -19,7 +19,7 @@ test('a non-default name opens a distinct, independently-schemad database', asyn
     expect(database).not.toBe(db)
     expect(database.name).toBe(TEST_DB_NAME)
     expect(database.tables.map((t) => t.name).toSorted()).toEqual(
-      ['activos', 'config', 'movimientos', 'outbox', 'vault'].toSorted(),
+      ['activos', 'config', 'movimientos', 'outbox', 'profileOwner', 'vault'].toSorted(),
     )
   } finally {
     database.close()

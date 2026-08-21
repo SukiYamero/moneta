@@ -47,6 +47,11 @@ export interface ProfileRecord {
 // (docs/wave-3-plan.md §2's ownership map); folded in once that stopped
 // being true, since neither had shipped yet (`specs.md` §11, 2026-08-19).
 const profileTable = deviceDb.profiles
+// specs.md §10.31 §1: the explicit active-profile pointer. A separate
+// table, not a field folded onto `MarkerRow`/`DriveDecisionRow` — this is
+// its own concern (which profile, not whether one exists) with its own
+// single-synthetic-id-row shape, matching every other device signal here.
+const activeProfilePointer = deviceDb.activeProfile
 
 // The existing `kurobello` database is *adopted* as the first profile
 // (AGENTS.md, specs.md §10.15) — never migrated, never renamed. Every later
@@ -56,6 +61,8 @@ export const DEFAULT_PROFILE_ID = 'kurobello' as const
 export const DEFAULT_PROFILE_DATABASE_NAME = 'kurobello' as const
 
 export const makeProfileDatabaseName = (profileId: string): string => `kurobello-${profileId}`
+
+const ACTIVE_PROFILE_POINTER_ID = 1 as const
 
 const nowIso = (): string => new Date().toISOString()
 
@@ -135,6 +142,31 @@ export const registerProfile = async (input: RegisterProfileInput): Promise<Prof
     await profileTable.put(record)
     return record
   })
+}
+
+// specs.md §10.31 edge case: "the registry lists a profile whose database
+// is gone (cleared storage) — must say so and offer removal, never fail
+// opaquely." This is that removal — the registry row only, never the
+// per-profile database itself (there is nothing meaningful left in it to
+// delete; a database that legitimately still had data would never fail
+// `switchProfile.ts`'s owner-marker check in the first place). Refuses to
+// remove the frozen default profile — it always exists (specs.md §10.15) —
+// and the currently active one, neither of which this edge case ever
+// actually names as a target. Self-catching: same posture as every other
+// registry write a UI action can retry.
+export const removeProfile = async (id: string): Promise<void> => {
+  if (id === DEFAULT_PROFILE_ID) return
+  try {
+    await profileTable.delete(id)
+    // A dangling pointer at a since-removed profile would otherwise stick
+    // `getActiveProfile()` on a row that no longer exists — it already
+    // falls through to recency in that case (defensive), but there is no
+    // reason to leave a pointer aimed at nothing.
+    if ((await getActiveProfileId()) === id)
+      await activeProfilePointer.delete(ACTIVE_PROFILE_POINTER_ID)
+  } catch (e) {
+    console.warn(`profiles: could not remove profile "${id}" from the registry`, e)
+  }
 }
 
 export const touchLastUsed = async (id: string): Promise<void> => {
@@ -223,11 +255,40 @@ export const resolveGoogleProfile = async (
   })
 }
 
-// No switcher UI exists yet (Wave 5+, specs.md §10.15) — recency is the only
-// signal available to pick "the" active profile. This both lazily adopts
-// the frozen kurobello database as the first-ever registry row (a device
-// that never wrote one gets it created here, on first read) and returns
-// whichever profile was used most recently.
+// specs.md §10.31 §1: the explicit pointer. Set only by a deliberate choice
+// (signing in, entering guest mode, the switcher — never by a passive
+// resolve), so a device that never makes one never has a row here and
+// `getActiveProfile()` below falls all the way through to the old
+// recency-only behavior, unchanged. Best-effort, self-catching like
+// `touchLastUsed`: every current writer (`authStore.ts`'s
+// `syncProfileForAccount`/`continueAsGuest`, the switcher) already resolves
+// the *same* profile by recency once it's the most-recently-touched one —
+// see each call site's own comment — so a lost write here degrades to the
+// pre-existing recency fallback, never to the wrong profile.
+export const getActiveProfileId = async (): Promise<string | undefined> => {
+  try {
+    return (await activeProfilePointer.get(ACTIVE_PROFILE_POINTER_ID))?.profileId
+  } catch (e) {
+    console.warn('profiles: could not read the active-profile pointer, falling back to recency', e)
+    return undefined
+  }
+}
+
+export const setActiveProfileId = async (id: string): Promise<void> => {
+  try {
+    await activeProfilePointer.put({ id: ACTIVE_PROFILE_POINTER_ID, profileId: id })
+  } catch (e) {
+    console.warn('profiles: could not persist the active-profile pointer', e)
+  }
+}
+
+// The explicit pointer wins when it names a profile that still exists in
+// the registry (specs.md §10.31 §1). Recency is the fallback for a device
+// that has never made an explicit choice — or whose pointer names a
+// since-removed profile — so nothing about today's boot changes for a user
+// who never opens the switcher. Also lazily adopts the frozen kurobello
+// database as the first-ever registry row (a device that never wrote one
+// gets it created here, on first read).
 export const getActiveProfile = async (): Promise<ProfileRecord> => {
   const existing = await listProfiles()
   if (existing.length === 0) {
@@ -242,6 +303,9 @@ export const getActiveProfile = async (): Promise<ProfileRecord> => {
     }
     return record
   }
+  const pointedId = await getActiveProfileId()
+  const pointed = pointedId ? existing.find((p) => p.id === pointedId) : undefined
+  if (pointed) return pointed
   return existing.reduce((latest, candidate) =>
     candidate.lastUsedAt > latest.lastUsedAt ? candidate : latest,
   )
@@ -252,4 +316,5 @@ export const getActiveProfile = async (): Promise<ProfileRecord> => {
 // whole test file. Not exported from any public surface.
 export const __clearRegistryForTests = async (): Promise<void> => {
   await profileTable.clear()
+  await activeProfilePointer.clear()
 }

@@ -79,9 +79,10 @@ of it.
   "Track AB review"): a second concurrent call for the _same_ profile
   returns the in-flight promise rather than racing it with an independent
   read-modify-write against the same Drive file; a call for a _different_
-  profile (the `boot.ts` rebind race — a fast logout+relogin never waits
-  for an in-flight pull/push before redirecting the outbox/repo binding)
-  gets its own promise instead of silently riding the other profile's,
+  profile (the `boot.ts` rebind race — a fast logout+relogin, or now a
+  profile switch, never waits for an in-flight pull/push before
+  redirecting the outbox/repo binding) gets its own promise instead of
+  silently riding the other profile's,
   which is what `ensureFolder()`'s own `token`-keyed guard already avoided
   but `pull()`/`push()` originally did not. `startSyncTriggers()`'s debounced
   push also re-arms itself after settling if the outbox is still dirty —
@@ -95,7 +96,15 @@ of it.
   (`getSyncContext()`: the current Drive-scoped token — refreshed silently,
   in place, if within 60s of `expiresAt` — the active profile from
   `repoProvider`'s binding, and the current copy locale), and the one place
-  `startSyncTriggers()`'s handle is owned in production
+  `startSyncTriggers()`'s handle is owned in production. `getSyncContext()`
+  also checks the bound profile's `accountKey` against the currently
+  authenticated account (`authStore.ts`'s `accountKeyOf`, specs.md §10.31
+  §4) — before the profile switcher (`profiles/switchProfile.ts`) existed,
+  the bound profile and the authenticated account were always the same
+  thing by construction; the switcher can now bind a profile that belongs
+  to a _different_ account (or the local one), and a context must never
+  hand that profile's Drive folder id a token that isn't actually scoped to
+  it.
   (`startSyncSession()`/`stopSyncSession()`, both idempotent). Start/stop is
   a **reactive subscription on `authStore`**, not explicit calls added
   inside `login`/`restore`/`hydrate`/`connectDrive`/`logout`/

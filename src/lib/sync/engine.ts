@@ -295,7 +295,12 @@ const pullOnce = async (
     }
 
     const device = await getDeviceId()
-    const pending = await listPendingOperations()
+    // The pulling profile's own database, explicitly — not whatever
+    // `outbox.ts`'s module-level redirect currently points to (specs.md
+    // §10.31 edge case: a switch mid-pull must not fold a *different*
+    // profile's pending ops into this replay).
+    const database = getProfileDatabase(profile.databaseName)
+    const pending = await listPendingOperations(database)
     movFiles.push(pendingMovFile(pending, device))
     configFiles.push(pendingConfigFile(pending, device))
 
@@ -303,7 +308,6 @@ const pullOnce = async (
     const actResult = replayActivos(actFiles)
     const configResult = replayConfig(configFiles)
 
-    const database = getProfileDatabase(profile.databaseName)
     await Promise.all([
       materializeMovimientos(database, movResult.items),
       materializeActivos(database, actResult.items),
@@ -535,7 +539,13 @@ export const push = (token: string, profile: ProfileRecord): Promise<void> => {
 }
 
 const pushOnce = async (token: string, profile: ProfileRecord): Promise<void> => {
-  const pending = await listPendingOperations()
+  // The pushing profile's own database, explicitly, for both reads and the
+  // final `removeOperations` below (specs.md §10.31 edge case / §12,
+  // 2026-08-20: the traced bug this closes). Not `outbox.ts`'s module-level
+  // redirect — a switch mid-push must not drain the *new* profile's outbox
+  // for ops this call actually uploaded on behalf of the old one.
+  const database = getProfileDatabase(profile.databaseName)
+  const pending = await listPendingOperations(database)
   if (pending.length === 0) return
 
   useSyncStore.setState({ phase: 'pushing', lastError: null })
@@ -568,7 +578,7 @@ const pushOnce = async (token: string, profile: ProfileRecord): Promise<void> =>
           return entry ? recordKnownTip(entry.entity, entry.entityId, entry.hlc) : Promise.resolve()
         }),
       )
-      await removeOperations(pushedIds)
+      await removeOperations(pushedIds, database)
     }
 
     if (pushedIds.length === pending.length) await recordSuccessfulPush(profile.id)

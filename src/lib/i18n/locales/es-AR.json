@@ -43,6 +43,16 @@
       "popupFailedToOpen": "El navegador bloqueó la ventana de Google. Revisá el bloqueador de ventanas emergentes.",
       "loginDefault": "No se pudo iniciar sesión. Intentá de nuevo.",
       "driveDefault": "No se pudo conectar con Drive. Intentá de nuevo."
+    },
+    "adoption": {
+      "title": "¿Traer tus movimientos a esta cuenta?",
+      "description_one": "Tenés {{count}} movimiento guardado solo en este dispositivo. Si lo traés, queda bajo esta cuenta y se pone en cola para tu Drive.",
+      "description_other": "Tenés {{count}} movimientos guardados solo en este dispositivo. Si los traés, quedan bajo esta cuenta y se ponen en cola para tu Drive.",
+      "declineNote": "Si elegís que no, se quedan en este dispositivo, en su propio perfil, y podés verlos cuando quieras.",
+      "acceptCta": "Sí, traerlos",
+      "declineCta": "No, dejarlos acá",
+      "moving": "Moviendo…",
+      "error": "No se pudieron traer los movimientos. Intentá de nuevo."
     }
   },
   "driveConsent": {
@@ -268,6 +278,13 @@
       "kind": {
         "local": "En este dispositivo",
         "google": "Cuenta de Google"
+      },
+      "localLabel": "Este dispositivo",
+      "goneDialog": {
+        "title": "Los datos de este perfil ya no están",
+        "description": "Su almacenamiento se borró en este dispositivo. Se puede sacar de la lista.",
+        "removeCta": "Sacar",
+        "cancelCta": "Cancelar"
       }
     },
     "sync": {
@@ -393,7 +410,8 @@
       "syncing": "Sincronizando…",
       "offline": "Sin conexión — se va a sincronizar al reconectar",
       "lastSync": "Última sincronización: {{when}}",
-      "neverSynced": "Todavía no se sincronizó"
+      "neverSynced": "Todavía no se sincronizó",
+      "differentAccount": "Sincronización desactivada: este perfil usa otra cuenta"
     },
     "notices": {
       "revived_one": "Un movimiento que borraste volvió a aparecer: otro dispositivo lo editó después de que lo borraste.",

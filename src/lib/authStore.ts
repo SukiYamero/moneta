@@ -10,13 +10,23 @@ import {
 import { bootstrap, type DriveLayout } from '@/lib/bootstrap'
 import { invalidateBootForSignOut } from '@/lib/boot'
 import { hasVault, resetVault, updateSession } from '@/lib/pinLock'
-import { resolveGoogleProfile, touchLastUsed, DEFAULT_PROFILE_ID } from '@/lib/profiles'
+import {
+  adoptGuestMovements,
+  countGuestMovements,
+  getProfile,
+  resolveGoogleProfile,
+  setActiveProfileId,
+  DEFAULT_PROFILE_ID,
+} from '@/lib/profiles'
+import type { ProfileRecord } from '@/lib/profiles'
 import {
   clearDriveDecision,
   clearGuestUsed,
   getDriveDecision,
+  hasDeclinedAdoption,
   hasLoggedInBefore,
   hasUsedGuestBefore,
+  markAdoptionDeclined,
   markGuestUsed,
   markLoggedIn,
   setDriveDecision,
@@ -50,6 +60,12 @@ type AuthState = {
   driveOptIn: DriveOptIn
   driveConnecting: boolean
   driveError: string | null
+  // specs.md §10.32: set once, at first sign-in, when the local/guest
+  // profile has movements to offer and the device hasn't already declined.
+  // `null` is the overwhelmingly common state — no prompt at all.
+  pendingAdoption: { profileId: string; count: number } | null
+  adoptionBusy: boolean
+  adoptionError: string | null
   login: () => Promise<void>
   restore: () => Promise<void>
   logout: () => void
@@ -57,6 +73,8 @@ type AuthState = {
   hydrate: (session: AuthSession, cachedUser: GoogleUser | null) => Promise<void>
   connectDrive: () => Promise<void>
   dismissDrive: () => void
+  acceptGuestAdoption: () => Promise<void>
+  declineGuestAdoption: () => void
 }
 
 // Narrower than "any authenticate() failure": access_denied/popup_closed/
@@ -125,16 +143,29 @@ const invalidateVaultOnLogout = async (): Promise<void> => {
   }
 }
 
+// The one place `user.sub ?? user.email` is decided (specs.md §11,
+// 2026-08-19's `sub`-over-`email` reasoning, spelled out on
+// `syncProfileForAccount` below) — exported so `sync/syncSession.ts` and
+// `profiles/switchProfile.ts` can compare "is the currently authenticated
+// account this profile's owner" without each re-deriving the same fallback
+// (specs.md §10.31 §4: sync must follow a switch only when the newly bound
+// profile's account matches the one actually signed in).
+export const accountKeyOf = (user: GoogleUser | null): string | undefined =>
+  user ? (user.sub ?? user.email) : undefined
+
 // specs.md §10.20: a `ProfileRecord` now records *whose* it is
-// (`accountKey`), not only what kind it is — this is what makes
-// getActiveProfile()'s existing recency resolution identity-aware without
-// that function needing to know about accounts at all. Whichever Google
-// account just established a session here becomes, by construction, the
-// most-recently-touched profile, so signing back in resolves to the right
-// one. Guest sessions never call this (no accountKey to key on — the
-// local/guest profile is untouched). Self-catching and never awaited by the
-// caller as a gate: a registry write failure must never fail the auth flow
-// it rides on, same posture as syncLockedSession.
+// (`accountKey`), not only what kind it is. specs.md §10.31 §1 adds the
+// explicit active-profile pointer on top: `setActiveProfileId` here is what
+// makes signing back into a previously-used account land on it directly,
+// rather than relying on `resolveGoogleProfile`'s own recency touch (still
+// happening below, kept as the fallback for a device that predates the
+// pointer or whose pointer write is lost) to happen to win. Guest sessions
+// never call this (no accountKey to key on — the local/guest profile is
+// untouched, see `continueAsGuest` below for its own pointer write).
+// Self-catching and never awaited by the caller as a gate: a registry write
+// failure must never fail the auth flow it rides on, same posture as
+// syncLockedSession. Returns the resolved profile so `login()` can check
+// whether it has local guest data to offer for adoption (specs.md §10.32).
 //
 // Keyed on `user.sub` — the OIDC subject identifier, stable and never
 // reassigned — not `user.email` (specs.md §11, 2026-08-19). A Workspace
@@ -143,12 +174,42 @@ const invalidateVaultOnLogout = async (): Promise<void> => {
 // reads to the user as total loss. `email` is a defensive fallback only,
 // for a cached/legacy `GoogleUser` that predates this field — every live
 // `fetchGoogleUser()` response carries `sub`.
-const syncProfileForAccount = async (user: GoogleUser | null): Promise<void> => {
-  if (!user) return
+const syncProfileForAccount = async (user: GoogleUser | null): Promise<ProfileRecord | null> => {
+  if (!user) return null
   try {
-    await resolveGoogleProfile({ accountKey: user.sub ?? user.email, label: user.name })
+    const record = await resolveGoogleProfile({
+      accountKey: user.sub ?? user.email,
+      label: user.name,
+    })
+    await setActiveProfileId(record.id)
+    return record
   } catch (e) {
     console.warn('profiles: failed to resolve the profile for this account', e)
+    return null
+  }
+}
+
+// specs.md §10.32: "asked once, at first sign-in with local data present,
+// never re-offered." Gated on the local/guest profile's actual movements
+// (`profiles/adoption.ts`'s `countGuestMovements`), not on any device
+// marker — "nothing local to bring" already suppresses the prompt on its
+// own, both for a genuine first-ever sign-in (the common case) and for a
+// device where a prior adoption already emptied the local profile. The
+// declined marker only needs to remember the one answer that does *not*
+// empty it: a "no". Self-catching: a failure here must never fail the
+// login it rides on, same posture as syncProfileForAccount above — the
+// user just loses the offer this session, not their sign-in.
+const checkGuestAdoption = async (
+  targetProfileId: string,
+): Promise<{ profileId: string; count: number } | null> => {
+  try {
+    if (await hasDeclinedAdoption()) return null
+    const count = await countGuestMovements()
+    if (count === 0) return null
+    return { profileId: targetProfileId, count }
+  } catch (e) {
+    console.warn('adoption: could not check for local guest data to offer', e)
+    return null
   }
 }
 
@@ -295,6 +356,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   driveOptIn: 'pending',
   driveConnecting: false,
   driveError: null,
+  pendingAdoption: null,
+  adoptionBusy: false,
+  adoptionError: null,
   login: async () => {
     const generation = authGeneration
     set({ status: 'authenticating', error: null })
@@ -307,7 +371,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // instant `status` becomes 'authenticated', so a fresh sign-in must
       // already be the most-recently-touched profile by that moment — never
       // a race against whichever profile recency last pointed at.
-      await syncProfileForAccount(user)
+      const resolvedProfile = await syncProfileForAccount(user)
       if (generation !== authGeneration) return
       set({ status: 'authenticated', session, user, driveOptIn })
       await syncLockedSession(session, user)
@@ -316,6 +380,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // gates on (specs.md §11, 2026-08-19). markLoggedIn() self-catches, so
       // this can never fail the login it rides on.
       await markLoggedIn()
+      // specs.md §10.32: "the moment of signing in is the moment the month
+      // disappears from the screen" — checked here, at the one moment this
+      // is actually "a guest signing in," never from restore()/hydrate()
+      // (silent re-entry into an *existing* session, not a sign-in). Reads
+      // the local/guest profile's actual movements, not the guest marker
+      // `clearGuestUsed()` is about to clear below — the two are different
+      // signals, and this one must not depend on the other still being set
+      // (a person can have local data in the default profile without ever
+      // having used "continue as guest" explicitly this session).
+      if (generation === authGeneration && resolvedProfile) {
+        const pending = await checkGuestAdoption(resolvedProfile.id)
+        if (generation === authGeneration && pending) set({ pendingAdoption: pending })
+      }
       // specs.md §10.33 decision 2: signing in with Google is one of the two
       // ways a guest marker is cleared — a stale one outliving the choice
       // would send this now-signed-in user back into guest mode on the next
@@ -468,37 +545,41 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   // ignore the returned Promise. This is not cosmetic: `status` flipping to
   // 'guest' is what makes RequireAuth render BootGate, whose effect reads
   // the profile registry (specs.md §10.28) practically immediately. A build
-  // that fired `touchLastUsed()` after `set()` (proven by
-  // src/features/boot/guestBootRace.test.tsx, which reproduced the loss on
-  // every run, not intermittently) let that read win the race against the
-  // write nearly every time, resolving the registry's stale most-recent
-  // profile — exactly the signed-out-Google-account scenario this touch
-  // exists to prevent — instead of the guest profile this call just chose.
+  // that fired the pointer write after `set()` (proven, when this used to
+  // be a recency touch instead, by src/features/boot/guestBootRace.test.tsx,
+  // which reproduced the loss on every run, not intermittently) let that
+  // read win the race against the write nearly every time.
   continueAsGuest: async () => {
     authGeneration += 1
     const generation = authGeneration
-    // specs.md §10.28: the profile registry resolves the active profile by
-    // recency alone (profiles/profileRegistry.ts's getActiveProfile()), with
-    // no notion of "guest" of its own. Without this touch, a device that
-    // signed out of a Google account and then chose to continue as guest
-    // would still resolve to that account's profile — it was touched more
-    // recently than the untouched default local one — and the boot sequence
-    // would read/write a guest's data into the signed-out account's local
-    // database. touchLastUsed() self-catches (profiles/profileRegistry.ts),
-    // so a storage failure here degrades to stale recency, never blocks
-    // entering guest mode. Awaited *before* the status flip below for the
-    // identical reason login()/restore() await syncProfileForAccount()
-    // first — see this function's own doc comment above.
-    await touchLastUsed(DEFAULT_PROFILE_ID)
+    // specs.md §10.31 §1: the explicit active-profile pointer. Without this,
+    // a device that signed out of a Google account and then chose to
+    // continue as guest would resolve *that* account's profile on the next
+    // boot — it was touched more recently than the untouched default local
+    // one — and read/write a guest's data into the signed-out account's
+    // local database. Replaces what used to be a `touchLastUsed
+    // (DEFAULT_PROFILE_ID)` recency-race workaround (specs.md §11,
+    // 2026-08-20): that patch existed only because the active profile was
+    // inferred by recency alone: with an explicit pointer, `getActiveProfile
+    // ()` consults it directly and no longer needs recency to happen to be
+    // correct. `resolveActiveProfileBinding()`'s own `touchLastUsed` call
+    // (repoProvider.ts) still bumps recency moments later, during the boot
+    // this triggers — this function no longer needs to do it itself.
+    // Self-catching (profiles/profileRegistry.ts), so a storage failure here
+    // degrades to stale recency, never blocks entering guest mode. Awaited
+    // *before* the status flip below for the identical reason login()/
+    // restore() await syncProfileForAccount() first — see this function's
+    // own doc comment above.
+    await setActiveProfileId(DEFAULT_PROFILE_ID)
     // specs.md §10.33: the device-local signal restore() reads on a later
     // cold start to recognise a returning guest — awaited before the status
-    // flip for the same reason touchLastUsed() is (this function's own doc
-    // comment above): nothing downstream races on it this session, but
-    // keeping every write that must land before `status: 'guest'` becomes
-    // observable in one place is simpler than deciding, per write, whether
-    // it happens to matter this time. markGuestUsed() self-catches, so a
-    // storage failure here degrades to "not remembered next time", never to
-    // failing this entry.
+    // flip for the same reason the pointer write above is (this function's
+    // own doc comment above): nothing downstream races on it this session,
+    // but keeping every write that must land before `status: 'guest'`
+    // becomes observable in one place is simpler than deciding, per write,
+    // whether it happens to matter this time. markGuestUsed() self-catches,
+    // so a storage failure here degrades to "not remembered next time",
+    // never to failing this entry.
     await markGuestUsed()
     if (generation !== authGeneration) return
     set({
@@ -579,5 +660,39 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     // synchronous UI state — a storage write failure here just means the
     // device is asked again next time, not that "Ahora no" stops working.
     void setDriveDecision('dismissed')
+  },
+  // specs.md §10.32: moves the local/guest profile's movements into the
+  // account that's now signed in. Isolated into its own `adoptionBusy`/
+  // `adoptionError` fields, not `status`/`error` — the same reasoning
+  // `driveConnecting`/`driveError` already established for `connectDrive`
+  // (docs/error-handling.md's case 6): a failure here must never look like
+  // the *identity* layer failed and boot the user back to a login screen.
+  // `pendingAdoption` is deliberately left set on failure (not cleared) so
+  // the prompt UI can offer a retry rather than silently losing the offer;
+  // `adoptGuestMovements` itself is safe to call again after any
+  // interruption (its own module comment) — a failed attempt here is
+  // exactly that kind of interruption.
+  acceptGuestAdoption: async () => {
+    const pending = get().pendingAdoption
+    if (!pending) return
+    set({ adoptionBusy: true, adoptionError: null })
+    try {
+      const target = await getProfile(pending.profileId)
+      if (!target) throw new Error('adoption: target profile no longer exists in the registry')
+      await adoptGuestMovements(target)
+      set({ adoptionBusy: false, pendingAdoption: null })
+    } catch (e) {
+      set({ adoptionBusy: false, adoptionError: errorMessage(e) })
+    }
+  },
+  // specs.md §10.32: "what 'no' means... the data stays on this device, in
+  // its own profile, and remains reachable" — nothing here touches the
+  // local profile at all, only records the answer so the prompt isn't
+  // re-offered (markAdoptionDeclined self-catches: a storage failure just
+  // means the prompt can reappear on a later sign-in, not that "no" stops
+  // working this session).
+  declineGuestAdoption: () => {
+    set({ pendingAdoption: null, adoptionError: null })
+    void markAdoptionDeclined()
   },
 }))

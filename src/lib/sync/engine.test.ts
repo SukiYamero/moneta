@@ -36,8 +36,10 @@ import {
 import type { ProfileRecord } from '@/lib/profiles'
 import {
   __resetOutboxClockForTests,
+  __resetOutboxDatabaseForTests,
   enqueueOperation,
   listPendingOperations,
+  setOutboxDatabase,
   useOutboxStore,
 } from '@/lib/outbox'
 import { __clearKnownTipsForTests } from '@/lib/sync/tip'
@@ -80,6 +82,13 @@ beforeEach(async () => {
   })
   await setDriveFolderId(registered.id, 'FOLD')
   profile = (await getProfile('p1'))!
+  // specs.md §10.31 edge case: push()/pull() now read/write the pushing
+  // profile's own outbox table explicitly (getProfileDatabase(profile.
+  // databaseName)) rather than outbox.ts's module-level redirect — matching
+  // real boot.ts behavior, which always redirects the outbox to the active
+  // profile before anything can push/pull. Every enqueueOperation() call
+  // below (with no explicit database argument) writes wherever this points.
+  setOutboxDatabase(getProfileDatabase('kurobello-engine-test'))
 })
 
 afterEach(async () => {
@@ -88,12 +97,14 @@ afterEach(async () => {
   await deviceDb.syncFileCache.clear()
   await db.outbox.clear()
   __resetOutboxClockForTests()
+  __resetOutboxDatabaseForTests()
   useOutboxStore.setState({ dirty: false })
   useSyncStore.setState({ phase: 'idle', pullProgress: null, lastError: null })
   const database = getProfileDatabase('kurobello-engine-test')
   await database.movimientos.clear()
   await database.activos.clear()
   await database.config.clear()
+  await database.outbox.clear()
 })
 
 describe('pull', () => {
