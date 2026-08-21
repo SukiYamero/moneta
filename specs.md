@@ -2974,7 +2974,20 @@ raced against the first render.
    (only `/settings` is split, `SettingsLazy.tsx`).
 4. **Render.**
 
-#### The brand moment — decided by the user, against the operator's recommendation
+#### The brand moment — WITHDRAWN 2026-08-20 (superseded by §10.29)
+
+**This subsection is superseded and is kept only so the reversal is legible.**
+The user decided the fixed brand moment, the operator built it, the user then
+used it and reported seeing two loading screens — and the design they finished
+the same day contains no full-screen loading at all. §10.29 records the
+revised decision: no splash, an inline three-state sync pill, and the app's own
+skeleton covering the pre-content span. `BootScreen` and its floor are deleted.
+
+**Everything else in §10.28 stands**: the boot _sequence_ — lock, resolve the
+profile, bind the repo and outbox, load, render — is unchanged and correct.
+Only the screen that covered it is gone.
+
+#### The brand moment, as originally decided (historical)
 
 **Decided 2026-08-20 (user): a fixed brand moment of ~800ms on every cold
 open**, not the on-demand anti-flash gate the operator recommended.
@@ -3077,25 +3090,45 @@ returning user's app flashes the Welcome/login screen before resolving to
 their dashboard. §10.9 calls that out as the boot flash; it is not available
 as a trade.
 
-#### The decision
+#### The decision — revised 2026-08-20, same day, by the user
 
-**One continuous brand screen owns the whole pre-content span.** From app
-start, through auth restore, through the boot binding, to Home — mounted once,
-never unmounted and remounted in between, never followed by a second
-full-screen loading treatment.
+**There is no full-screen loading screen at all. The design wins over the
+brand moment.**
 
-Consequences, stated so they are chosen rather than discovered:
+The 800ms brand floor decided earlier the same day (§10.28) is **withdrawn**.
+The design export contains no splash, boot or full-screen loading artboard —
+verified by exhaustive search, twice, independently. What it does contain is a
+**three-state inline pill**: `Sincronizando con tu Drive` / `Todo al dia` /
+pending, rendered in the top bar as a row, never as a screen. Those three
+states are exactly what `sync/status.ts` already derives.
 
-- **A returning user sees one screen**, start to finish. This is the case the
-  user reported and the one that matters most, because it is every open after
-  the first.
-- **A first-run user sees the brand screen briefly, then Welcome.** The user
-  asked for no loading "at app start"; this is the one residue of that, and it
-  is the price of not flashing the login screen at everyone else. It reads as
-  the app launching, which is what it is.
-- **The 800ms floor now spans a longer window**, so in practice it will be
-  invisible more often — the floor is already satisfied by real work before it
-  becomes a wait. §10.28's floor-not-duration rule is unchanged.
+So the answer to "the app is busy" is not a screen that covers the app. It is
+a line inside the app that says what is happening while the app is usable.
+
+**Why the user reversed their own decision, recorded so it does not read as
+drift:** the brand moment was chosen in the abstract, before it existed. Once
+it shipped, the same person opened the app and reported seeing two loading
+screens. The design they then finished has none. Both signals point the same
+way, and the second one is evidence rather than preference.
+
+#### What still has to exist, and it is not a loader
+
+**A returning user's app must not flash the login screen** while `restore()`
+resolves — §10.9's Tier 1 defect, which is not available as a trade no matter
+what replaces the loader. With no full-screen treatment, the cover has to be
+something that is _already the app_: the Home skeleton (§10.9 Tier 2,
+`Skeleton`/`ScreenLoading` exist), not a distinct screen. The user sees the
+app's own shape settle into itself, never a separate thing appear and leave.
+
+Concretely:
+
+- `RequireAuth`'s `ScreenLoading` and `BootGate`'s `BootScreen` both stop being
+  full-screen treatments. `BootScreen.tsx` and its 800ms floor are deleted, not
+  reworked.
+- The pre-content span renders the app shell with its skeleton, so the
+  transition into real data is a fill, not a swap.
+- The sync pill becomes the one place "we are talking to Drive" is expressed,
+  for every case except a genuinely first-ever download (below).
 
 #### The first-run download view is not a second loader, and stays
 
@@ -3200,6 +3233,131 @@ track, not just this one.
 `index.html`, the theme-resolution module, `PreferencesEditor`/`OptionList`'s
 theme row, and `docs/ui/design-tokens.md`. No schema change: `tema` already
 exists on `Preferencias`.
+
+### 10.31 Choosing a profile — the switcher, whose database is whose, and the PIN gate
+
+Wave 4.1. Specced 2026-08-20 at the user's request. No code written yet.
+
+Every account ever signed into on a device leaves a profile behind, with its
+own database and its own money in it. `getActiveProfile()` resolves **by
+recency alone** — so every profile but the most recent one is intact,
+on-device, and unreachable. `ProfilesSection` already lists them and marks
+which is active; it cannot switch. That gap is `docs/pendientes-usuario.md`
+item 6 (the guest cliff), and it is larger than that item describes: it is not
+only the guest, it is every account.
+
+- **Goal:** a person can move between the profiles on their device
+  deliberately, and can tell whose data each one holds.
+- **User story:** "I used the app as a guest for a month, then signed in with
+  Google. My month is still here — I can go back to it."
+- **Done when:** Settings lists every profile with a truthful owner; choosing
+  one rebinds the app to it; the PIN is asked when the device has one; and no
+  profile's rows are ever observable under another profile's binding.
+
+#### 1. The active profile becomes explicit, not inferred
+
+Recency is an _implicit_ rule that happens to be right when there is no
+switcher and is wrong the moment there is one — a user who switches to an
+older profile and closes the app must land back in the one they chose, not the
+one they used most recently before that.
+
+Add an explicit active-profile pointer to the device registry. Recency stays
+only as the fallback for a device that has never made an explicit choice, so
+nothing about today's boot changes for a user who never opens the switcher.
+
+**Note what this fixes for free:** the guest-vs-signed-out race the boot review
+found and patched with a `touchLastUsed(DEFAULT_PROFILE_ID)` before the status
+flip (§11, 2026-08-20) exists _because_ the active profile is inferred. An
+explicit pointer makes that patch redundant rather than load-bearing — remove
+it when this lands, and say so, rather than leaving two mechanisms for one
+question.
+
+#### 2. Whose database is whose
+
+`ProfileRecord` already carries `accountKey` — the account's email — plus
+`label` and `kind` (§10.20). Ownership _is_ recorded. Two real gaps remain:
+
+- **The registry is a single point of truth.** The databases themselves are
+  anonymous: `kurobello-<profileId>`, with nothing inside saying whose they
+  are. Lose or corrupt the registry and every profile becomes an unattributable
+  blob that no recovery path can name. **Write an owner marker inside each
+  profile database** — account key, kind, created-at — so a database can
+  identify itself without the registry. It is a few bytes and it is the
+  difference between "we can rebuild the list" and "this data is lost with no
+  way to know whose it was."
+- **The list has to be honest about the local profile.** Its label is the
+  hardcoded string `'Local'` (§12, unlocalized — fix it here, it is now
+  user-facing in a way it was not before). A profile with no account is not
+  nameless; it is _this device's own_, and should say so.
+
+#### 3. Switching asks for the PIN when one is set
+
+**Decided by the user 2026-08-20:** choosing a different profile shows the PIN
+screen if the device has one configured, and goes straight through if not.
+
+**This is the delicate part of the whole section and needs care rather than a
+faithful reading of that sentence.** The lock is **device-scoped**: one vault,
+holding the encrypted session of the account it was enabled for (§10.2). It was
+never designed for more than one identity on a device. Two things follow, and
+neither should be decided by whoever implements this without saying so:
+
+- **Unlocking with the PIN currently restores the vault's cached session**, and
+  that session belongs to whichever account enabled the lock. A switch that
+  unlocks into the _other_ account's session is a real crossing bug, not a
+  detail. The unlock on a switch must gate access and **must not** rehydrate a
+  session belonging to a different profile.
+- **`resetVault()` on lockout wipes the device's only vault**, which affects
+  every profile, not the one being switched to.
+
+The safe reading of the user's decision, and what this spec adopts: **the PIN
+is a gate on the device, asked again when the active profile changes** — the
+same authorization surface, not a per-profile secret. Anything beyond that (a
+per-profile lock, per-profile vaults) is a redesign of §10.2 and is out of
+scope here; if the implementer concludes it is required, they stop and
+escalate.
+
+#### 4. Switching rebinds, and sync has to follow
+
+`boot.ts` already owns the rebind path — resolve, bind the repo, redirect the
+outbox, reset the data store before loading (§10.28). A switch reuses it; it
+does not grow a second one.
+
+Sync must follow the switch: stop the triggers for the old profile, start them
+for the new one only if that profile's account has a live Drive session.
+**Switching to a Google profile you are not currently signed into shows its
+local data with sync off** — this is correct and must be _said_, not left to be
+inferred from a pill that never turns green. The data is on the device; the
+token is not.
+
+#### Edge cases
+
+- **A push in flight when the switch happens.** §12 (2026-08-20) already files
+  that `push()`'s final `removeOperations` reads `outbox.ts`'s module-level
+  binding, so a redirect mid-flight drains the wrong profile's outbox. **This
+  section is what makes that reachable on purpose**, rather than by a fast
+  logout+relogin race — the same pattern as §10.22 Decision 6 becoming
+  reachable at the flip. It must be closed here, not carried: thread a
+  profile-scoped database reference through `push()`/`pull()`, which
+  `outbox.ts`'s README already names as the fix.
+- **Switching to the profile already active** — a no-op, no PIN prompt, no
+  rebind, no brand flash.
+- **Switching while offline** — local data is local; only sync waits.
+- **The registry lists a profile whose database is gone** (cleared storage).
+  It must say so and offer removal, never fail opaquely.
+- **Two tabs, two different profiles.** Out of scope and must be _named_: the
+  registry is device-wide, so a switch in one tab changes what the other tab
+  believes. §12 already files cross-tab racing as deferred; this widens it.
+  Escalate rather than inventing cross-tab coordination here.
+
+#### Blast radius
+
+`src/lib/profiles/**` (the explicit pointer, the owner marker), `src/lib/boot.ts`
+(reuse, not extend), `src/lib/outbox.ts` + `src/lib/sync/engine.ts` (the
+profile-scoped reference above), `src/features/profile/ProfilesSection.tsx`,
+the lock's switch gate, and the `profile` i18n namespace. **Schema note:** the
+owner marker lives in the profile database, not in `schema.ts`'s `Config` — it
+describes the container, not the user's data, and must not become a synced
+field.
 
 ### Wave 3 — staging and dependencies
 
@@ -6456,6 +6614,35 @@ export/index.ts:49` all still inline `format(date, 'yyyy-MM-dd')` instead
   UI, and it keeps its place in the plan and still needs its own §10 spec
   before anyone builds it.
 
+- 2026-08-20 — **No full-screen loading screen at all; the design wins over
+  the brand moment decided the same morning** (user). Full reasoning in §10.29;
+  §10.28's brand-moment subsection is marked WITHDRAWN and kept so the reversal
+  stays legible. Worth recording as a **process** point, not just an outcome:
+  the brand moment was chosen in the abstract, before it existed, and reversed
+  once the same person opened the built app and saw it. The design finished
+  that day independently contains no splash and answers "busy" with an inline
+  three-state pill. Two signals, same direction, and the second one is evidence
+  rather than preference — which is an argument for building the cheap version
+  of a debated UI decision early rather than debating it longer.
+- 2026-08-20 — **The profile switcher moves into Wave 4.1** (user), after the
+  operator pointed out it is far cheaper than `docs/pendientes-usuario.md`
+  item 6 assumed: `ProfilesSection` already lists profiles and marks the active
+  one, `ProfileRecord` already carries the account key, and `boot.ts` already
+  owns a proven rebind path. What is missing is an explicit active-profile
+  pointer and a tap handler — not "a screen nobody designed". Specced as
+  §10.31, together with the two things the user asked for alongside it: an
+  owner marker written **inside** each profile database so the registry stops
+  being a single point of truth, and a PIN gate on the switch.
+- 2026-08-20 — **`docs/ui/Moneta_ Expense Manager UI.zip` is versioned in the
+  repo, deliberately.** `docs/ui/README.md` had referred to `Moneta.dc.html`
+  as though it were readable since Wave 1; it lives only in the Claude Design
+  canvas, which an agent session cannot fetch (403, verified). Every designed
+  screen through Wave 4 was therefore implemented from prose descriptions
+  rather than artboards. 4.3 MB in git is cheaper than that, and re-exports
+  are occasional. `docs/ui/design-export-reference.md` is the extracted,
+  readable form; `docs/ui/moneta-theme.css` is the design's own token table
+  lifted verbatim.
+
 ## 12. Backlog (pending verification / deferred work)
 
 - **The Add sheet's "gear into `/settings`" entry point was never actually
@@ -7261,6 +7448,25 @@ SupportedLocale = detectLocale()`, and looks up each section/category's
   similarly named) indicator, derived with precedence
   `isSyncing > lastError !== null > outboxDirty > up_to_date`, rendered
   with its own icon/copy rather than silently folded into `pending`.
+
+- **Should the local financial data be encrypted at rest? — analysis owed,
+  no decision yet.** Raised by the user 2026-08-20, alongside §10.31. Today
+  nothing in a profile database is encrypted: the PIN vault protects the
+  **OAuth token** and nothing else (§11, 2026-08-20). Anyone with the unlocked
+  device and devtools reads every movement out of IndexedDB, and the profile
+  switcher makes the multi-account version of that concrete — one person's
+  database sitting next to another's on the same device.
+  **What the analysis has to weigh, so it is not re-argued from scratch:**
+  where the key would live (a PIN-derived key means no PIN ⇒ no protection,
+  and this app deliberately allows no PIN; a device-stored key protects
+  against nothing that matters); the cost on every read and write in a
+  money app that already derives all its views from a full table scan; what
+  it actually defends against, given that the threat which motivated it —
+  someone picking up an unlocked phone — is also answered by the lock; and
+  whether it would weaken recovery, since an encrypted database whose key is
+  gone is data destroyed rather than data exposed. **Do not implement before
+  this is written down and decided** — it is exactly the kind of change that
+  is easy to ship and very hard to reverse.
 
 ### Development waves (parallel tracks, sequencing, worktree log)
 
