@@ -278,3 +278,26 @@ were correctly _not_ acted on by a reviewer scoped to one track.
    "belongs in `src/lib/`" smell, and moving it touches files owned by two
    different tracks — which is exactly why it is the cross-track pass's job
    and not a per-track reviewer's.
+
+## 9. The one gap that kept the wave open, and the decision that closed it
+
+AG's reviewer attacked `adoptGuestMovements`'s resumability claim four ways and
+found it genuinely idempotent — **and then found that nothing ever calls it
+again.** Only `login()` checks for a pending adoption, and the pending state was
+unpersisted zustand. So a tab closed mid-move left the guest profile holding a
+permanent duplicate, part of it never queued for Drive, with no error and no
+re-offer. §10.32 names that exact case as the one part of the section that can
+lose data and requires "resumable or atomic, never half-moved" — the function
+met the letter and the app did not meet the requirement.
+
+**Operator decision (2026-08-21): resuming an interrupted adoption is not a new
+consent, so it does not need a new prompt.** The person already said yes to
+moving _these_ movements into _that_ account; finishing spends no consent they
+did not give. Re-asking would be wrong (they answered) and resuming into a
+_different_ account would be the real violation — so the persisted record names
+the target profile, and a resume only fires when the active profile still
+matches it.
+
+Recorded here because the reviewer was right to escalate rather than guess: the
+fix is cheap, but "when may we move someone's money without asking again" is not
+a question a reviewer should answer on its own.
