@@ -223,7 +223,8 @@ Per `AGENTS.md`, non-optional:
 
 ## 7. Operator debt from stage 1 (do not lose these)
 
-- **`syncStoredTheme()` has no caller.** Track AE built it correctly and could
+- ~~**`syncStoredTheme()` has no caller.**~~ **Closed 2026-08-20** — wired in
+  `main.tsx` (`1aefa85`) the moment AD merged and released the file. Track AE built it correctly and could
   not wire it: the one line belongs in `src/main.tsx` beside
   `syncStoredLocale()`, and `main.tsx` is Track AD's file this wave. Until it
   lands, picking a theme writes `Preferencias.tema` and nothing moves on
