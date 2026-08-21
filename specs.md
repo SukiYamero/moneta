@@ -7537,6 +7537,24 @@ authStore`), caught by a batch of test files failing on
 
 ## 12. Backlog (pending verification / deferred work)
 
+- **An adoption interrupted by a closed tab is never automatically
+  retried** (found by the Track AG review, 2026-08-21 — full reasoning in
+  §11). `profiles/adoption.ts`'s `adoptGuestMovements` is resumable by
+  construction at the function level, but `authStore.ts` only calls
+  `checkGuestAdoption()`/offers the prompt from `login()`; a silent
+  `restore()`/`hydrate()` re-entry (the normal shape of reopening the app
+  with an already-authenticated session) never checks again, and the
+  in-memory `pendingAdoption` doesn't survive a reload. A tab closed
+  partway through the per-movement enqueue loop leaves the guest profile
+  holding a full duplicate of the already-adopted movements indefinitely,
+  some of it never queued for Drive, with no error and no re-offer short of
+  a fresh explicit consent sign-in. Needs a product decision on how the
+  retry should surface — silently reaching into `restore()`/`hydrate()`
+  (which §10.32 deliberately kept this out of, since those fire mid-session
+  and an unprompted modal would be jarring) or a persisted "consented but
+  not yet confirmed complete" marker that lets a background retry happen
+  with no second prompt — not filed as a specific fix here.
+
 - **The Add sheet's "gear into `/settings`" entry point was never actually
   filed** (found by the Track G2 review, 2026-08-20). §10.24's own UI
   section says that follow-up "is not built here... it is a one-line
@@ -8461,6 +8479,91 @@ string` on `ProfileRecord`/`deviceStore.ts`'s `ProfileRow` (a Dexie version
   reference through `dataStore.ts`'s write path the same way `push()`/
   `pull()` now do, which touches `dataStore.ts` (not listed in §10.31's
   blast radius) and needs an owner.
+
+- 2026-08-21 — **Track AG reviewed (§10.31/§10.32).** Two fixes applied,
+  one gap escalated rather than guessed at.
+  - **Fixed: `switchToProfile()` could report `'switched'` for a rebind
+    that never actually happened.** `useBootStore.run()` never rejects —
+    it swallows its own failures into `status: 'error'` — so nothing in
+    `switchToProfile` checked whether the rebind landed before reporting
+    success. Traced: a failure between `resolveActiveProfileBinding()` and
+    `bindActiveProfile()` inside `run()` would leave the repo bound to the
+    _old_ profile while the active-profile pointer this function already
+    wrote points at the new one — a success-shaped value for a failure
+    (docs/error-handling.md §4), and a persisted pointer naming a profile
+    the app never bound to. Not reachable today — every function on that
+    path currently self-catches, so `run()` effectively can't throw — but
+    the contract shouldn't rest on every downstream function happening to
+    stay that way forever. Fixed: `switchToProfile` now checks
+    `getActiveProfileBinding()` against the target after `run()`; on a
+    mismatch it reverts the pointer, re-runs `run()` so boot status
+    settles back on the still-bound old profile instead of leaving
+    `BootGate` stuck on a global error screen, and returns a new
+    `'switch-failed'` outcome, which `useProfiles.ts` now surfaces as a
+    toast (`profile:profiles.switchError`, all four locales). Regression
+    test in `switchProfile.test.ts` mocks `run()` "completing" without
+    ever rebinding and asserts the pointer reverts and no sync is touched.
+  - **Fixed: `countGuestMovements()` degraded a storage failure to `0`.**
+    `0` is a real, valid count, so this was the exact same shape its own
+    module's sibling function calls out and avoids — `adoptGuestMovements`
+    throws on purpose, citing docs/error-handling.md §4 ("never a
+    success-shaped value for a failure"); `countGuestMovements` violated
+    that rule one function down. Its one caller, `authStore.ts`'s
+    `checkGuestAdoption`, already wraps it in its own try/catch with the
+    right posture for a sign-in flow ("must never fail the login it rides
+    on") — the inner swallow was redundant with a strictly worse failure
+    mode (silently indistinguishable from "no local data" instead of
+    logged at the layer that actually decides what to do about it). Now
+    propagates; `authStore.test.ts`'s existing coverage of
+    `checkGuestAdoption`'s own catch already exercised a rejecting
+    `countGuestMovements` and needed no changes.
+  - **Escalated, not fixed: an adoption interrupted by a closed tab is
+    never automatically retried.** `adoptGuestMovements` is genuinely
+    resumable by construction — attacked directly (the "duplicated in both
+    databases" window between `bulkPut` and `bulkDelete`, a target edit
+    landing in that window, two tabs racing the same adoption) and it
+    holds at the function level. But **nothing in the app ever calls it
+    again** after the one interruption the spec itself names ("a tab
+    closed mid-move"): only `login()` calls `checkGuestAdoption()` —
+    `restore()`/`hydrate()` deliberately don't (this track's own
+    implementation notes: "never restore()/hydrate(), which are silent
+    re-entry, not a sign-in") — and `pendingAdoption` is unpersisted
+    zustand state, lost on reload. Traced concretely: accept →
+    `adoptGuestMovements` bulk-puts into the target (a single fast call,
+    lands whole) → the tab dies partway through the slower per-movement
+    enqueue loop → on reopening, the session restores silently via
+    `restore()`/`hydrate()`, `checkGuestAdoption` never runs again, and the
+    guest profile is left holding a full duplicate of the already-adopted
+    movements indefinitely, with whichever weren't yet enqueued never
+    queued for Drive — silently, no error, no re-offer, no route back to
+    it short of a fresh explicit consent sign-in. This is a real gap in
+    the section's own requirement ("resumable... never half-moved") at the
+    whole-system level, even though the mechanism it's built from is
+    sound. Closing it needs either reaching into `restore()`/`hydrate()`
+    (which this track deliberately kept the check out of, for a real,
+    separate reason: those fire silently mid-session, and popping this
+    modal unprompted mid-session would be jarring) or a persisted
+    "consented but not yet confirmed complete" marker that lets a silent
+    background retry happen without a second prompt. Both are product
+    decisions about how the retry should surface, not bug fixes —
+    escalated rather than guessed at.
+  - **Checked and confirmed solid, no changes needed:** the outbox
+    cross-profile-scoping fix itself (traced `push()`/`pull()`/the
+    debounce/flush triggers — nothing else resolves "which database" from
+    module state at a different moment than it started); the
+    `dataStore.ts` write-race finding above is real, traced, and correctly
+    outside this track's stated blast radius; the owner marker lives in
+    its own table, never `schema.ts`'s `Config`, never synced; all four
+    locales carry the adoption prompt's copy in full key parity, correctly
+    say "queued for Drive" rather than claiming an upload that hasn't
+    happened; the `authStore → profiles/index → switchProfile → authStore`
+    cycle fix is a real boundary (nothing re-imports `switchProfile.ts`
+    except `useProfiles.ts`, directly); and `continueAsGuest()`'s removed
+    `touchLastUsed(DEFAULT_PROFILE_ID)` patch is genuinely redundant —
+    `guestBootRace.test.tsx`, which reproduces the actual DOM race rather
+    than reasoning about it, still passes unmodified.
+  - `bun run check` green: 145 files, 1,546 tests (2 new, both regression
+    tests for the fixes above).
 
 ### Development waves (parallel tracks, sequencing, worktree log)
 

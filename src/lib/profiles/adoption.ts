@@ -16,15 +16,18 @@ import type { ProfileRecord } from '@/lib/profiles/profileRegistry'
  * "How much" — a real count, not a guess, for the prompt to name. Also
  * what gates the prompt existing at all: "nothing local to bring → no
  * prompt," the overwhelmingly common first sign-in.
+ *
+ * Deliberately does not self-catch: `docs/error-handling.md` §4 — 0 is a
+ * real, valid count, so swallowing a storage failure into `0` here would
+ * be indistinguishable from "genuinely no local data" and would silently
+ * suppress the adoption offer for a device whose storage is actually
+ * broken. Its one caller, `authStore.ts`'s `checkGuestAdoption`, already
+ * wraps this in its own try/catch with the correct posture for *that*
+ * call site ("must never fail the login it rides on") — this module stays
+ * a data-layer function that lets the failure reach it, rather than
+ * duplicating that decision here with a different, silently-successful one.
  */
-export const countGuestMovements = async (): Promise<number> => {
-  try {
-    return await db.movimientos.count()
-  } catch (e) {
-    console.warn('adoption: could not count local guest movements, treating as none', e)
-    return 0
-  }
-}
+export const countGuestMovements = async (): Promise<number> => db.movimientos.count()
 
 export interface AdoptionResult {
   movedCount: number

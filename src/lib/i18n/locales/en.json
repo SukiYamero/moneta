@@ -280,6 +280,7 @@
         "google": "Google account"
       },
       "localLabel": "This device",
+      "switchError": "Couldn't switch profiles. Try again.",
       "goneDialog": {
         "title": "This profile's data is gone",
         "description": "Its storage was cleared on this device. It can be removed from the list.",
