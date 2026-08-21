@@ -40,6 +40,24 @@ neither blocks any code:
   (§11, 2026-08-18). Keep the artboard as a memory of the idea, or remove it so
   nobody implements it by mistake?
 
+### 10. Look at the new screens on light — `owner: user`
+
+Raised 2026-08-20, at the end of Wave 4.1 stage 1. Four screens were built in
+the same batch that made light real, and **none of them has ever been seen on
+a light background**: the returning-user screen (§10.21), and the PIN lock
+screen, PIN setup and lock-settings panel (§10.2).
+
+The cross-track pass checked them and found them clean, but it is worth being
+precise about what that evidence is: it read every class and confirmed they
+resolve through tokens rather than hardcoded values, which is a strong
+argument that nothing is _structurally_ wrong. **It is not the same as looking
+at them.** Glows and shadows tuned against black can be technically
+token-correct and still read as muddy on `#F4F3EF`.
+
+Pairs with what already needed your eye from §10.30: `#f72121` (the light rose
+had nowhere to go but pure red) and `#af7809` (any yellow earning contrast on
+white goes brown). One pass over the app in light mode answers all of it.
+
 ### 4. Verify `connectDrive` against a real Drive — `owner: user`
 
 Open in `specs.md` §12 since Wave 1 and **no agent can close it**: it needs a
