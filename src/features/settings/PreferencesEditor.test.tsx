@@ -12,6 +12,19 @@ const preferencias = (overrides: Partial<Preferencias> = {}): Preferencias => ({
 })
 
 describe('PreferencesEditor', () => {
+  it('selects the stored tema', () => {
+    render(<PreferencesEditor preferencias={preferencias({ tema: 'claro' })} onChange={vi.fn()} />)
+    expect(screen.getByRole('radio', { name: 'Claro' })).toHaveAttribute('aria-checked', 'true')
+  })
+
+  it('writes the picked tema when a theme row is tapped', async () => {
+    const onChange = vi.fn()
+    const user = userEvent.setup()
+    render(<PreferencesEditor preferencias={preferencias()} onChange={onChange} />)
+    await user.click(screen.getByRole('radio', { name: 'Oscuro' }))
+    expect(onChange).toHaveBeenCalledWith({ tema: 'oscuro' })
+  })
+
   it('calls onChange with the numeric primerDiaSemana when the week-start toggle is tapped', async () => {
     const onChange = vi.fn()
     const user = userEvent.setup()

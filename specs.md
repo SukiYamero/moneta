@@ -6887,6 +6887,39 @@ export/index.ts:49` all still inline `format(date, 'yyyy-MM-dd')` instead
   readable form; `docs/ui/moneta-theme.css` is the design's own token table
   lifted verbatim.
 
+- 2026-08-20 — **Track AE ships the light theme (§10.30): `:root` real, the
+  picker built, `localStorage` used for the theme mirror deliberately.**
+  `THEME_STORAGE_KEY` (`src/lib/theme.ts`, `'kurobello-theme'`) holds
+  `Preferencias.tema` in `localStorage` so `index.html`'s inline script can
+  resolve it synchronously before React renders — `AGENTS.md` §7 bans
+  `localStorage` for _sensitive_ data, and a theme preference is not that;
+  §10.30 already ruled this the honest mechanism (the same fix the language
+  flash's own §11/§12 entries named as unaffordable there, now applied
+  where the flash it prevents is a full-screen colour inversion, not text).
+  Applied `:root`'s full mapping from `docs/ui/design-export-reference.md`
+  §1 mechanically, plus the four gap-fills §10.30 already decided: the five
+  `chart-*` tints at their WCAG-corrected values (not the export's own,
+  which fail contrast), and `--destructive`/`--danger-strong` set equal to
+  `--danger` (`#CF4B4B`) and `--danger-foreground` set to `#FFFFFF` —
+  reasoned, not directly stated in `specs.md`, from two anchors already in
+  the same decided table: `--destructive`/`--danger-strong` trace to a dark
+  hex (`#f87171`) nearly identical to `--danger`'s own dark anchor
+  (`#fb8989`), so "adapt from `--mn-danger`'s pair" collapses them to the
+  same light value; `--danger-foreground` mirrors `--success-foreground`'s
+  already-decided light value (white text on a now-darker/more-saturated
+  strong color, the same inversion pattern dark→light already performs for
+  success). `--warning` reuses `--chart-3`'s light value (`#af7809`) rather
+  than `--danger`'s, since `--warning`'s dark hex is literally `--chart-3`'s
+  (`#f5b93f`), not `--mn-danger`'s.
+  **Escalated to the operator, not resolved unilaterally:** `syncStoredTheme()`
+  (the `dataStore` subscription that actually applies a written `tema` and
+  tracks `prefers-color-scheme` live) has no caller — the one-line wiring it
+  needs is in `main.tsx`, owned by Track AD this wave
+  (`docs/wave-4.1-plan.md` §2). Filed as a §12 backlog item. Also flagged,
+  not touched: `src/features/profile/PreferencesSection.tsx`'s `tema` row
+  (unowned by any Wave 4.1 track) still renders as inert with a
+  "dark-only for now" note that this change makes false.
+
 ## 12. Backlog (pending verification / deferred work)
 
 - **The Add sheet's "gear into `/settings`" entry point was never actually
@@ -7711,6 +7744,39 @@ SupportedLocale = detectLocale()`, and looks up each section/category's
   gone is data destroyed rather than data exposed. **Do not implement before
   this is written down and decided** — it is exactly the kind of change that
   is easy to ship and very hard to reverse.
+
+- **`syncStoredTheme()` (Track AE, `src/lib/syncStoredTheme.ts`, §10.30) has
+  no caller — a `tema` change is currently inert.** The picker writes
+  `Preferencias.tema` through `dataStore.updateConfig` correctly, but the
+  subscription that turns a resolved `tema` into the `.dark` class (and
+  mirrors it to `localStorage` for the next boot's pre-paint script) is
+  never invoked: it needs the same one-line wiring `main.tsx` already gives
+  `syncStoredLocale()`, and `main.tsx` is Track AD's file this wave
+  (`docs/wave-4.1-plan.md` §2), not Track AE's to edit. Add, next to the
+  existing `syncStoredLocale()` call:
+
+  ```ts
+  import { syncStoredTheme } from '@/lib/syncStoredTheme'
+  // …
+  syncStoredTheme()
+  ```
+
+  Until this lands, `claro`/`sistema` both render correctly on first boot
+  (the inline script + `:root`'s real values already do that unconditionally)
+  but picking a theme in Settings has no visible effect and nothing persists
+  for the next launch.
+
+- **`src/features/profile/PreferencesSection.tsx`'s `tema` row is now stale
+  copy, not owned by any Wave 4.1 track.** It renders `tema` as a
+  permanently inert row with `settings:preferences.theme.note` ("the app is
+  dark-only for now") — true before Track AE's light theme shipped, false
+  now that `/settings` has a real `claro`/`oscuro`/`sistema` picker. Fixing
+  it means either turning this row into a `Link` to `/settings` (matching
+  `LinkedRow`'s existing pattern for the other three preferences) or
+  removing the note, plus retiring the now-unused `settings:preferences.theme.note`
+  key — a small change, but to a file and a `profile`-namespace string
+  neither Track AE (owns `settings` only) nor any other Wave 4.1 track was
+  assigned.
 
 ### Development waves (parallel tracks, sequencing, worktree log)
 
