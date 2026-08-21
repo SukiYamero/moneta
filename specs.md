@@ -3130,6 +3130,38 @@ Concretely:
 - The sync pill becomes the one place "we are talking to Drive" is expressed,
   for every case except a genuinely first-ever download (below).
 
+#### What covers the pre-content span — decided 2026-08-20 (user)
+
+A skeleton is a **promise**: it says content is coming, in this shape. During
+`restore()` the app does not yet know whether there is a session, so showing
+the Home skeleton unconditionally would swap to the Welcome screen when there
+is none — moving the flash rather than removing it, and showing a first-time
+user the ghost of an app they have never opened.
+
+**The decision: the skeleton is shown only when the promise is true.**
+`deviceStore.ts`'s `hasLoggedInBefore()` already records whether anyone has
+ever signed in on this device — the same signal §10.21 reads to recognise a
+returning user.
+
+- **Someone has signed in here before** → render `AppShell` + the Home
+  skeleton. They are almost certainly returning, and the skeleton resolves
+  into their Home.
+- **Nobody ever has** → promise nothing. Straight to Welcome, no ghost.
+
+**The one uncomfortable case, accepted deliberately:** a returning user whose
+session expired sees the skeleton and lands on the returning-user screen
+(§10.21) rather than Home. That is the same person, recognised by name, not a
+stranger — an acceptable outcome, and the alternative (resolving auth before
+promising anything) is the full-screen loader this section exists to delete.
+
+**Implementation note, since this is the track's central structural question:**
+`AppShell` today renders _inside_ `RequireAuth`, three levels below the point
+where the decision is made, so the skeleton is not reachable from where it is
+needed. Hoisting the shell above `RequireAuth` is **not** the answer — the
+bottom nav must never appear over the Welcome screen. What renders during the
+span is a deliberate, minimal composition (shell chrome + skeleton) chosen by
+this track, not `AppShell` relocated.
+
 #### The first-run download view is not a second loader, and stays
 
 `DriveDownloadScreen` (§10.26) may follow the brand screen on a genuinely
