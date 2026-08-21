@@ -3,7 +3,7 @@ import { Coins } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/lib/authStore'
 import { listProfiles, type ProfileRecord } from '@/lib/profiles'
-import { getInitials } from '@/features/home/homeView'
+import { getInitials } from '@/lib/initials'
 import { loginErrorCopy } from '@/features/auth/errorCopy'
 import { GoogleSignInButton } from '@/features/auth/GoogleSignInButton'
 

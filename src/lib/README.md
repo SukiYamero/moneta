@@ -18,6 +18,12 @@ Shared stores, helpers, and the Drive/auth/lock logic layer. No UI here.
   re-exported by `src/components/shared/IconAvatar.tsx` for every existing
   consumer of that import path.
 - `branding.ts` — `APP_NAME`, the single source for the display name.
+- `initials.ts` — `getInitials(name)`, the plain `name → initials` helper
+  behind every avatar badge (`HomeHeader`, `ReturningUserScreen`,
+  `IdentitySection`). Moved here from `src/features/home/homeView.ts`
+  (Wave 4.1 cross-track pass) once a third feature imported it — it never
+  had any Home-specific coupling, unlike that file's other helpers, which
+  all take a `Movimiento`/date-fns `Locale` and stayed put.
 - `i18n/` — the translation table (`react-i18next`/`i18next`, bundled JSON,
   four locales: `es`/`en`/`es-AR`/`pt-BR`, `es` base and fallback, key parity
   across all four enforced by a test). Own `README.md`.

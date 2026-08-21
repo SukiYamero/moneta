@@ -1,7 +1,8 @@
 import { Bell } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/lib/authStore'
-import { getGreetingKey, getInitials } from '@/features/home/homeView'
+import { getInitials } from '@/lib/initials'
+import { getGreetingKey } from '@/features/home/homeView'
 
 // The greeting is the screen's <h1> — it's what the design actually
 // presents as Home's subject, not the app name (which appears nowhere on

@@ -15,15 +15,6 @@ export const getGreetingKey = (date: Date): GreetingKey => {
   return 'evening'
 }
 
-/** First letter of the first and last name, e.g. "Alex Rivera" -> "AR". */
-export const getInitials = (name: string): string => {
-  const parts = name.trim().split(/\s+/).filter(Boolean)
-  if (parts.length === 0) return ''
-  const first = parts[0]?.[0] ?? ''
-  const last = parts.length > 1 ? (parts.at(-1)?.[0] ?? '') : ''
-  return (first + last).toUpperCase()
-}
-
 /** 3-letter uppercase weekday abbreviation ("LUN"), matching the design's week strip. */
 export const shortDayLabel = (iso: string, locale: Locale): string =>
   format(parseISO(iso), 'EEE', { locale }).toUpperCase()
