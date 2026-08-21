@@ -7780,6 +7780,13 @@ SupportedLocale = detectLocale()`, and looks up each section/category's
   but picking a theme in Settings has no visible effect and nothing persists
   for the next launch.
 
+  **Closed 2026-08-20 (operator).** Wired the moment Track AD merged and
+  released `main.tsx`. Recorded rather than deleted because the shape is
+  worth keeping: a track that builds a correct module it is not allowed to
+  call ships something that looks finished and does nothing, and only the
+  operator's own debt list stands between that and a silent gap. The wiring
+  is one line beside `syncStoredLocale()`.
+
 - **`src/features/profile/PreferencesSection.tsx`'s `tema` row is now stale
   copy, not owned by any Wave 4.1 track.** It renders `tema` as a
   permanently inert row with `settings:preferences.theme.note` ("the app is

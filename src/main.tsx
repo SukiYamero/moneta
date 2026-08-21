@@ -7,6 +7,7 @@ import { AppErrorBoundary } from '@/AppErrorBoundary'
 import { initServiceWorkerUpdates } from '@/lib/swUpdate'
 import '@/lib/i18n'
 import { syncStoredLocale } from '@/lib/i18n/syncStoredLocale'
+import { syncStoredTheme } from '@/lib/syncStoredTheme'
 // Side-effect import: attaches the authStore subscription that starts/stops
 // the Drive sync triggers (specs.md §10.26 §2) — see that module's own
 // comment for why this is a reactive subscription rather than explicit
@@ -19,6 +20,7 @@ if (!rootEl) throw new Error('Root element #root not found')
 
 initServiceWorkerUpdates()
 syncStoredLocale()
+syncStoredTheme()
 
 createRoot(rootEl).render(
   <StrictMode>
