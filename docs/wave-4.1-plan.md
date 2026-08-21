@@ -214,12 +214,12 @@ Per `AGENTS.md`, non-optional:
 
 ## 6. Status
 
-| Track | Branch           | Worktree                           | Status                                                |
-| ----- | ---------------- | ---------------------------------- | ----------------------------------------------------- |
-| AD    | `track-ad-boot`  | removed                            | **merged 2026-08-20**, review in flight (`review-ad`) |
-| AE    | `track-ae-light` | removed                            | ✅ **merged + reviewed 2026-08-20**                   |
-| AF    | `track-af-pin`   | `../moneta-worktrees/track-af-pin` | active                                                |
-| AG    | —                | —                                  | stage 2, not started                                  |
+| Track | Branch           | Worktree                           | Status                              |
+| ----- | ---------------- | ---------------------------------- | ----------------------------------- |
+| AD    | `track-ad-boot`  | removed                            | ✅ **merged + reviewed 2026-08-20** |
+| AE    | `track-ae-light` | removed                            | ✅ **merged + reviewed 2026-08-20** |
+| AF    | `track-af-pin`   | `../moneta-worktrees/track-af-pin` | active                              |
+| AG    | —                | —                                  | stage 2, not started                |
 
 ## 7. Operator debt from stage 1 (do not lose these)
 
@@ -236,3 +236,25 @@ Per `AGENTS.md`, non-optional:
   settings-side editor and never asked which _other_ file rendered the same
   preference. Authorized to AE's reviewer, with the constraint that the
   `profile` i18n namespace belongs to live Track AF.
+
+## 8. Escalated to the operator by the stage-1 reviewers (decide in the cross-track pass)
+
+Neither is a defect in the track that surfaced it; both are cross-cutting and
+were correctly _not_ acted on by a reviewer scoped to one track.
+
+1. **Mirror the login marker for a synchronous read, the way the theme now
+   is.** `RequireAuth` renders a genuinely blank frame while
+   `hasLoggedInBefore()` resolves from IndexedDB, so a returning user's real
+   sequence is blank → skeleton → content. Track AE established the pattern
+   that removes it (§10.30: a non-sensitive device signal may be mirrored to
+   `localStorage` precisely so boot can read it before first paint). The
+   marker lives in `deviceStore.ts`, which Track AF owns this stage — decide
+   once AF has merged. **The trade to weigh:** it adds a second home for a
+   signal that must not drift (`AGENTS.md`'s single-source-of-truth rule),
+   against removing a blank frame on every cold open.
+2. **`getInitials` is a pure `name → initials` helper living in
+   `@/features/home/homeView`**, now imported by three features (home,
+   profile's `IdentitySection`, auth's returning-user screen). That is the
+   "belongs in `src/lib/`" smell, and moving it touches files owned by two
+   different tracks — which is exactly why it is the cross-track pass's job
+   and not a per-track reviewer's.

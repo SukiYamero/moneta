@@ -671,10 +671,9 @@ Check this table against `git worktree list` at the start of any parallel
 session; prune anything stale (merged-but-not-removed, or on disk but
 missing/finished here).
 
-| Path                               | Branch         | Status                    |
-| ---------------------------------- | -------------- | ------------------------- |
-| `../moneta-worktrees/review-ad`    | `review-ad`    | active (AD's review pass) |
-| `../moneta-worktrees/track-af-pin` | `track-af-pin` | active                    |
+| Path                               | Branch         | Status |
+| ---------------------------------- | -------------- | ------ |
+| `../moneta-worktrees/track-af-pin` | `track-af-pin` | active |
 
 Wave 4 stage 3, step 2: AB = §10.26 sync goes live (merged and removed
 2026-08-20, along with its own review pass); AC = §10.27 + the review debt
