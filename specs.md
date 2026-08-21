@@ -3241,23 +3241,89 @@ recorded one (`docs/pendientes-usuario.md` item 7).
   place that distinction earns its keep. Record the choice explicitly rather
   than letting it look like a violation.
 
-#### The contrast check the user still owes
+#### The contrast check — done 2026-08-20, and all five tints fail on light
 
-The five category tints were picked against a dark background. `#f5b93f` and
-`#2fd896` are the two most likely to fail against a light surface. This is a
-human judgment against real screens, not something an agent should assert —
-until it happens, ship light knowing the tints are unverified there, and say
-so in the track's report rather than silently.
+Measured, not estimated, and it corrects the operator's earlier guess that
+`#f5b93f` and `#2fd896` were "the two to look at": **all five fail**, and by a
+wide margin.
 
-#### What is still needed before this can be dispatched
+Measured in the real usage — `text-chart-N` on `bg-chart-N/15` over a white
+card, which is what `IconAvatar` and `TagChip` actually render
+(`tintClasses.ts`) — against WCAG's 3.0 threshold for graphical elements:
 
-**The design file itself.** `docs/ui/README.md` refers to `Moneta.dc.html` as
-though it were readable, and it is not in this repo — it lives only in the
-Claude Design canvas, which an agent session cannot reach (403). Every
-implementation of a designed screen has so far worked from prose descriptions
-in that folder rather than the artboards. **Export `Moneta.dc.html` into
-`docs/ui/`** and this stops being a recurring cost for every future design
-track, not just this one.
+| tint            | light | dark |
+| --------------- | ----- | ---- |
+| chart-1 emerald | 1.67  | 7.14 |
+| chart-2 blue    | 2.16  | 5.67 |
+| chart-3 amber   | 1.62  | 7.40 |
+| chart-4 rose    | 2.05  | 5.94 |
+| chart-5 purple  | 2.32  | 5.30 |
+
+The opaque `fill` bar (`BreakdownCard`) is the same story: 1.77–2.64 on light,
+6.72–10.06 on dark.
+
+**This contradicts a decision already taken and recorded**, and the
+contradiction is worth stating plainly rather than quietly resolving: the user
+closed §10.30's prerequisite by giving `:root`'s five `chart-*` tokens the same
+values `.dark` carries, reasoning that a tint is an identity, not a decoration.
+**That reasoning is right and survives; those specific values do not.** They
+were picked against black.
+
+**The resolution keeps the principle** by applying an operation the design
+itself already performs on the accent (`#2FD896` dark → `#12A873` light): hold
+hue and saturation, lower lightness until the threshold is met.
+
+**Decided 2026-08-20 (user):**
+
+| token   | dark (unchanged) | light     |
+| ------- | ---------------- | --------- |
+| chart-1 | `#2fd896`        | `#1c9465` |
+| chart-2 | `#7ba7f0`        | `#4180e9` |
+| chart-3 | `#f5b93f`        | `#af7809` |
+| chart-4 | `#fb8989`        | `#f72121` |
+| chart-5 | `#c084fc`        | `#a958fb` |
+
+All land at 3.2 on the pill and ~3.8–4.0 on the bar — **the minimum that
+passes, not a redesign**. Two are flagged for the user's own eye once visible:
+`#f72121` moved furthest from its origin (a light rose has nowhere to go but
+pure red) and `#af7809` reads nearly brown, which is what happens to any yellow
+that has to earn contrast on white.
+
+#### The four danger/warning tokens — decided 2026-08-20 (user)
+
+`--destructive`, `--danger-strong`, `--danger-foreground` and `--warning` have
+no light source in the export; the app's dark values trace to a literal hex in
+the markup. **Adapt them from the design's own pair**, `--mn-danger`
+`#FB8989` dark → `#CF4B4B` light — the same relationship the user chose for the
+rest of the palette. A destructive action must read as danger on white as
+plainly as it does on black.
+
+#### `--muted`/`--accent`/`--secondary` collapsing to `#FFFFFF` — confirmed correct
+
+All three resolve to the same white in light, faithfully inheriting the dark
+theme's own pattern of reusing the card slot. **Confirmed by the user as
+intended**, not a translation error: surfaces separate from the `#F4F3EF`
+background by shadow and border rather than by fill. Recorded so a later
+reviewer does not "fix" it.
+
+#### The theme mechanism — operator decision
+
+The design toggles with an attribute (`:root[data-mn-theme="light"]`); the app
+uses a class (`.dark` on `<html>`), which is what Tailwind v4's `dark:` variant
+is already wired to across the whole codebase. **The app's class convention
+wins** — this is a mechanism, not a design choice, and switching it would touch
+every `dark:` utility in the tree for no user-visible gain.
+
+#### The palette itself — available 2026-08-20
+
+The design export is versioned in the repo. `docs/ui/moneta-theme.css` carries
+every `--mn-*` value for both themes verbatim, and
+`docs/ui/design-export-reference.md` holds the validated mapping from those
+names to the app's own tokens. That mapping is not guesswork: the app's shipped
+`.dark` block was diffed hex by hex against the export's dark column and every
+value matched, which is what makes the light column trustworthy — and which
+surfaced that `--popover` maps to `--mn-surface3`, not the obvious
+`--mn-surface2`.
 
 #### Blast radius
 
