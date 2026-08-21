@@ -22,6 +22,7 @@ export type SwitchProfileResult =
   | { outcome: 'noop' }
   | { outcome: 'switched' }
   | { outcome: 'profile-database-gone' }
+  | { outcome: 'switch-failed' }
 
 /**
  * Switches the active profile (specs.md §10.31): no PIN (decided by the
@@ -57,16 +58,41 @@ export const switchToProfile = async (target: ProfileRecord): Promise<SwitchProf
   await setActiveProfileId(target.id)
   await useBootStore.getState().run()
 
+  // `useBootStore.run()` never rejects — it swallows its own failures into
+  // `status: 'error'` (specs.md §10.28's boot error screen) — so the only
+  // way to tell whether the rebind actually landed is to check what's
+  // bound now against what we asked for. Without this, a failure between
+  // `resolveActiveProfileBinding()` and `bindActiveProfile()` inside
+  // `run()` would leave the repo still pointing at the *old* profile while
+  // the pointer we just wrote above already names the new one — reported
+  // back as `'switched'` (a success-shaped value for a failure,
+  // docs/error-handling.md §4) and, on the next cold boot, a device stuck
+  // trying to bind a profile it never actually resolved this session.
+  const rebound = getActiveProfileBinding()
+  if (rebound?.profile.id !== target.id) {
+    if (current) {
+      await setActiveProfileId(current.profile.id)
+      // `run()` above already left `useBootStore`'s own status `'error'`
+      // for the failed attempt at `target`. The repo binding itself never
+      // moved away from `current` (that's what this branch means), so
+      // re-running now that the pointer points back at it resolves the
+      // exact same binding already held in memory, reloads nothing (the
+      // data store was never reset), and settles boot status back to
+      // `'ready'` — the global `BootGate` must not keep showing an error
+      // screen over a profile the switch never actually left.
+      await useBootStore.getState().run()
+    }
+    return { outcome: 'switch-failed' }
+  }
+
   // Stop unconditionally first — the old profile's triggers must never keep
   // running once its data is no longer what's on screen, whether or not
   // the new one gets its own.
   stopSyncSession()
-  const rebound = getActiveProfileBinding()
   const { status, drive, user } = useAuthStore.getState()
   const eligible =
     status === 'authenticated' &&
     drive !== null &&
-    rebound !== null &&
     rebound.profile.accountKey === accountKeyOf(user)
   if (eligible) startSyncSession()
 

@@ -123,6 +123,42 @@ describe('switchToProfile', () => {
     expect(mStartSyncSession).toHaveBeenCalled()
   })
 
+  // `useBootStore.run()` never rejects — it swallows its own failures into
+  // `status: 'error'` — so switchToProfile can't tell a failed rebind apart
+  // from a successful one just by awaiting it. This simulates exactly that:
+  // run() "completing" without ever actually moving the repo binding away
+  // from the profile that was active before the switch (e.g. because
+  // resolveActiveProfileBinding() threw before bindActiveProfile() ran).
+  it('reports failure and reverts the pointer when run() completes without actually rebinding to the target', async () => {
+    const { useBootStore } = await import('@/lib/boot')
+    await useBootStore.getState().run() // establishes the default profile as bound first
+    const before = getActiveProfileBinding()!.profile
+
+    await registerProfile({
+      id: 'switch-run-fails',
+      label: 'Cuenta de Google',
+      kind: 'google',
+      databaseName: 'kurobello-switch-run-fails',
+    })
+    const targetDb = getProfileDatabase('kurobello-switch-run-fails')
+    await targetDb.profileOwner.put({ id: 1, kind: 'google', createdAt: 'T1' })
+    const target = (await getProfile('switch-run-fails'))!
+
+    const runSpy = vi.spyOn(useBootStore.getState(), 'run').mockResolvedValue(undefined)
+
+    const result = await switchToProfile(target)
+
+    expect(result).toEqual({ outcome: 'switch-failed' })
+    // The pointer must not be left naming a profile the app never actually
+    // bound to — the repo is still on `before`, so the pointer must be too.
+    expect(getActiveProfileBinding()!.profile.id).toBe(before.id)
+    expect(await getActiveProfileId()).toBe(before.id)
+    expect(mStopSyncSession).not.toHaveBeenCalled()
+    expect(mStartSyncSession).not.toHaveBeenCalled()
+
+    runSpy.mockRestore()
+  })
+
   it('reports the target profile’s database as gone when its owner marker is missing, without switching', async () => {
     const { useBootStore } = await import('@/lib/boot')
     await useBootStore.getState().run()

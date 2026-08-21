@@ -280,6 +280,7 @@
         "google": "Cuenta de Google"
       },
       "localLabel": "Este dispositivo",
+      "switchError": "No se pudo cambiar de perfil. Intentá de nuevo.",
       "goneDialog": {
         "title": "Los datos de este perfil ya no están",
         "description": "Su almacenamiento se borró en este dispositivo. Se puede sacar de la lista.",

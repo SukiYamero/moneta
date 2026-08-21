@@ -53,6 +53,20 @@ describe('countGuestMovements', () => {
     await db.movimientos.bulkPut([movimiento(), movimiento(), movimiento()])
     expect(await countGuestMovements()).toBe(3)
   })
+
+  // docs/error-handling.md §4: 0 is a real, valid count, so a storage
+  // failure must not degrade to it — that would be indistinguishable from
+  // "genuinely no local data" and silently suppress the adoption offer on
+  // a device whose storage is actually broken. `authStore.ts`'s
+  // `checkGuestAdoption` is the one place that decides how to degrade this
+  // (its own test covers that); this module must let the failure through.
+  it('propagates a storage failure rather than degrading to 0', async () => {
+    const spy = vi.spyOn(db.movimientos, 'count').mockRejectedValue(new Error('IDB blocked'))
+
+    await expect(countGuestMovements()).rejects.toThrow('IDB blocked')
+
+    spy.mockRestore()
+  })
 })
 
 describe('adoptGuestMovements', () => {

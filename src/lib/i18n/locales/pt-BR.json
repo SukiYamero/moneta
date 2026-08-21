@@ -280,6 +280,7 @@
         "google": "Conta do Google"
       },
       "localLabel": "Este aparelho",
+      "switchError": "Não foi possível trocar de perfil. Tente de novo.",
       "goneDialog": {
         "title": "Os dados deste perfil sumiram",
         "description": "O armazenamento foi apagado neste aparelho. Dá para remover da lista.",

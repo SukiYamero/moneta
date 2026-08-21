@@ -3,6 +3,7 @@ import { getActiveProfile, listProfiles, removeProfile, type ProfileRecord } fro
 // Imported directly, not through the `@/lib/profiles` barrel — that barrel
 // deliberately omits it to avoid a circular import (see its own comment).
 import { switchToProfile } from '@/lib/profiles/switchProfile'
+import { toast } from '@/lib/toastStore'
 
 export interface UseProfilesResult {
   status: 'loading' | 'ready'
@@ -66,6 +67,11 @@ export const useProfiles = (): UseProfilesResult => {
     }
     setState((prev) => ({ ...prev, switchingId: null }))
     if (result.outcome === 'switched') await reload()
+    // `switchToProfile` already reverted the pointer to whatever was
+    // active before the attempt (docs/error-handling.md §4 — never a
+    // success-shaped value for a failure), so there is nothing to reload
+    // here; the person just needs to know the tap didn't do anything.
+    if (result.outcome === 'switch-failed') toast.error('profile:profiles.switchError')
   }
 
   const dismissGoneProfile = (): void => setState((prev) => ({ ...prev, goneProfile: null }))

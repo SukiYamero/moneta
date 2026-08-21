@@ -71,11 +71,17 @@ createdAt })` writes only if the database doesn't already carry one
   Order: no-op if `target` is already active → pre-check the target's owner
   marker (absent means its storage was cleared — returns
   `'profile-database-gone'` without touching anything) → set the explicit
-  pointer → `useBootStore.getState().run()` → stop the old profile's sync
-  triggers unconditionally → start the new one's only if it belongs to the
-  currently authenticated account (`authStore.ts`'s `accountKeyOf`,
-  `specs.md` §10.31 §4 — switching to a Google profile you are not signed
-  into shows its local data with sync off, on purpose). Composed **above**
+  pointer → `useBootStore.getState().run()` → verify the rebind actually
+  landed (`run()` never rejects — it swallows its own failures into
+  `status: 'error'` — so this checks `getActiveProfileBinding()` against
+  `target` itself; a mismatch reverts the pointer, re-runs `run()` to settle
+  boot status back on the still-bound old profile, and returns
+  `'switch-failed'` rather than reporting a rebind that never happened) →
+  stop the old profile's sync triggers unconditionally → start the new
+  one's only if it belongs to the currently authenticated account
+  (`authStore.ts`'s `accountKeyOf`, `specs.md` §10.31 §4 — switching to a
+  Google profile you are not signed into shows its local data with sync
+  off, on purpose). Composed **above**
   `boot.ts`, `authStore.ts` and `sync/syncSession.ts` rather than inside
   any one of them: `authStore.ts` already imports `boot.ts`
   (`invalidateBootForSignOut`), and `syncSession.ts` already imports
@@ -103,6 +109,10 @@ switchProfile`.
   asserts the retry finishes cleanly with no duplicate outbox entries).
   Throws on failure rather than swallowing it — the caller
   (`authStore.ts`'s `acceptGuestAdoption`) decides whether/when to retry.
+  `countGuestMovements()` does too, for the same reason (`0` is a real,
+  valid count, so swallowing a storage failure into it would be
+  indistinguishable from "genuinely no local data"); its one caller,
+  `authStore.ts`'s `checkGuestAdoption`, is what decides how to degrade it.
 - `index.ts` — the public barrel: profile types, the registry functions
   (including the active-profile pointer and `removeProfile`), and
   `getProfileDatabase()`/`ensureOwnerMarker`/`readOwnerMarker`/
