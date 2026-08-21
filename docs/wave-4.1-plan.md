@@ -214,13 +214,13 @@ Per `AGENTS.md`, non-optional:
 
 ## 6. Status
 
-| Track | Branch           | Worktree | Status                              |
-| ----- | ---------------- | -------- | ----------------------------------- |
-| AD    | `track-ad-boot`  | removed  | ✅ **merged + reviewed 2026-08-20** |
-| AE    | `track-ae-light` | removed  | ✅ **merged + reviewed 2026-08-20** |
-| AF    | `track-af-pin`   | removed  | ✅ **merged + reviewed 2026-08-20** |
-| AH    | —                | —        | §10.33, next (added mid-wave)       |
-| AG    | —                | —        | after AH                            |
+| Track | Branch              | Worktree                                | Status                              |
+| ----- | ------------------- | --------------------------------------- | ----------------------------------- |
+| AD    | `track-ad-boot`     | removed                                 | ✅ **merged + reviewed 2026-08-20** |
+| AE    | `track-ae-light`    | removed                                 | ✅ **merged + reviewed 2026-08-20** |
+| AF    | `track-af-pin`      | removed                                 | ✅ **merged + reviewed 2026-08-20** |
+| AH    | `track-ah-guest`    | removed                                 | ✅ **merged + reviewed 2026-08-20** |
+| AG    | `track-ag-profiles` | `../moneta-worktrees/track-ag-profiles` | active (§10.31 + §10.32)            |
 
 ## 7. Operator debt from stage 1 (do not lose these)
 
