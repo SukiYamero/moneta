@@ -43,6 +43,16 @@
       "popupFailedToOpen": "El navegador bloqueó la ventana de Google. Revisa el bloqueador de ventanas emergentes.",
       "loginDefault": "No se pudo iniciar sesión. Intenta de nuevo.",
       "driveDefault": "No se pudo conectar con Drive. Intenta de nuevo."
+    },
+    "adoption": {
+      "title": "¿Traer tus movimientos a esta cuenta?",
+      "description_one": "Tienes {{count}} movimiento guardado solo en este dispositivo. Si lo traes, queda bajo esta cuenta y se pone en cola para tu Drive.",
+      "description_other": "Tienes {{count}} movimientos guardados solo en este dispositivo. Si los traes, quedan bajo esta cuenta y se ponen en cola para tu Drive.",
+      "declineNote": "Si eliges que no, se quedan en este dispositivo, en su propio perfil, y puedes verlos cuando quieras.",
+      "acceptCta": "Sí, traerlos",
+      "declineCta": "No, dejarlos aquí",
+      "moving": "Moviendo…",
+      "error": "No se pudieron traer los movimientos. Intenta de nuevo."
     }
   },
   "driveConsent": {

@@ -84,10 +84,30 @@ createdAt })` writes only if the database doesn't already carry one
   for the identical reason one level up: it imports `authStore.ts`, which
   imports this barrel — callers import it directly from `@/lib/profiles/
 switchProfile`.
+- `adoption.ts` — `countGuestMovements()` / `adoptGuestMovements(target)`
+  (`specs.md` §10.32): the local/guest profile (always `db.ts`'s frozen
+  `kurobello` — a guest never has any other database) is the only source;
+  movements only, no `Activo` (there is no sync write path for it yet —
+  `outbox.ts`'s `OutboxOperation` union has no variant, so there is nothing
+  to enqueue even if it were copied). `adoptGuestMovements` is a merge, not
+  a replace (ids are `crypto.randomUUID()`, so nothing in `target` can
+  collide) and **resumable by construction, not by tracking progress**:
+  every step is an idempotent "set" operation over data re-read fresh each
+  call (`bulkPut` into the target, a guarded enqueue that skips an entity
+  id already queued, then `bulkDelete` from the source) — IndexedDB has no
+  transaction spanning two separate databases, so a caller safe to retry
+  after _any_ interruption (a tab closed mid-move) by simply calling this
+  again, no special "resume" argument, is what stands in for atomicity.
+  Written test-first (`adoption.test.ts`'s interruption test mocks a
+  mid-move failure, asserts neither side lost data, then retries and
+  asserts the retry finishes cleanly with no duplicate outbox entries).
+  Throws on failure rather than swallowing it — the caller
+  (`authStore.ts`'s `acceptGuestAdoption`) decides whether/when to retry.
 - `index.ts` — the public barrel: profile types, the registry functions
   (including the active-profile pointer and `removeProfile`), and
-  `getProfileDatabase()`/`ensureOwnerMarker`/`readOwnerMarker`. Not
-  `switchToProfile` — see `switchProfile.ts`'s own entry above.
+  `getProfileDatabase()`/`ensureOwnerMarker`/`readOwnerMarker`/
+  `adoptGuestMovements`/`countGuestMovements`. Not `switchToProfile` — see
+  `switchProfile.ts`'s own entry above.
 
 Consumed by `src/lib/repoProvider.ts`'s `resolveActiveProfileBinding()`,
 called once per boot by `src/lib/boot.ts` (`specs.md` §10.28) — its result is

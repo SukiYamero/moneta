@@ -43,6 +43,16 @@
       "popupFailedToOpen": "Seu navegador bloqueou a janela do Google. Verifique o bloqueador de pop-ups.",
       "loginDefault": "Não foi possível entrar. Tente de novo.",
       "driveDefault": "Não foi possível conectar ao Drive. Tente de novo."
+    },
+    "adoption": {
+      "title": "Trazer seus lançamentos para esta conta?",
+      "description_one": "Você tem {{count}} lançamento guardado só neste aparelho. Se trouxer, ele passa a ficar nesta conta e entra na fila para o seu Drive.",
+      "description_other": "Você tem {{count}} lançamentos guardados só neste aparelho. Se trouxer, eles passam a ficar nesta conta e entram na fila para o seu Drive.",
+      "declineNote": "Se você disser que não, eles ficam neste aparelho, no próprio perfil, e você pode acessá-los quando quiser.",
+      "acceptCta": "Sim, trazer",
+      "declineCta": "Não, deixar aqui",
+      "moving": "Movendo…",
+      "error": "Não foi possível trazer os lançamentos. Tente de novo."
     }
   },
   "driveConsent": {

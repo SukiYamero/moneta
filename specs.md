@@ -7445,6 +7445,96 @@ authStore`), caught by a batch of test files failing on
      **Half 2 (§10.32, guest-data adoption) is a separate commit.**
      `bun run check` green after half 1 alone: 143 files / 1,518 tests.
 
+- 2026-08-21 — **§10.32 implemented (Track AG half 2): the guest-data
+  adoption prompt.** Closes the common path of the guest cliff — signing in
+  no longer looks like the app forgot you.
+  - `profiles/adoption.ts` — `countGuestMovements()` (the "how much," a
+    real count) and `adoptGuestMovements(target)` (the move itself: `db.ts`'s
+    frozen `kurobello` database is always the guest/local source — a guest
+    never has any other one — moving into `target`'s own database and
+    outbox). Movements only, matching the spec's own wording throughout
+    ("N movements") and the fact that there is no sync write path for
+    `Activo` yet. **Resumable by construction, not by tracking progress**:
+    every step is expressed as an idempotent "set" operation over data
+    re-read fresh each call (`bulkPut` into the target, a guarded enqueue
+    that skips an entity id already queued in the target's outbox, then
+    `bulkDelete` from the source) — IndexedDB has no transaction primitive
+    spanning two separate databases, so there is no way to make the whole
+    move one atomic unit; instead, every step being safe to redo is what
+    makes calling this function again after _any_ interruption (a tab
+    closed mid-move) correct, with no special "resume" argument and no
+    separate progress bookkeeping. **Written test-first**
+    (`adoption.test.ts`): a test mocks the target's outbox write to fail
+    partway through a two-movement adoption, asserts neither side lost
+    data (target already has both — that half is idempotent regardless of
+    when it runs — and the source still holds both, since nothing is
+    confirmed moved until the source delete lands), then calls the
+    function again with no special argument and asserts it finishes
+    cleanly with the source empty and no duplicate outbox entries (the
+    "already queued" guard is what prevents the retry from re-uploading —
+    and re-paying for — the same shard entry twice). A second test proves
+    "adoption is a merge, not a replace" the spec itself asked to have
+    proven rather than assumed: the target already holding an unrelated
+    movement before adoption ends up with both afterward, since ids are
+    `crypto.randomUUID()` and nothing can collide.
+  - `outbox.ts`'s new optional `database` parameter (half 1) is what lets
+    `adoption.ts` enqueue directly into a profile that isn't the currently
+    active one, without waiting for `setOutboxDatabase()` to redirect to it
+    first — the same mechanism half 1 built for `push()`/`pull()`, reused
+    rather than duplicated.
+  - `authStore.ts`: `login()` (only — not `restore()`/`hydrate()`, which
+    are silent re-entry into an _existing_ session, not "a guest signing
+    in") checks `checkGuestAdoption()` after resolving the signed-in
+    account's profile and before flipping `status`'s consumers can act on
+    it being settled. **Reads the local profile's actual movement count
+    directly, not the §10.33 guest-used device marker `clearGuestUsed()`
+    clears moments later in the same function** — the brief's own named
+    seam ("make sure one does not destroy the other's signal") is closed
+    by the two being independent signals from the start, not by careful
+    ordering: a person can have local data in the default profile without
+    ever having tapped "continue as guest" this session, and the marker
+    says nothing about whether data exists. New `pendingAdoption`/
+    `adoptionBusy`/`adoptionError` fields, isolated from `status`/`error`
+    the same way `driveConnecting`/`driveError` already are (§7's case 6:
+    a failure here must never look like the identity layer failed and boot
+    the user back to a login screen). `acceptGuestAdoption()` leaves
+    `pendingAdoption` set on failure (not cleared) so the prompt can offer
+    a retry — `adoptGuestMovements` is safe to call again after exactly
+    this kind of interruption. The "asked once" device-wide marker
+    (`deviceStore.ts`'s `adoptionDeclined`, half 1) is written only on an
+    explicit decline, never merely on the prompt being shown: an accepted
+    adoption empties the local profile, which suppresses the prompt on its
+    own via the movement count, so only "no" needs a persisted memory.
+  - `features/auth/GuestAdoptionPrompt.tsx` — mounted by `RequireAuth.tsx`
+    alongside `children` in the `'authenticated'` branch (after
+    `driveOptIn` resolves), not as a second full-screen gate: Home is
+    already real and usable underneath while the person decides, unlike
+    `DrivePermissionScreen`'s pending-decision full-screen treatment. No
+    design exists for this screen (verified against the export — the
+    canvas's "Usar estos datos" belongs to the receipt-scan flow, not
+    profiles) — built from `CenterModal`/`Button` and the tokens, same
+    posture as §10.2.1's operator-designed biometric row.
+  - **Edge cases, all satisfied by construction rather than special-cased:**
+    "nothing local to bring → no prompt" is the `count === 0` branch of
+    `checkGuestAdoption`, the same check that also makes a genuine
+    first-ever sign-in silent. "Offline at sign-in" needs no handling at
+    all — `adoptGuestMovements` never makes a network call, only local
+    writes plus an outbox enqueue that waits for whatever trigger
+    eventually pushes it, so the prompt's copy ("queued for Drive," never
+    "uploaded") stays true regardless of connectivity. "The emptied guest
+    profile stays" — `adoptGuestMovements` never touches the profile
+    registry, only movements; the local profile continues to exist, simply
+    with none left, exactly as the switcher (§10.31) needs it to.
+  - **Not built, correctly out of scope per the spec's own "what this does
+    and does not close":** any change to `profiles/switchProfile.ts` or
+    the switcher — declining leaves the guest data exactly where the
+    switcher already makes it reachable, with nothing new for this half to
+    add.
+    `bun run check` green: 145 files, 1,544 tests (up from half 1's
+    143/1,518 — 2 new files, 26 new tests: `adoption.test.ts`'s 8,
+    `GuestAdoptionPrompt.test.tsx`'s 7, plus `authStore.test.ts`'s 9 new
+    login/accept/decline cases and 2 new `RequireAuth.test.tsx` cases).
+
 ## 12. Backlog (pending verification / deferred work)
 
 - **The Add sheet's "gear into `/settings`" entry point was never actually

@@ -3,6 +3,7 @@ import { useAuthStore } from '@/lib/authStore'
 import { hasLoggedInBefore, hasUsedGuestBefore } from '@/lib/deviceStore'
 import { WelcomeScreen } from '@/features/auth/WelcomeScreen'
 import { DrivePermissionScreen } from '@/features/auth/DrivePermissionScreen'
+import { GuestAdoptionPrompt } from '@/features/auth/GuestAdoptionPrompt'
 import { ReturningUserScreen } from '@/features/auth/ReturningUserScreen'
 import { PreContentSkeleton } from '@/features/boot/PreContentSkeleton'
 
@@ -77,7 +78,17 @@ export const RequireAuth = ({ children }: { children: ReactNode }) => {
   // opt-in to answer, and never did).
   if (status === 'guest') return <>{children}</>
   if (status === 'authenticated') {
-    return driveOptIn === 'pending' ? <DrivePermissionScreen /> : <>{children}</>
+    if (driveOptIn === 'pending') return <DrivePermissionScreen />
+    // specs.md §10.32: a modal over the settled app, not a second
+    // full-screen gate — Home is already real and usable underneath while
+    // the person decides. Renders nothing itself when there is no pending
+    // offer (the overwhelmingly common case).
+    return (
+      <>
+        {children}
+        <GuestAdoptionPrompt />
+      </>
+    )
   }
 
   // Not authenticated, not guest: the pre-content span (specs.md §10.29).

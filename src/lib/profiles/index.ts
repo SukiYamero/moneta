@@ -24,6 +24,11 @@ export {
 } from '@/lib/profiles/profileRegistry'
 export { __clearProfileDatabaseCacheForTests, getProfileDatabase } from '@/lib/profiles/profileDb'
 export { ensureOwnerMarker, readOwnerMarker } from '@/lib/profiles/profileOwner'
+export {
+  adoptGuestMovements,
+  countGuestMovements,
+  type AdoptionResult,
+} from '@/lib/profiles/adoption'
 // `switchToProfile` (profiles/switchProfile.ts) is deliberately NOT
 // re-exported here: it imports `authStore.ts`, which itself imports this
 // barrel (`resolveGoogleProfile`/`setActiveProfileId`) — re-exporting it

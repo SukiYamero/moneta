@@ -10,14 +10,23 @@ import {
 import { bootstrap, type DriveLayout } from '@/lib/bootstrap'
 import { invalidateBootForSignOut } from '@/lib/boot'
 import { hasVault, resetVault, updateSession } from '@/lib/pinLock'
-import { resolveGoogleProfile, setActiveProfileId, DEFAULT_PROFILE_ID } from '@/lib/profiles'
+import {
+  adoptGuestMovements,
+  countGuestMovements,
+  getProfile,
+  resolveGoogleProfile,
+  setActiveProfileId,
+  DEFAULT_PROFILE_ID,
+} from '@/lib/profiles'
 import type { ProfileRecord } from '@/lib/profiles'
 import {
   clearDriveDecision,
   clearGuestUsed,
   getDriveDecision,
+  hasDeclinedAdoption,
   hasLoggedInBefore,
   hasUsedGuestBefore,
+  markAdoptionDeclined,
   markGuestUsed,
   markLoggedIn,
   setDriveDecision,
@@ -51,6 +60,12 @@ type AuthState = {
   driveOptIn: DriveOptIn
   driveConnecting: boolean
   driveError: string | null
+  // specs.md §10.32: set once, at first sign-in, when the local/guest
+  // profile has movements to offer and the device hasn't already declined.
+  // `null` is the overwhelmingly common state — no prompt at all.
+  pendingAdoption: { profileId: string; count: number } | null
+  adoptionBusy: boolean
+  adoptionError: string | null
   login: () => Promise<void>
   restore: () => Promise<void>
   logout: () => void
@@ -58,6 +73,8 @@ type AuthState = {
   hydrate: (session: AuthSession, cachedUser: GoogleUser | null) => Promise<void>
   connectDrive: () => Promise<void>
   dismissDrive: () => void
+  acceptGuestAdoption: () => Promise<void>
+  declineGuestAdoption: () => void
 }
 
 // Narrower than "any authenticate() failure": access_denied/popup_closed/
@@ -168,6 +185,30 @@ const syncProfileForAccount = async (user: GoogleUser | null): Promise<ProfileRe
     return record
   } catch (e) {
     console.warn('profiles: failed to resolve the profile for this account', e)
+    return null
+  }
+}
+
+// specs.md §10.32: "asked once, at first sign-in with local data present,
+// never re-offered." Gated on the local/guest profile's actual movements
+// (`profiles/adoption.ts`'s `countGuestMovements`), not on any device
+// marker — "nothing local to bring" already suppresses the prompt on its
+// own, both for a genuine first-ever sign-in (the common case) and for a
+// device where a prior adoption already emptied the local profile. The
+// declined marker only needs to remember the one answer that does *not*
+// empty it: a "no". Self-catching: a failure here must never fail the
+// login it rides on, same posture as syncProfileForAccount above — the
+// user just loses the offer this session, not their sign-in.
+const checkGuestAdoption = async (
+  targetProfileId: string,
+): Promise<{ profileId: string; count: number } | null> => {
+  try {
+    if (await hasDeclinedAdoption()) return null
+    const count = await countGuestMovements()
+    if (count === 0) return null
+    return { profileId: targetProfileId, count }
+  } catch (e) {
+    console.warn('adoption: could not check for local guest data to offer', e)
     return null
   }
 }
@@ -315,6 +356,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   driveOptIn: 'pending',
   driveConnecting: false,
   driveError: null,
+  pendingAdoption: null,
+  adoptionBusy: false,
+  adoptionError: null,
   login: async () => {
     const generation = authGeneration
     set({ status: 'authenticating', error: null })
@@ -327,7 +371,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // instant `status` becomes 'authenticated', so a fresh sign-in must
       // already be the most-recently-touched profile by that moment — never
       // a race against whichever profile recency last pointed at.
-      await syncProfileForAccount(user)
+      const resolvedProfile = await syncProfileForAccount(user)
       if (generation !== authGeneration) return
       set({ status: 'authenticated', session, user, driveOptIn })
       await syncLockedSession(session, user)
@@ -336,6 +380,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // gates on (specs.md §11, 2026-08-19). markLoggedIn() self-catches, so
       // this can never fail the login it rides on.
       await markLoggedIn()
+      // specs.md §10.32: "the moment of signing in is the moment the month
+      // disappears from the screen" — checked here, at the one moment this
+      // is actually "a guest signing in," never from restore()/hydrate()
+      // (silent re-entry into an *existing* session, not a sign-in). Reads
+      // the local/guest profile's actual movements, not the guest marker
+      // `clearGuestUsed()` is about to clear below — the two are different
+      // signals, and this one must not depend on the other still being set
+      // (a person can have local data in the default profile without ever
+      // having used "continue as guest" explicitly this session).
+      if (generation === authGeneration && resolvedProfile) {
+        const pending = await checkGuestAdoption(resolvedProfile.id)
+        if (generation === authGeneration && pending) set({ pendingAdoption: pending })
+      }
       // specs.md §10.33 decision 2: signing in with Google is one of the two
       // ways a guest marker is cleared — a stale one outliving the choice
       // would send this now-signed-in user back into guest mode on the next
@@ -603,5 +660,39 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     // synchronous UI state — a storage write failure here just means the
     // device is asked again next time, not that "Ahora no" stops working.
     void setDriveDecision('dismissed')
+  },
+  // specs.md §10.32: moves the local/guest profile's movements into the
+  // account that's now signed in. Isolated into its own `adoptionBusy`/
+  // `adoptionError` fields, not `status`/`error` — the same reasoning
+  // `driveConnecting`/`driveError` already established for `connectDrive`
+  // (docs/error-handling.md's case 6): a failure here must never look like
+  // the *identity* layer failed and boot the user back to a login screen.
+  // `pendingAdoption` is deliberately left set on failure (not cleared) so
+  // the prompt UI can offer a retry rather than silently losing the offer;
+  // `adoptGuestMovements` itself is safe to call again after any
+  // interruption (its own module comment) — a failed attempt here is
+  // exactly that kind of interruption.
+  acceptGuestAdoption: async () => {
+    const pending = get().pendingAdoption
+    if (!pending) return
+    set({ adoptionBusy: true, adoptionError: null })
+    try {
+      const target = await getProfile(pending.profileId)
+      if (!target) throw new Error('adoption: target profile no longer exists in the registry')
+      await adoptGuestMovements(target)
+      set({ adoptionBusy: false, pendingAdoption: null })
+    } catch (e) {
+      set({ adoptionBusy: false, adoptionError: errorMessage(e) })
+    }
+  },
+  // specs.md §10.32: "what 'no' means... the data stays on this device, in
+  // its own profile, and remains reachable" — nothing here touches the
+  // local profile at all, only records the answer so the prompt isn't
+  // re-offered (markAdoptionDeclined self-catches: a storage failure just
+  // means the prompt can reappear on a later sign-in, not that "no" stops
+  // working this session).
+  declineGuestAdoption: () => {
+    set({ pendingAdoption: null, adoptionError: null })
+    void markAdoptionDeclined()
   },
 }))

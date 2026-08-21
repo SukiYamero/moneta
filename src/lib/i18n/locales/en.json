@@ -43,6 +43,16 @@
       "popupFailedToOpen": "Your browser blocked the Google window. Check your pop-up blocker.",
       "loginDefault": "We couldn't sign you in. Try again.",
       "driveDefault": "We couldn't connect to Drive. Try again."
+    },
+    "adoption": {
+      "title": "Bring your movements into this account?",
+      "description_one": "You have {{count}} movement saved only on this device. Bringing it in keeps it under this account and queues it for your Drive.",
+      "description_other": "You have {{count}} movements saved only on this device. Bringing them in keeps them under this account and queues them for your Drive.",
+      "declineNote": "If you say no, they stay on this device, in their own profile, and you can still reach them anytime.",
+      "acceptCta": "Yes, bring them",
+      "declineCta": "No, leave them here",
+      "moving": "Moving…",
+      "error": "Couldn't bring your movements over. Try again."
     }
   },
   "driveConsent": {
