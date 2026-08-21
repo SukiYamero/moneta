@@ -3607,6 +3607,106 @@ canvas's "Usar estos datos" belongs to the receipt-scan flow, not to profiles.
 Operator-designed from existing components, same posture as the biometric row
 (§10.2.1).
 
+### 10.33 A guest who comes back — persisting guest mode, and what the guest lock actually protects
+
+Wave 4.1, operator-owned. Written 2026-08-20, from a defect the wave's own
+seam produced. No code yet.
+
+#### How this was found, because the process matters more than the bug
+
+Track AF shipped the guest's biometric lock (§10.2.1) and reported, honestly
+and unprompted, that it **only re-locks a guest session that is already
+running and goes to the background — never at cold start**, because guest
+status is not persisted across a reload. The shipped copy says the opposite:
+_"Pedí tu huella o Face ID al volver a abrir la app."_
+
+Neither track was wrong. **The operator's brief was.** §10.21 says in as many
+words that persisting guest mode "is unblocked, and this screen is its natural
+home. Decide the two together" — and the Track AD brief instead told AD to
+leave the guest out entirely, conflating "no guest button on the returning-user
+screen" (correct: that screen is for a lapsed Google session) with "no guest
+persistence" (a separate question the spec had explicitly asked to be answered
+in the same breath). AF then met the consequence from the other side, where it
+looks like a lock that does not lock.
+
+This is the seam shape `AGENTS.md` records from Wave 4 stage 3: correct read
+alone, wrong read together, invisible to both authors.
+
+#### What is actually true today
+
+- `authStore`'s `status: 'guest'` is **in-memory only**. A reload drops it.
+- A returning guest therefore lands on `WelcomeScreen`, with their local data
+  intact in the default local profile but invisible until they tap "Continue
+  as guest" again. §10.21 names this as the guest's version of the "everything
+  reset" wall.
+- Consequently the guest lock is trivially bypassable: reload, tap guest, no
+  biometric prompt. Against the one threat it names — someone picking up the
+  phone — that is a lock in name only.
+- `deviceStore.ts` already owns exactly this class of signal (the login
+  marker, the Drive decision, the profile registry), so there is a correct
+  home and no new database.
+
+#### Decisions
+
+**1. Guest mode persists, in `deviceStore.ts`, as a device-local signal.** Not
+`localStorage` (§7), not `Config` (a guest has no Drive to sync it to) — the
+same table family the login marker already lives in. It records only "this
+device last used the app as a guest", never anything about a person.
+
+**2. It is cleared the moment the guest leaves.** Signing in with Google, or
+an explicit exit from the profile screen (§10.18 built that exit — it is what
+unblocked this). A stale guest marker that outlives the choice is worse than
+none, because it would send a signed-in user back to guest mode.
+
+**3. The returning-guest path is `RequireAuth`'s, and it reuses what AD
+built** — the pre-content skeleton, and the same "has this device been used
+before" question, now with two answers instead of one (a Google marker, a
+guest marker). A returning guest goes straight into the app, never to the
+first-run pitch, exactly as a returning account holder does.
+
+**4. The guest lock then gates the cold start, and its copy becomes true.**
+This is the point of the whole section: with guest status restorable, the
+biometric prompt can stand in front of it. Until this ships, the copy must say
+only what the lock does (Track AF's review is fixing that in the meantime).
+
+**5. It changes nothing about what the guest lock _is_.** §10.2.1 and §11
+(2026-08-20) already ruled: for a guest this gates the UI and is **not** a
+cryptographic boundary, because the local financial data is not encrypted at
+rest for anyone. Persisting the session does not move that line, and this
+section must not be read as licence to encrypt the local database — that stays
+filed for its own analysis in §12.
+
+#### Edge cases
+
+- **Both markers set** (this device signed into Google _and_ used guest mode).
+  The account wins on restore: a Google session that still resolves is the
+  stronger signal. The guest data stays reachable through §10.31's switcher.
+- **Guest marker set, local profile empty.** Enter as guest anyway; an empty
+  dashboard for a guest who recorded nothing is the truth, not a failure.
+- **Guest marker set, biometric lock enabled, platform capability lost**
+  (a phone whose fingerprint sensor is disabled or the credential revoked by
+  the OS). It must not lock the person out of their own local data — there is
+  no honest recovery for a guest (§10.2.1's whole argument). Degrade to
+  unlocked and say the lock is off, never a dead end.
+- **A guest who signs in mid-session.** Clears the guest marker; §10.32's
+  adoption prompt is what decides the data.
+- **Two tabs.** Same device-wide registry caveat §10.31 already names.
+
+#### Done when
+
+A guest closes the app and reopens it to their own data, never the first-run
+screen; with the biometric lock on, the prompt stands in front of that; and
+the settings copy describes what actually happens.
+
+#### Blast radius
+
+`src/lib/deviceStore.ts` (one additive table/field, a Dexie version bump),
+`src/lib/authStore.ts` (set on entering guest, cleared on sign-in/exit,
+restored in `restore()`), `src/features/auth/RequireAuth.tsx` (one more branch
+in the cold-start decision AD just rebuilt), `src/lib/lockStore.ts` +
+`src/features/lock/**` (the cold-start guest gate), and the `lock` i18n
+namespace. **No `schema.ts` change** — nothing here is user data.
+
 ### Wave 3 — staging and dependencies
 
 Not everything runs in parallel. A track in a later stage is **blocked** until

@@ -539,6 +539,21 @@ pre-content span, so the transition into real data is a fill rather than a
 swap. §10.9's Tier 1 boot flash is still not available as a trade — AD's
 mandatory regression test is what keeps that true.
 
+### AH — the guest who comes back (added 2026-08-20, mid-wave)
+
+**§10.33.** Not in the original Wave 4.1 table: it exists because the wave's
+own seam produced it. Track AF shipped the guest biometric lock and reported
+that it never gates a cold start, because guest mode is in-memory only — while
+the row's copy promises a prompt "when you reopen the app". The operator's own
+Track AD brief caused it, by telling AD to leave the guest out when §10.21 had
+explicitly asked for guest persistence to be decided together with the
+returning-user screen.
+
+Sequenced **before AG**: both touch `authStore.ts`'s account/guest transitions,
+and AG's §10.32 adoption prompt fires at exactly the moment AH clears the guest
+marker. Small, and it makes AF's shipped control honest rather than merely
+worded honestly.
+
 ### AG lost its PIN gate, and gained the prompt that prevents the cliff
 
 Two revisions land on AG after the table above was first written, and both
