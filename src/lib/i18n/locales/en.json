@@ -25,6 +25,16 @@
       "guestCta": "Continue as guest",
       "guestReassurance": "As a guest, your data stays only on this device. It isn't synced — if you lose the device, you lose the data too."
     },
+    "return": {
+      "greetingNamed": "Welcome back, {{name}}",
+      "greetingGeneric": "Welcome back",
+      "subtitle": "Your session expired for security.",
+      "reassurance": "If you had data saved, it's still on this device.",
+      "expiredChip": "Expired",
+      "continueCtaNamed": "Continue as {{name}}",
+      "continueCtaGeneric": "Continue with Google",
+      "useAnotherAccount": "Use another account"
+    },
     "errors": {
       "missingClientId": "Configuration error. Please try again later.",
       "gisFailedToLoad": "We couldn't load Google. Check your connection and try again.",

@@ -25,6 +25,16 @@
       "guestCta": "Continuar como convidado",
       "guestReassurance": "Como convidado, seus dados ficam somente neste dispositivo. Eles não são sincronizados: se você perder o aparelho, perde os dados também."
     },
+    "return": {
+      "greetingNamed": "Olá de novo, {{name}}",
+      "greetingGeneric": "Olá de novo",
+      "subtitle": "Sua sessão expirou por segurança.",
+      "reassurance": "Se você tinha dados salvos, eles continuam neste dispositivo.",
+      "expiredChip": "Expirada",
+      "continueCtaNamed": "Continuar como {{name}}",
+      "continueCtaGeneric": "Continuar com o Google",
+      "useAnotherAccount": "Usar outra conta"
+    },
     "errors": {
       "missingClientId": "Erro de configuração. Tente novamente mais tarde.",
       "gisFailedToLoad": "Não conseguimos carregar o Google. Verifique sua conexão e tente de novo.",
