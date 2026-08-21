@@ -492,12 +492,12 @@ AG is stage 2. Execution detail — staging, file ownership, the conflict hunt
 and the operator decisions taken before dispatch — lives in
 [`wave-4.1-plan.md`](wave-4.1-plan.md).**
 
-| Track                           | Spec                | Priority | Owns                                                                                                                                               |
-| ------------------------------- | ------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **AD — the cold-start surface** | §10.29 + §10.21     | 1        | `RequireAuth.tsx`, `src/features/boot/**`, `src/features/sync/FirstSyncGate.tsx`, `router.tsx`, `src/features/auth/**`                             |
-| **AE — the light theme**        | §10.30              | 2        | `src/styles/index.css` (`:root` only), `index.html`, the theme-resolution module, the theme row in `PreferencesEditor`, `docs/ui/design-tokens.md` |
-| **AF — the PIN screens**        | §10.2 (polished UI) | 3        | `src/features/lock/**`, `src/features/profile/SecuritySection.tsx`                                                                                 |
-| **AG — the profile switcher**   | §10.31              | 4        | `src/lib/profiles/**`, `ProfilesSection.tsx`, `outbox.ts` + `sync/engine.ts` (the profile-scoped reference), the lock's switch gate                |
+| Track                           | Spec                | Priority | Owns                                                                                                                                                              |
+| ------------------------------- | ------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **AD — the cold-start surface** | §10.29 + §10.21     | 1        | `RequireAuth.tsx`, `src/features/boot/**`, `src/features/sync/FirstSyncGate.tsx`, `router.tsx`, `src/features/auth/**`                                            |
+| **AE — the light theme**        | §10.30              | 2        | `src/styles/index.css` (`:root` only), `index.html`, the theme-resolution module, the theme row in `PreferencesEditor`, `docs/ui/design-tokens.md`                |
+| **AF — the PIN screens**        | §10.2 (polished UI) | 3        | `src/features/lock/**`, `src/features/profile/SecuritySection.tsx`                                                                                                |
+| **AG — the profile switcher**   | §10.31 + §10.32     | 4        | `src/lib/profiles/**`, `ProfilesSection.tsx`, `outbox.ts` + `sync/engine.ts` (the profile-scoped reference), `authStore.ts`'s sign-in moment, the adoption prompt |
 
 ### Why AD is one track and not two
 
@@ -538,6 +538,22 @@ What replaces it is not another loader: the app's own skeleton covers the
 pre-content span, so the transition into real data is a fill rather than a
 swap. §10.9's Tier 1 boot flash is still not available as a trade — AD's
 mandatory regression test is what keeps that true.
+
+### AG lost its PIN gate, and gained the prompt that prevents the cliff
+
+Two revisions land on AG after the table above was first written, and both
+shrink or move work rather than adding it:
+
+- **No PIN when switching** (§10.31 §3, user, revised the same day). The first
+  instruction was that a switch shows the PIN screen; presented with what that
+  costs — one device-scoped vault holding one account's session, so unlocking
+  on a switch would rehydrate the _wrong_ account's session — the user chose
+  the simpler rule: the PIN protects opening the app, not moving inside it.
+  **AG therefore does not touch the lock at all**, which is also what keeps it
+  clear of Track AF.
+- **§10.32 joins AG**: a guest signing in is asked, once, whether to bring
+  their movements into the account. That is the half that _prevents_ the guest
+  cliff; the switcher is the half that _recovers_ from it. Both are AG.
 
 ### AG is not "a screen nobody designed"
 
