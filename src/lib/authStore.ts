@@ -10,7 +10,8 @@ import {
 import { bootstrap, type DriveLayout } from '@/lib/bootstrap'
 import { invalidateBootForSignOut } from '@/lib/boot'
 import { hasVault, resetVault, updateSession } from '@/lib/pinLock'
-import { resolveGoogleProfile, touchLastUsed, DEFAULT_PROFILE_ID } from '@/lib/profiles'
+import { resolveGoogleProfile, setActiveProfileId, DEFAULT_PROFILE_ID } from '@/lib/profiles'
+import type { ProfileRecord } from '@/lib/profiles'
 import {
   clearDriveDecision,
   clearGuestUsed,
@@ -125,16 +126,29 @@ const invalidateVaultOnLogout = async (): Promise<void> => {
   }
 }
 
+// The one place `user.sub ?? user.email` is decided (specs.md §11,
+// 2026-08-19's `sub`-over-`email` reasoning, spelled out on
+// `syncProfileForAccount` below) — exported so `sync/syncSession.ts` and
+// `profiles/switchProfile.ts` can compare "is the currently authenticated
+// account this profile's owner" without each re-deriving the same fallback
+// (specs.md §10.31 §4: sync must follow a switch only when the newly bound
+// profile's account matches the one actually signed in).
+export const accountKeyOf = (user: GoogleUser | null): string | undefined =>
+  user ? (user.sub ?? user.email) : undefined
+
 // specs.md §10.20: a `ProfileRecord` now records *whose* it is
-// (`accountKey`), not only what kind it is — this is what makes
-// getActiveProfile()'s existing recency resolution identity-aware without
-// that function needing to know about accounts at all. Whichever Google
-// account just established a session here becomes, by construction, the
-// most-recently-touched profile, so signing back in resolves to the right
-// one. Guest sessions never call this (no accountKey to key on — the
-// local/guest profile is untouched). Self-catching and never awaited by the
-// caller as a gate: a registry write failure must never fail the auth flow
-// it rides on, same posture as syncLockedSession.
+// (`accountKey`), not only what kind it is. specs.md §10.31 §1 adds the
+// explicit active-profile pointer on top: `setActiveProfileId` here is what
+// makes signing back into a previously-used account land on it directly,
+// rather than relying on `resolveGoogleProfile`'s own recency touch (still
+// happening below, kept as the fallback for a device that predates the
+// pointer or whose pointer write is lost) to happen to win. Guest sessions
+// never call this (no accountKey to key on — the local/guest profile is
+// untouched, see `continueAsGuest` below for its own pointer write).
+// Self-catching and never awaited by the caller as a gate: a registry write
+// failure must never fail the auth flow it rides on, same posture as
+// syncLockedSession. Returns the resolved profile so `login()` can check
+// whether it has local guest data to offer for adoption (specs.md §10.32).
 //
 // Keyed on `user.sub` — the OIDC subject identifier, stable and never
 // reassigned — not `user.email` (specs.md §11, 2026-08-19). A Workspace
@@ -143,12 +157,18 @@ const invalidateVaultOnLogout = async (): Promise<void> => {
 // reads to the user as total loss. `email` is a defensive fallback only,
 // for a cached/legacy `GoogleUser` that predates this field — every live
 // `fetchGoogleUser()` response carries `sub`.
-const syncProfileForAccount = async (user: GoogleUser | null): Promise<void> => {
-  if (!user) return
+const syncProfileForAccount = async (user: GoogleUser | null): Promise<ProfileRecord | null> => {
+  if (!user) return null
   try {
-    await resolveGoogleProfile({ accountKey: user.sub ?? user.email, label: user.name })
+    const record = await resolveGoogleProfile({
+      accountKey: user.sub ?? user.email,
+      label: user.name,
+    })
+    await setActiveProfileId(record.id)
+    return record
   } catch (e) {
     console.warn('profiles: failed to resolve the profile for this account', e)
+    return null
   }
 }
 
@@ -468,37 +488,41 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   // ignore the returned Promise. This is not cosmetic: `status` flipping to
   // 'guest' is what makes RequireAuth render BootGate, whose effect reads
   // the profile registry (specs.md §10.28) practically immediately. A build
-  // that fired `touchLastUsed()` after `set()` (proven by
-  // src/features/boot/guestBootRace.test.tsx, which reproduced the loss on
-  // every run, not intermittently) let that read win the race against the
-  // write nearly every time, resolving the registry's stale most-recent
-  // profile — exactly the signed-out-Google-account scenario this touch
-  // exists to prevent — instead of the guest profile this call just chose.
+  // that fired the pointer write after `set()` (proven, when this used to
+  // be a recency touch instead, by src/features/boot/guestBootRace.test.tsx,
+  // which reproduced the loss on every run, not intermittently) let that
+  // read win the race against the write nearly every time.
   continueAsGuest: async () => {
     authGeneration += 1
     const generation = authGeneration
-    // specs.md §10.28: the profile registry resolves the active profile by
-    // recency alone (profiles/profileRegistry.ts's getActiveProfile()), with
-    // no notion of "guest" of its own. Without this touch, a device that
-    // signed out of a Google account and then chose to continue as guest
-    // would still resolve to that account's profile — it was touched more
-    // recently than the untouched default local one — and the boot sequence
-    // would read/write a guest's data into the signed-out account's local
-    // database. touchLastUsed() self-catches (profiles/profileRegistry.ts),
-    // so a storage failure here degrades to stale recency, never blocks
-    // entering guest mode. Awaited *before* the status flip below for the
-    // identical reason login()/restore() await syncProfileForAccount()
-    // first — see this function's own doc comment above.
-    await touchLastUsed(DEFAULT_PROFILE_ID)
+    // specs.md §10.31 §1: the explicit active-profile pointer. Without this,
+    // a device that signed out of a Google account and then chose to
+    // continue as guest would resolve *that* account's profile on the next
+    // boot — it was touched more recently than the untouched default local
+    // one — and read/write a guest's data into the signed-out account's
+    // local database. Replaces what used to be a `touchLastUsed
+    // (DEFAULT_PROFILE_ID)` recency-race workaround (specs.md §11,
+    // 2026-08-20): that patch existed only because the active profile was
+    // inferred by recency alone: with an explicit pointer, `getActiveProfile
+    // ()` consults it directly and no longer needs recency to happen to be
+    // correct. `resolveActiveProfileBinding()`'s own `touchLastUsed` call
+    // (repoProvider.ts) still bumps recency moments later, during the boot
+    // this triggers — this function no longer needs to do it itself.
+    // Self-catching (profiles/profileRegistry.ts), so a storage failure here
+    // degrades to stale recency, never blocks entering guest mode. Awaited
+    // *before* the status flip below for the identical reason login()/
+    // restore() await syncProfileForAccount() first — see this function's
+    // own doc comment above.
+    await setActiveProfileId(DEFAULT_PROFILE_ID)
     // specs.md §10.33: the device-local signal restore() reads on a later
     // cold start to recognise a returning guest — awaited before the status
-    // flip for the same reason touchLastUsed() is (this function's own doc
-    // comment above): nothing downstream races on it this session, but
-    // keeping every write that must land before `status: 'guest'` becomes
-    // observable in one place is simpler than deciding, per write, whether
-    // it happens to matter this time. markGuestUsed() self-catches, so a
-    // storage failure here degrades to "not remembered next time", never to
-    // failing this entry.
+    // flip for the same reason the pointer write above is (this function's
+    // own doc comment above): nothing downstream races on it this session,
+    // but keeping every write that must land before `status: 'guest'`
+    // becomes observable in one place is simpler than deciding, per write,
+    // whether it happens to matter this time. markGuestUsed() self-catches,
+    // so a storage failure here degrades to "not remembered next time",
+    // never to failing this entry.
     await markGuestUsed()
     if (generation !== authGeneration) return
     set({

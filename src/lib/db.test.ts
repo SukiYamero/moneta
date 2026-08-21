@@ -7,6 +7,7 @@ afterEach(async () => {
   await db.activos.clear()
   await db.config.clear()
   await db.outbox.clear()
+  await db.profileOwner.clear()
 })
 
 const sampleVault = (): LockVault => {
@@ -30,10 +31,10 @@ test('vault round-trips through IndexedDB', async () => {
   expect(read?.failedAttempts).toBe(0)
 })
 
-test('v3 upgrade is additive: vault survives alongside the new tables', async () => {
-  expect(db.verno).toBe(3)
+test('v4 upgrade is additive: vault survives alongside the new tables', async () => {
+  expect(db.verno).toBe(4)
   expect(db.tables.map((t) => t.name).toSorted()).toEqual(
-    ['activos', 'config', 'movimientos', 'outbox', 'vault'].toSorted(),
+    ['activos', 'config', 'movimientos', 'outbox', 'profileOwner', 'vault'].toSorted(),
   )
   await db.vault.put({ id: VAULT_ID, ...sampleVault() })
   await db.movimientos.put({
@@ -88,9 +89,9 @@ test('createProfileDb builds an independently-named database with the same schem
   const other = createProfileDb('kurobello-profile-test-a')
   try {
     expect(other.name).toBe('kurobello-profile-test-a')
-    expect(other.verno).toBe(3)
+    expect(other.verno).toBe(4)
     expect(other.tables.map((t) => t.name).toSorted()).toEqual(
-      ['activos', 'config', 'movimientos', 'outbox', 'vault'].toSorted(),
+      ['activos', 'config', 'movimientos', 'outbox', 'profileOwner', 'vault'].toSorted(),
     )
   } finally {
     other.close()

@@ -19,7 +19,7 @@ vi.mock('@/lib/boot', () => ({ invalidateBootForSignOut: vi.fn() }))
 vi.mock('@/lib/pinLock', () => ({ hasVault: vi.fn(), updateSession: vi.fn(), resetVault: vi.fn() }))
 vi.mock('@/lib/profiles', () => ({
   resolveGoogleProfile: vi.fn(),
-  touchLastUsed: vi.fn(),
+  setActiveProfileId: vi.fn(),
   DEFAULT_PROFILE_ID: 'kurobello',
 }))
 vi.mock('@/lib/deviceStore', () => ({
@@ -50,7 +50,7 @@ import { AuthError, requestAccessToken, fetchGoogleUser } from '@/lib/auth'
 import { bootstrap } from '@/lib/bootstrap'
 import { invalidateBootForSignOut } from '@/lib/boot'
 import { hasVault, resetVault, updateSession } from '@/lib/pinLock'
-import { resolveGoogleProfile, touchLastUsed } from '@/lib/profiles'
+import { resolveGoogleProfile, setActiveProfileId } from '@/lib/profiles'
 import {
   clearDriveDecision,
   clearGuestUsed,
@@ -71,7 +71,7 @@ const mUpdateSession = vi.mocked(updateSession)
 const mResetVault = vi.mocked(resetVault)
 const mInvalidateBootForSignOut = vi.mocked(invalidateBootForSignOut)
 const mResolveGoogleProfile = vi.mocked(resolveGoogleProfile)
-const mTouchLastUsed = vi.mocked(touchLastUsed)
+const mSetActiveProfileId = vi.mocked(setActiveProfileId)
 const mHasLoggedInBefore = vi.mocked(hasLoggedInBefore)
 const mMarkLoggedIn = vi.mocked(markLoggedIn)
 const mGetDriveDecision = vi.mocked(getDriveDecision)
@@ -1280,19 +1280,17 @@ describe('useAuthStore.continueAsGuest', () => {
     expect(useAuthStore.getState().driveOptIn).toBe('pending')
   })
 
-  // CONFIRMED gap (specs.md §10.28): the registry resolves the active
-  // profile purely by recency (`profiles/profileRegistry.ts`'s
-  // `getActiveProfile()`) — with no account-aware signal of its own for
-  // guest. Without this, a device that signed out of a Google account and
-  // then chose "continue as guest" would still resolve to that account's
-  // profile (touched more recently than the default local one), and the
-  // boot sequence would read/write a guest's movements into the signed-out
-  // account's local database. Mirrors `syncProfileForAccount`'s own touch
-  // for the Google path, applied to the one profile guest ever uses.
-  it('touches the default local profile so recency-based resolution cannot land a guest in a stale Google profile', async () => {
+  // specs.md §10.31 §1: the explicit active-profile pointer. Without this,
+  // a device that signed out of a Google account and then chose "continue
+  // as guest" would resolve that account's profile on the next boot — it
+  // was touched more recently than the default local one — and read/write
+  // a guest's movements into the signed-out account's local database.
+  // Mirrors `syncProfileForAccount`'s own pointer write for the Google
+  // path, applied to the one profile guest ever uses.
+  it('sets the active-profile pointer to the default local profile so a stale Google profile cannot win', async () => {
     await useAuthStore.getState().continueAsGuest()
 
-    expect(mTouchLastUsed).toHaveBeenCalledWith('kurobello')
+    expect(mSetActiveProfileId).toHaveBeenCalledWith('kurobello')
   })
 
   // specs.md §10.33: the device-local signal a returning guest is
@@ -1306,22 +1304,23 @@ describe('useAuthStore.continueAsGuest', () => {
   })
 
   // CONFIRMED by src/features/boot/guestBootRace.test.tsx (a real-registry,
-  // real-BootGate integration test): a build that flipped `status` to
-  // 'guest' *before* this touch landed lost the race against BootGate's
-  // effect-driven registry read on every run, not intermittently — status
-  // must not flip until the touch has actually resolved.
-  it('awaits the touch before flipping status, so a reader of status cannot observe "guest" before the registry reflects it', async () => {
-    let resolveTouch: () => void = () => {}
-    mTouchLastUsed.mockReturnValue(
+  // real-BootGate integration test, against what used to be a recency
+  // touch instead of the explicit pointer write): a build that flipped
+  // `status` to 'guest' before this write landed lost the race against
+  // BootGate's effect-driven registry read on every run, not
+  // intermittently — status must not flip until the write has resolved.
+  it('awaits the pointer write before flipping status, so a reader of status cannot observe "guest" before the registry reflects it', async () => {
+    let resolveWrite: () => void = () => {}
+    mSetActiveProfileId.mockReturnValue(
       new Promise<void>((resolve) => {
-        resolveTouch = resolve
+        resolveWrite = resolve
       }),
     )
 
     const pending = useAuthStore.getState().continueAsGuest()
     expect(useAuthStore.getState().status).not.toBe('guest')
 
-    resolveTouch()
+    resolveWrite()
     await pending
 
     expect(useAuthStore.getState().status).toBe('guest')

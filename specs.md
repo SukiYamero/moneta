@@ -7341,6 +7341,110 @@ export/index.ts:49` all still inline `format(date, 'yyyy-MM-dd')` instead
   `bun run check` green: 140 files, 1495 tests, the same 2 pre-existing
   `react/only-export-components` warnings.
 
+- 2026-08-21 — **§10.31 half 1 implemented (Track AG): the explicit
+  active-profile pointer, the in-database owner marker, the outbox
+  cross-profile-scoping fix, and the switcher UI.** All four pieces of the
+  brief's ordered list, in order:
+  1. **The explicit pointer.** `profiles/profileRegistry.ts`'s
+     `getActiveProfile()` now consults `getActiveProfileId()` (a new
+     `activeProfile` table on `deviceStore.ts`'s connection, `v9`) before
+     falling back to its old pure-recency resolution. Set by every
+     deliberate "this profile is now what I'm using" moment:
+     `authStore.ts`'s `syncProfileForAccount` (login/restore/hydrate) and
+     `continueAsGuest()`, and `profiles/switchProfile.ts`'s
+     `switchToProfile()`. **`continueAsGuest()`'s `touchLastUsed
+(DEFAULT_PROFILE_ID)` patch — the exact one §10.31's brief named — was
+     removed**, replaced by `setActiveProfileId(DEFAULT_PROFILE_ID)`;
+     recency alone can no longer misresolve a guest into a stale signed-out
+     Google profile, because the pointer is now what `getActiveProfile()`
+     checks first, and `resolveActiveProfileBinding()`'s own
+     `touchLastUsed()` call (run moments later, during the boot this
+     triggers) still keeps recency itself meaningful as the fallback
+     signal. Confirmed genuinely redundant, not merely renamed: the boot
+     race test (`guestBootRace.test.tsx`) that originally proved the old
+     patch load-bearing still passes unmodified against the new mechanism.
+  2. **The owner marker.** `db.ts` `v4` adds a `profileOwner` table (`kind`,
+     `accountKey`, `createdAt`) written inside each profile's own database
+     — `profiles/profileOwner.ts`'s `ensureOwnerMarker`/`readOwnerMarker`,
+     called (idempotently) by `repoProvider.ts`'s
+     `resolveActiveProfileBinding()` on every bind. Its own module (not
+     folded into `profileDb.ts`/`profileRegistry.ts`) specifically to avoid
+     joining the existing `profileDb.ts` ⇄ `profileRegistry.ts` value-level
+     import relationship into a cycle.
+  3. **The outbox cross-profile-scoping bug (§12, closed).** `outbox.ts`'s
+     `enqueueOperation`/`listPendingOperations`/`removeOperations` all gained
+     an optional `database: ProfileDb` parameter — omitted, every existing
+     caller (`dataStore.ts`'s write path, `bootstrap.ts`, the sign-out
+     confirm count) keeps reading/writing whatever `setOutboxDatabase()`
+     currently points to; `sync/engine.ts`'s `pull()`/`push()` now pass the
+     pulling/pushing profile's own database explicitly, so a switch
+     mid-flight (redirecting the module-level binding) can no longer strand
+     a still-in-flight push's `removeOperations` call against the _new_
+     profile's table. **Written test-first**: a failing test
+     (`sync/outboxProfileScoping.test.ts`) reproduced the exact stranding
+     against the pre-fix code (profile A's already-uploaded op stayed in
+     A's outbox forever after a mid-flight switch to B) before the fix
+     landed. Sweep: the identical shape exists in `outbox.ts`'s
+     `enqueueOperation`/`lastHlcFor` read path used by `dataStore.ts`'s
+     ordinary write flow (a repo write that's mid-flight exactly when a
+     switch redirects the outbox could enqueue into the _new_ profile's
+     table for a write that happened on the _old_ one) — **not fixed**,
+     narrower (needs a live write racing a switch in the same tick, no
+     Drive round trip involved) and outside this section's stated blast
+     radius (`outbox.ts` + `sync/engine.ts` only); flagged here rather than
+     silently widening scope.
+  4. **The switcher.** `profiles/switchProfile.ts`'s `switchToProfile()`:
+     no PIN (the user's decision, §10.31 §3 — not re-opened), reuses
+     `boot.ts`'s existing rebind path rather than growing a second one,
+     stops the old profile's sync triggers unconditionally and starts the
+     new one's only if its `accountKey` matches the currently authenticated
+     account (`authStore.ts`'s new `accountKeyOf` export;
+     `sync/syncSession.ts`'s `getSyncContext()` gained the identical guard
+     as defense in depth, since before the switcher the bound profile and
+     the authenticated account were always the same thing by construction
+     and could be inferred from `status`/`drive` alone — a real behavior
+     change, not just wiring, with its own test in `syncSession.test.ts`).
+     A profile whose owner marker is missing (storage cleared) is reported
+     as `'profile-database-gone'` rather than silently rebound;
+     `profileRegistry.ts` gained `removeProfile()` for the UI to offer.
+     `ProfilesSection.tsx` wires all of it: tapping a row switches, a
+     `ConfirmDialog` offers removal for a gone profile, and the local
+     profile's displayed name is now derived at render time
+     (`profiles.localLabel`) rather than showing the registry's internal
+     `label: 'Local'` (§12's unlocalized-label finding — closed here, as
+     the brief asked).
+     **Deliberately not built inside `switchProfile.ts` itself**: it composes
+     `boot.ts`, `authStore.ts` (read-only, via `getState()`/`accountKeyOf`)
+     and `sync/syncSession.ts` from a layer _above_ all three, because
+     `authStore.ts` already imports `boot.ts` and `syncSession.ts` already
+     imports `authStore.ts` — `boot.ts` importing `syncSession.ts` directly
+     would close that into a real cycle. Found and fixed the same shape once
+     already this track: `switchToProfile` was briefly re-exported from
+     `profiles/index.ts`, which `authStore.ts` itself imports — a real
+     circular import (`authStore → profiles/index → switchProfile →
+authStore`), caught by a batch of test files failing on
+     `useAuthStore.subscribe` being undefined the moment any of them imported
+     the profiles barrel with a partial `authStore` mock. Not re-exported from
+     the barrel; callers import it from `@/lib/profiles/switchProfile` directly.
+     **Checked, not fixed (escalating rather than guessing, per this track's
+     brief): `lockStore.ts`'s `guestLockEnabled` never being reset on the
+     account-logout subscription.** Traced the actual call graph: this
+     track's switcher never calls `authStore.login()`/`logout()` at all — a
+     profile switch is deliberately independent of the Google OAuth session
+     lifecycle (per §10.31 §4, switching to a profile you aren't signed into
+     is supposed to leave the session alone). So the switcher does not create
+     a new path to the subscription in `lockStore.ts` (`src/lib/lockStore.ts`
+     around its `useAuthStore.subscribe` block) that fires on `logout()`. If
+     that subscription is reachable at all today, it would be through the
+     pre-existing guest → sign-in-with-Google → later-logout sequence (guest
+     enables the biometric lock, then signs into an account in the same tab,
+     then eventually logs out) — a sequence that already existed before this
+     track and belongs to §10.33/the lock owner, not something §10.31 opened
+     up. Not touched, per this track's explicit instruction not to edit
+     `src/features/lock/**` or the lock stores.
+     **Half 2 (§10.32, guest-data adoption) is a separate commit.**
+     `bun run check` green after half 1 alone: 143 files / 1,518 tests.
+
 ## 12. Backlog (pending verification / deferred work)
 
 - **The Add sheet's "gear into `/settings`" entry point was never actually
@@ -8247,6 +8351,26 @@ string` on `ProfileRecord`/`deviceStore.ts`'s `ProfileRow` (a Dexie version
   different recovery surface entirely (e.g. an explicit "reset guest lock"
   action reachable without unlocking first), which is a product decision,
   not a bug.
+
+- **A live `dataStore.ts` write racing a profile switch could enqueue into
+  the wrong profile's outbox.** Found while closing §10.31's outbox
+  cross-profile-scoping bug (2026-08-20, Track AG), same shape, not fixed
+  — narrower and outside that section's stated blast radius (`outbox.ts` +
+  `sync/engine.ts` only). `outbox.ts`'s `enqueueOperation`/`lastHlcFor`
+  still read the module-level `entries` binding when called with no
+  explicit `database` (`dataStore.ts`'s ordinary write path always calls it
+  this way). A write already in flight — `repo.local.ts`'s dexie write has
+  committed, `dataStore.ts` is about to build and enqueue the matching
+  outbox op — when `switchProfile.ts`'s `setOutboxDatabase()` redirects the
+  module binding to the newly active profile lands the enqueue in the
+  _new_ profile's outbox for an edit that actually happened on the _old_
+  one's data. Requires a write and a switch racing within the same
+  microtask window (no PIN gate slows a switch down, so it's a plausible
+  double-tap, not a contrived sequence) — not reproduced, reasoned from the
+  code. Closing it properly means threading a profile-scoped database
+  reference through `dataStore.ts`'s write path the same way `push()`/
+  `pull()` now do, which touches `dataStore.ts` (not listed in §10.31's
+  blast radius) and needs an owner.
 
 ### Development waves (parallel tracks, sequencing, worktree log)
 

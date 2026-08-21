@@ -268,6 +268,13 @@
       "kind": {
         "local": "On this device",
         "google": "Google account"
+      },
+      "localLabel": "This device",
+      "goneDialog": {
+        "title": "This profile's data is gone",
+        "description": "Its storage was cleared on this device. It can be removed from the list.",
+        "removeCta": "Remove",
+        "cancelCta": "Cancel"
       }
     },
     "sync": {
@@ -393,7 +400,8 @@
       "syncing": "Syncing…",
       "offline": "Offline — will sync when reconnected",
       "lastSync": "Last synced: {{when}}",
-      "neverSynced": "Not synced yet"
+      "neverSynced": "Not synced yet",
+      "differentAccount": "Sync off — this profile uses a different account"
     },
     "notices": {
       "revived_one": "A movement you deleted came back: another device edited it after you deleted it.",

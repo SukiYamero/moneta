@@ -31,16 +31,32 @@ directly or is a deliberately inert stub.
   keeping that data — `authStore.logout()` already keeps it
   (`specs.md` §10.15's "nothing is ever replaced"); this hook only decides
   whether to say so first.
-- `ProfilesSection.tsx` + `useProfiles.ts` — the read-only list from
-  `src/lib/profiles`'s device-scoped registry, active one marked. Renders
-  even for a single profile (the point is to teach the concept exists).
-  Switching/renaming/consolidating are Wave 5+.
+- `ProfilesSection.tsx` + `useProfiles.ts` — the list from
+  `src/lib/profiles`'s device-scoped registry, active one marked, **and the
+  switcher** (`specs.md` §10.31): tapping any non-active row rebinds the app
+  to it via `profiles/switchProfile.ts`'s `switchToProfile()` — no PIN, no
+  confirmation, no second rebind path (it reuses `boot.ts`'s own). A
+  profile whose database has been cleared reports itself as gone
+  (`switchToProfile()`'s owner-marker pre-check) and offers removal through
+  a `ConfirmDialog` rather than failing opaquely. The local/default
+  profile's name is derived at render time (`profiles.localLabel`, "this
+  device"), never the registry's own stored `label: 'Local'` — that string
+  is internal bookkeeping, not user-facing copy (`specs.md` §12's
+  unlocalized-label finding, closed here). Renders even for a single
+  profile (the point is to teach the concept exists). Renaming/consolidating
+  are still later work.
 - `SyncSection.tsx` + `useSyncWatermark.ts` — the Drive status row
   (`specs.md` §10.26 §4): last sync, pending/syncing/up-to-date, offline.
   Renders nothing for a guest or a signed-in user who never connected
-  Drive — no status row promising sync where none exists. The three-state
-  indicator comes from `sync/status.ts`'s pure `deriveSyncIndicator()`
-  reading `useSyncStore`'s `phase` and `useOutboxStore`'s `dirty` directly
+  Drive — no status row promising sync where none exists. **Also renders a
+  distinct "sync off — different account" row** (`specs.md` §10.31 §4) when
+  the bound profile's `accountKey` doesn't match the currently
+  authenticated account — the switcher can bind a Google profile you're not
+  signed into, or the local one, while still authenticated as someone else;
+  this is said explicitly rather than left to be inferred from a pill that
+  never turns green. The three-state indicator comes from `sync/status.ts`'s
+  pure `deriveSyncIndicator()` reading `useSyncStore`'s `phase` and
+  `useOutboxStore`'s `dirty` directly
   (both reactive); the watermark (`lastPullAt`/`lastPushAt`, for "last
   synced N ago") is not reactive on its own — `ProfileRecord` lives in the
   device-scoped registry, not a store — so `useSyncWatermark.ts` re-reads

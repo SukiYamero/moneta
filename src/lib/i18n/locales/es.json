@@ -268,6 +268,13 @@
       "kind": {
         "local": "En este dispositivo",
         "google": "Cuenta de Google"
+      },
+      "localLabel": "Este dispositivo",
+      "goneDialog": {
+        "title": "Los datos de este perfil ya no están",
+        "description": "Su almacenamiento se borró en este dispositivo. Se puede quitar de la lista.",
+        "removeCta": "Quitar",
+        "cancelCta": "Cancelar"
       }
     },
     "sync": {
@@ -393,7 +400,8 @@
       "syncing": "Sincronizando…",
       "offline": "Sin conexión — se sincronizará al reconectar",
       "lastSync": "Última sincronización: {{when}}",
-      "neverSynced": "Todavía no se sincronizó"
+      "neverSynced": "Todavía no se sincronizó",
+      "differentAccount": "Sincronización desactivada: este perfil usa otra cuenta"
     },
     "notices": {
       "revived_one": "Un movimiento que eliminaste volvió a aparecer: otro dispositivo lo editó después de que lo borraste.",
