@@ -686,9 +686,9 @@ Check this table against `git worktree list` at the start of any parallel
 session; prune anything stale (merged-but-not-removed, or on disk but
 missing/finished here).
 
-| Path                                 | Branch           | Status |
-| ------------------------------------ | ---------------- | ------ |
-| `../moneta-worktrees/track-ah-guest` | `track-ah-guest` | active |
+| Path                            | Branch      | Status                    |
+| ------------------------------- | ----------- | ------------------------- |
+| `../moneta-worktrees/review-ah` | `review-ah` | active (AH's review pass) |
 
 Wave 4.1 stage 1 (2026-08-20): AD, AE and AF each merged with its own review
 pass applied, plus an operator cross-track pass — every worktree removed. AH

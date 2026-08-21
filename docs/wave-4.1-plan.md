@@ -238,6 +238,22 @@ Per `AGENTS.md`, non-optional:
   preference. Authorized to AE's reviewer, with the constraint that the
   `profile` i18n namespace belongs to live Track AF.
 
+### 8.1 How the marker-mirror question actually resolved (2026-08-20)
+
+Track AH was asked to weigh the mirror and **declined it, with the better
+argument**: `AppLock` renders its own blank frame — an unavoidable vault check
+— _before_ `RequireAuth` even mounts. Mirroring the two markers to
+`localStorage` would therefore shave the **smaller of two stacked blank
+frames** while doubling a drift-prone surface (two markers instead of the
+theme's one, cleared across more write paths).
+
+That reframes the original finding rather than answering it: the blank frame a
+returning user sees is mostly `AppLock`'s, not `RequireAuth`'s. **The real
+question is whether the vault check can be made synchronous**, and it is filed
+in `specs.md` §12 rather than decided here. Worth recording as a process note:
+the operator's escalation named the wrong owner of the symptom, and the track
+that was asked to implement it checked before it did.
+
 ## 8. Escalated to the operator by the stage-1 reviewers (decide in the cross-track pass)
 
 Neither is a defect in the track that surfaced it; both are cross-cutting and
