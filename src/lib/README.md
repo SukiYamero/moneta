@@ -99,11 +99,34 @@ name>>` table (`specs.md` §10.22 Decision 6/§10.25 addendum) — ids never
   (PIN + optional biometric via WebAuthn PRF). The vault's plaintext is a
   versioned envelope (`{ v: 2, session, user }`, decoded backward-compatibly
   from the pre-envelope v1 shape) so the cached Google profile survives a
-  re-lock/cold boot without a network call.
+  re-lock/cold boot without a network call. Also owns the **guest** lock
+  (`enableGuestLock`/`disableGuestLock`/`hasGuestLock`/`verifyGuestLock`/
+  `markGuestLockActive`/`isGuestLockBackgroundExpired`, `specs.md` §10.2.1) —
+  session-less by construction: a guest has no `AuthSession`, so there is no
+  DEK, no envelope, nothing to wrap. It's a plain WebAuthn credential
+  (no PRF extension) whose _assertion succeeding_ is the whole signal,
+  persisted via `deviceStore.ts`'s `guestLock` table, not `db.ts`. What the
+  credential gates is the UI only, never a cryptographic boundary (`specs.md`
+  §11, 2026-08-20) — do not let this grow into encrypting the local
+  database (separate, deferred work, `specs.md` §12).
+  `isGuestLockBackgroundExpired` reads `deviceDb.guestLock` directly (not
+  through `getGuestLock()`'s self-catching wrapper), mirroring
+  `isBackgroundExpired`'s own raw `db.vault.get()` read — both need a
+  storage failure to _propagate_, not be swallowed into "not expired", so
+  `lockStore.onVisible` can fail closed.
 - `lockStore.ts` — zustand store wrapping `pinLock.ts`: lock phase, throttle,
   biometric availability (`biometricAvailable` — platform capability — vs
   `biometricEnrolled` — this vault's own enrollment, see `specs.md` §11,
-  2026-08-19).
+  2026-08-19). `onHidden`/`onVisible` are identity-branched (`specs.md`
+  §10.2.1): an account's background timeout guards the PIN vault's
+  `lastActiveAt`, a guest's guards the session-less `guestLockEnabled` row
+  instead — the two never coexist for one tab. `guestLockEnabled` is never
+  set by `init()` (guest status isn't known at boot — it's chosen from
+  `WelcomeScreen`, after `init()` already settled); callers refresh it
+  explicitly via `initGuestLock()` once `authStore.status === 'guest'`
+  (`SecuritySection` does this on mount). `unlockGuest()` has no
+  lockout/reset counterpart to `resume()`'s: a failed guest assertion is
+  just retriable, there is nothing to throttle or wipe.
 - `deviceStore.ts` — a separate, tiny Dexie database (`kurobello-device`,
   distinct from `db.ts`'s `kurobello`), the canonical home for every
   non-secret, per-device signal. Four live here: the login marker
@@ -128,7 +151,17 @@ name>>` table (`specs.md` §10.22 Decision 6/§10.25 addendum) — ids never
   (`sync/engine.ts` — a previously-downloaded, already-validated op file
   keyed by Drive fileId, which is what makes the `files.list` revision
   check safe rather than merely faster, since `Movimiento` itself carries
-  no hlc/provenance by design).
+  no hlc/provenance by design). `v7` adds `guestLock` (`pinLock.ts`'s
+  session-less guest biometric lock, `specs.md` §10.2.1) —
+  `credentialId`/`lastActiveAt` for a guest's WebAuthn enrollment; belongs
+  here rather than on a profile's own `db.ts` connection for the same
+  reason as every other row above: device-scoped, not per-profile, and
+  there is no DEK/token to wrap so it doesn't fit `db.ts`'s `LockVault`
+  shape either. `getGuestLock` self-catches like every other read here, but
+  is exported alongside a raw `GUEST_LOCK_ID` specifically so
+  `pinLock.ts`'s `isGuestLockBackgroundExpired` can bypass that self-catch
+  and read `deviceDb.guestLock` directly — a storage failure there needs to
+  propagate, not be swallowed (see `pinLock.ts`'s own entry above).
 - `networkStore.ts` — a small, self-initialising zustand store (attaches
   `online`/`offline` listeners at module scope, since `main.tsx` is another
   track's file) owning the online/offline hint plus the 7-hour offline

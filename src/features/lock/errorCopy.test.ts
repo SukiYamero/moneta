@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { BiometricUnavailableError, WrongPinError } from '@/lib/pinLock'
+import {
+  BiometricUnavailableError,
+  GuestBiometricUnavailableError,
+  WrongPinError,
+} from '@/lib/pinLock'
 import { LOCKED_OUT_ERROR, NO_SESSION_ERROR, SESSION_RESTORE_ERROR } from '@/lib/lockStore'
 import { enableLockErrorCopy, unlockErrorCopy } from '@/features/lock/errorCopy'
 
@@ -17,6 +21,14 @@ describe('unlockErrorCopy', () => {
 
   it('maps unavailable biometrics to its translation key', () => {
     expect(unlockErrorCopy(new BiometricUnavailableError().message)).toBe(
+      'errors.biometricUnavailable',
+    )
+  })
+
+  // specs.md §10.2.1: the guest path has no PIN fallback, so its own
+  // unavailable-biometrics error reuses the same copy as the account path's.
+  it('maps an unavailable guest biometric to the same translation key', () => {
+    expect(unlockErrorCopy(new GuestBiometricUnavailableError().message)).toBe(
       'errors.biometricUnavailable',
     )
   })

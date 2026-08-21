@@ -2,18 +2,23 @@ import { afterEach, expect, test, vi } from 'vitest'
 import {
   __resetDeviceIdForTests,
   clearDriveDecision,
+  clearGuestLock,
   clearLoggedIn,
   deviceDb,
   getDeviceId,
   getDriveDecision,
+  getGuestLock,
   hasLoggedInBefore,
   markLoggedIn,
   setDriveDecision,
+  setGuestLock,
+  touchGuestLockActive,
 } from '@/lib/deviceStore'
 
 afterEach(async () => {
   await clearLoggedIn()
   await clearDriveDecision()
+  await clearGuestLock()
   await deviceDb.deviceId.clear()
   __resetDeviceIdForTests()
 })
@@ -111,6 +116,79 @@ test('clearLoggedIn is safe to fire-and-forget: a delete failure is caught and l
   const spy = vi.spyOn(deviceDb.marker, 'delete').mockRejectedValue(new Error('IDB blocked'))
 
   await expect(clearLoggedIn()).resolves.toBeUndefined()
+  expect(warn).toHaveBeenCalled()
+
+  spy.mockRestore()
+  warn.mockRestore()
+})
+
+// specs.md §10.2.1 (Track AF, Wave 4.1 half 2): a guest's session-less
+// biometric lock enrollment — device-scoped, no DEK/token to wrap.
+test('no guest lock on a fresh device', async () => {
+  expect(await getGuestLock()).toBeUndefined()
+})
+
+test('setGuestLock persists the credential id and last-active time', async () => {
+  const credentialId = new Uint8Array([1, 2, 3])
+  await setGuestLock({ credentialId, lastActiveAt: 1000 })
+
+  const row = await getGuestLock()
+  expect(row?.credentialId).toEqual(credentialId)
+  expect(row?.lastActiveAt).toBe(1000)
+})
+
+test('clearGuestLock removes the enrollment', async () => {
+  await setGuestLock({ credentialId: new Uint8Array([1]), lastActiveAt: 1000 })
+  await clearGuestLock()
+  expect(await getGuestLock()).toBeUndefined()
+})
+
+test('touchGuestLockActive updates only the last-active time', async () => {
+  const credentialId = new Uint8Array([9, 9])
+  await setGuestLock({ credentialId, lastActiveAt: 1000 })
+
+  await touchGuestLockActive(2000)
+
+  const row = await getGuestLock()
+  expect(row?.lastActiveAt).toBe(2000)
+  // A partial Dexie `update()` round-trips the untouched binary field back
+  // as a plain numeric-keyed object, not a real Uint8Array (same quirk
+  // `pinLock.test.ts` documents for `db.vault.update()`) — compare byte
+  // content, not the representation.
+  expect(
+    Uint8Array.from(Object.values(row?.credentialId as unknown as Record<string, number>)),
+  ).toEqual(credentialId)
+})
+
+test('getGuestLock degrades to undefined on a storage read failure', async () => {
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  const spy = vi.spyOn(deviceDb.guestLock, 'get').mockRejectedValue(new Error('IDB blocked'))
+
+  expect(await getGuestLock()).toBeUndefined()
+  expect(warn).toHaveBeenCalled()
+
+  spy.mockRestore()
+  warn.mockRestore()
+})
+
+test('setGuestLock is safe to fire-and-forget: a write failure is caught and logged, not thrown', async () => {
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  const spy = vi.spyOn(deviceDb.guestLock, 'put').mockRejectedValue(new Error('IDB blocked'))
+
+  await expect(
+    setGuestLock({ credentialId: new Uint8Array([1]), lastActiveAt: 1 }),
+  ).resolves.toBeUndefined()
+  expect(warn).toHaveBeenCalled()
+
+  spy.mockRestore()
+  warn.mockRestore()
+})
+
+test('touchGuestLockActive is safe to fire-and-forget: an update failure is caught and logged, not thrown', async () => {
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  const spy = vi.spyOn(deviceDb.guestLock, 'update').mockRejectedValue(new Error('IDB blocked'))
+
+  await expect(touchGuestLockActive(1)).resolves.toBeUndefined()
   expect(warn).toHaveBeenCalled()
 
   spy.mockRestore()

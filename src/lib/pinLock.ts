@@ -1,7 +1,16 @@
 import { db, VAULT_ID, type LockVault } from '@/lib/db'
 import type { AuthSession, GoogleUser } from '@/lib/auth'
 import { APP_NAME } from '@/lib/branding'
-import { clearDriveDecision, clearLoggedIn } from '@/lib/deviceStore'
+import {
+  clearDriveDecision,
+  clearGuestLock,
+  clearLoggedIn,
+  deviceDb,
+  getGuestLock,
+  GUEST_LOCK_ID,
+  setGuestLock,
+  touchGuestLockActive,
+} from '@/lib/deviceStore'
 
 // What actually comes back out of the vault on a successful unlock — the
 // session alone used to be the whole plaintext; the cached profile is new
@@ -42,6 +51,20 @@ export class BiometricUnavailableError extends Error {
   constructor() {
     super('lock: biometric unavailable')
     this.name = 'BiometricUnavailableError'
+  }
+}
+
+// Distinct from BiometricUnavailableError: that one is thrown by the
+// *account* vault's PRF-based unlock (a wrap that could, in principle,
+// succeed or fail for reasons tied to the vault). This one has no vault, no
+// DEK, no PRF at all — a guest's lock is a plain WebAuthn presence/
+// verification check (specs.md §10.2.1) — so keeping the classes separate
+// stops a future caller from writing an `instanceof BiometricUnavailableError`
+// that silently also has to handle the session-less guest case.
+export class GuestBiometricUnavailableError extends Error {
+  constructor() {
+    super('lock: guest biometric unavailable')
+    this.name = 'GuestBiometricUnavailableError'
   }
 }
 
@@ -377,4 +400,85 @@ export const isBackgroundExpired = async (now: number = Date.now()): Promise<boo
   const vault = await db.vault.get(VAULT_ID)
   if (!vault) return false
   return now - vault.lastActiveAt > BACKGROUND_TIMEOUT_MS
+}
+
+// --- Guest biometric lock (specs.md §10.2.1) ---
+//
+// Session-less by construction: a guest has no AuthSession, so there is
+// nothing to encrypt and nothing to wrap. What follows is a plain WebAuthn
+// enrollment/assertion pair — no PRF extension, no DEK, no envelope. What
+// the credential gates is the UI only, never a cryptographic boundary
+// (specs.md §11, 2026-08-20) — do not let this grow into encrypting the
+// local database; that is separate, deferred work (specs.md §12).
+
+const registerGuestCredential = async (): Promise<Bytes | null> => {
+  const created = (await navigator.credentials.create({
+    publicKey: {
+      challenge: randomBytes(32),
+      rp: { name: APP_NAME, id: location.hostname },
+      user: {
+        id: randomBytes(16),
+        name: 'kurobello-guest-lock',
+        displayName: `${APP_NAME} guest lock`,
+      },
+      pubKeyCredParams: [
+        { type: 'public-key', alg: -7 },
+        { type: 'public-key', alg: -257 },
+      ],
+      authenticatorSelection: {
+        authenticatorAttachment: 'platform',
+        userVerification: 'required',
+        residentKey: 'required',
+      },
+    },
+  })) as PublicKeyCredential | null
+  return created ? new Uint8Array(created.rawId) : null
+}
+
+export const enableGuestLock = async (): Promise<void> => {
+  const credentialId = await registerGuestCredential()
+  if (!credentialId) throw new GuestBiometricUnavailableError()
+  await setGuestLock({ credentialId, lastActiveAt: Date.now() })
+}
+
+export const disableGuestLock = async (): Promise<void> => {
+  await clearGuestLock()
+}
+
+export const hasGuestLock = async (): Promise<boolean> => {
+  return (await getGuestLock()) !== undefined
+}
+
+export const verifyGuestLock = async (): Promise<void> => {
+  const row = await getGuestLock()
+  if (!row) throw new GuestBiometricUnavailableError()
+
+  const assertion = (await navigator.credentials.get({
+    publicKey: {
+      challenge: randomBytes(32),
+      allowCredentials: [{ type: 'public-key', id: asBytes(row.credentialId) }],
+      userVerification: 'required',
+    },
+  })) as PublicKeyCredential | null
+  if (!assertion) throw new GuestBiometricUnavailableError()
+
+  await touchGuestLockActive()
+}
+
+// A thin re-export, not a new try/catch: `deviceStore.touchGuestLockActive`
+// already self-catches (device.ts's own best-effort posture). Named to
+// match `markActive` above so `lockStore.ts` only ever talks to this
+// module for lock-domain actions, never reaching past it into
+// `deviceStore.ts` directly.
+export const markGuestLockActive = touchGuestLockActive
+
+// Reads `deviceDb.guestLock` directly, not through getGuestLock()'s
+// self-catching wrapper: a storage failure here must propagate so
+// lockStore.onVisible can fail closed (re-lock) instead of this layer
+// silently swallowing it into "not expired" — the same reasoning
+// isBackgroundExpired's own account-vault read follows.
+export const isGuestLockBackgroundExpired = async (now: number = Date.now()): Promise<boolean> => {
+  const row = await deviceDb.guestLock.get(GUEST_LOCK_ID)
+  if (!row) return false
+  return now - row.lastActiveAt > BACKGROUND_TIMEOUT_MS
 }

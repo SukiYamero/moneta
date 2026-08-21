@@ -70,6 +70,16 @@ export type SyncTipRow = { id: string; hlc: string }
 // additive to the row's value shape, no version bump (only the primary key
 // is part of the store's schema).
 export type SyncFileCacheRow = { id: string; modifiedTime: string; file: unknown; skipped: number }
+// A guest's session-less biometric lock (specs.md §10.2.1, Track AF Wave
+// 4.1 half 2): unlike `db.ts`'s `LockVault`, there is no DEK/token to wrap
+// here — no session means nothing to encrypt — so this is device-scoped,
+// not per-profile, and lives beside every other device-local signal in this
+// database rather than growing a second vault shape in `db.ts`.
+// `credentialId` is the WebAuthn credential's raw id, kept only to target
+// the right assertion on `navigator.credentials.get()`; `lastActiveAt`
+// mirrors `LockVault.lastActiveAt`'s role for the account path's 7-minute
+// background-timeout re-lock (`pinLock.ts`'s `BACKGROUND_TIMEOUT_MS`).
+export type GuestLockRow = { id: number; credentialId: Uint8Array; lastActiveAt: number }
 
 const MARKER_ID = 1 as const
 const DRIVE_DECISION_ID = 1 as const
@@ -94,6 +104,7 @@ export const deviceDb = new Dexie('kurobello-device') as Dexie & {
   deviceId: EntityTable<DeviceIdRow, 'id'>
   syncTips: EntityTable<SyncTipRow, 'id'>
   syncFileCache: EntityTable<SyncFileCacheRow, 'id'>
+  guestLock: EntityTable<GuestLockRow, 'id'>
 }
 deviceDb.version(1).stores({ marker: 'id' })
 // Additive: `marker` keeps its v1 definition unchanged — same reasoning as
@@ -156,6 +167,19 @@ deviceDb.version(6).stores({
   deviceId: 'id',
   syncTips: 'id',
   syncFileCache: 'id',
+})
+// Additive again: `guestLock` (this module, `specs.md` §10.2.1) — a guest's
+// session-less biometric lock enrollment. Every earlier table restated
+// unchanged.
+deviceDb.version(7).stores({
+  marker: 'id',
+  driveDecision: 'id',
+  anchor: 'id',
+  profiles: 'id, kind, lastUsedAt',
+  deviceId: 'id',
+  syncTips: 'id',
+  syncFileCache: 'id',
+  guestLock: 'id',
 })
 
 export const hasLoggedInBefore = async (): Promise<boolean> => {
@@ -258,4 +282,49 @@ export const getDeviceId = (): Promise<string> => {
 // reusing the cached promise, matching networkStore.ts's own reset hatch.
 export const __resetDeviceIdForTests = (): void => {
   deviceIdPromise = null
+}
+
+// Exported (unlike the other row-id consts above) so pinLock.ts's
+// isGuestLockBackgroundExpired can read `deviceDb.guestLock` directly,
+// unguarded — same reason isBackgroundExpired reads db.vault.get(VAULT_ID)
+// directly rather than through a self-catching wrapper: a storage failure
+// there must propagate so lockStore.onVisible can fail closed (re-lock)
+// instead of a lower layer silently swallowing it into "not expired".
+export const GUEST_LOCK_ID = 1 as const
+
+// Absence means "never enrolled" — same posture as getDriveDecision above.
+export const getGuestLock = async (): Promise<GuestLockRow | undefined> => {
+  try {
+    return await deviceDb.guestLock.get(GUEST_LOCK_ID)
+  } catch (e) {
+    console.warn('device: could not read the guest lock, treating as not enrolled', e)
+    return undefined
+  }
+}
+
+export const setGuestLock = async (row: Omit<GuestLockRow, 'id'>): Promise<void> => {
+  try {
+    await deviceDb.guestLock.put({ id: GUEST_LOCK_ID, ...row })
+  } catch (e) {
+    console.warn('device: could not persist the guest lock', e)
+  }
+}
+
+export const clearGuestLock = async (): Promise<void> => {
+  try {
+    await deviceDb.guestLock.delete(GUEST_LOCK_ID)
+  } catch (e) {
+    console.warn('device: could not clear the guest lock', e)
+  }
+}
+
+// Best-effort touch, mirrors `pinLock.ts`'s `markActive` for the account
+// vault's `lastActiveAt` — a missed write just means the next background-
+// expiry check compares against a slightly stale timestamp.
+export const touchGuestLockActive = async (now: number = Date.now()): Promise<void> => {
+  try {
+    await deviceDb.guestLock.update(GUEST_LOCK_ID, { lastActiveAt: now })
+  } catch (e) {
+    console.warn('device: could not record the guest lock last-active time', e)
+  }
 }

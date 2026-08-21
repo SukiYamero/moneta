@@ -2,16 +2,22 @@ import { create } from 'zustand'
 import { useAuthStore } from '@/lib/authStore'
 import {
   biometricEnabled,
+  disableGuestLock as disableGuestLockCredential,
+  enableGuestLock as enableGuestLockCredential,
   enableLock,
   forgetDek,
+  hasGuestLock,
   hasVault,
   isBackgroundExpired,
   isBiometricAvailable,
+  isGuestLockBackgroundExpired,
   LockedOutError,
   markActive,
+  markGuestLockActive,
   resetVault,
   unlockWithBiometric,
   unlockWithPin,
+  verifyGuestLock,
   type VaultSession,
 } from '@/lib/pinLock'
 import { startSyncSession, stopSyncSession } from '@/lib/sync/syncSession'
@@ -41,11 +47,21 @@ type LockState = {
   // biometrics to a PIN-only user always fails, even though the device
   // itself supports it (specs.md §11, 2026-08-19, finding 9).
   biometricEnrolled: boolean
+  // Whether *this device* has a guest biometric credential enrolled
+  // (specs.md §10.2.1) — the guest equivalent of `enabled`, but never set by
+  // `init()`: guest status isn't known at boot (it's only chosen from
+  // WelcomeScreen, after `init()` already settled), so callers refresh it
+  // explicitly via `initGuestLock()` once `authStore.status === 'guest'`.
+  guestLockEnabled: boolean
   error: string | null
   init: () => Promise<void>
+  initGuestLock: () => Promise<void>
   enable: (pin: string, biometric: boolean) => Promise<void>
+  enableGuestLock: () => Promise<void>
+  disableGuestLock: () => Promise<void>
   unlockPin: (pin: string) => Promise<void>
   unlockBiometric: () => Promise<void>
+  unlockGuest: () => Promise<void>
   lock: () => void
   onHidden: () => void
   onVisible: () => Promise<void>
@@ -110,6 +126,7 @@ export const useLockStore = create<LockState>((set, get) => ({
   enabled: false,
   biometricAvailable: false,
   biometricEnrolled: false,
+  guestLockEnabled: false,
   error: null,
   init: async () => {
     let locked = false
@@ -150,8 +167,47 @@ export const useLockStore = create<LockState>((set, get) => ({
     await enableLock({ pin, session, user, biometric })
     set({ phase: 'unlocked', enabled: true })
   },
+  // Reads `hasGuestLock()` fresh rather than trusting `guestLockEnabled`'s
+  // current value: unlike `init()`'s vault check, this is called on demand
+  // (SecuritySection mounting into 'guest' status, after `init()` already
+  // settled with no way to have known that at the time), so there's no
+  // earlier boot-time read to fall back on.
+  initGuestLock: async () => {
+    let enrolled = false
+    try {
+      enrolled = await hasGuestLock()
+    } catch (e) {
+      // Same fail-open posture as init()'s hasVault() read: a guest's lock
+      // is a UI convenience, not a security boundary (specs.md §11,
+      // 2026-08-20), so an unreadable device signal must not block the
+      // section from rendering — it just means "nothing enrolled yet."
+      console.error('lock: could not read guest lock state, treating as not enrolled', e)
+    }
+    set({ guestLockEnabled: enrolled })
+  },
+  enableGuestLock: async () => {
+    await enableGuestLockCredential()
+    set({ guestLockEnabled: true })
+  },
+  disableGuestLock: async () => {
+    await disableGuestLockCredential()
+    set({ guestLockEnabled: false })
+  },
   unlockPin: (pin) => resume(set, () => unlockWithPin(pin)),
   unlockBiometric: () => resume(set, () => unlockWithBiometric()),
+  // No lockout/reset counterpart to resume()'s: a guest credential gates
+  // the UI only, never a cryptographic boundary (specs.md §11,
+  // 2026-08-20), so there is nothing to brute-force and nothing a failed
+  // attempt needs to throttle — a failure just means "try the OS prompt
+  // again," which LockScreen's own retry button offers.
+  unlockGuest: async () => {
+    try {
+      await verifyGuestLock()
+      set({ phase: 'unlocked', error: null })
+    } catch (e) {
+      set({ error: e instanceof Error ? e.message : 'unlock failed' })
+    }
+  },
   lock: () => {
     if (!get().enabled) return
     forgetDek()
@@ -165,20 +221,34 @@ export const useLockStore = create<LockState>((set, get) => ({
     // `set()` the next time `resume()` unlocks successfully.
     stopSyncSession()
   },
+  // Identity-branched (specs.md §10.2.1): an account's background timeout
+  // guards the PIN vault's `lastActiveAt`; a guest's guards the session-less
+  // guest-lock row instead — the two never coexist for one tab (status is
+  // either 'authenticated' or 'guest'), so this only ever takes one branch.
   onHidden: () => {
-    if (get().phase === 'unlocked') void markActive()
+    if (get().phase !== 'unlocked') return
+    if (useAuthStore.getState().status === 'guest') {
+      if (get().guestLockEnabled) void markGuestLockActive()
+      return
+    }
+    void markActive()
   },
   onVisible: async () => {
     if (get().phase !== 'unlocked') return
+    const isGuest = useAuthStore.getState().status === 'guest'
+    if (isGuest && !get().guestLockEnabled) return
+
     let expired: boolean
     try {
-      expired = await isBackgroundExpired()
+      expired = isGuest ? await isGuestLockBackgroundExpired() : await isBackgroundExpired()
     } catch (e) {
       // Fail closed: if we can't tell whether the background timeout
       // elapsed, treat it as elapsed rather than silently leaving the app
       // unlocked — the 5-attempt PIN throttle is this app's whole
       // brute-force defense for a 4-digit PIN (specs.md §5), so an
-      // ambiguous read must not default to "stay open."
+      // ambiguous read must not default to "stay open." The guest path
+      // carries no throttle of its own, but the same "don't guess open"
+      // instinct still applies to an unreadable read.
       console.error('lock: could not read background-expiry state, re-locking', e)
       expired = true
     }

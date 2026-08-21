@@ -225,26 +225,30 @@ Full design: `docs/superpowers/specs/2026-06-26-pin-lock-design.md`.
 - **User story:** I enable the lock, set a 4-digit PIN, optionally turn on
   biometrics; on cold start or after 7 min in background the app asks for
   biometrics, falling back to the PIN.
-- **UI:** minimal here (PIN keypad + biometric button + enable toggle); the
-  polished lock-screen design is a separate spec the user will propose.
+- **UI:** the polished design, implemented in full (Track AF, Wave 4.1 half 1 —
+  see the 2026-08-20 §11 entry): `LockScreen` (icon tile, dots, auto-submitting
+  keypad, "Olvidé mi PIN"), `LockSettings` (full-screen settings panel),
+  `PinSetup` (create/confirm two-step flow), reached from a real entry point in
+  `SecuritySection` — no longer the dev/test-harness layout this bullet
+  originally described.
 - **Data touched:** a single encrypted `LockVault` record in IndexedDB (token
   cipher, PIN/biometric DEK envelopes, salts, throttle counters, `lastActiveAt`).
-  No `schema.ts` change.
+  No `schema.ts` change. A guest's biometric lock (§10.2.1) is a separate,
+  session-less `guestLock` row on `deviceStore.ts`'s device-wide connection —
+  no DEK, no envelope, nothing this bullet's `LockVault` shape covers.
 - **Crypto:** envelope encryption — one random DEK encrypts the token; the DEK is
   wrapped separately by `PBKDF2(PIN)` and by the WebAuthn `PRF` secret (HKDF).
 - **Edge cases:** no WebAuthn/PRF → PIN-only; biometric cancel → PIN; wrong PIN →
   throttle (5 → forced re-login); corrupt vault → re-login; logout keeps the
   vault; offline unlock defers silent re-auth.
-- **Done when:** (crypto/store core — DONE) `pinLock.ts` + `lockStore.ts` provide
-  envelope encryption, biometric/PIN unlock, throttle, token rotation, and the
-  re-lock triggers; biometric offered only where PRF exists; token never stored
-  unencrypted; tests + `typecheck` + `lint` green. (Activation — DEFERRED, see §12)
-  the user-facing "enable lock" flow and the `updateSession` token-refresh wiring
-  land with the polished UI spec.
-- **Out of scope (own specs / deferred — see §12):** the **enable-lock UI** (entry
-  point that calls `lockStore.enable`) and wiring `updateSession` into the token
-  refresh path — both ride with the polished UI; the polished lock-screen visual
-  design; `repo.ts` CRUD; encrypting the local financial-data cache.
+- **Done when:** `pinLock.ts` + `lockStore.ts` provide envelope encryption,
+  biometric/PIN unlock, throttle, token rotation, and the re-lock triggers;
+  biometric offered only where PRF exists; token never stored unencrypted. The
+  activation UI (enable-lock flow, `updateSession` token-refresh wiring) is
+  **DONE** — landed with Track AF, Wave 4.1, not deferred any longer. Tests +
+  `typecheck` + `lint` green.
+- **Out of scope (deferred — see §12):** `repo.ts` CRUD; encrypting the local
+  financial-data cache (explicitly a separate decision, §12).
 
 #### 10.2.1 The lock's two identities — decided 2026-08-20 (user), Track AF
 
@@ -6926,6 +6930,66 @@ export/index.ts:49` all still inline `format(date, 'yyyy-MM-dd')` instead
   passing `initialFocus` pointing at the PIN input itself, so the rAF lands
   where PIN entry actually happens. `bun run check` green (132 files, 1394
   tests) before this entry was written.
+
+- 2026-08-20 — **Track AF, Wave 4.1, half 2: the guest's session-less
+  biometric lock (§10.2.1) — shipped, not stopped.** The pre-authorized stop
+  condition (§10.2.1, wave-4.1 plan §3 decision 5) was "if the guest path
+  turns out to require reshaping the vault or redesigning §10.2's envelope
+  encryption, STOP." It didn't: the guest lock is a genuinely separate,
+  additive mechanism — a plain WebAuthn credential (no PRF extension, no
+  DEK, no envelope) whose _assertion succeeding_ is the whole signal. New
+  surface, all in `pinLock.ts`/`deviceStore.ts`/`lockStore.ts` (all
+  track-owned this stage): `deviceStore.ts` gained a `guestLock` table (v7,
+  `credentialId`/`lastActiveAt`) and
+  `getGuestLock`/`setGuestLock`/`clearGuestLock`/`touchGuestLockActive`
+  (self-catching, same posture as every other row there);
+  `pinLock.ts` gained
+  `enableGuestLock`/`disableGuestLock`/`hasGuestLock`/`verifyGuestLock`/
+  `markGuestLockActive`/`isGuestLockBackgroundExpired` and
+  `GuestBiometricUnavailableError`; `lockStore.ts` gained
+  `guestLockEnabled`/`initGuestLock`/`enableGuestLock`/`disableGuestLock`/
+  `unlockGuest`, and `onHidden`/`onVisible` are now identity-branched
+  (`authStore.status`) between the account vault's `lastActiveAt` and the
+  guest row's, since the two never coexist for one tab.
+  **A scope boundary drawn deliberately, not discovered as a limitation
+  later:** the guest lock only ever re-locks from an _already-active_ guest
+  session's own 7-minute background timeout — never at cold start. Guest
+  status itself is not persisted across a reload today (a separate, known
+  gap: `authStore.ts` resets to `status: 'idle'` on every fresh boot
+  regardless of a prior guest session, and fixing that is `authStore.ts`/
+  `RequireAuth.tsx` territory — Track AD's files this stage, out of this
+  track's ownership and out of scope for a UI track to redesign
+  unilaterally). Building a cold-start guest gate on top of that would mean
+  either reaching into files this track doesn't own, or inventing a second,
+  independent "was this device in guest mode" persistence signal — exactly
+  the kind of unscoped reshaping the stop condition exists to catch, just
+  one layer removed from the vault itself. The shipped scope (re-lock on
+  return-from-background within a live guest session) still matches the
+  named threat model precisely: "the lock's real value, for both identity
+  kinds, is defending against someone picking up the phone" (§11,
+  2026-08-20) — that threat is live the instant a guest session backgrounds,
+  cold-start persistence or not.
+  **`SecuritySection.tsx`'s guest branch** (`GuestLockRow`, local to that
+  file): a single row + `Toggle`, rendered only when
+  `lockStore.biometricAvailable` — absent entirely otherwise, never a
+  disabled control, per §10.2.1's own wording. `initGuestLock()` runs on
+  mount (guest status isn't known at `lockStore.init()`'s boot-time check,
+  so `guestLockEnabled` has no earlier read to piggyback on).
+  **A real bug caught by the deviceStore contract test itself, not
+  reasoning:** `touchGuestLockActive`'s partial Dexie `update()` round-trips
+  the untouched `credentialId` back as a plain numeric-keyed object, not a
+  real `Uint8Array` — the identical quirk `pinLock.ts` already documents for
+  `db.vault.update()`. `pinLock.ts`'s `verifyGuestLock()` already ran the
+  stored `credentialId` through the existing `asBytes()` normalizer before
+  handing it to `navigator.credentials.get()`, so this never reached a real
+  WebAuthn call — but it's exactly the shape AGENTS.md's "fix the shape, not
+  the instance" warns about, so `isGuestLockBackgroundExpired` was also
+  swept: it reads `deviceDb.guestLock` **directly**, not through
+  `getGuestLock()`'s self-catching wrapper, mirroring
+  `isBackgroundExpired`'s own raw `db.vault.get()` read — both need a
+  storage failure to propagate so `lockStore.onVisible` can fail closed,
+  which a lower-layer self-catch would otherwise silently defeat.
+  `bun run check` green: 133 files, 1435 tests.
 
 ## 12. Backlog (pending verification / deferred work)
 

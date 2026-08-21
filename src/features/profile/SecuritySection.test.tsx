@@ -1,10 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { i18next } from '@/lib/i18n'
 
 let authStatus = 'authenticated'
 let lockEnabled = false
+let biometricAvailable = false
+let guestLockEnabled = false
+
+const initGuestLock = vi.fn()
+const enableGuestLock = vi.fn()
+const disableGuestLock = vi.fn()
 
 vi.mock('@/lib/authStore', () => ({
   useAuthStore: (selector: (s: unknown) => unknown) =>
@@ -23,24 +29,39 @@ vi.mock('@/lib/lockStore', () => ({
       get enabled() {
         return lockEnabled
       },
+      get biometricAvailable() {
+        return biometricAvailable
+      },
+      get guestLockEnabled() {
+        return guestLockEnabled
+      },
       lock: vi.fn(),
       reset: vi.fn(),
       enable: vi.fn(),
-      biometricAvailable: false,
+      initGuestLock,
+      enableGuestLock,
+      disableGuestLock,
     }),
 }))
 
 import { SecuritySection } from '@/features/profile/SecuritySection'
 
 beforeEach(() => {
+  vi.clearAllMocks()
   authStatus = 'authenticated'
   lockEnabled = false
+  biometricAvailable = false
+  guestLockEnabled = false
+  enableGuestLock.mockResolvedValue(undefined)
+  disableGuestLock.mockResolvedValue(undefined)
 })
 
-// specs.md §10.2.1 / §12: a guest must never be shown a lock control that
-// can only fail — verified here at the section level, closing the
-// backlog item CONFIRMED by the operator (§11, 2026-08-20).
-describe.each(['guest', 'idle', 'authenticating', 'error'])('when status is %s', (status) => {
+// specs.md §10.2.1 / §12: idle/authenticating/error have no session to
+// protect yet, so no lock control at all — verified here at the section
+// level, closing the backlog item CONFIRMED by the operator (§11,
+// 2026-08-20). Guest's own absence rule is tested separately below,
+// since it depends on platform biometric capability, not status alone.
+describe.each(['idle', 'authenticating', 'error'])('when status is %s', (status) => {
   it('renders nothing', () => {
     authStatus = status
     const { container } = render(<SecuritySection />)
@@ -68,5 +89,60 @@ describe('when authenticated', () => {
       screen.getByRole('button', { name: new RegExp(i18next.t('lock:settings.panelTitle')) }),
     )
     expect(screen.getByText(i18next.t('lock:settings.panelSubtitle'))).toBeInTheDocument()
+  })
+})
+
+// specs.md §10.2.1: a guest gets biometrics or nothing — never a PIN. Where
+// the device has no biometric capability, the whole section is absent, not
+// a disabled control.
+describe('when a guest', () => {
+  beforeEach(() => {
+    authStatus = 'guest'
+  })
+
+  it('renders nothing when the device has no biometric capability', () => {
+    biometricAvailable = false
+    const { container } = render(<SecuritySection />)
+    expect(container).toBeEmptyDOMElement()
+  })
+
+  it('shows the biometric-lock row when the device supports it', () => {
+    biometricAvailable = true
+    render(<SecuritySection />)
+    expect(screen.getByText(i18next.t('lock:settings.guestRowLabel'))).toBeInTheDocument()
+    // No account-only affordances leak into the guest row.
+    expect(screen.queryByText(i18next.t('lock:settings.panelTitle'))).not.toBeInTheDocument()
+  })
+
+  it('refreshes the enrollment state on mount', async () => {
+    biometricAvailable = true
+    render(<SecuritySection />)
+    await waitFor(() => expect(initGuestLock).toHaveBeenCalled())
+  })
+
+  it('enabling the toggle enrolls the guest biometric credential', async () => {
+    biometricAvailable = true
+    const user = userEvent.setup()
+    render(<SecuritySection />)
+    await user.click(screen.getByRole('switch', { name: i18next.t('lock:settings.guestRowLabel') }))
+    expect(enableGuestLock).toHaveBeenCalled()
+  })
+
+  it('disabling the toggle clears the enrollment', async () => {
+    biometricAvailable = true
+    guestLockEnabled = true
+    const user = userEvent.setup()
+    render(<SecuritySection />)
+    await user.click(screen.getByRole('switch', { name: i18next.t('lock:settings.guestRowLabel') }))
+    expect(disableGuestLock).toHaveBeenCalled()
+  })
+
+  it('shows an actionable error when enrollment fails', async () => {
+    biometricAvailable = true
+    enableGuestLock.mockRejectedValue(new Error('lock: guest biometric unavailable'))
+    const user = userEvent.setup()
+    render(<SecuritySection />)
+    await user.click(screen.getByRole('switch', { name: i18next.t('lock:settings.guestRowLabel') }))
+    expect(await screen.findByRole('alert')).toBeInTheDocument()
   })
 })

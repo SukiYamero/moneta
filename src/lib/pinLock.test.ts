@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { db } from '@/lib/db'
 import {
   enableLock,
@@ -16,6 +16,13 @@ import {
   markActive,
   isBackgroundExpired,
   forgetDek,
+  enableGuestLock,
+  disableGuestLock,
+  hasGuestLock,
+  verifyGuestLock,
+  markGuestLockActive,
+  isGuestLockBackgroundExpired,
+  GuestBiometricUnavailableError,
 } from '@/lib/pinLock'
 import type { AuthSession, GoogleUser } from '@/lib/auth'
 
@@ -336,4 +343,99 @@ test('background is expired only after the timeout elapses', async () => {
 
 test('no vault is never background-expired', async () => {
   expect(await isBackgroundExpired(Date.now())).toBe(false)
+})
+
+// specs.md §10.2.1 (Track AF, Wave 4.1 half 2): a guest's biometric lock is
+// session-less — no AuthSession, no DEK, no envelope. WebAuthn mints a
+// device-scoped credential whose *assertion succeeding* is the whole
+// signal; nothing here wraps or decrypts anything.
+describe('guest biometric lock (session-less, specs.md §10.2.1)', () => {
+  afterEach(async () => {
+    await disableGuestLock()
+  })
+
+  test('no guest lock enrolled on a fresh device', async () => {
+    expect(await hasGuestLock()).toBe(false)
+  })
+
+  test('enableGuestLock mints a WebAuthn credential with no PRF extension — nothing to wrap', async () => {
+    mockWebAuthn(undefined)
+    await enableGuestLock()
+    expect(await hasGuestLock()).toBe(true)
+
+    const createSpy = navigator.credentials.create as ReturnType<typeof vi.fn>
+    const createArg = createSpy.mock.calls.at(-1)![0] as {
+      publicKey: PublicKeyCredentialCreationOptions
+    }
+    expect(createArg.publicKey.extensions).toBeUndefined()
+  })
+
+  test('a cancelled/failed registration throws GuestBiometricUnavailableError, enrolls nothing', async () => {
+    vi.stubGlobal('navigator', {
+      credentials: { create: vi.fn().mockResolvedValue(null) },
+    })
+    await expect(enableGuestLock()).rejects.toBeInstanceOf(GuestBiometricUnavailableError)
+    expect(await hasGuestLock()).toBe(false)
+  })
+
+  test('verifyGuestLock succeeds against the enrolled credential', async () => {
+    mockWebAuthn(undefined)
+    await enableGuestLock()
+
+    await expect(verifyGuestLock()).resolves.toBeUndefined()
+
+    const getSpy = navigator.credentials.get as ReturnType<typeof vi.fn>
+    const getArg = getSpy.mock.calls.at(-1)![0] as {
+      publicKey: PublicKeyCredentialRequestOptions
+    }
+    expect(getArg.publicKey.extensions).toBeUndefined()
+  })
+
+  test('verifyGuestLock throws when nothing is enrolled', async () => {
+    await expect(verifyGuestLock()).rejects.toBeInstanceOf(GuestBiometricUnavailableError)
+  })
+
+  test('verifyGuestLock throws when the platform ceremony returns no assertion', async () => {
+    mockWebAuthn(undefined)
+    await enableGuestLock()
+    vi.stubGlobal('navigator', {
+      credentials: {
+        create: vi.fn().mockResolvedValue(null),
+        get: vi.fn().mockResolvedValue(null),
+      },
+    })
+    await expect(verifyGuestLock()).rejects.toBeInstanceOf(GuestBiometricUnavailableError)
+  })
+
+  test('disableGuestLock clears the enrollment', async () => {
+    mockWebAuthn(undefined)
+    await enableGuestLock()
+    await disableGuestLock()
+    expect(await hasGuestLock()).toBe(false)
+  })
+
+  test('the guest lock and the account vault are independent', async () => {
+    mockWebAuthn(undefined)
+    await enableGuestLock()
+    await enableLock({ pin: '1234', session })
+
+    expect(await hasGuestLock()).toBe(true)
+    expect(await hasVault()).toBe(true)
+
+    await resetVault()
+    expect(await hasVault()).toBe(false)
+    expect(await hasGuestLock()).toBe(true)
+  })
+
+  test('guest background is expired only after the timeout elapses', async () => {
+    mockWebAuthn(undefined)
+    await enableGuestLock()
+    await markGuestLockActive(1_000_000)
+    expect(await isGuestLockBackgroundExpired(1_000_000 + BACKGROUND_TIMEOUT_MS - 1)).toBe(false)
+    expect(await isGuestLockBackgroundExpired(1_000_000 + BACKGROUND_TIMEOUT_MS + 1)).toBe(true)
+  })
+
+  test('no guest lock is never background-expired', async () => {
+    expect(await isGuestLockBackgroundExpired(Date.now())).toBe(false)
+  })
 })

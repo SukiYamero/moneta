@@ -12,6 +12,12 @@ const pinLock = {
   isBackgroundExpired: vi.fn(),
   forgetDek: vi.fn(),
   LockedOutError: class LockedOutError extends Error {},
+  hasGuestLock: vi.fn(),
+  enableGuestLock: vi.fn(),
+  disableGuestLock: vi.fn(),
+  verifyGuestLock: vi.fn(),
+  markGuestLockActive: vi.fn(),
+  isGuestLockBackgroundExpired: vi.fn(),
 }
 const hydrate = vi.fn()
 const logout = vi.fn()
@@ -58,6 +64,7 @@ afterEach(async () => {
     phase: 'unknown',
     biometricAvailable: false,
     biometricEnrolled: false,
+    guestLockEnabled: false,
     error: null,
     enabled: false,
   })
@@ -404,6 +411,138 @@ describe('useLockStore', () => {
     expect(pinLock.forgetDek).toHaveBeenCalledOnce()
     expect(error).toHaveBeenCalled()
     error.mockRestore()
+  })
+
+  // specs.md §10.2.1: a guest's biometric lock is session-less — no vault,
+  // no DEK, no lockout. These tests exercise the same onHidden/onVisible
+  // entry points as the account path above, just identity-branched.
+  describe('guest biometric lock (specs.md §10.2.1)', () => {
+    test('initGuestLock reads hasGuestLock into state', async () => {
+      pinLock.hasGuestLock.mockResolvedValue(true)
+      const { useLockStore } = await import('@/lib/lockStore')
+      await useLockStore.getState().initGuestLock()
+      expect(useLockStore.getState().guestLockEnabled).toBe(true)
+    })
+
+    test('initGuestLock fails open (not enrolled) when the read rejects', async () => {
+      pinLock.hasGuestLock.mockRejectedValueOnce(new Error('IDB blocked'))
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+      const { useLockStore } = await import('@/lib/lockStore')
+
+      await useLockStore.getState().initGuestLock()
+
+      expect(useLockStore.getState().guestLockEnabled).toBe(false)
+      expect(error).toHaveBeenCalled()
+      error.mockRestore()
+    })
+
+    test('enableGuestLock enrolls the credential and marks it enabled', async () => {
+      pinLock.enableGuestLock.mockResolvedValue(undefined)
+      const { useLockStore } = await import('@/lib/lockStore')
+      await useLockStore.getState().enableGuestLock()
+      expect(pinLock.enableGuestLock).toHaveBeenCalled()
+      expect(useLockStore.getState().guestLockEnabled).toBe(true)
+    })
+
+    test('enableGuestLock propagates a registration failure without marking it enabled', async () => {
+      pinLock.enableGuestLock.mockRejectedValue(new Error('lock: guest biometric unavailable'))
+      const { useLockStore } = await import('@/lib/lockStore')
+      await expect(useLockStore.getState().enableGuestLock()).rejects.toThrow()
+      expect(useLockStore.getState().guestLockEnabled).toBe(false)
+    })
+
+    test('disableGuestLock clears the enrollment', async () => {
+      const { useLockStore } = await import('@/lib/lockStore')
+      useLockStore.setState({ guestLockEnabled: true })
+      await useLockStore.getState().disableGuestLock()
+      expect(pinLock.disableGuestLock).toHaveBeenCalled()
+      expect(useLockStore.getState().guestLockEnabled).toBe(false)
+    })
+
+    test('unlockGuest unlocks on a successful assertion', async () => {
+      pinLock.verifyGuestLock.mockResolvedValue(undefined)
+      const { useLockStore } = await import('@/lib/lockStore')
+      useLockStore.setState({ phase: 'locked', error: 'stale' })
+
+      await useLockStore.getState().unlockGuest()
+
+      expect(useLockStore.getState().phase).toBe('unlocked')
+      expect(useLockStore.getState().error).toBeNull()
+    })
+
+    // No lockout: a failed guest assertion is retriable, never a wipe — it
+    // gates the UI only, never a cryptographic boundary (specs.md §11,
+    // 2026-08-20), so there's nothing to throttle.
+    test('unlockGuest sets an error and stays locked on a failed assertion, never wiping anything', async () => {
+      pinLock.verifyGuestLock.mockRejectedValue(new Error('lock: guest biometric unavailable'))
+      const { useLockStore } = await import('@/lib/lockStore')
+      useLockStore.setState({ phase: 'locked', error: null })
+
+      await useLockStore.getState().unlockGuest()
+
+      expect(useLockStore.getState().phase).toBe('locked')
+      expect(useLockStore.getState().error).toBe('lock: guest biometric unavailable')
+      expect(pinLock.resetVault).not.toHaveBeenCalled()
+      expect(logout).not.toHaveBeenCalled()
+    })
+
+    test('onHidden touches the guest lock, not the account vault, for a guest', async () => {
+      authStatus = 'guest'
+      const { useLockStore } = await import('@/lib/lockStore')
+      useLockStore.setState({ phase: 'unlocked', guestLockEnabled: true })
+
+      useLockStore.getState().onHidden()
+
+      expect(pinLock.markGuestLockActive).toHaveBeenCalled()
+      expect(pinLock.markActive).not.toHaveBeenCalled()
+    })
+
+    test('onHidden does nothing for a guest with no guest lock enrolled', async () => {
+      authStatus = 'guest'
+      const { useLockStore } = await import('@/lib/lockStore')
+      useLockStore.setState({ phase: 'unlocked', guestLockEnabled: false })
+
+      useLockStore.getState().onHidden()
+
+      expect(pinLock.markGuestLockActive).not.toHaveBeenCalled()
+    })
+
+    test('onVisible re-locks a guest after background expiry', async () => {
+      authStatus = 'guest'
+      pinLock.isGuestLockBackgroundExpired.mockResolvedValue(true)
+      const { useLockStore } = await import('@/lib/lockStore')
+      useLockStore.setState({ phase: 'unlocked', guestLockEnabled: true })
+
+      await useLockStore.getState().onVisible()
+
+      expect(useLockStore.getState().phase).toBe('locked')
+      expect(pinLock.isBackgroundExpired).not.toHaveBeenCalled()
+    })
+
+    test('onVisible never re-locks a guest with no guest lock enrolled', async () => {
+      authStatus = 'guest'
+      const { useLockStore } = await import('@/lib/lockStore')
+      useLockStore.setState({ phase: 'unlocked', guestLockEnabled: false })
+
+      await useLockStore.getState().onVisible()
+
+      expect(useLockStore.getState().phase).toBe('unlocked')
+      expect(pinLock.isGuestLockBackgroundExpired).not.toHaveBeenCalled()
+    })
+
+    test('onVisible re-locks a guest (fails closed) when isGuestLockBackgroundExpired() rejects', async () => {
+      authStatus = 'guest'
+      pinLock.isGuestLockBackgroundExpired.mockRejectedValueOnce(new Error('IDB blocked'))
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+      const { useLockStore } = await import('@/lib/lockStore')
+      useLockStore.setState({ phase: 'unlocked', guestLockEnabled: true })
+
+      await expect(useLockStore.getState().onVisible()).resolves.toBeUndefined()
+
+      expect(useLockStore.getState().phase).toBe('locked')
+      expect(error).toHaveBeenCalled()
+      error.mockRestore()
+    })
   })
 
   test('clearError clears a stale error without touching phase or enabled', async () => {

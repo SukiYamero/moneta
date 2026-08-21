@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Fingerprint, LockKeyhole } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { useAuthStore } from '@/lib/authStore'
 import { useLockStore } from '@/lib/lockStore'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { PinDots } from '@/features/lock/PinDots'
@@ -19,9 +20,56 @@ export const IconTile = ({ children }: { children: ReactNode }) => (
   </div>
 )
 
-const LockScreen = () => {
+/**
+ * A guest never has a PIN vault (specs.md §10.2.1) — this branch only ever
+ * mounts when an already-active guest session's own background timeout
+ * re-locks it (`lockStore.onVisible`); a guest is never gated at cold start,
+ * since guest status itself isn't persisted across a reload. No PIN
+ * keypad, no "Olvidé mi PIN": the credential gates the UI, not a
+ * cryptographic boundary, so a guest's only recovery is retrying the OS
+ * prompt — there is nothing to wipe that would help.
+ */
+const GuestLockScreen = () => {
   const { t } = useTranslation('lock')
-  const phase = useLockStore((s) => s.phase)
+  const unlockGuest = useLockStore((s) => s.unlockGuest)
+  const error = useLockStore((s) => s.error)
+  const triedRef = useRef(false)
+
+  useEffect(() => {
+    if (triedRef.current) return
+    triedRef.current = true
+    void unlockGuest()
+  }, [unlockGuest])
+
+  return (
+    <div className="flex min-h-dvh flex-col items-center justify-center gap-8 p-6 text-center">
+      <IconTile>
+        <Fingerprint aria-hidden="true" className="size-8 text-primary-foreground" />
+      </IconTile>
+      <div className="space-y-2">
+        <h1 className="text-xl font-extrabold tracking-tight">{t('screen.guestTitle')}</h1>
+        <p className="text-sm font-medium text-muted-foreground">{t('screen.guestSubtitle')}</p>
+      </div>
+      <div className="flex h-5 items-center" aria-hidden={!error}>
+        {error && (
+          <p role="alert" className="text-sm text-destructive">
+            {t(unlockErrorCopy(error))}
+          </p>
+        )}
+      </div>
+      <button
+        type="button"
+        className="flex min-h-11 items-center justify-center rounded-full border border-border-subtle px-6 text-sm font-bold"
+        onClick={() => void unlockGuest()}
+      >
+        {t('screen.guestRetryCta')}
+      </button>
+    </div>
+  )
+}
+
+const AccountLockScreen = () => {
+  const { t } = useTranslation('lock')
   const biometricEnrolled = useLockStore((s) => s.biometricEnrolled)
   const unlockPin = useLockStore((s) => s.unlockPin)
   const unlockBiometric = useLockStore((s) => s.unlockBiometric)
@@ -45,8 +93,6 @@ const LockScreen = () => {
       setPin('')
     })
   }, [pin, unlockPin])
-
-  if (phase !== 'locked') return null
 
   const confirmForgot = () => {
     setForgotOpen(false)
@@ -115,6 +161,14 @@ const LockScreen = () => {
       />
     </div>
   )
+}
+
+const LockScreen = () => {
+  const phase = useLockStore((s) => s.phase)
+  const isGuest = useAuthStore((s) => s.status === 'guest')
+
+  if (phase !== 'locked') return null
+  return isGuest ? <GuestLockScreen /> : <AccountLockScreen />
 }
 
 export default LockScreen

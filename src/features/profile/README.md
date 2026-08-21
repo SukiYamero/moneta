@@ -47,15 +47,19 @@ directly or is a deliberately inert stub.
   it via `getProfile()` whenever `phase` cycles back to `'idle'`, the one
   moment it could actually have changed.
 - `SecuritySection.tsx` — the real production home for the PIN lock's entry
-  point (moved off the dev-only `/kit` route, `specs.md` §10.18). Renders a
-  single row (icon, "Bloqueo con PIN", the `lockStateLabel`
+  point (moved off the dev-only `/kit` route, `specs.md` §10.18). Branches on
+  identity (`specs.md` §10.2.1, user 2026-08-20): an authenticated account
+  gets a row (icon, "Bloqueo con PIN", the `lockStateLabel`
   "Activado"/"Desactivado" status chip) that opens `LockSettings`
   (`src/features/lock/`), the full-screen panel from the design export
-  (`docs/ui/design-export-reference.md` §4). **Account-only by construction**
-  (`specs.md` §10.2.1, user 2026-08-20): renders nothing at all unless
-  `authStore.status === 'authenticated'` — a guest never sees a lock control
-  that can only fail (closes the backlog item CONFIRMED by the operator,
-  `specs.md` §11/§12, 2026-08-20).
+  (`docs/ui/design-export-reference.md` §4); a guest gets a single row +
+  toggle for the session-less biometric lock (`lockStore.enableGuestLock`/
+  `disableGuestLock`, `GuestLockRow` local to this file) — rendered only
+  when `lockStore.biometricAvailable`, absent entirely otherwise, never a
+  disabled control. `idle`/`authenticating`/`error` render nothing (no
+  session yet to protect). A guest never sees a lock control that can only
+  fail (closes the backlog item CONFIRMED by the operator, `specs.md`
+  §11/§12, 2026-08-20).
 - `DataSection.tsx` — the first real caller of
   `exportMovimientosToCsv()` (`src/lib/export`, `specs.md` §10.12), which
   had no UI trigger for a whole stage. Catches its rejection itself (the

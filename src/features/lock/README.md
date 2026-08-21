@@ -12,22 +12,32 @@ dev/test-harness layout.
   `unlockErrorCopy`) whenever `phase !== 'locked' && error` — the one place
   a lockout or failed session-restore message survives the same `set()`
   that unmounts `LockScreen` (`specs.md` §11, 2026-08-19).
-- `LockScreen.tsx` — the full-screen unlock UI: `IconTile` (accent-glow icon
-  tile, exported for reuse), dynamic subtitle (biometric-enrolled vs.
-  PIN-only), `PinDots`, a reserved-height error line, `PinPad`
-  (auto-submits once 4 digits are entered — no separate "Unlock" button,
-  matching the export), and "Olvidé mi PIN" below the pad. The biometric
-  button is gated on `lockStore.biometricEnrolled` (this vault's own
-  enrollment), not `biometricAvailable` (platform capability) — offering it
-  to a PIN-only user always fails. "Olvidé mi PIN" is **not a new recovery
-  mechanism** (`specs.md` §10.2.1): it opens the shared `ConfirmDialog`
-  whose destructive action is `lockStore.reset()` — the exact vault-wipe +
-  forced-relogin the code already performs after 5 failed attempts, now
-  offered as a manual, honestly-worded exit rather than something a user
-  only discovers by failing. A correct PIN/biometric with no network still
-  unlocks cleanly (`specs.md` §10.11) — see `@/lib/lockStore`'s own comment
-  on why `SESSION_RESTORE_ERROR` is a defensive invariant, not a live path,
-  for the offline case.
+- `LockScreen.tsx` — dispatches on `authStore.status === 'guest'` between two
+  shells sharing `IconTile` (accent-glow icon tile, exported for reuse):
+  - `AccountLockScreen` (default): dynamic subtitle (biometric-enrolled vs.
+    PIN-only), `PinDots`, a reserved-height error line, `PinPad`
+    (auto-submits once 4 digits are entered — no separate "Unlock" button,
+    matching the export), and "Olvidé mi PIN" below the pad. The biometric
+    button is gated on `lockStore.biometricEnrolled` (this vault's own
+    enrollment), not `biometricAvailable` (platform capability) — offering
+    it to a PIN-only user always fails. "Olvidé mi PIN" is **not a new
+    recovery mechanism** (`specs.md` §10.2.1): it opens the shared
+    `ConfirmDialog` whose destructive action is `lockStore.reset()` — the
+    exact vault-wipe + forced-relogin the code already performs after 5
+    failed attempts, now offered as a manual, honestly-worded exit rather
+    than something a user only discovers by failing. A correct PIN/
+    biometric with no network still unlocks cleanly (`specs.md` §10.11) —
+    see `@/lib/lockStore`'s own comment on why `SESSION_RESTORE_ERROR` is a
+    defensive invariant, not a live path, for the offline case.
+  - `GuestLockScreen` (`specs.md` §10.2.1): biometric-only, no keypad, no
+    "Olvidé mi PIN" — a guest's credential gates the UI, not a
+    cryptographic boundary, so there is no vault to wipe that would help a
+    failed attempt; retrying the OS prompt is the only recovery, offered as
+    a visible retry button. Tries the ceremony once automatically on mount.
+    This branch **only ever mounts from an already-active guest session's
+    own background timeout** (`lockStore.onVisible`) — a guest is never
+    gated at cold start, since guest status itself isn't persisted across a
+    reload (a separate, known gap, out of this track's ownership).
 - `LockSettings.tsx` — the account lock's full-screen settings panel
   (`FullScreenPanel`, back-arrow header), reached by tapping the
   "Bloqueo con PIN" row in `src/features/profile/SecuritySection.tsx`. One
@@ -69,6 +79,18 @@ dev/test-harness layout.
   component resolves it (`t(unlockErrorCopy(error))`), the same split
   `src/features/auth/errorCopy.ts` already established (`specs.md` §10.24,
   Wave 4 stage 2 — the retrofit `specs.md` §12 had open since Wave 2).
+  `GuestBiometricUnavailableError`'s message maps to the same
+  `errors.biometricUnavailable` key as the account path's — the guest lock
+  has no PIN fallback, so a near-duplicate locale key would say the same
+  thing twice.
+
+`src/features/profile/SecuritySection.tsx` (not in this directory, but the
+only caller of `LockSettings`) owns the guest-vs-account branch at the entry
+point: an authenticated account gets the "Bloqueo con PIN" row above; a
+guest gets a single row + toggle for the session-less biometric lock
+(`lockStore.enableGuestLock`/`disableGuestLock`), rendered only when the
+platform has biometric capability — absent entirely otherwise, never a
+disabled control (`specs.md` §10.2.1).
 
 All screens read `useLockStore` (`@/lib/lockStore`) for state.
 `useLockStore` also listens for `useAuthStore`'s logout transition (a
