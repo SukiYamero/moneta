@@ -7169,6 +7169,81 @@ export/index.ts:49` all still inline `format(date, 'yyyy-MM-dd')` instead
   which a lower-layer self-catch would otherwise silently defeat.
   `bun run check` green: 133 files, 1435 tests.
 
+- 2026-08-20 — **Wave 4.1 stage 1 cross-track pass (AD + AE + AF seams).**
+  Traced the real render orders `AppLock` → `RequireAuth` → `BootGate` for
+  every combination the three tracks together produce (PIN + returning,
+  PIN + guest — impossible today, a guest never has a vault, no PIN +
+  returning, guest backgrounding/returning, a locked app whose `restore()`
+  is "in flight"): every path was already invariant-guarded by the tracks
+  themselves (`RequireAuth`'s own top comment states the no-race invariant;
+  confirmed by tracing `AppLock`'s `phase === 'unknown' → null`, never
+  `children`, so `RequireAuth` structurally cannot mount before a vault's
+  existence is known). No flash, no double treatment, no screen rendering
+  under the lock — clean.
+  **Light theme against the PIN surface and the cold-start screens
+  (`LockScreen`/`PinPad`/`PinDots`/`FullScreenPanel`/`PinSetup`/
+  `ReturningUserScreen`/`PreContentSkeleton`):** every one of them reads
+  color exclusively off tokens (`bg-card`, `text-foreground`,
+  `border-border-strong`, `color-mix(in_oklch, var(--primary), …)` glows),
+  so all adapt correctly — nothing hardcoded against black was found.
+  `GoogleSignInButton`'s fixed `bg-white`/`shadow-[0_8px_24px_rgba(0,0,0,.3)]`
+  looked like a candidate at first glance but is not: it's the exact
+  Google-brand button spec (`docs/ui/design-export-reference.md` line
+  ~288-292, `box-shadow:0 8px 24px…`), already a documented deliberate
+  exception, and a dark elevation shadow under an opaque white card reads
+  correctly on both a near-black and a near-white canvas — it's ordinary
+  card elevation, not a glow tuned for one background.
+  **`deviceStore.ts`'s three consumers** (AD's login marker, AF's
+  `guestLock` table + registry) stay coherent: every accessor self-catches
+  with a stated fail-open/fail-closed posture per `docs/error-handling.md`,
+  and the one raw (non-self-catching) read (`isGuestLockBackgroundExpired`
+  via the exported `GUEST_LOCK_ID`) mirrors the account vault's own raw
+  read for the identical "must propagate to fail closed" reason. No
+  contradiction found.
+  **Duplication hunt:** `FullScreenPanel` (AF) reuses the existing
+  `useOverlay` hook `BottomSheet`/`CenterModal` already build on, not a
+  second focus-trap implementation. No busy-button component was built
+  twice — every screen still hand-rolls `disabled` + label-swap, which was
+  already this codebase's pattern before this wave. **`getInitials`
+  (`src/features/home/homeView.ts`), the one real duplication-shaped
+  finding an AF-track reviewer escalated**, moved to `src/lib/initials.ts`
+  (three call sites updated: `HomeHeader`, `ReturningUserScreen`,
+  `IdentitySection`; tests moved with it). `homeView.ts`'s other four
+  helpers stayed — each takes a `Movimiento`/date-fns `Locale` `getInitials`
+  never needed, so they're genuinely Home-scoped.
+  **Doc drift found and fixed:** `src/features/profile/README.md`'s
+  `PreferencesSection.tsx` bullet still described the pre-AE inert `tema`
+  row (`index.html` hardcodes dark…) — stale since Track AE's review turned
+  it into a real `Link` (already correctly recorded in this file's own
+  2026-08-20 Track AE entry above, just never propagated to the README).
+  `src/lib/README.md`/`src/features/home/README.md` updated for the
+  `getInitials` move. `ARCHITECTURE.md`, `docs/ui/design-tokens.md`, the
+  `lock`/`boot`/`settings` READMEs: read and cross-checked against the
+  current code line by line, no drift found.
+  **`lockStore.ts`'s account-logout subscription never resets
+  `guestLockEnabled`** (escalated by Track AF's reviewer as relevant to
+  §10.33) — **CONFIRMED unreachable today, traced**: the subscription only
+  fires when `status` becomes `'idle'` **and** `session` goes from non-null
+  to null (an account logout's signature). A guest's `session` is always
+  null (§10.2.1 — no session, no vault), so that guard is false by
+  construction for any guest-adjacent transition. Independently, a guest's
+  only shipped exit today (`IdentitySection.tsx`'s sign-in CTA) calls
+  `authStore.login()` directly — `status` goes `'guest'` → `'authenticating'`
+  → `'authenticated'`, never through `'idle'`, so the subscription's own
+  condition is never even evaluated on that path either. Two independent
+  reasons the gap is inert, not one. It also self-heals going forward
+  without this subscription's help: `SecuritySection`'s
+  `if (status === 'guest') void initGuestLock()` re-reads
+  `hasGuestLock()` from storage on every mount where `status` is `'guest'`,
+  so a stale in-memory `guestLockEnabled` left over from an earlier guest
+  session gets corrected the next time guest mode is actually entered,
+  regardless of what this subscription does or doesn't reset. **For §10.33:
+  this specific gap does not need a fix** — the guest-persistence work's
+  actual clearing responsibility is `authStore.ts`'s own guest marker
+  (§10.33 decision 2, already specced), not `lockStore.guestLockEnabled`.
+  `bun run check` green: 139 files, 1469 tests, the same 2 pre-existing
+  `react/only-export-components` warnings.
+
 ## 12. Backlog (pending verification / deferred work)
 
 - **The Add sheet's "gear into `/settings`" entry point was never actually

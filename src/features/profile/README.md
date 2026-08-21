@@ -73,12 +73,13 @@ directly or is a deliberately inert stub.
   (never wired to an `onClick`) with a `STUB(wave5)` comment on what the
   real thing needs. Never a side effect of signing out.
 - `PreferencesSection.tsx` — the entry point into `/settings`
-  (`specs.md` §10.24): the `monedaPrincipal`/`primerDiaSemana`/`idioma` rows
-  are real `Link`s to `/settings` carrying the current value (the actual
-  controls live there — `src/features/settings/`). `tema` is the one row
-  that stays inert and plain text, never a `Link` — `index.html` hardcodes
-  dark, so there's nowhere to send that tap; it always reads "Oscuro"
-  rather than repeating a stored `tema` that has no effect. Reads
+  (`specs.md` §10.24): all four preference rows (`tema`, `monedaPrincipal`,
+  `primerDiaSemana`, `idioma`) are real `Link`s to `/settings` carrying the
+  current value (the actual controls live there —
+  `src/features/settings/`). `tema` joined the other three once Track AE
+  shipped the real light theme and the `/settings` picker (`specs.md`
+  §10.30, Wave 4.1) — before that `index.html` hardcoded dark, leaving the
+  row inert with nowhere to send the tap. Reads
   `LOCALE_LABEL` (`src/lib/i18n/localeLabels.ts`), the one endonym table
   this section and `/settings`'s own language picker both share, and
   `src/lib/weekStart.ts`'s `WEEK_START_KEY` for the `primerDiaSemana` row's

@@ -21,9 +21,13 @@ Track L).
   is an id (`specs.md` §10.22), and `RecentMovimientos`/`MovimientoRow` need
   this to resolve it.
 - `homeView.ts` — pure, data-free presentation helpers: greeting bucket
-  (morning/afternoon/evening), initials from a display name, weekday
-  labels, and the week-strip's 7-day scaffold (which days have a real
-  movement — membership only, not a total). `shortDayLabel`/
+  (morning/afternoon/evening), weekday labels, and the week-strip's 7-day
+  scaffold (which days have a real movement — membership only, not a
+  total). `getInitials` used to live here too; moved to
+  `src/lib/initials.ts` once a third feature (`auth`) started importing it
+  — the other helpers below stay, since they all take a `Movimiento`/
+  date-fns `Locale` this file's `getInitials` never needed.
+  `shortDayLabel`/
   `narrowDayLabel`/`monthYearLabel`/`buildWeekStripDays` take a required
   `Locale` parameter (no default) — `useHomeDashboard.ts` supplies it via
   `useLocaleFormatting()` (`docs/wave-2/track-m.md`).

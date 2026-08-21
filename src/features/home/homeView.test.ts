@@ -4,7 +4,6 @@ import type { Movimiento } from '@/lib/schema'
 import {
   buildWeekStripDays,
   getGreetingKey,
-  getInitials,
   monthYearLabel,
   narrowDayLabel,
   shortDayLabel,
@@ -37,24 +36,6 @@ describe('getGreetingKey', () => {
 
   it('returns evening for the early-morning boundary before 5am', () => {
     expect(getGreetingKey(new Date(2026, 7, 19, 2))).toBe('evening')
-  })
-})
-
-describe('getInitials', () => {
-  it('takes the first letter of the first and last name', () => {
-    expect(getInitials('Alex Rivera')).toBe('AR')
-  })
-
-  it('handles a single name', () => {
-    expect(getInitials('Alex')).toBe('A')
-  })
-
-  it('ignores extra whitespace', () => {
-    expect(getInitials('  Alex   Rivera  ')).toBe('AR')
-  })
-
-  it('returns an empty string for an empty name', () => {
-    expect(getInitials('')).toBe('')
   })
 })
 
