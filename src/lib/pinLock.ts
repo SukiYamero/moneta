@@ -439,6 +439,14 @@ export const enableGuestLock = async (): Promise<void> => {
   const credentialId = await registerGuestCredential()
   if (!credentialId) throw new GuestBiometricUnavailableError()
   await setGuestLock({ credentialId, lastActiveAt: Date.now() })
+  // setGuestLock() self-catches (deviceStore.ts's posture for every device
+  // signal there) — a storage failure resolves silently instead of
+  // throwing. Verify the row actually landed rather than reporting a
+  // successful enrollment the storage layer silently dropped: a guest who
+  // believes background re-lock is on and it silently isn't (onVisible's
+  // isGuestLockBackgroundExpired() reads "no row" as "never expired," so it
+  // would never re-lock) is the unsafe direction — fail loud here instead.
+  if (!(await hasGuestLock())) throw new Error('lock: guest lock could not be saved')
 }
 
 export const disableGuestLock = async (): Promise<void> => {

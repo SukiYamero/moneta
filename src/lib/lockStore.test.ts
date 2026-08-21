@@ -452,11 +452,25 @@ describe('useLockStore', () => {
     })
 
     test('disableGuestLock clears the enrollment', async () => {
+      pinLock.hasGuestLock.mockResolvedValue(false)
       const { useLockStore } = await import('@/lib/lockStore')
       useLockStore.setState({ guestLockEnabled: true })
       await useLockStore.getState().disableGuestLock()
       expect(pinLock.disableGuestLock).toHaveBeenCalled()
       expect(useLockStore.getState().guestLockEnabled).toBe(false)
+    })
+
+    // deviceStore.ts's clearGuestLock() self-catches a storage failure
+    // (its established posture for every device signal here), so
+    // disableGuestLock() must not simply assume the clear worked — it
+    // re-reads hasGuestLock() instead of trusting a silent success.
+    test('disableGuestLock reflects a silently-failed clear rather than lying that it worked', async () => {
+      pinLock.hasGuestLock.mockResolvedValue(true)
+      const { useLockStore } = await import('@/lib/lockStore')
+      useLockStore.setState({ guestLockEnabled: true })
+      await useLockStore.getState().disableGuestLock()
+      expect(pinLock.disableGuestLock).toHaveBeenCalled()
+      expect(useLockStore.getState().guestLockEnabled).toBe(true)
     })
 
     test('unlockGuest unlocks on a successful assertion', async () => {
