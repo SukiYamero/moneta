@@ -29,7 +29,7 @@
       "greetingNamed": "Olá de novo, {{name}}",
       "greetingGeneric": "Olá de novo",
       "subtitle": "Sua sessão expirou por segurança.",
-      "reassurance": "Se você tinha dados salvos, eles continuam neste dispositivo.",
+      "reassurance": "Fazer login de novo não afeta o que já está salvo neste dispositivo.",
       "expiredChip": "Expirada",
       "continueCtaNamed": "Continuar como {{name}}",
       "continueCtaGeneric": "Continuar com o Google",
