@@ -15,31 +15,51 @@ Onboarding screens and the route guard that sits in front of the app.
 - `RequireAuth.tsx` — route guard, rebuilt for specs.md §10.29 (one loading
   moment, not two): `status === 'guest'` or `'authenticated'` render
   `children`/`DrivePermissionScreen` immediately, with no dependency on
-  anything below. Below that, the render depends on `hasLoggedInBefore()`
-  (`@/lib/deviceStore`) — read independently here, not inferred from
-  `authStore.restore()`'s own internal check of the same marker (that
-  module isn't owned by this track): `null` (still resolving — a real
-  IndexedDB read, not a microtask) renders nothing at all, the one honestly
-  unknown span; `true` renders `PreContentSkeleton`
+  anything below. Below that, the render depends on "has this device been
+  used before" — `hasLoggedInBefore() || hasUsedGuestBefore()`
+  (`@/lib/deviceStore`, both read independently here via one `Promise.all`,
+  not inferred from `authStore.restore()`'s own internal checks of the same
+  two markers, specs.md §10.33): `null` (either read still resolving — two
+  real IndexedDB reads, not a microtask) renders nothing at all, the one
+  honestly unknown span; `true` renders `PreContentSkeleton`
   (`@/features/boot/PreContentSkeleton`) for as long as `restore()` is still
-  running, then `ReturningUserScreen` once it settles without reaching
-  `'authenticated'` (specs.md §10.21 — session genuinely lapsed); `false`
-  renders `WelcomeScreen`, and — because that outcome is deterministic once
-  known, restore() cannot land anywhere else for a marker-false device — as
-  soon as it's known, not gated on `restore()` finishing too. The marker
-  read is deliberately sequenced _before_ `restore()` is even called (not
-  run in parallel with it): reading it first makes "returning flips true
-  after `status` has already left `idle`" structurally impossible instead
-  of merely unlikely — see `RequireAuth.tsx`'s own comment and the
-  `guard: boot-flash regression` tests in `RequireAuth.test.tsx`. Offline
-  (checked via `@/lib/networkStore`'s hint, no-lock boot path only):
-  `restore()` skips the network call entirely and lands on `status:
-'authenticated'` with `session`/`user` both `null` — handled by the same
-  top branch as any other `'authenticated'` outcome, never reaching the
-  returning-user check (`specs.md` §10.11). Guest entry: `WelcomeScreen`'s
-  "Continuar como invitado" button calls `authStore.continueAsGuest()`,
-  landing on the distinct `status: 'guest'` (never `'authenticated'` with a
-  synthesized user) — checked first, before anything else.
+  running, then either `status === 'guest'` (top branch, a returning guest —
+  `restore()`'s own guest branch) or `ReturningUserScreen` once it settles
+  without reaching `'authenticated'`/`'guest'` (specs.md §10.21 — an account
+  session genuinely lapsed; the account marker is what makes this fallback
+  correct even though the combined boolean can't tell the two markers
+  apart, since `restore()`'s guest branch only ever runs — and always
+  succeeds, short-circuited by the top-level `status === 'guest'` check —
+  when the account marker is absent); `false` renders `WelcomeScreen`, and —
+  because that outcome is deterministic once known, restore() cannot land
+  anywhere else for a device with neither marker — as soon as it's known,
+  not gated on `restore()` finishing too. The two marker reads are
+  deliberately sequenced _before_ `restore()` is even called (not run in
+  parallel with it, though they run in parallel with _each other_): reading
+  them first makes "returning flips true after `status` has already left
+  `idle`" structurally impossible instead of merely unlikely — see
+  `RequireAuth.tsx`'s own comment and the `guard: boot-flash regression`
+  tests in `RequireAuth.test.tsx` (extended with a returning-guest variant,
+  specs.md §10.33). Offline (checked via `@/lib/networkStore`'s hint,
+  no-lock boot path only): `restore()` skips the network call entirely and
+  lands on `status: 'authenticated'` with `session`/`user` both `null` —
+  handled by the same top branch as any other `'authenticated'` outcome,
+  never reaching the returning-user check (`specs.md` §10.11). Guest entry:
+  `WelcomeScreen`'s "Continuar como invitado" button calls
+  `authStore.continueAsGuest()`, landing on the distinct `status: 'guest'`
+  (never `'authenticated'` with a synthesized user) — checked first, before
+  anything else. A **returning** guest reaches the same status through
+  `restore()`'s guest branch instead (`@/lib/authStore`'s own entry has the
+  detail) — `RequireAuth` itself needed no new branch for this, since
+  `status === 'guest'` was already checked first for every entry path.
+  A synchronous `localStorage` mirror of either marker (the pattern
+  `@/lib/theme.ts` uses for the theme, so first paint doesn't wait on
+  IndexedDB) was considered and **not built**: `AppLock` already blanks the
+  screen for its own, separate, unavoidable reason (`lockStore.init()`'s
+  vault check) _before_ this component even mounts, so mirroring here would
+  only shave the smaller of two stacked blank frames while doubling the
+  drift-prone surface (two mirrored keys instead of one, cleared across
+  more write paths) — see specs.md §11, 2026-08-20 for the full reasoning.
 - `ReturningUserScreen.tsx` — specs.md §10.21: greets by first name (device-
   local `profiles` registry, `@/lib/profiles`'s `listProfiles()` filtered to
   the most-recently-used `'google'`-kind record — never `getActiveProfile()`

@@ -7,6 +7,8 @@ import {
   enableLock,
   forgetDek,
   hasGuestLock,
+  hasLoggedInBefore,
+  hasUsedGuestBefore,
   hasVault,
   isBackgroundExpired,
   isBiometricAvailable,
@@ -36,9 +38,21 @@ export const NO_SESSION_ERROR = 'lock: no session to protect'
 export const SESSION_RESTORE_ERROR = 'lock: could not restore the session after unlock'
 
 type LockPhase = 'unknown' | 'unlocked' | 'locked'
+// Which credential is gating the *current* locked phase (specs.md §10.33).
+// Not derivable from `authStore.status === 'guest'` alone: the cold-start
+// guest gate (`init()`, below) can lock the app before RequireAuth has
+// even mounted, let alone resolved `status` — AppLock renders nothing but
+// LockScreen while `phase === 'locked'`, so authStore's own guest
+// restoration never gets the chance to run first. `onVisible()`'s
+// background re-lock, by contrast, always fires after `status` is already
+// known and sets this explicitly too, for one consistent signal
+// LockScreen can read regardless of which path locked it. `null` while
+// unlocked/unknown.
+type LockKind = 'account' | 'guest'
 
 type LockState = {
   phase: LockPhase
+  lockKind: LockKind | null
   enabled: boolean
   biometricAvailable: boolean
   // Whether *this vault* enrolled biometrics — distinct from
@@ -86,10 +100,10 @@ const resume = async (
     // failure mode again. The PIN itself was correct, so there's no reason
     // to re-lock either way.
     if (useAuthStore.getState().status !== 'authenticated') {
-      set({ phase: 'unlocked', error: SESSION_RESTORE_ERROR })
+      set({ phase: 'unlocked', lockKind: null, error: SESSION_RESTORE_ERROR })
       return
     }
-    set({ phase: 'unlocked', error: null })
+    set({ phase: 'unlocked', lockKind: null, error: null })
     // lock()'s explicit stopSyncSession() call needs an equally explicit
     // counterpart here, not the authStore subscription: hydrate() re-sets
     // `status`/`drive` to the exact values they already held before this
@@ -114,7 +128,7 @@ const resume = async (
         console.error('lock: failed to wipe the vault after lockout', resetError)
       }
       useAuthStore.getState().logout()
-      set({ phase: 'unlocked', enabled: false, error: LOCKED_OUT_ERROR })
+      set({ phase: 'unlocked', lockKind: null, enabled: false, error: LOCKED_OUT_ERROR })
       return
     }
     set({ error: e instanceof Error ? e.message : 'unlock failed' })
@@ -123,6 +137,7 @@ const resume = async (
 
 export const useLockStore = create<LockState>((set, get) => ({
   phase: 'unknown',
+  lockKind: null,
   enabled: false,
   biometricAvailable: false,
   biometricEnrolled: false,
@@ -132,6 +147,12 @@ export const useLockStore = create<LockState>((set, get) => ({
     let locked = false
     let available = false
     let enrolled = false
+    // Cold-start guest gate (specs.md §10.33): only ever considered when
+    // there's no account vault to protect first — "account wins on
+    // restore" means a device that also carries the account marker will
+    // have authStore.restore() try that path, never guest, so a guest
+    // credential must not gate a cold start it isn't the answer to.
+    let guestGate = false
     try {
       // The whole boot-time read, including the vault-level enrollment check
       // that only makes sense once we know a vault exists, is one operation:
@@ -139,7 +160,30 @@ export const useLockStore = create<LockState>((set, get) => ({
       // still leave the app renderable, never stuck on 'unknown' forever
       // (docs/error-handling.md §3; specs.md §11, 2026-08-19, finding 1).
       ;[locked, available] = await Promise.all([hasVault(), isBiometricAvailable()])
-      if (locked) enrolled = await biometricEnabled()
+      if (locked) {
+        enrolled = await biometricEnabled()
+      } else {
+        const [loggedInBefore, usedGuestBefore] = await Promise.all([
+          hasLoggedInBefore(),
+          hasUsedGuestBefore(),
+        ])
+        if (!loggedInBefore && usedGuestBefore && (await hasGuestLock())) {
+          // Live capability, not just past enrollment: a sensor disabled or
+          // reset since enrollment must degrade to unlocked, never gate a
+          // cold start behind a credential that can no longer succeed — a
+          // guest has no PIN fallback by design (specs.md §10.2.1), so a
+          // dead credential here is a dead end, not an inconvenience.
+          if (available) {
+            guestGate = true
+          } else {
+            // Self-heals the stale enrollment (docs/error-handling.md §4:
+            // never leave persisted state inconsistent with what the UI
+            // believes) — otherwise Settings keeps claiming a lock that can
+            // never fire again.
+            await disableGuestLockCredential()
+          }
+        }
+      }
     } catch (e) {
       // Storage unreadable (Safari private browsing blocks IndexedDB
       // outright, as do quota errors and some extensions) must degrade to
@@ -153,12 +197,14 @@ export const useLockStore = create<LockState>((set, get) => ({
     // Guards the invariant "phase locked ⇒ no DEK resident" even on cold start,
     // where activeDek is normally already null — cheap, and keeps every route
     // into 'locked' provably equivalent rather than relying on module-load order.
-    if (locked) forgetDek()
+    if (locked || guestGate) forgetDek()
     set({
-      phase: locked ? 'locked' : 'unlocked',
+      phase: locked || guestGate ? 'locked' : 'unlocked',
+      lockKind: locked ? 'account' : guestGate ? 'guest' : null,
       enabled: locked,
       biometricAvailable: available,
       biometricEnrolled: enrolled,
+      guestLockEnabled: guestGate,
     })
   },
   enable: async (pin, biometric) => {
@@ -213,15 +259,32 @@ export const useLockStore = create<LockState>((set, get) => ({
   unlockGuest: async () => {
     try {
       await verifyGuestLock()
-      set({ phase: 'unlocked', error: null })
+      set({ phase: 'unlocked', lockKind: null, error: null })
     } catch (e) {
+      // A guest credential is never a cryptographic boundary (specs.md §11,
+      // 2026-08-20) and has no PIN fallback by design (§10.2.1) — so if the
+      // platform capability itself is gone (sensor disabled, credential
+      // store wiped), the ceremony failing is proof there is nothing left
+      // to unlock with, not a wrong attempt to retry. WebAuthn deliberately
+      // can't distinguish "no matching credential" from "user cancelled"
+      // (privacy: an attacker must not learn which), so the platform
+      // capability check is the only signal safe to act on automatically —
+      // checked live here, not just at the cold-start gate in init(), so a
+      // sensor lost mid-session degrades the same way instead of leaving a
+      // guest stuck behind a broken credential with only a retry that can
+      // never succeed (specs.md §10.33 edge cases).
+      if (!(await isBiometricAvailable())) {
+        await disableGuestLockCredential()
+        set({ phase: 'unlocked', lockKind: null, guestLockEnabled: false, error: null })
+        return
+      }
       set({ error: e instanceof Error ? e.message : 'unlock failed' })
     }
   },
   lock: () => {
     if (!get().enabled) return
     forgetDek()
-    set({ phase: 'locked' })
+    set({ phase: 'locked', lockKind: 'account' })
     // specs.md §10.26 §2: the one transition `syncSession.ts`'s own
     // authStore subscription structurally cannot see — locking never
     // touches `authStore`'s `status`/`drive` (it's a lockStore-only state
@@ -264,12 +327,12 @@ export const useLockStore = create<LockState>((set, get) => ({
     }
     if (!expired) return
     forgetDek()
-    set({ phase: 'locked' })
+    set({ phase: 'locked', lockKind: isGuest ? 'guest' : 'account' })
   },
   reset: async () => {
     await resetVault()
     useAuthStore.getState().logout()
-    set({ phase: 'unlocked', enabled: false, error: null })
+    set({ phase: 'unlocked', lockKind: null, enabled: false, error: null })
   },
   clearError: () => set({ error: null }),
 }))
@@ -298,6 +361,6 @@ export const useLockStore = create<LockState>((set, get) => ({
 useAuthStore.subscribe((state, prevState) => {
   if (state.status === 'idle' && state.session === null && prevState.session !== null) {
     forgetDek()
-    useLockStore.setState({ phase: 'unlocked', enabled: false, error: null })
+    useLockStore.setState({ phase: 'unlocked', lockKind: null, enabled: false, error: null })
   }
 })

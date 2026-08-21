@@ -14,17 +14,21 @@ const render = (ui: ReactElement) => rtlRender(ui, { wrapper: MemoryRouter })
 
 vi.mock('@/lib/deviceStore', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/deviceStore')>()
-  return { ...actual, hasLoggedInBefore: vi.fn() }
+  return { ...actual, hasLoggedInBefore: vi.fn(), hasUsedGuestBefore: vi.fn() }
 })
 
-import { hasLoggedInBefore } from '@/lib/deviceStore'
+import { hasLoggedInBefore, hasUsedGuestBefore } from '@/lib/deviceStore'
 
 const mHasLoggedInBefore = vi.mocked(hasLoggedInBefore)
+const mHasUsedGuestBefore = vi.mocked(hasUsedGuestBefore)
 
 beforeEach(() => {
   // Defaults to "never logged in before" — most tests exercise a genuine
   // first-run device; the returning-device tests below override it.
   mHasLoggedInBefore.mockResolvedValue(false)
+  // Defaults to "never used guest mode" — the returning-guest tests below
+  // override it.
+  mHasUsedGuestBefore.mockResolvedValue(false)
   useAuthStore.setState({
     status: 'idle',
     user: null,
@@ -233,6 +237,75 @@ describe('RequireAuth', () => {
     await waitFor(() =>
       expect(screen.getByRole('heading', { name: /hola de nuevo/i })).toBeInTheDocument(),
     )
+  })
+
+  // specs.md §10.33: "has this device been used before" now draws on two
+  // markers, not one — a returning guest must get the same skeleton-then-
+  // children treatment a returning account holder already gets, never the
+  // first-run pitch.
+  describe('the returning guest (specs.md §10.33)', () => {
+    it('covers a returning-guest cold start with the skeleton while restore() resolves, never Welcome', async () => {
+      mHasUsedGuestBefore.mockResolvedValue(true)
+      let resolveRestore: () => void = () => {}
+      const restore = vi.fn(() => {
+        useAuthStore.setState({ status: 'authenticating' })
+        return new Promise<void>((resolve) => {
+          resolveRestore = resolve
+        })
+      })
+      useAuthStore.setState({ restore })
+
+      render(
+        <RequireAuth>
+          <div>secret</div>
+        </RequireAuth>,
+      )
+
+      await waitFor(() => expect(restore).toHaveBeenCalledOnce())
+      expect(screen.queryByRole('button', { name: /google/i })).not.toBeInTheDocument()
+      expect(screen.queryByText('secret')).not.toBeInTheDocument()
+      // The skeleton cover (its BottomNav), not a blank frame.
+      expect(screen.getByRole('navigation')).toBeInTheDocument()
+
+      act(() => {
+        useAuthStore.setState({ status: 'guest' })
+        resolveRestore()
+      })
+
+      await waitFor(() => expect(screen.getByText('secret')).toBeInTheDocument())
+    })
+
+    it('renders children directly once a returning guest is recognised, without waiting on the account marker path', async () => {
+      mHasUsedGuestBefore.mockResolvedValue(true)
+      const restore = vi.fn(() => {
+        useAuthStore.setState({ status: 'guest' })
+        return Promise.resolve()
+      })
+      useAuthStore.setState({ restore })
+
+      render(
+        <RequireAuth>
+          <div>secret</div>
+        </RequireAuth>,
+      )
+
+      await waitFor(() => expect(screen.getByText('secret')).toBeInTheDocument())
+      expect(screen.queryByRole('button', { name: /google/i })).not.toBeInTheDocument()
+    })
+
+    it('never shows the skeleton for a device that has used neither Google nor guest mode', async () => {
+      mHasLoggedInBefore.mockResolvedValue(false)
+      mHasUsedGuestBefore.mockResolvedValue(false)
+
+      render(
+        <RequireAuth>
+          <div>secret</div>
+        </RequireAuth>,
+      )
+
+      expect(await screen.findByRole('button', { name: /google/i })).toBeInTheDocument()
+      expect(screen.queryByRole('navigation')).not.toBeInTheDocument()
+    })
   })
 
   // The real regression this track owns (specs.md §10.29): a returning

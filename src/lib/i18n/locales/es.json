@@ -475,7 +475,7 @@
       "biometricRowLabel": "Usar también biometría",
       "biometricRowSubcopy": "Desbloqueá más rápido con tu huella o Face ID",
       "guestRowLabel": "Bloqueo con huella",
-      "guestRowSubcopy": "Te la vuelve a pedir si dejaste la app un rato en segundo plano"
+      "guestRowSubcopy": "Te la pide al abrir la app, y de nuevo si la dejaste un rato en segundo plano"
     },
     "setup": {
       "kickerNew": "Nuevo PIN",

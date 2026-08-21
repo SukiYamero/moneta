@@ -475,7 +475,7 @@
       "biometricRowLabel": "Usar também biometria",
       "biometricRowSubcopy": "Desbloqueie mais rápido com sua digital ou Face ID",
       "guestRowLabel": "Bloqueio com digital",
-      "guestRowSubcopy": "Pede de novo se você deixou o app um tempo em segundo plano"
+      "guestRowSubcopy": "Pede ao abrir o app, e de novo se você o deixou um tempo em segundo plano"
     },
     "setup": {
       "kickerNew": "Novo PIN",

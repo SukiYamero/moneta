@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Fingerprint, LockKeyhole } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { useAuthStore } from '@/lib/authStore'
 import { useLockStore } from '@/lib/lockStore'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { PinDots } from '@/features/lock/PinDots'
@@ -21,13 +20,14 @@ export const IconTile = ({ children }: { children: ReactNode }) => (
 )
 
 /**
- * A guest never has a PIN vault (specs.md §10.2.1) — this branch only ever
- * mounts when an already-active guest session's own background timeout
- * re-locks it (`lockStore.onVisible`); a guest is never gated at cold start,
- * since guest status itself isn't persisted across a reload. No PIN
- * keypad, no "Olvidé mi PIN": the credential gates the UI, not a
- * cryptographic boundary, so a guest's only recovery is retrying the OS
- * prompt — there is nothing to wipe that would help.
+ * A guest never has a PIN vault (specs.md §10.2.1) — this branch mounts
+ * either when the cold-start guest gate locks a returning guest before the
+ * app has rendered anything else (`lockStore.init()`, specs.md §10.33), or
+ * when an already-active guest session's own background timeout re-locks
+ * it (`lockStore.onVisible`). No PIN keypad, no "Olvidé mi PIN": the
+ * credential gates the UI, not a cryptographic boundary, so a guest's only
+ * recovery is retrying the OS prompt — there is nothing to wipe that would
+ * help.
  */
 const GuestLockScreen = () => {
   const { t } = useTranslation('lock')
@@ -165,10 +165,15 @@ const AccountLockScreen = () => {
 
 const LockScreen = () => {
   const phase = useLockStore((s) => s.phase)
-  const isGuest = useAuthStore((s) => s.status === 'guest')
+  // Not authStore.status: the cold-start guest gate (lockStore.init(),
+  // specs.md §10.33) can lock the app before authStore has resolved
+  // anything — lockKind is set by the same code path that decided to lock,
+  // so it's correct at every entry point, not just the background-relock
+  // one that already knew authStore's status by the time it fired.
+  const lockKind = useLockStore((s) => s.lockKind)
 
   if (phase !== 'locked') return null
-  return isGuest ? <GuestLockScreen /> : <AccountLockScreen />
+  return lockKind === 'guest' ? <GuestLockScreen /> : <AccountLockScreen />
 }
 
 export default LockScreen
