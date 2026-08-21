@@ -220,3 +220,18 @@ Per `AGENTS.md`, non-optional:
 | AE    | `track-ae-light` | `../moneta-worktrees/track-ae-light` | active               |
 | AF    | `track-af-pin`   | `../moneta-worktrees/track-af-pin`   | active               |
 | AG    | —                | —                                    | stage 2, not started |
+
+## 7. Operator debt from stage 1 (do not lose these)
+
+- **`syncStoredTheme()` has no caller.** Track AE built it correctly and could
+  not wire it: the one line belongs in `src/main.tsx` beside
+  `syncStoredLocale()`, and `main.tsx` is Track AD's file this wave. Until it
+  lands, picking a theme writes `Preferencias.tema` and nothing moves on
+  screen. **The operator wires it the moment AD merges** — filed in `specs.md`
+  §12 by AE as well, so it survives this file.
+- **`src/features/profile/PreferencesSection.tsx` was unowned**, and its inert
+  "Tema — Oscuro / dark-only for now" row became false the instant AE merged.
+  That is a planning miss, not a track's fault: the wave plan assigned the
+  settings-side editor and never asked which _other_ file rendered the same
+  preference. Authorized to AE's reviewer, with the constraint that the
+  `profile` i18n namespace belongs to live Track AF.
