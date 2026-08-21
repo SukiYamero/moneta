@@ -109,6 +109,11 @@ lost their data. §12 names two acceptable answers and one that is not:
   honest, but does not actually get them back to it.
 - **Ship the flip and say nothing** — ruled out.
 
+**Built 2026-08-21 (Wave 4.1, Track AG): both halves shipped.** The switcher
+recovers every profile ever signed into on the device, and a guest signing in
+with local movements is now asked, once, whether to bring them along. **The item
+stays open until you have used it** — a shipped flow is not a confirmed one.
+
 **Updated 2026-08-20 (Wave 4.1): both halves are now specified and owned.**
 §10.32 prevents the cliff (a guest signing in is _asked_ whether to bring their
 movements into the account — a prompt rather than an automatic move, because

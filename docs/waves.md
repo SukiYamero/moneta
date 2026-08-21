@@ -487,10 +487,17 @@ next, but nothing in it is newly reachable: Track Z shipped the validation it
 could not ship without, which was the whole point of that split. These four
 items are visible on every single app open.
 
-**Specs are written. Stage 1 (AD, AE, AF) is in flight since 2026-08-20;
-AG is stage 2. Execution detail — staging, file ownership, the conflict hunt
-and the operator decisions taken before dispatch — lives in
-[`wave-4.1-plan.md`](wave-4.1-plan.md).**
+**✅ COMPLETE (merged to `main`, 2026-08-21).** Five tracks, not four: AD, AE
+and AF in parallel, then AH and AG in sequence. Each merged with its own review
+pass applied, plus an operator cross-track pass over the stage-1 seams.
+`bun run check`: 145 files, 1563 tests (the wave started at 131/1375).
+
+**AH was not in the plan.** It exists because the wave's own seam produced it:
+AF shipped a guest lock whose copy promised cold-start protection, and guest
+mode turned out to be in-memory only — an operator briefing error, recorded as
+one in §10.33. Execution detail — staging, file ownership, the conflict hunt,
+the decisions taken before dispatch and the escalations resolved after — lives
+in [`wave-4.1-plan.md`](wave-4.1-plan.md).
 
 | Track                           | Spec                | Priority | Owns                                                                                                                                                              |
 | ------------------------------- | ------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
