@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router'
 import { RequireAuth } from '@/features/auth/RequireAuth'
 import { BootGate } from '@/features/boot/BootGate'
 import { useAuthStore } from '@/lib/authStore'
@@ -74,14 +75,16 @@ describe('continueAsGuest() vs. the boot sequence — the recency race', () => {
     })
 
     render(
-      <RequireAuth>
-        <BootGate>
-          <div>app</div>
-        </BootGate>
-      </RequireAuth>,
+      <MemoryRouter>
+        <RequireAuth>
+          <BootGate>
+            <div>app</div>
+          </BootGate>
+        </RequireAuth>
+      </MemoryRouter>,
     )
 
-    await userEvent.click(screen.getByRole('button', { name: /invitado/i }))
+    await userEvent.click(await screen.findByRole('button', { name: /invitado/i }))
 
     await waitFor(() => {
       expect(useBootStore.getState().status).toBe('ready')

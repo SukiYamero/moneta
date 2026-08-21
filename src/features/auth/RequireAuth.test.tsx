@@ -1,11 +1,30 @@
-import { StrictMode } from 'react'
+import { StrictMode, type ReactElement } from 'react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, render as rtlRender, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router'
 import { RequireAuth } from '@/features/auth/RequireAuth'
 import { useAuthStore } from '@/lib/authStore'
 
+// PreContentSkeleton (rendered whenever a returning device is still
+// resolving) uses the real BottomNav, which needs a Router context — every
+// real call site (router.tsx) already provides one; this is test-harness
+// only.
+const render = (ui: ReactElement) => rtlRender(ui, { wrapper: MemoryRouter })
+
+vi.mock('@/lib/deviceStore', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/deviceStore')>()
+  return { ...actual, hasLoggedInBefore: vi.fn() }
+})
+
+import { hasLoggedInBefore } from '@/lib/deviceStore'
+
+const mHasLoggedInBefore = vi.mocked(hasLoggedInBefore)
+
 beforeEach(() => {
+  // Defaults to "never logged in before" — most tests exercise a genuine
+  // first-run device; the returning-device tests below override it.
+  mHasLoggedInBefore.mockResolvedValue(false)
   useAuthStore.setState({
     status: 'idle',
     user: null,
@@ -15,21 +34,21 @@ beforeEach(() => {
     driveOptIn: 'pending',
     driveConnecting: false,
     driveError: null,
-    // RequireAuth attempts a silent restore on mount when idle (see below) —
-    // stub it out by default so the other tests aren't exercising real auth.ts.
+    // RequireAuth attempts a silent restore on mount when idle — stub it
+    // out by default so the other tests aren't exercising real auth.ts.
     restore: vi.fn().mockResolvedValue(undefined),
   })
 })
 
 describe('RequireAuth', () => {
-  it('shows the welcome screen when unauthenticated', () => {
+  it('shows the welcome screen when unauthenticated', async () => {
     render(
       <RequireAuth>
         <div>secret</div>
       </RequireAuth>,
     )
     expect(screen.queryByText('secret')).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /google/i })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: /google/i })).toBeInTheDocument()
   })
 
   it('calls login when the welcome screen button is clicked', async () => {
@@ -40,18 +59,18 @@ describe('RequireAuth', () => {
         <div>secret</div>
       </RequireAuth>,
     )
-    await userEvent.click(screen.getByRole('button', { name: /google/i }))
+    await userEvent.click(await screen.findByRole('button', { name: /google/i }))
     expect(login).toHaveBeenCalledOnce()
   })
 
-  it('shows a welcome-screen error message when status is error', () => {
+  it('shows a welcome-screen error message when status is error', async () => {
     useAuthStore.setState({ status: 'error', error: 'auth: access_denied' })
     render(
       <RequireAuth>
         <div>secret</div>
       </RequireAuth>,
     )
-    expect(screen.getByRole('alert')).toHaveTextContent(/cancelaste el inicio de sesión/i)
+    expect(await screen.findByRole('alert')).toHaveTextContent(/cancelaste el inicio de sesión/i)
   })
 
   it('shows the Drive permission screen right after login, before the app', () => {
@@ -85,7 +104,21 @@ describe('RequireAuth', () => {
     expect(screen.getByText('secret')).toBeInTheDocument()
   })
 
-  it('attempts a silent restore once on mount while status is idle', () => {
+  it('renders authenticated children instantly, never gated on the returning-device marker', () => {
+    // Already 'authenticated' at mount (e.g. a lock-screen unlock handoff) —
+    // must not wait on hasLoggedInBefore() at all, which this test leaves
+    // permanently pending to prove it.
+    mHasLoggedInBefore.mockReturnValue(new Promise(() => {}))
+    useAuthStore.setState({ status: 'authenticated', driveOptIn: 'connected' })
+    render(
+      <RequireAuth>
+        <div>secret</div>
+      </RequireAuth>,
+    )
+    expect(screen.getByText('secret')).toBeInTheDocument()
+  })
+
+  it('attempts a silent restore once on mount while status is idle', async () => {
     const restore = vi.fn().mockResolvedValue(undefined)
     useAuthStore.setState({ restore })
     render(
@@ -93,7 +126,7 @@ describe('RequireAuth', () => {
         <div>secret</div>
       </RequireAuth>,
     )
-    expect(restore).toHaveBeenCalledOnce()
+    await waitFor(() => expect(restore).toHaveBeenCalledOnce())
   })
 
   it('does not attempt a silent restore when a lock-screen unlock already settled status', () => {
@@ -107,13 +140,6 @@ describe('RequireAuth', () => {
     expect(restore).not.toHaveBeenCalled()
   })
 
-  // The persisted decision (specs.md §11, 2026-08-19) is resolved inside
-  // authStore's own async login/restore/hydrate — by the time `status`
-  // flips to 'authenticated', `driveOptIn` is already whatever storage said.
-  // This pins down the resulting contract from RequireAuth's side: as long
-  // as the store transitions both fields in the same `set()` call, a device
-  // that already answered must never render DrivePermissionScreen at all,
-  // not even for one intermediate render.
   it('never flashes the Drive screen for a device that already answered', async () => {
     let resolveRestore: () => void = () => {}
     const restore = vi.fn(
@@ -128,13 +154,9 @@ describe('RequireAuth', () => {
         <div>secret</div>
       </RequireAuth>,
     )
-    // Still resolving — neither the app nor the Drive screen has any answer yet.
     expect(screen.queryByText('secret')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /permitir y continuar/i })).not.toBeInTheDocument()
 
-    // authStore resolves status and the persisted driveOptIn together, in one
-    // set() call — never a separate render where status is 'authenticated'
-    // but driveOptIn hasn't caught up yet.
     act(() => {
       useAuthStore.setState({ status: 'authenticated', driveOptIn: 'connected' })
       resolveRestore()
@@ -156,32 +178,7 @@ describe('RequireAuth', () => {
     expect(screen.queryByRole('button', { name: /permitir y continuar/i })).not.toBeInTheDocument()
   })
 
-  // The real boot-flash bug this track owns (specs.md §10.9): status is
-  // 'authenticating' for the whole duration of restore()'s network calls,
-  // not just the instant before/after — WelcomeScreen must not render for
-  // any of that window.
-  it('does not flash the welcome screen while status is authenticating', () => {
-    useAuthStore.setState({ status: 'authenticating' })
-    render(
-      <RequireAuth>
-        <div>secret</div>
-      </RequireAuth>,
-    )
-    expect(screen.queryByRole('button', { name: /google/i })).not.toBeInTheDocument()
-    expect(screen.queryByText('secret')).not.toBeInTheDocument()
-    expect(screen.getByRole('status')).toBeInTheDocument()
-  })
-
-  // Regression: the boot-flash fix above must not swallow an explicit,
-  // user-initiated login. login() sets the exact same `status:
-  // 'authenticating'` that a cold-boot restore() does, so a naive guard
-  // that keys only off `status` would rip the whole WelcomeScreen out from
-  // under the user's tap and replace it with the full-screen boot
-  // placeholder — a regression against specs.md §10.9 tier 3 ("the busy
-  // state lives on the control that was pressed... never a full-screen
-  // overlay"; "WelcomeScreen's Google button already does the label swap;
-  // that is the pattern").
-  it('keeps the welcome screen on screen when login() is triggered from it, instead of swapping in the boot placeholder', async () => {
+  it('keeps the welcome screen on screen when login() is triggered from it, instead of swapping in a boot placeholder', async () => {
     const login = vi.fn(() => {
       useAuthStore.setState({ status: 'authenticating' })
       return Promise.resolve()
@@ -192,31 +189,18 @@ describe('RequireAuth', () => {
         <div>secret</div>
       </RequireAuth>,
     )
-    // Let the mount-time restore() mock settle so the boot window has closed.
-    await waitFor(() => expect(screen.getByRole('button', { name: /google/i })).toBeInTheDocument())
+    const googleButton = await screen.findByRole('button', { name: /google/i })
 
-    await userEvent.click(screen.getByRole('button', { name: /google/i }))
+    await userEvent.click(googleButton)
 
-    // Still the welcome screen, showing its own inline busy state — not the
-    // full-screen boot placeholder.
+    // Still the welcome screen, showing its own inline busy state — never a
+    // full-screen boot placeholder (specs.md §10.9 tier 3).
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: /conectando/i })).toBeInTheDocument()
   })
 
-  // StrictMode (main.tsx) double-invokes effects in dev: mount, run effect,
-  // simulate unmount, remount, run effect again — same component instance,
-  // so refs survive across the pair. A naive "settle the boot window in the
-  // mount effect" implementation resolves this per *invocation*: the second
-  // invocation sees `status` already flipped away from 'idle' by the first
-  // invocation's synchronous pre-await work, takes the "not idle" branch,
-  // and marks boot settled immediately — reopening the exact boot-flash bug
-  // this track fixes, in dev only, for a slow restore(). The real restore()
-  // call must be the only one whose settlement can end the boot window.
   it('does not end the boot window early under StrictMode double-invocation while the real restore() is still pending', async () => {
     let resolveRestore: () => void = () => {}
-    // Mirrors the real restore(): flips status synchronously, before any
-    // await, which is exactly what makes the second StrictMode invocation
-    // see a non-'idle' status.
     const restore = vi.fn(() => {
       useAuthStore.setState({ status: 'authenticating' })
       return new Promise<void>((resolve) => {
@@ -224,6 +208,7 @@ describe('RequireAuth', () => {
       })
     })
     useAuthStore.setState({ restore })
+    mHasLoggedInBefore.mockResolvedValue(true)
 
     render(
       <StrictMode>
@@ -233,16 +218,104 @@ describe('RequireAuth', () => {
       </StrictMode>,
     )
 
-    // Still booting — the boot placeholder must still be up, not the welcome
-    // screen, no matter how many times the mount effect fired.
-    expect(screen.getByRole('status')).toBeInTheDocument()
+    // Still booting for a known-returning device — the skeleton cover (its
+    // `BottomNav`) must stay up, never Welcome, no matter how many times the
+    // mount effect fired.
+    await waitFor(() => expect(screen.getByRole('navigation')).toBeInTheDocument())
     expect(screen.queryByRole('button', { name: /google/i })).not.toBeInTheDocument()
+    expect(screen.queryByText('secret')).not.toBeInTheDocument()
 
     act(() => {
       useAuthStore.setState({ status: 'idle' })
       resolveRestore()
     })
 
-    await waitFor(() => expect(screen.getByRole('button', { name: /google/i })).toBeInTheDocument())
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: /hola de nuevo/i })).toBeInTheDocument(),
+    )
+  })
+
+  // The real regression this track owns (specs.md §10.29): a returning
+  // device's app must never flash the Welcome screen — the pre-§10.9 defect
+  // and the new-screen equivalent of it — while either the marker read or
+  // restore() itself is still resolving. Exercised under adversarial,
+  // independently-controlled timing for both signals rather than trusting
+  // them to happen to resolve in a safe order.
+  describe('boot-flash regression (specs.md §10.29)', () => {
+    it('never renders Welcome while a known-returning device is still resolving, in any interleaving', async () => {
+      let resolveMarker: (v: boolean) => void = () => {}
+      mHasLoggedInBefore.mockReturnValue(
+        new Promise<boolean>((resolve) => {
+          resolveMarker = resolve
+        }),
+      )
+      let resolveRestore: () => void = () => {}
+      const restore = vi.fn(() => {
+        useAuthStore.setState({ status: 'authenticating' })
+        return new Promise<void>((resolve) => {
+          resolveRestore = resolve
+        })
+      })
+      useAuthStore.setState({ restore })
+
+      render(
+        <RequireAuth>
+          <div>secret</div>
+        </RequireAuth>,
+      )
+
+      // Marker still unknown: genuinely nothing to promise yet.
+      expect(screen.queryByRole('button', { name: /google/i })).not.toBeInTheDocument()
+      expect(screen.queryByText('secret')).not.toBeInTheDocument()
+
+      // Marker resolves true — restore() has not been kicked off yet at
+      // this exact instant in a naive implementation; must still not be Welcome.
+      act(() => resolveMarker(true))
+      await waitFor(() => expect(restore).toHaveBeenCalledOnce())
+      expect(screen.queryByRole('button', { name: /google/i })).not.toBeInTheDocument()
+      expect(screen.queryByText('secret')).not.toBeInTheDocument()
+
+      // restore() fails silently (session truly lapsed) — lands on the
+      // returning-user screen, never Welcome.
+      act(() => {
+        useAuthStore.setState({ status: 'idle' })
+        resolveRestore()
+      })
+      await waitFor(() =>
+        expect(screen.getByRole('heading', { name: /hola de nuevo/i })).toBeInTheDocument(),
+      )
+      // Distinct from WelcomeScreen even though its generic-fallback CTA
+      // shares the same label: no guest option and no first-run legal copy.
+      expect(screen.queryByRole('button', { name: /invitado/i })).not.toBeInTheDocument()
+    })
+
+    it('never renders Welcome for a known-returning device whose restore() succeeds', async () => {
+      mHasLoggedInBefore.mockResolvedValue(true)
+      let resolveRestore: () => void = () => {}
+      const restore = vi.fn(() => {
+        useAuthStore.setState({ status: 'authenticating' })
+        return new Promise<void>((resolve) => {
+          resolveRestore = resolve
+        })
+      })
+      useAuthStore.setState({ restore })
+
+      render(
+        <RequireAuth>
+          <div>secret</div>
+        </RequireAuth>,
+      )
+
+      await waitFor(() => expect(restore).toHaveBeenCalledOnce())
+      expect(screen.queryByRole('button', { name: /google/i })).not.toBeInTheDocument()
+
+      act(() => {
+        useAuthStore.setState({ status: 'authenticated', driveOptIn: 'dismissed' })
+        resolveRestore()
+      })
+
+      await waitFor(() => expect(screen.getByText('secret')).toBeInTheDocument())
+      expect(screen.queryByRole('button', { name: /google/i })).not.toBeInTheDocument()
+    })
   })
 })

@@ -6886,6 +6886,20 @@ export/index.ts:49` all still inline `format(date, 'yyyy-MM-dd')` instead
   are occasional. `docs/ui/design-export-reference.md` is the extracted,
   readable form; `docs/ui/moneta-theme.css` is the design's own token table
   lifted verbatim.
+- 2026-08-20 — **§10.29's "Done when" sentence is stale against its own
+  revised decision — the binding reading is zero full-screen loading
+  treatments, not one** (Track AD, per `docs/wave-4.1-plan.md` §3.2). The
+  sentence "a cold open by a signed-in user shows exactly one full-screen
+  treatment before Home" was written before the same-day reversal, earlier
+  in the same section, that deleted the full-screen brand screen entirely.
+  `BootScreen.tsx` and its 800ms floor are deleted, not reworked;
+  `RequireAuth` and `BootGate` both cover their pre-content span with
+  `PreContentSkeleton` (shell chrome + the real Home skeleton) for a
+  returning device only, and with nothing at all — not even a blank
+  placeholder screen — for a device that has never logged in. The one
+  remaining full-screen treatment on a fresh sign-in, `DriveDownloadScreen`,
+  is a progress screen with real content, not a loading treatment, and was
+  never what "zero" refers to.
 
 - 2026-08-20 — **Track AE ships the light theme (§10.30): `:root` real, the
   picker built, `localStorage` used for the theme mirror deliberately.**
@@ -7777,6 +7791,19 @@ SupportedLocale = detectLocale()`, and looks up each section/category's
   key — a small change, but to a file and a `profile`-namespace string
   neither Track AE (owns `settings` only) nor any other Wave 4.1 track was
   assigned.
+- **`ProfileRecord` (`src/lib/profiles/profileRegistry.ts`) has no email
+  field, so §10.21's returning-user screen can't reliably show one.** Found
+  building that screen (Track AD, Wave 4.1). `accountKey` is keyed on the
+  Google `sub` whenever a live session provides one (`authStore.ts`'s
+  `syncProfileForAccount`, specs.md §11 2026-08-19) — a stable OIDC subject,
+  not an email — so it's almost never displayable as one; the screen shows
+  it only on the rare cached/legacy profile where `accountKey` happens to be
+  an email, and omits the row otherwise rather than ever printing a raw sub
+  as if it were an address. A real fix needs a `label`-adjacent `email?:
+string` on `ProfileRecord`/`deviceStore.ts`'s `ProfileRow` (a Dexie version
+  bump, additive), written wherever `syncProfileForAccount` already runs —
+  out of scope for Track AD, whose file ownership this wave excludes
+  `deviceStore.ts` from writing to.
 
 ### Development waves (parallel tracks, sequencing, worktree log)
 
