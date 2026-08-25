@@ -487,7 +487,7 @@
       "pinRowSubcopy": "4 dígitos, solo en este teléfono",
       "changePinCta": "Cambiar PIN",
       "lockNowCta": "Bloquear ahora",
-      "footerPolicy": "El PIN se guarda solo en este dispositivo. Si lo olvidás, podés desactivarlo desde la pantalla de bloqueo — vas a cerrar sesión, pero tus datos no se tocan.",
+      "footerPolicy": "El PIN se guarda solo en este dispositivo. Si lo olvidas, puedes desactivarlo desde la pantalla de bloqueo — vas a cerrar sesión, pero tus datos no se tocan.",
       "statusActive": "Activado",
       "statusInactive": "Desactivado",
       "biometricRowLabel": "Usar también biometría",
