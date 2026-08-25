@@ -2,6 +2,7 @@ import { History, House, Plus, Search, User, type LucideIcon } from 'lucide-reac
 import { useTranslation } from 'react-i18next'
 import { NavLink } from 'react-router'
 import { cn } from '@/lib/utils'
+import { useHasOpenOverlay } from '@/components/shared/useOverlay'
 
 const ACTIVE_STROKE = 2.5
 const INACTIVE_STROKE = 2
@@ -57,11 +58,21 @@ export interface BottomNavProps {
  */
 export const BottomNav = ({ profileOpen, onOpenProfile, addOpen, onOpenAdd }: BottomNavProps) => {
   const { t } = useTranslation('nav')
+  // specs.md §10.53: a modal overlay must never let this show through —
+  // hidden via opacity/pointer-events, not unmounted, so `useOverlay`'s
+  // close-time focus restore (e.g. back to this file's own Add FAB) still
+  // has a real, focusable element to land on the instant the overlay closes,
+  // before this hook's own re-render has caught up and made it visible
+  // again.
+  const hasOpenOverlay = useHasOpenOverlay()
 
   return (
     <nav
       aria-label={t('label')}
-      className="fixed inset-x-0 bottom-0 z-50 flex h-(--bottom-nav-clearance) items-center justify-between bg-[linear-gradient(to_top,var(--color-canvas)_60%,color-mix(in_oklch,var(--color-canvas)_92%,transparent)_88%,transparent)] px-6 pb-[calc(env(safe-area-inset-bottom)+1.375rem)]"
+      className={cn(
+        'fixed inset-x-0 bottom-0 z-50 flex h-(--bottom-nav-clearance) items-center justify-between bg-[linear-gradient(to_top,var(--color-canvas)_60%,color-mix(in_oklch,var(--color-canvas)_92%,transparent)_88%,transparent)] px-6 pb-[calc(env(safe-area-inset-bottom)+1.375rem)]',
+        hasOpenOverlay && 'pointer-events-none opacity-0',
+      )}
     >
       <NavTab to="/" icon={House} label={t('home')} />
       <NavTab to="/history" icon={History} label={t('history')} />

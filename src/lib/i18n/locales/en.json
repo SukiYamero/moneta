@@ -12,6 +12,10 @@
         "network": "No connection. Check your internet and try again.",
         "unknown": "Something went wrong. Try again."
       }
+    },
+    "landscapeGuard": {
+      "title": "Rotate your phone",
+      "body": "This app is designed to be used in portrait mode."
     }
   },
   "auth": {

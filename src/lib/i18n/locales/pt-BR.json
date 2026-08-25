@@ -12,6 +12,10 @@
         "network": "Sem conexão. Verifique sua internet e tente novamente.",
         "unknown": "Ocorreu um erro inesperado. Tente novamente."
       }
+    },
+    "landscapeGuard": {
+      "title": "Gire seu celular",
+      "body": "Este app foi projetado para ser usado na vertical."
     }
   },
   "auth": {

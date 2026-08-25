@@ -6,6 +6,7 @@ import { es } from 'date-fns/locale'
 import { BottomSheet } from '@/components/shared/BottomSheet'
 import { CenterModal } from '@/components/shared/CenterModal'
 import { DateChipPicker } from '@/components/shared/DateChipPicker'
+import { useHasOpenOverlay } from '@/components/shared/useOverlay'
 
 /**
  * These tests cover the interaction *between* two overlay instances — the
@@ -273,5 +274,77 @@ describe('useOverlay + useEscapeToClose — DateChipPicker inside a BottomSheet'
 
     expect(screen.queryByRole('group', { name: 'Selector de fecha' })).not.toBeInTheDocument()
     expect(onSheetClose).not.toHaveBeenCalled()
+  })
+})
+
+describe('useHasOpenOverlay — module-level overlay-stack exposed to React (specs.md §10.53)', () => {
+  // Any consumer (BottomNav) reacting to "is *some* overlay open" must not
+  // special-case which overlay it is — this is the same nesting-aware
+  // `stack` the Escape/Tab-trap logic above already shares between
+  // BottomSheet, CenterModal and useEscapeToClose, exposed via
+  // useSyncExternalStore instead of read locally by AppShell (which would
+  // only ever see the Add/Profile sheets it happens to own).
+  const Probe = () => {
+    const hasOpenOverlay = useHasOpenOverlay()
+    return <span data-testid="probe">{String(hasOpenOverlay)}</span>
+  }
+
+  it('is false with nothing open, flips true while a BottomSheet is open, and flips back false once it closes', async () => {
+    const user = userEvent.setup()
+    const Wrapper = () => {
+      const [open, setOpen] = useState(false)
+      return (
+        <>
+          <Probe />
+          <button type="button" onClick={() => setOpen(true)}>
+            Abrir
+          </button>
+          <BottomSheet open={open} onClose={() => setOpen(false)} ariaLabel="Sheet de prueba">
+            <button type="button" onClick={() => setOpen(false)}>
+              Cerrar
+            </button>
+          </BottomSheet>
+        </>
+      )
+    }
+
+    render(<Wrapper />)
+    expect(screen.getByTestId('probe')).toHaveTextContent('false')
+
+    await user.click(screen.getByRole('button', { name: 'Abrir' }))
+    await vi.waitFor(() => expect(screen.getByTestId('probe')).toHaveTextContent('true'))
+
+    await user.click(screen.getByRole('button', { name: 'Cerrar' }))
+    await vi.waitFor(() => expect(screen.getByTestId('probe')).toHaveTextContent('false'))
+  })
+
+  it('stays true while an outer sheet remains open even after a nested CenterModal inside it closes', async () => {
+    const user = userEvent.setup()
+    const Wrapper = () => {
+      const [modalOpen, setModalOpen] = useState(true)
+      return (
+        <>
+          <Probe />
+          <BottomSheet open onClose={() => {}} ariaLabel="Sheet exterior">
+            <CenterModal
+              open={modalOpen}
+              onClose={() => setModalOpen(false)}
+              ariaLabel="Modal anidado"
+            >
+              <button type="button" onClick={() => setModalOpen(false)}>
+                Cerrar modal
+              </button>
+            </CenterModal>
+          </BottomSheet>
+        </>
+      )
+    }
+
+    render(<Wrapper />)
+    await vi.waitFor(() => expect(screen.getByTestId('probe')).toHaveTextContent('true'))
+
+    await user.click(screen.getByRole('button', { name: 'Cerrar modal' }))
+    // The outer sheet is still open — never expect this to read 'false'.
+    expect(screen.getByTestId('probe')).toHaveTextContent('true')
   })
 })

@@ -12,6 +12,10 @@
         "network": "No hay conexión. Revisá tu internet e intentá de nuevo.",
         "unknown": "Ocurrió un error inesperado. Intentá de nuevo."
       }
+    },
+    "landscapeGuard": {
+      "title": "Girá tu teléfono",
+      "body": "Esta app está diseñada para usarse en vertical."
     }
   },
   "auth": {

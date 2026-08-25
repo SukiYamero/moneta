@@ -3,6 +3,7 @@ import {
   useEffect,
   useLayoutEffect,
   useRef,
+  useSyncExternalStore,
   type ReactNode,
   type Ref,
   type RefObject,
@@ -65,12 +66,26 @@ let stack: OverlayHandle[] = []
 let scrollLockCount = 0
 let previousBodyOverflow = ''
 
+// Subscribers to "the overlay stack changed at all" — currently just
+// whether it's empty, for `useHasOpenOverlay` below. Kept separate from
+// `stack` itself (an ordinary module variable, not React state): the
+// Escape/Tab-trap logic reads `stack` directly and synchronously inside a
+// `keydown` handler, which must never go through React's render cycle.
+type StackListener = () => void
+const stackListeners = new Set<StackListener>()
+
+const notifyStackListeners = () => {
+  for (const listener of stackListeners) listener()
+}
+
 const pushOverlay = (handle: OverlayHandle) => {
   stack = [...stack, handle].toSorted((a, b) => a.seq - b.seq)
+  notifyStackListeners()
 }
 
 const popOverlay = (handle: OverlayHandle) => {
   stack = stack.filter((entry) => entry !== handle)
+  notifyStackListeners()
 }
 
 const isTopOverlay = (handle: OverlayHandle) => {
@@ -203,6 +218,27 @@ export const useOverlay = <T extends HTMLElement>({
 
   return setPanelRef
 }
+
+/**
+ * Whether any BottomSheet/CenterModal/FullScreenPanel — or the lighter
+ * `useEscapeToClose` popover, which shares the same module-level `stack` —
+ * is currently open anywhere in the app. A real iPhone showed `BottomNav`
+ * (specs.md §10.53) painting through the strip above the keyboard while the
+ * Add sheet was open; the fix is "hide while *any* overlay is open," which
+ * only this shared stack can answer correctly. A consumer checking its own
+ * local `addOpen`/`profileOpen` state instead would miss every other sheet
+ * — the filter sheet, the tag picker, the category modal, and anything
+ * added later — so `BottomNav` reads this hook directly rather than a prop
+ * threaded down from `AppShell`.
+ */
+export const useHasOpenOverlay = (): boolean =>
+  useSyncExternalStore(
+    (onStoreChange) => {
+      stackListeners.add(onStoreChange)
+      return () => stackListeners.delete(onStoreChange)
+    },
+    () => stack.length > 0,
+  )
 
 export interface UseEscapeToCloseOptions {
   open: boolean

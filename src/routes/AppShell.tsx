@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Outlet } from 'react-router'
 import { BottomNav } from '@/components/shared/BottomNav'
+import { LandscapeGuard } from '@/components/shared/LandscapeGuard'
 import { ProfileSheet } from '@/features/profile'
 import {
   AddMovimientoSheet,
@@ -53,6 +54,13 @@ export const AppShell = () => {
       <ProfileSheet open={profileOpen} onClose={() => setProfileOpen(false)} />
       <AddMovimientoSheet />
       <MovimientoSheet />
+      {/* specs.md §10.53: the one context with no real orientation lock —
+          a bare mobile browser tab. Mounted here (not main.tsx/AppLock.tsx,
+          outside this track's writable set) so it covers the three
+          bottom-nav tabs; it does not reach the pre-auth/lock screens or
+          `/settings`, which mount before or beside AppShell entirely — see
+          this track's own report. */}
+      <LandscapeGuard />
     </div>
   )
 }

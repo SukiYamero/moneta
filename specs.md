@@ -7338,6 +7338,242 @@ shared surface (the i18n namespace list/locale files, the two other
 tracks' READMEs, `docs/ajustes-3-plan.md`'s own status table) was checked
 and is either already consistent or a pre-existing, non-drifting convention.
 
+### 10.53 The backdrop made uncoverable, `BottomNav` hidden under any overlay, and keeping the app in portrait (Ajustes 4, Track AJ4-A, 2026-08-25)
+
+Two goals from the user's third real-iPhone report of the same background/
+`BottomNav`-bleed-through symptom (§10.49, §10.52 both already tried to fix
+it), plus keeping the app out of landscape.
+
+#### Goal 1a — the backdrop, made uncoverable regardless of pan/shrink geometry
+
+**Hypothesis going in:** `position: fixed` on iOS is pinned to the layout
+viewport, not the visual one; when the keyboard opens and iOS pans the page
+to keep the focused input visible, `visualViewport.offsetTop` goes
+non-zero. Traced by reasoning (no iOS device here, so this is **PLAUSIBLE,
+not CONFIRMED**): a `fixed inset-0` backdrop spans the _entire_ layout
+viewport `[0, layoutHeight]` per spec, and the visible window after a pan is
+`[offsetTop, offsetTop + visualHeight]` — a subset of that range as long as
+`offsetTop + visualHeight ≤ layoutHeight`, which should always hold for a
+keyboard-only pan. Read literally, `inset-0` should already cover the
+visible area fully after §10.52's fix (backdrop pulled out to its own
+always-full `fixed inset-0` sibling). That the user still reports the
+symptom means either the pan exceeds this model, or real WebKit doesn't
+render `fixed inset-0` exactly per spec under this specific interaction —
+neither is verifiable from this repo, and no competing mechanism was found
+by reading the code (§10.52's backdrop/panel split is real and correct on
+its own terms; nothing else in `BottomSheet.tsx`/`CenterModal.tsx` reads
+`viewportInset` for the backdrop).
+
+**Fix — oversizing, not deriving the exact union.** Rather than compute the
+"true" box (which requires trusting the same geometry model already wrong
+twice), the backdrop now overscans `OVERLAY_BACKDROP_OVERSCAN_BLOCK`
+(`-50dvh`) top/bottom and `OVERLAY_BACKDROP_OVERSCAN_INLINE` (`-50dvw`)
+left/right past a plain `inset-0`, unconditionally — not derived from
+`viewportInset` at all, so it can't be defeated by the same reasoning being
+wrong a third time. **What this is robust against:** any pan/shrink
+combination up to half a viewport dimension in any direction — comfortably
+more than any real keyboard height (~35-40% of screen) or the pan a
+keyboard causes, and more than realistic pinch-zoom panning (`review-aj3-b`,
+§10.49.1, already established pinch-zoom is possible on iOS despite
+`user-scalable=no`, and that this hook's correction handles it as a
+side-effect). **What it is not robust against:** a pan/shrink exceeding 50%
+of the viewport in one direction (not a real scenario for a software
+keyboard) or a `fixed` element resolving against something other than the
+true device viewport at all (an ancestor `transform` would do this, but
+both shells portal straight to `document.body`, confirmed by reading —
+same fact `scripts/no-in-flow-min-h-dvh.sh`'s own comment already
+establishes for this exact class of question). Constants live in
+`useVisualViewportInset.ts` (the module both shells already import for the
+geometry-derived correction), not derived from it.
+
+**TDD.** New `backdrop overscan` tests in `BottomSheet.test.tsx`/
+`CenterModal.test.tsx` asserting the backdrop's inline `top`/`bottom`/
+`left`/`right` equal the overscan constants and the class string no longer
+contains `inset-0` — watched failing against the pre-fix code (backdrop
+still read `inset-0`, no inline overscan style) before the fix, both files.
+Two **pre-existing** tests in the same `viewport-safe positioning` block
+(`'never shrinks the backdrop along with the keyboard-safe wrapper'`)
+asserted `backdrop.style.top` stayed exactly `''` — a proxy for "not
+touched by `viewportInset`" that broke once the backdrop legitimately
+carries an unconditional inline `top`. Updated to assert the value is
+unchanged before/after a simulated keyboard resize instead of empty, which
+is the actual invariant that test was protecting.
+
+#### Goal 1b — `BottomNav` hides while any overlay is open, regardless of which one
+
+**The belt-and-braces half, deliberately not dependent on Goal 1a's
+geometry model being right.** New `useHasOpenOverlay()`
+(`useOverlay.ts`) exposes the existing module-level overlay stack — already
+shared by `BottomSheet`/`CenterModal`/`FullScreenPanel`/`useEscapeToClose`
+— to React via `useSyncExternalStore`, `true` whenever the stack is
+non-empty. `BottomNav` reads it directly rather than `AppShell` threading
+`addOpen || profileOpen` down as a prop — the latter would miss the filter
+sheet, the tag picker, the category modal and anything future, exactly the
+"fix the shape, not the instance" mistake `AGENTS.md` names.
+
+**Hide, not unmount — reasoned through, not guessed.** `useOverlay`'s
+close-time cleanup calls `triggerElement?.focus()` synchronously, restoring
+focus to whatever opened the overlay (often `BottomNav`'s own Add FAB).
+Traced: the `useSyncExternalStore` update this triggers (via `popOverlay`'s
+`notifyStackListeners()`) is a _scheduled_ re-render, not synchronous within
+the same layout-effect cleanup call — so at the exact moment `.focus()`
+runs, `BottomNav` is still rendered in its _previous_ ("hidden") state, one
+render behind. `display: none`/`visibility: hidden`/the `inert` attribute
+(used elsewhere in this codebase for a _different_ purpose — see
+`PreContentSkeleton.tsx`, which hides only a decoy nav's _interactivity_,
+not its paint) all make an element unfocusable via script, which would make
+the restore silently fail during that one-render gap. `opacity-0
+pointer-events-none` does not — an element stays scriptable-focusable
+regardless of opacity — so the FAB can always receive focus back the
+instant the overlay closes, even a render tick before this hook's own
+update repaints the bar visible again. **Known, accepted gap, not fixed
+here:** `aria-hidden` was deliberately _not_ added alongside the opacity
+toggle for the same timing reason — toggling it in lockstep would risk a
+screen reader briefly seeing focus land inside an `aria-hidden` ancestor
+during that same one-render gap, a real (if minor, and standards-invalid
+either way) regression risk not worth trading for a marginal improvement
+over the pre-existing behavior (which had no `aria-hidden` at all, so this
+is neutral-or-better, not worse).
+
+**TDD.** `useOverlay.test.tsx` gained a `useHasOpenOverlay` describe block
+(flips true/false around a `BottomSheet`'s open/close, stays true while a
+nested `CenterModal` alone closes) — watched failing (`useHasOpenOverlay is
+not a function`) before the export existed. `BottomNav.test.tsx` gained two
+tests: one asserting `opacity-0 pointer-events-none` while an _unrelated_
+sibling `BottomSheet` is open and that the Add button stays queryable in
+the DOM throughout (proving hide, not unmount) — watched failing against
+the pre-fix markup (no such classes existed at all); one asserting the FAB
+itself regains focus after the sheet it opened closes, which would fail
+against an unmount-based implementation (not attempted — reasoned as the
+wrong choice above, not built and discarded).
+
+#### Goal 2 — keeping the app in portrait
+
+**Rescoped mid-track by the operator:** the user is designing this guard
+screen themselves ("voy trabajando en el diseño de esa pantalla"), so this
+track builds the minimal functional version only — detection/state kept
+separate from presentation, so a later design drops in without touching the
+mechanism. `AGENTS.md`'s design-vs-code authority question does not apply
+here: there is no existing design or canvas artboard to defer to.
+
+**Per-context answer, each verified by reading rather than assumed:**
+
+- **Installed PWA (Android and desktop) / Play Store TWA.** `vite.config.ts`
+  already declares `manifest.orientation: 'portrait'` (read directly,
+  pre-existing, untouched this track). The Web App Manifest spec's
+  `orientation` member is honored by the OS/browser once the app is
+  _installed_ (added to home screen, launched standalone) — this is a
+  platform-level lock requiring no JavaScript at all. A TWA wraps the same
+  manifest under the same Chrome/WebView engine (already established,
+  §10.49), so it inherits this for free; the TWA's own native
+  `AndroidManifest.xml` (generated by Bubblewrap/PWABuilder, not something
+  this repo produces) can additionally set `android:screenOrientation` as a
+  second, OS-level lock, independent of the web content entirely — noted,
+  not something this track can configure since no such native project
+  exists here. **PLAUSIBLE, not CONFIRMED**: this is the documented
+  behavior of the manifest spec and Chrome's own PWA implementation, not
+  verified against a real installed app in this environment.
+- **iOS, installed ("Add to Home Screen").** Apple's home-screen web-app
+  support does not implement the manifest's orientation-lock behavior the
+  way Chromium does — iOS has no equivalent mechanism to enforce it at the
+  OS level for a home-screen web app. **PLAUSIBLE**, reasoned from iOS's
+  documented, narrower Web App Manifest support (no primary Apple source
+  found confirming orientation specifically; treated as unsupported rather
+  than assumed supported, per this project's own standing rule against
+  claiming a platform capability without checking).
+- **Screen Orientation API (`screen.orientation.lock()`), any context.**
+  Deliberately **not called anywhere in this codebase.** Per spec, `lock()`
+  only works when the document is fullscreen or running in an installed
+  context Chromium recognizes — i.e., it would be redundant with the
+  manifest-driven lock above in the one case it might work, and iOS Safari
+  does not implement `lock()`/`unlock()` at all, installed or not (long-
+  standing WebKit gap). Calling it and swallowing the rejection would
+  satisfy "doesn't crash" while teaching nothing — exactly the "claim
+  written as settled fact, never verified" pattern this file's own §11
+  already names four instances of. **Not shipped, and not silently assumed
+  to work anywhere.**
+- **Mobile browser tab (not installed), both platforms.** No real lock is
+  available in this context on either engine — this is the one case with no
+  installed-context fallback to lean on. New `useIsLandscape()`
+  (`src/components/shared/useIsLandscape.ts`) —
+  `matchMedia('(orientation: landscape)')` via `useSyncExternalStore`,
+  mirroring the existing `usePrefersReducedMotion.ts` shape exactly — feeds
+  new `LandscapeGuard.tsx`, a self-contained, always-mounted component that
+  renders nothing in portrait and a full-screen blocking `role="status"` in
+  landscape (existing tokens/icon/`common` copy only, no illustration, per
+  the operator's explicit "minimal functional version" scope). **The seam
+  for the user's own design:** `useIsLandscape.ts` (the "when") and
+  `LandscapeGuard.tsx` (the "what") are separate files: a future design
+  replaces the body of `LandscapeGuard.tsx` alone, touching neither the
+  hook nor its mount site.
+
+**Mount site — a known, reported gap, not silently absorbed.** Mounted once,
+in `src/routes/AppShell.tsx`, which only covers the three bottom-nav tabs.
+The pre-auth/lock screens (Welcome, Returning-user, PIN lock/setup) and
+`/settings` all mount outside `AppShell` (`src/router.tsx`: `RequireAuth`/
+`AppLock` wrap the router _above_ `AppShell`; `/settings` is a sibling
+top-level route) — none of those are guarded by this track. Extending
+coverage there means mounting `<LandscapeGuard />` once in `src/main.tsx`
+(inside or beside `AppLock`), which is outside this track's writable set —
+flagged for the operator rather than silently widened into.
+
+**i18n.** New `landscapeGuard.title`/`landscapeGuard.body` keys added to
+the existing `common` namespace (no new namespace — `I18N_NAMESPACES`/
+`resources.ts` are outside this track's writable `src/lib/` scope) across
+all four locales (`es`/`en`/`es-AR`/`pt-BR`); `es-AR`'s copy uses voseo
+(`"Girá tu teléfono"`), matching that file's existing convention.
+
+#### Not verified — no real device or browser this session
+
+**No iOS device anywhere in this environment**, so Goal 1a's core
+hypothesis, Goal 1b's actual on-screen effect, and both iOS entries under
+Goal 2 are reasoned/read, not watched. **No working Playwright browser
+session either** — attempted and refused
+(`Browser is already in use for .../mcp-chrome-5f26035`), the same
+concurrent-session conflict `review-aj3-b` (§10.49.1) already hit. Every
+claim above is marked PLAUSIBLE or CONFIRMED-by-reading/-by-test
+accordingly; nothing here was watched happen in a real browser or on a real
+phone. Added to `docs/pendientes-usuario.md` (below) rather than claimed
+settled.
+
+#### Data touched
+
+None. Shell positioning/visibility and a new, purely presentational guard
+component; no schema/store change.
+
+#### Done when
+
+- `bun run check` green: 154 files (+2: `useIsLandscape.test.ts`,
+  `LandscapeGuard.test.tsx`), 1673 tests (+12 over the 1661 baseline: 2
+  backdrop-overscan, 2 `useHasOpenOverlay`, 2 `BottomNav` hide/focus-restore,
+  3 `useIsLandscape`, 2 `LandscapeGuard`, 1 `AppShell` mount-wiring — two
+  pre-existing backdrop tests were _updated_, not added, so the net new-file
+  count is 2 and net new-test count is 12), typecheck/lint/`lint:units`
+  clean, the same two pre-existing `react/only-export-components` warnings
+  (`button.tsx`, `FirstSyncGate.tsx`).
+
+#### Blast radius
+
+**Owned by Track AJ4-A:** `src/components/shared/BottomSheet.tsx` + test,
+`CenterModal.tsx` + test, `useOverlay.ts` + test (`useHasOpenOverlay`),
+`useVisualViewportInset.ts` (overscan constants), `BottomNav.tsx` + test;
+new `useIsLandscape.ts` + test, `LandscapeGuard.tsx` + test;
+`src/routes/AppShell.tsx` + test (mounts `LandscapeGuard`);
+`src/lib/i18n/locales/*.json` (new `common.landscapeGuard` keys only);
+`src/components/shared/README.md`, `src/routes/README.md`.
+
+**Not touched, per the writable-file boundary:** `src/main.tsx`/
+`AppLock.tsx` (would be needed for app-wide landscape coverage — see
+above), `src/styles/index.css` (no new token — the backdrop's overscan
+values and the guard's copy/layout use only existing tokens/utilities),
+`vite.config.ts`'s manifest (already correct, read not changed),
+`index.html` (read, not touched), `src/lib/i18n/index.ts`/`resources.ts`
+(no new namespace).
+
+`docs/pendientes-usuario.md` — item 17 updated (not reopened as a new item)
+with this track's belt-and-braces fix and the still-open device check;
+Goal 2's per-context claims added as a new check.
+
 ## 11. Decisions log
 
 - 2026-06-25 — Package manager: **bun**. Node: **24 LTS** (`.nvmrc`).
@@ -11384,6 +11620,27 @@ posture both cut against.
 What is different from 2026-08-24 is only the quality of the decision: the
 same answer, now given by someone who knows the two platforms disagree.
 
+- 2026-08-25 — **An overlay backdrop overscans past `inset-0` rather than
+  deriving its exact box (Track AJ4-A, §10.53).** The same symptom
+  (`BottomNav` bleeding through above the keyboard) survived two prior
+  fixes (§10.49, §10.52) that each reasoned about the "correct" geometry
+  and were each wrong or incomplete. Rather than trust a third geometry
+  model, the backdrop now overscans by half a viewport dimension on every
+  edge, unconditionally — robust to the _class_ of error (a `fixed`
+  element's rendered box coming out smaller/offset than reasoned) rather
+  than to one specific corrected value. Worth reusing as the default
+  instinct whenever a "cover the whole screen" element has already needed
+  more than one geometry-model fix for the same report: oversize past the
+  model instead of refining it again.
+- 2026-08-25 — **`screen.orientation.lock()` is not called anywhere in this
+  codebase (Track AJ4-A, §10.53).** It only works fullscreen or in an
+  installed Chromium context (redundant with the manifest's own
+  `orientation: 'portrait'` there) and iOS Safari doesn't implement it at
+  all. Calling it and swallowing the rejection would look like "handled"
+  while doing nothing on the one platform (a bare mobile browser tab) that
+  actually needs a fallback — recorded so a future track doesn't add it
+  back as a no-op safety net.
+
 ## 12. Backlog (pending verification / deferred work)
 
 - ✅ **CLOSED 2026-08-25 (operator, commit `07f6c16`) — the two stale
@@ -12735,6 +12992,25 @@ string` on `ProfileRecord`/`deviceStore.ts`'s `ProfileRow` (a Dexie version
   behavior; or leave it as a documented kit-only primitive, with the
   caveat that its own doc comment/README don't currently warn a future
   author that a sibling amount input elsewhere behaves differently.
+
+- **`LandscapeGuard` only covers the three bottom-nav tabs, not the whole
+  app — Track AJ4-A, §10.53, 2026-08-25.** Mounted once in
+  `src/routes/AppShell.tsx`, which is nested well below `src/main.tsx`'s
+  real app root; the pre-auth/lock screens (Welcome, Returning-user, PIN
+  lock/setup) and the `/settings` route all mount outside `AppShell`
+  entirely and are not guarded. Closing this means mounting
+  `<LandscapeGuard />` once more, in `src/main.tsx` (inside or beside
+  `AppLock`) — a one-line change, left undone because that file was outside
+  this track's writable set, not because it's hard.
+- **Whether iOS actually leaves a real gap for `LandscapeGuard` to fill, and
+  whether the manifest-driven portrait lock genuinely holds for an
+  installed PWA/TWA — Track AJ4-A, §10.53, 2026-08-25, no device available.**
+  Two claims in §10.53 are PLAUSIBLE only: that iOS's home-screen web-app
+  mode has no orientation-lock mechanism at all (reasoned from documented,
+  narrower manifest support; no primary Apple source found saying so
+  explicitly), and that an installed Android PWA/TWA is actually held to
+  portrait by the manifest alone with no JS. Added to
+  `docs/pendientes-usuario.md` for the user to check on a real device.
 
 ### Development waves (parallel tracks, sequencing, worktree log)
 

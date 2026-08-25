@@ -141,6 +141,7 @@ describe('CenterModal', () => {
       const dialog = screen.getByRole('dialog')
       const wrapper = dialog.parentElement as HTMLElement
       const backdrop = document.querySelector('[aria-hidden="true"]') as HTMLElement
+      const backdropTopBeforeResize = backdrop.style.top
 
       act(() => {
         viewport.offsetTop = 80
@@ -148,9 +149,31 @@ describe('CenterModal', () => {
         viewport.dispatchEvent(new Event('resize'))
       })
 
+      // The backdrop's own inline `top` (its static overscan, specs.md
+      // §10.53) is untouched by `viewportInset` — it never reads from the
+      // hook at all, so it cannot shrink or shift with it either.
       expect(wrapper.contains(backdrop)).toBe(false)
-      expect(backdrop.style.top).toBe('')
+      expect(backdrop.style.top).toBe(backdropTopBeforeResize)
       expect(backdrop.style.height).toBe('')
+    })
+  })
+
+  describe('backdrop overscan — uncoverable regardless of pan/shrink (specs.md §10.53)', () => {
+    // Same reasoning as BottomSheet's own overscan test: `inset-0` spans
+    // exactly the layout viewport per spec, which is already unverified
+    // against a real device for this exact symptom (specs.md §10.49,
+    // §10.52). Overscanning removes the dependency on getting that geometry
+    // right.
+    it('extends the backdrop past every edge of the layout viewport, not just inset-0', () => {
+      render(<Harness open onClose={() => {}} />)
+      const backdrop = document.querySelector('[aria-hidden="true"]') as HTMLElement
+
+      expect(backdrop.className).toMatch(/(^|\s)fixed(\s|$)/)
+      expect(backdrop.className).not.toMatch(/inset-0/)
+      expect(backdrop.style.top).toBe('-50dvh')
+      expect(backdrop.style.bottom).toBe('-50dvh')
+      expect(backdrop.style.left).toBe('-50dvw')
+      expect(backdrop.style.right).toBe('-50dvw')
     })
   })
 })

@@ -26,6 +26,12 @@ doesn't belong to any one `src/features/**` folder. See `specs.md` §10.5.
   `CenterModal` re-export their public `Props` type as, so the two shells
   can't drift apart on `open`/`onClose`/`children`/`className`/
   `initialFocus`/`ref` the way they used to (see `specs.md` §11, 2026-08-19).
+  Also exports `useHasOpenOverlay()` (`specs.md` §10.53) — the same
+  module-level stack exposed to React via `useSyncExternalStore`, `true`
+  whenever it's non-empty. `BottomNav` reads this directly (not a prop from
+  `AppShell`) so it reacts to _every_ overlay app-wide — the filter sheet,
+  the tag picker, the category modal, anything future — not just the
+  Add/Profile sheets `AppShell` happens to own.
 - `BottomSheet.tsx` — sliding-sheet shell with real drag-to-dismiss
   (Pointer Events, `setPointerCapture`/`pointercancel`/`lostpointercapture`
   all handled — the last one is the reliable catch-all for a drag that ends
@@ -46,12 +52,17 @@ overscroll-y-contain` body that owns the horizontal/bottom padding —
   visible instead of the full layout viewport (`specs.md` §10.49). That
   wrapper is `pointer-events-none` (with `auto` restored on the panel) and
   is a sibling of the backdrop, never its ancestor — the backdrop is a
-  separate, always-full-screen `fixed inset-0` div, so it keeps dimming the
+  separate, always-full-screen `fixed` div, so it keeps dimming the
   whole layout viewport (and hiding whatever sits behind it, `BottomNav`
   included) even while the wrapper itself is clamped to a smaller keyboard-
   safe area; nesting the backdrop inside the clamped wrapper let `BottomNav`
   show through the strip the wrapper stopped covering (cross-track review,
-  `specs.md` §10.49). `className` still merges onto that outer panel,
+  `specs.md` §10.49). The backdrop overscans past a plain `inset-0` by
+  `OVERLAY_BACKDROP_OVERSCAN_BLOCK`/`_INLINE` (`useVisualViewportInset.ts`,
+  below) on every edge — insurance against `position: fixed`'s rendered box
+  narrowing under a real device's keyboard-driven pan in a way this repo
+  cannot reproduce, uncoverable regardless of which exact geometry model is
+  right (`specs.md` §10.53). `className` still merges onto that outer panel,
   matching `CenterModal`'s contract — it targets the _outer_ panel, not the
   padded/scrollable body, so a future consumer wanting to override the
   body's padding needs a dedicated prop, not `className` (no current
@@ -89,7 +100,12 @@ overflow-y-auto overscroll-y-contain`) — it had neither before
   — the one JS-side source of truth for the panel's clamp fraction; the
   `max-h-[88dvh]` Tailwind class each shell keeps as its static fallback is
   a separate, hand-kept-in-sync duplicate, because Tailwind's arbitrary-
-  value syntax can't reference a JS constant (`specs.md` §10.49.1).
+  value syntax can't reference a JS constant (`specs.md` §10.49.1). Also
+  exports `OVERLAY_BACKDROP_OVERSCAN_BLOCK`/`_INLINE` (`-50dvh`/`-50dvw`) —
+  how far each shell's backdrop extends past its own edges in every
+  direction, unconditionally and never derived from this file's viewport-
+  inset tracking above, so it stays uncoverable even if that tracking's own
+  geometry reasoning turns out to be wrong (`specs.md` §10.53).
 - `ScreenHeader.tsx` — the back-button + title row a screen with a
   back-bar header renders as the first thing inside its shared
   `--screen-inset-top` container (`specs.md` §10.34): the row owns its own
@@ -211,7 +227,29 @@ Categoria[]` prop (no default, same no-silent-fallback rule as
   `<ProfileSheet>` (`specs.md` §10.18).
   Its height is `--bottom-nav-clearance` (`src/styles/index.css`); any
   screen or overlay that must sit clear of the bar pads by the same token
-  instead of repeating the number.
+  instead of repeating the number. **Hides (`opacity-0 pointer-events-none`),
+  never unmounts, while `useHasOpenOverlay()` (`useOverlay.ts`, above) is
+  true** (`specs.md` §10.53) — a real iPhone showed this bar's own
+  background/icons through the strip above the keyboard while the Add sheet
+  was open. Hiding rather than unmounting is deliberate: `useOverlay`
+  restores focus to the element that opened the overlay on close (e.g. the
+  Add FAB, part of this component), and `opacity`/`pointer-events` (unlike
+  `display`/`visibility`/`inert`) don't affect focusability — the restore
+  can land correctly even a render tick before this hook's own re-render
+  makes the bar visible again.
+- `useIsLandscape.ts` — `matchMedia('(orientation: landscape)')` exposed to
+  React via `useSyncExternalStore`, same shape as
+  `src/features/home/usePrefersReducedMotion.ts`. The detection half of
+  `specs.md` §10.53's "stay in portrait" rule — kept apart from
+  `LandscapeGuard.tsx`'s presentation on purpose, per that section's own
+  reasoning about what a real lock does and doesn't cover in each context.
+- `LandscapeGuard.tsx` — the presentation half: self-contained, mounted
+  unconditionally (currently by `src/routes/AppShell.tsx`), renders nothing
+  in portrait and a full-screen blocking `role="status"` in landscape.
+  Deliberately minimal (existing tokens, existing `common` copy, no
+  illustration) — the user is designing this screen themselves
+  (`docs/pendientes-usuario.md`); this file is the seam their design drops
+  into without touching `useIsLandscape.ts` or the mount site.
 - `Toast.tsx` — a single toast card: `role="alert"` (errors) /
   `role="status"` (confirmations), swipe-to-dismiss via Pointer Events
   (`touch-pan-y`, mirroring `BottomSheet`'s drag handling), plus a

@@ -6,6 +6,8 @@ import {
   type OverlayShellProps,
 } from '@/components/shared/useOverlay'
 import {
+  OVERLAY_BACKDROP_OVERSCAN_BLOCK,
+  OVERLAY_BACKDROP_OVERSCAN_INLINE,
   OVERLAY_MAX_HEIGHT_FRACTION,
   useVisualViewportInset,
 } from '@/components/shared/useVisualViewportInset'
@@ -35,10 +37,17 @@ export const CenterModal = ({
           iPhone showed `BottomNav` through the strip a keyboard-shrunk
           visual viewport leaves outside the corrected wrapper, because this
           backdrop used to shrink along with it, specs.md §10.49, cross-track
-          review). */}
+          review). Also overscans past `inset-0` on every edge — same
+          reasoning as `BottomSheet`'s own comment (specs.md §10.53). */}
       <div
         onClick={onClose}
-        className="fixed inset-0 z-50 animate-fade-in bg-black/70"
+        style={{
+          top: OVERLAY_BACKDROP_OVERSCAN_BLOCK,
+          bottom: OVERLAY_BACKDROP_OVERSCAN_BLOCK,
+          left: OVERLAY_BACKDROP_OVERSCAN_INLINE,
+          right: OVERLAY_BACKDROP_OVERSCAN_INLINE,
+        }}
+        className="fixed z-50 animate-fade-in bg-black/70"
         aria-hidden="true"
       />
       {/* Same wrapper correction as `BottomSheet` — see its own comment. Also
