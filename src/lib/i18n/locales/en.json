@@ -32,7 +32,14 @@
       "reassurance": "Signing back in won't touch anything already on this device.",
       "expiredChip": "Expired",
       "continueCtaNamed": "Continue as {{name}}",
-      "continueCtaGeneric": "Continue with Google"
+      "continueCtaGeneric": "Continue with Google",
+      "guestCta": "Continue as guest",
+      "guestConfirm": {
+        "title": "Continue as guest?",
+        "description": "This is a separate, device-only profile. Your Google data isn't touched — you can switch back to it anytime from your profile.",
+        "confirmCta": "Continue as guest",
+        "cancelCta": "Cancel"
+      }
     },
     "errors": {
       "missingClientId": "Configuration error. Please try again later.",

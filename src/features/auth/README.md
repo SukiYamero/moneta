@@ -62,27 +62,31 @@ Onboarding screens and the route guard that sits in front of the app.
   only shave the smaller of two stacked blank frames while doubling the
   drift-prone surface (two mirrored keys instead of one, cleared across
   more write paths) — see specs.md §11, 2026-08-20 for the full reasoning.
-- `ReturningUserScreen.tsx` — specs.md §10.21: greets by first name (device-
-  local `profiles` registry, `@/lib/profiles`'s `listProfiles()` filtered to
-  the most-recently-used `'google'`-kind record — never `getActiveProfile()`
-  alone, which would resolve to a more-recently-touched guest/local profile
-  if one exists), shows an account card (initials avatar, name, an expired
-  chip on the `--warning` token — never the design export's literal
-  untokenized hex) and **one** action: the primary "Continuar como `<name>`"
-  Google button. specs.md §10.36 removed the second "Usar otra cuenta"
-  button that used to sit below it — it called the exact same `login()`
-  as the primary, so it was one control promising a different outcome and
-  delivering the identical one. Replacing it with "continue as guest," the
-  user's own suggestion, was considered and rejected: this screen only ever
-  renders for a device with a lapsed **Google** profile holding real local
-  data, and guest mode is a separate profile with its own, empty database —
-  routing here into guest would reproduce the guest cliff (§10.25/§10.31/
-  §10.32/§10.33) from the other direction. A genuinely distinct second
-  action (forcing Google's account chooser via GIS's `select_account`
-  prompt) is possible in principle but needs `src/lib/auth.ts` and
-  `src/lib/authStore.ts` changes outside this track's file ownership —
-  escalated, not built here. No guest option, no value proposition, no legal
-  copy.
+- `ReturningUserScreen.tsx` — specs.md §10.21/§10.37: greets by first name
+  (device-local `profiles` registry, `@/lib/profiles`'s `listProfiles()`
+  filtered to the most-recently-used `'google'`-kind record — never
+  `getActiveProfile()` alone, which would resolve to a more-recently-touched
+  guest/local profile if one exists), shows an account card (initials
+  avatar, name, an expired chip on the `--warning` token — never the design
+  export's literal untokenized hex) and **two** actions: the primary
+  "Continuar como `<name>`" Google button, and a secondary "Continuar como
+  invitado" button. specs.md §10.36 removed a second "Usar otra cuenta"
+  button that used to sit below it — it called the exact same `login()` as
+  the primary, so it was one control promising a different outcome and
+  delivering the identical one, and §10.36 rejected replacing it with guest
+  entry at the time. §10.37 (user decision, later the same day) un-rejects
+  guest specifically, on a reason §10.36 didn't have: Google's own sign-in
+  already opens an account chooser, so "use another account" was never a
+  genuinely distinct action — guest is. The button never calls
+  `continueAsGuest()` directly: it opens a `ConfirmDialog`
+  (`@/components/shared`) first, whose copy states only what actually
+  happens (a separate, device-only profile; this account's data untouched;
+  reachable again via the profile switcher, §10.31) — never a value
+  proposition or legal copy, which is the part of §10.21's original ban that
+  still holds. A genuinely distinct third action (forcing Google's account
+  chooser via GIS's `select_account` prompt) remains possible in principle
+  but needs `src/lib/auth.ts`/`src/lib/authStore.ts` changes outside this
+  track's file ownership — still escalated, not built here.
   Degrades to a generic greeting/CTA (no name) when the registry has nothing
   yet or ever — never a blank. The reassurance line ("volver a iniciar
   sesión no toca lo que ya está guardado en este dispositivo") claims only

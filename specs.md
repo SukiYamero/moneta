@@ -3793,6 +3793,140 @@ requires no new UI surface beyond a label, and does not touch guest/profile
 state at all. It is a small, well-scoped change to `src/lib/auth.ts` +
 `src/lib/authStore.ts`, better suited to a track that owns those files.
 
+### 10.37 The returning-user screen's second action, take two — guest, behind a gate
+
+Ajustes 1, Track AJ-E. User decision, 2026-08-24, overruling §10.36/§10.21's
+blanket "no guest option on this screen." The user's own reason, which AJ-D
+did not have: Google's sign-in already opens its own account chooser by
+default, so a "use another account" control (what §10.21 called
+"acceptable") is genuinely redundant — there is nothing left for a second
+button to honestly promise except a different destination entirely. What the
+user wants in that slot instead is an escape hatch for someone who does not
+want to sign in again: **continue as guest, behind a modal that says what
+that means.**
+
+**§10.21's prohibition is amended, not circumvented — and it is `specs.md`
+itself the user is amending, not code overriding a spec.** `AGENTS.md` says
+code never outranks `specs.md`; it says nothing about the user outranking
+`specs.md`, because `specs.md` is the user's own document. §10.21's original
+text stays as written above (append-only); this section records the narrower
+case it did not anticipate.
+
+**What §10.21 actually objected to, re-read for this specific case:** the
+banned list was "the guest option, the value proposition and the first-run
+legal copy," on the grounds that "this person accepted all of that months ago
+and repeating it is what makes the app feel reset." A gated escape hatch with
+an honest, one-sentence warning is a materially different object from
+re-showing the welcome pitch: it adds no value proposition, no legal copy, and
+nothing about "why guest mode exists" — it says only what tapping the button
+does, once, right before it does it. **Track AJ-E's own judgment: the user is
+right that this is a different thing than what §10.21 banned**, on the
+condition the modal stays a warning about a consequence and never grows back
+into a second welcome screen. If a later track is tempted to add the guest
+value proposition or legal copy to this dialog, that is the line §10.21 still
+holds.
+
+#### The trap this section exists to close: is there a way back?
+
+Traced against `src/lib/authStore.ts`, `src/features/auth/RequireAuth.tsx`,
+`src/features/profile/ProfilesSection.tsx` (all read-only for this track —
+findings only, no edits):
+
+- **`continueAsGuest()` does not clear the device's login marker
+  (`hasLoggedInBefore()`).** Nothing does, except an explicit sign-out
+  (§10.20). CONFIRMED by reading `authStore.ts`: `continueAsGuest()` calls
+  `setActiveProfileId(DEFAULT_PROFILE_ID)` and `markGuestUsed()` only.
+- **Within the same session, the way back is real and already built.**
+  `AppShell.tsx` mounts `BottomNav` and `ProfileSheet` unconditionally — no
+  gate on `status`, so a guest reaches the profile sheet exactly like anyone
+  else. `ProfilesSection.tsx` (§10.31, shipped) lists every profile including
+  the lapsed Google one and lets the user tap back to it, no PIN (the
+  device's own decided posture: the PIN gates opening the app, not moving
+  inside it). CONFIRMED by reading `AppShell.tsx` and `ProfilesSection.tsx`.
+- **Across a cold restart, `restore()`'s marker order decides which screen
+  wins, and it is already specced for exactly this case.** `restore()` checks
+  `hasLoggedInBefore()` first; only when it is false does it consult
+  `hasUsedGuestBefore()` at all. So on a device with both markers set (this
+  screen's exact precondition once guest is tapped), the account marker
+  always wins the _attempt_ — restore() retries silent Google re-auth on
+  every cold boot, never auto-lands on `'guest'` by itself. Two outcomes
+  follow, both traced in `authStore.ts`/`RequireAuth.tsx`: silent re-auth
+  succeeds (token happened to refresh) → straight to the Google profile,
+  bypassing whatever the person was doing as a guest last session, visible
+  again only through the switcher; silent re-auth fails again → `idle` →
+  `ReturningUserScreen` renders again, from which guest is one tap away, same
+  as before. **This is not a new defect** — it is precisely §10.33's own
+  documented edge case ("both markers set… the account wins on restore… the
+  guest data stays reachable through §10.31's switcher"), now reachable from
+  the account side instead of the guest-first side that section was written
+  for. CONFIRMED by reading `restore()`'s branch order, not executed
+  end-to-end in a browser.
+- **Net finding: nobody is stranded.** The login marker being sticky is what
+  prevents statelessness, not a bug to fix — it means this screen keeps
+  reoffering itself (or auto-reconnects) every cold boot rather than ever
+  silently discarding the account path. The cost is a UX one, not a data-loss
+  one: someone who deliberately wants to stay in guest mode long-term has to
+  re-tap "continuar como invitado" once per cold boot for as long as the
+  account marker and a still-lapsed session coexist, instead of guest mode
+  ever becoming the sticky default on its own. That tradeoff belongs to
+  §10.33/§10.31, both outside this track's file ownership — flagged here,
+  not changed here.
+
+#### What is honestly true to say in the modal
+
+Not "your data will be deleted" — false, and not what any code path does.
+What actually happens, traced above: guest mode rebinds `repoProvider` to the
+`DEFAULT_PROFILE_ID` database, a profile distinct from the lapsed Google
+profile's own database (§10.15). Nothing is edited, exported, or removed.
+The one true, useful sentence is: this is a separate, device-only profile;
+the Google account's data is untouched; the way back is the profile switcher.
+That is what the `guestConfirm` copy (`auth` namespace, all four locales)
+says, in one sentence, matching `identity.signOutConfirm`'s brevity rather
+than `lock.forgotConfirm`'s longer, frightening shape the user has separately
+objected to.
+
+#### What shipped
+
+`ReturningUserScreen.tsx` gets a second, visually secondary button
+("Continuar como invitado," styled like `WelcomeScreen`'s own guest button —
+not `GoogleSignInButton`) that opens a `ConfirmDialog` (`@/components/shared`)
+rather than calling `continueAsGuest()` directly. Confirming calls it;
+cancelling calls neither. The dialog's title/description/CTAs are new
+`auth.return.guestConfirm.*` keys (parity across `en`/`es`/`es-AR`/`pt-BR`,
+`resources.test.ts` green) — no value proposition, no legal copy, matching
+§10.21's surviving restriction.
+
+**Test changes, and why one of them is the same shape §10.36 already named.**
+`ReturningUserScreen.test.tsx`'s "never offers a guest option" test
+(introduced by AJ-D to encode §10.21's original, now-amended rule) is removed
+and replaced with tests for the gated flow: tapping the guest button opens the
+dialog without calling `continueAsGuest()`; confirming calls it once;
+cancelling calls it never; the dialog carries no legal/value-prop copy. The
+"exactly one action" test becomes "exactly two actions." A sibling test in
+`RequireAuth.test.tsx` (not owned by this track, but broken by this same
+sanctioned change) asserted the identical "no guest button, ever" invariant
+inside its unrelated boot-flash-flash regression case; fixed with a one-line,
+mechanical edit — the regression it actually tests (never flashing Welcome)
+is untouched, only the incidental, now-outdated final assertion changed.
+
+#### Blast radius
+
+`src/features/auth/ReturningUserScreen.tsx` + its test, `src/lib/i18n/locales/*.json`
+(`auth` namespace), one line in `src/features/auth/RequireAuth.test.tsx`
+(mechanical fix, not this track's file). **No changes to** `authStore.ts`,
+`auth.ts`, `RequireAuth.tsx` itself, the profile switcher, or the guest
+persistence mechanism (§10.31/§10.33) — all read-only for this track, and all
+already do what this section relies on.
+
+#### Escalated, not built here
+
+Nothing new beyond §10.36's own escalation (`select_account`, still correctly
+out of this track's file ownership). The one open question worth the
+operator's attention: whether guest mode should ever become the sticky
+default across restarts once both markers are set (today it never does — see
+"net finding" above) is a product question about §10.31/§10.33, not a defect
+in this track's own change.
+
 ### Wave 3 — staging and dependencies
 
 Not everything runs in parallel. A track in a later stage is **blocked** until
@@ -7932,6 +8066,21 @@ artboards are in exactly that position today — `GROUPS LIST`, `GROUP SCREEN`,
 `PROFILE SHEET`, `CUSTOM TAG MODAL`, `AUTH: WELCOME`. That is not proof they
 diverge; it is proof nobody has checked, which is the position the Add sheet
 was in until a user held the running app. Filed to §12, not fixed here.
+
+### 2026-08-24 — the returning screen's guest option, un-banned for one specific case
+
+§10.21 banned "the guest option" from `ReturningUserScreen` outright; §10.36
+(same day, earlier) reaffirmed the ban when the user first suggested guest as
+a replacement for the redundant "use another account" button. **The user
+overruled both, later the same day, with a reason neither had considered:**
+Google's own sign-in already opens an account chooser, so "use another
+account" was never going to be a genuinely distinct second action — but
+"continue as guest, behind an honest modal" is. §10.37 records the amendment
+and the trace behind it (`specs.md` §10.37): the way back from guest exists
+both in-session (the profile switcher, already shipped per §10.31) and across
+a cold restart (the login marker never clears on its own, so the account path
+keeps re-offering itself). Nobody is stranded; the modal's copy states only
+what actually happens, never a deletion that doesn't occur.
 
 ## 12. Backlog (pending verification / deferred work)
 

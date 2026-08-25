@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ReturningUserScreen } from '@/features/auth/ReturningUserScreen'
 import { useAuthStore } from '@/lib/authStore'
@@ -84,22 +84,23 @@ describe('ReturningUserScreen', () => {
     useAuthStore.setState({ login })
     render(<ReturningUserScreen />)
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: /continuar/i })).toBeInTheDocument(),
+      expect(screen.getByRole('button', { name: /continuar con google/i })).toBeInTheDocument(),
     )
-    await userEvent.click(screen.getByRole('button', { name: /continuar/i }))
+    await userEvent.click(screen.getByRole('button', { name: /continuar con google/i }))
     expect(login).toHaveBeenCalledOnce()
   })
 
-  // A second, differently-labeled control calling the same login() promises a
-  // different outcome and delivers the identical one. §10.21 allows a
-  // secondary action here but forbids the guest option outright, so there is
-  // no honest destination for one until auth can force an account chooser
-  // (specs.md §10.36).
-  it('renders exactly one action — no second control duplicating the primary CTA', async () => {
+  // §10.36 removed "Usar otra cuenta" because it called the identical
+  // login() as the primary CTA — one control, two labels. §10.37 adds a
+  // second action back, but a genuinely distinct one: guest entry, gated
+  // behind a confirm dialog rather than a bare button, so the visible
+  // action count stays at two honest, differently-behaving controls.
+  it('renders exactly two actions — the primary CTA and the gated guest entry', async () => {
     render(<ReturningUserScreen />)
     await waitFor(() => expect(screen.getByRole('heading')).toBeInTheDocument())
-    expect(screen.getAllByRole('button')).toHaveLength(1)
+    expect(screen.getAllByRole('button')).toHaveLength(2)
     expect(screen.queryByRole('button', { name: /otra cuenta/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /invitado/i })).toBeInTheDocument()
   })
 
   it('shows a busy state on the primary button while authenticating', async () => {
@@ -116,10 +117,62 @@ describe('ReturningUserScreen', () => {
     expect(screen.queryByText(/access_denied/i)).not.toBeInTheDocument()
   })
 
-  it('never offers a guest option', async () => {
+  // specs.md §10.37: the user overruled §10.21's blanket "no guest option"
+  // for this specific case (Google's own chooser already covers "use
+  // another account"), on condition that the escape hatch is honest about
+  // what it does — never a bare button that silently switches profiles.
+  it('does not enter guest mode from a bare tap — it opens a confirm dialog first', async () => {
+    const continueAsGuest = vi.fn()
+    useAuthStore.setState({ continueAsGuest })
     render(<ReturningUserScreen />)
     await waitFor(() => expect(screen.getByRole('heading')).toBeInTheDocument())
-    expect(screen.queryByRole('button', { name: /invitado/i })).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: /invitado/i }))
+
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    expect(continueAsGuest).not.toHaveBeenCalled()
+  })
+
+  it('calls continueAsGuest() only after the dialog is confirmed', async () => {
+    const continueAsGuest = vi.fn()
+    useAuthStore.setState({ continueAsGuest })
+    render(<ReturningUserScreen />)
+    await waitFor(() => expect(screen.getByRole('heading')).toBeInTheDocument())
+    await userEvent.click(screen.getByRole('button', { name: /invitado/i }))
+    const dialog = await screen.findByRole('dialog')
+
+    await userEvent.click(within(dialog).getByRole('button', { name: /invitado/i }))
+
+    expect(continueAsGuest).toHaveBeenCalledOnce()
+  })
+
+  it('cancelling the guest dialog closes it without entering guest mode', async () => {
+    const continueAsGuest = vi.fn()
+    useAuthStore.setState({ continueAsGuest })
+    render(<ReturningUserScreen />)
+    await waitFor(() => expect(screen.getByRole('heading')).toBeInTheDocument())
+    await userEvent.click(screen.getByRole('button', { name: /invitado/i }))
+    const dialog = await screen.findByRole('dialog')
+
+    await userEvent.click(within(dialog).getByRole('button', { name: /^cancelar$/i }))
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(continueAsGuest).not.toHaveBeenCalled()
+  })
+
+  // The dialog is the one honest place left to say what guest mode does —
+  // but §10.21's ban on repeating the first-run pitch/legal copy still
+  // holds (§10.37): this is a warning about a consequence, not a second
+  // welcome screen.
+  it('the guest dialog explains the consequence without repeating first-run legal copy', async () => {
+    render(<ReturningUserScreen />)
+    await waitFor(() => expect(screen.getByRole('heading')).toBeInTheDocument())
+    await userEvent.click(screen.getByRole('button', { name: /invitado/i }))
+    const dialog = await screen.findByRole('dialog')
+
+    expect(within(dialog).getByRole('heading', { name: /invitado/i })).toBeInTheDocument()
+    expect(screen.queryByText(/términos/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/política de privacidad/i)).not.toBeInTheDocument()
   })
 
   // specs.md §10.21: the reassurance line must be true whether or not local

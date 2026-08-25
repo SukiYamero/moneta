@@ -32,7 +32,14 @@
       "reassurance": "Volver a iniciar sesión no toca lo que ya está guardado en este dispositivo.",
       "expiredChip": "Caducada",
       "continueCtaNamed": "Continuar como {{name}}",
-      "continueCtaGeneric": "Continuar con Google"
+      "continueCtaGeneric": "Continuar con Google",
+      "guestCta": "Continuar como invitado",
+      "guestConfirm": {
+        "title": "¿Continuar como invitado?",
+        "description": "Es un perfil aparte, solo en este dispositivo. Tus datos de Google no se tocan: puedes volver a ellos cuando quieras desde tu perfil.",
+        "confirmCta": "Continuar como invitado",
+        "cancelCta": "Cancelar"
+      }
     },
     "errors": {
       "missingClientId": "Error de configuración. Intenta más tarde.",
