@@ -22,6 +22,7 @@ export const I18N_NAMESPACES = [
   'settings',
   'lock',
   'sync',
+  'dateChipPicker',
 ] as const
 
 // i18next initializes synchronously whenever `resources` are passed inline
