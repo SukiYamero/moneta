@@ -24,6 +24,22 @@ describe('BottomSheet', () => {
     expect(dialog).toHaveAttribute('aria-modal', 'true')
   })
 
+  it('keeps the grab handle outside the scrollable content box', () => {
+    // The handle must be fixed chrome — a sibling of the scrolling body,
+    // never inside it — or scrolling the body's content drags the handle
+    // away with it. On `main`, the panel itself was the `overflow-y-auto`
+    // box and the handle was its first child, so `scrollBox` there is the
+    // dialog itself and this assertion fails.
+    render(<Harness open onClose={() => {}} />)
+    const dialog = screen.getByRole('dialog')
+    const handle = dialog.firstElementChild as HTMLElement
+    const scrollBox = dialog.querySelector('.overflow-y-auto') as HTMLElement
+
+    expect(scrollBox).not.toBeNull()
+    expect(scrollBox).not.toBe(dialog)
+    expect(scrollBox.contains(handle)).toBe(false)
+  })
+
   it('never draws a focus ring on the panel itself, even when it has no focusable children', async () => {
     // With no focusable content, useOverlay's fallback focuses the panel
     // (tabIndex={-1}) directly — that's the exact case that showed a bright

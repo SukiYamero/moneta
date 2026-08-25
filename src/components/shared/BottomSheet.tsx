@@ -15,6 +15,9 @@ const DRAG_DISMISS_THRESHOLD_PX = 120
  * The sliding-sheet shell (Filter, Movement, Profile, Add, Tag picker…).
  * Drag-to-dismiss is driven by Pointer Events (one path for touch/mouse/pen)
  * with `touch-none` on the handle so the browser doesn't fight the gesture.
+ * The grab handle is fixed chrome — a sibling of the scrollable body, never
+ * its child — so scrolling long content never carries the handle away with
+ * it (specs.md §10.35).
  */
 export const BottomSheet = ({
   open,
@@ -105,22 +108,25 @@ export const BottomSheet = ({
           transitionDuration: dragging ? '0ms' : undefined,
         }}
         className={cn(
-          'absolute inset-x-0 bottom-0 max-h-[88dvh] overflow-y-auto rounded-t-5xl border-t border-border-subtle bg-card px-5.5 pt-2.5 pb-7 animate-sheet-up transition-transform duration-200 ease-out',
+          'absolute inset-x-0 bottom-0 flex max-h-[88dvh] flex-col rounded-t-5xl border-t border-border-subtle bg-card animate-sheet-up transition-transform duration-200 ease-out',
           OVERLAY_PANEL_CLASS,
           className,
         )}
       >
+        {/* Fixed chrome — a sibling of the scrolling body below, not its
+            child, so dragging/scrolling the content never carries the
+            handle away with it (specs.md §10.35). */}
         <div
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={endDrag}
           onPointerCancel={cancelDrag}
           onLostPointerCapture={handleLostPointerCapture}
-          className="mx-auto mb-4.5 flex h-8 w-full touch-none cursor-grab items-center justify-center active:cursor-grabbing"
+          className="mx-auto mt-2.5 mb-4.5 flex h-8 w-full shrink-0 touch-none cursor-grab items-center justify-center active:cursor-grabbing"
         >
           <div className="h-1.25 w-9.5 rounded-full bg-border-strong" />
         </div>
-        {children}
+        <div className="min-h-0 flex-1 overflow-y-auto px-5.5 pb-7">{children}</div>
       </div>
     </div>,
     document.body,
