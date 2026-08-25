@@ -1,3 +1,4 @@
+import type { ProfileOwnerRow } from '@/lib/db'
 import { accountKeyOf, useAuthStore } from '@/lib/authStore'
 import { useBootStore } from '@/lib/boot'
 import { getActiveProfileBinding } from '@/lib/repoProvider'
@@ -23,6 +24,7 @@ export type SwitchProfileResult =
   | { outcome: 'switched' }
   | { outcome: 'profile-database-gone' }
   | { outcome: 'switch-failed' }
+  | { outcome: 'switch-check-failed' }
 
 /**
  * Switches the active profile (specs.md §10.31): no PIN (decided by the
@@ -51,8 +53,23 @@ export const switchToProfile = async (target: ProfileRecord): Promise<SwitchProf
   // registering one is always immediately followed by binding it, at
   // sign-in) already carries it; its absence here means the database's
   // storage was cleared out from under the registry.
+  //
+  // `readOwnerMarker` deliberately does not self-catch (docs/error-handling.md
+  // §4): a thrown read failure is not the same fact as a resolved `undefined`,
+  // so it must not fall into the same `!marker` branch below — that branch's
+  // outcome drives an irreversible registry removal in the UI
+  // (`ProfilesSection`'s confirm), and a transient IndexedDB failure (Safari
+  // eviction, a blocked version change from another tab, quota pressure) is
+  // not evidence the database is gone. Caught here, once, and reported as its
+  // own outcome the caller cannot mistake for "gone."
   const targetDatabase = getProfileDatabase(target.databaseName)
-  const marker = await readOwnerMarker(targetDatabase)
+  let marker: ProfileOwnerRow | undefined
+  try {
+    marker = await readOwnerMarker(targetDatabase)
+  } catch (e) {
+    console.warn('profiles: could not verify the target profile before switching', e)
+    return { outcome: 'switch-check-failed' }
+  }
   if (!marker) return { outcome: 'profile-database-gone' }
 
   await setActiveProfileId(target.id)

@@ -71,7 +71,13 @@ export const useProfiles = (): UseProfilesResult => {
     // active before the attempt (docs/error-handling.md §4 — never a
     // success-shaped value for a failure), so there is nothing to reload
     // here; the person just needs to know the tap didn't do anything.
-    if (result.outcome === 'switch-failed') toast.error('profile:profiles.switchError')
+    // `'switch-check-failed'` shares the same toast on purpose: the target's
+    // owner marker couldn't be read (a storage error, not a resolved
+    // absence), so nothing about the target profile is known one way or the
+    // other — that is not the `goneProfile` dialog's premise, only the same
+    // "this didn't happen, try again" as an ordinary failed switch.
+    if (result.outcome === 'switch-failed' || result.outcome === 'switch-check-failed')
+      toast.error('profile:profiles.switchError')
   }
 
   const dismissGoneProfile = (): void => setState((prev) => ({ ...prev, goneProfile: null }))
