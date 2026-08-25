@@ -4500,6 +4500,108 @@ pre-existing `react/only-export-components` warnings — unchanged from
   through `ScreenHeader` would need conditional slots for a component with
   exactly one other caller. Leaving it bespoke, as AJ-A argued, is correct.
 
+### 10.39 The min-h-dvh sweep — nine screens, re-derived and re-verified, plus a mechanical guard (Ajustes 1, Track AJ-G, 2026-08-24)
+
+One owner for the whole defect, per §9 of `docs/ajustes-1-plan.md`, so the
+fix couldn't land as nine copies split across the tracks that happen to own
+each file — exactly the split `AGENTS.md` names as this project's most
+expensive lesson (fix one instance, leave its twin).
+
+- **The list Track AJ-A reported (§10.34/§12) was re-derived independently,
+  not trusted.** `rg 'dvh' src` classified every hit: `AppShell.tsx`,
+  `AppErrorBoundary.tsx`, `RouteErrorFallback.tsx`, `boot/BootErrorScreen.tsx`,
+  `auth/DrivePermissionScreen.tsx`, `auth/ReturningUserScreen.tsx`,
+  `lock/LockScreen.tsx` (both branches), `sync/DriveDownloadScreen.tsx`,
+  `components/shared/ScreenLoading.tsx` are a plain in-flow `min-h-dvh` root
+  each, with no wrapping element anywhere in the tree back to `#root` that
+  sets its own height — confirmed by reading `main.tsx`, `router.tsx`,
+  `AppLock.tsx`, `RequireAuth.tsx`, `BootGate.tsx`, `FirstSyncGate.tsx`, all
+  of which render children/fragments with no intervening div. `body`'s
+  padded content box is genuinely what constrains every one of them. The
+  list matched exactly: no tenth instance, nothing on the list that turned
+  out to be fine. `FullScreenPanel.tsx` (`fixed inset-0 ... min-h-dvh`,
+  `createPortal`) and the two `max-h-[88dvh]` sites (`BottomSheet.tsx`,
+  `ProfileSheet.tsx` — a _max_-height cap on an already-positioned sheet
+  panel, a different failure mode entirely) are correctly not on it.
+- **The real exemption criterion is `fixed`, not "portaled."** A portaled
+  element with no `fixed` positioning would still land inside `body`'s
+  padded flow (portals mount into the DOM tree, by default still inside
+  `body`) and would carry the identical bug — `position: fixed` is what
+  sizes an element against the true viewport directly, bypassing `body`'s
+  padding-driven content box. `FullScreenPanel.tsx` happens to be both;
+  `fixed` is the one that matters.
+- **Fix: the same `min-h-dvh` → `min-h-full` swap AJ-A used, everywhere.**
+  `min-h-full` resolves against the real `html`/`body`/`#root` ancestor
+  chain (`src/styles/index.css`: all `height: 100%`), so it can never
+  demand more room than `body`'s own padded content box actually has —
+  verified per-site (not assumed per-pattern) that each of the nine sits
+  directly under that chain with nothing breaking it.
+- **Reproduced, not just reasoned, for two of the nine — chosen for what
+  they're worth, not arbitrarily.** `bun run dev`, a simulated
+  `body { padding-top: 47px; padding-bottom: 34px }` injected in a running
+  browser at 390×844, reached via guest mode (no OAuth needed):
+  - `AppShell`/Home, the app's main surface and the one AJ-A already
+    reproduced on: pre-fix, `document.documentElement.scrollHeight` exceeded
+    `window.innerHeight` by exactly 47px; post-fix, zero, and `BottomNav`'s
+    own bottom edge landed exactly at the viewport's bottom edge (844 of 844) instead of scrolling away with the rest of the shell.
+  - `ReturningUserScreen`, the file a concurrent review pass holds (told not
+    to touch this one instance) — reached by writing `hasLoggedInBefore` in
+    `kurobello-device`'s IndexedDB directly and clearing the guest markers
+    so `restore()` lands there instead of `'guest'`. Same result: 47px
+    overflow pre-fix, zero post-fix.
+  - The remaining seven (`AppErrorBoundary`, `RouteErrorFallback`,
+    `BootErrorScreen`, `DrivePermissionScreen`, `LockScreen` both branches,
+    `DriveDownloadScreen`, `ScreenLoading`) were **not** individually driven
+    in a browser — reaching an error boundary, a boot failure, or a locked
+    state on demand costs more setup than the marginal proof is worth once
+    the ancestor-chain read above already confirms the identical mechanism.
+    They were verified by reading the render tree and by the guard below,
+    which fires identically on all nine pre-fix and is clean on all nine
+    post-fix.
+- **The guard: `scripts/no-in-flow-min-h-dvh.sh`, wired into `lint:units`
+  (`bun run check`).** Chosen over a `screenChrome.test.ts`-style `?raw`
+  source-text test (that file's own pattern, used for the four top-level
+  screens plus `WelcomeScreen`) because this defect isn't scoped to a fixed,
+  named list of files the way the inset-token standard is — the whole
+  problem is that a _new_ file can reintroduce the shape anywhere under
+  `src/`, so the guard has to scan the whole tree, which is what the
+  `no-raw-px.sh`/`no-ui-imports-in-lib.sh` shape already does and a
+  per-file test cannot. The script flags any `min-h-dvh` whose line doesn't
+  also carry `fixed` (the real exemption criterion above), with a narrow
+  carve-out for a backtick-quoted prose mention (`` `min-h-dvh` ``, the
+  house style for naming a code token in a comment — see
+  `WelcomeScreen.tsx`/`PreContentSkeleton.tsx`) so the guard doesn't fire on
+  its own explanatory comments. **Proven, not just written:** run against
+  the pre-fix tree (via `git stash`) it flagged exactly the nine files/ten
+  lines above and nothing else; run post-fix it is clean. Honest limit: it
+  is a line-based grep, not a parser — it assumes (true everywhere in this
+  codebase today) that a root's `className`/`cn()` string and any `fixed` it
+  carries are written on the same line; a future className that wraps
+  `min-h-dvh` and `fixed` across separate lines would slip past it.
+- **A why-comment was added at each of the nine sites** (`` `min-h-full`,
+not `` `min-h-dvh` ``: ...), matching `WelcomeScreen.tsx`/
+`PreContentSkeleton.tsx`'s existing style, because a future edit that
+"simplifies" the class back to `min-h-dvh` would look like a harmless
+  cleanup without it.
+- **`ScreenLoading.tsx`'s own doc comment** ("Overrides the default
+  `` `min-h-dvh` ``") was stale after the swap and is now
+  "Overrides the default `` `min-h-full` ``" — the `/kit` gallery's
+  `className="min-h-72"` override still wins via `cn()`/`tailwind-merge`
+  regardless of which utility it's overriding.
+- **Not the operator's suggested alternative (moving the safe-area padding
+  out of `body` so the trap can't exist at all) — considered and rejected.**
+  `body`'s unconditional `env(safe-area-inset-*)` padding is exactly what
+  lets every screen skip re-deriving its own inset (the same mechanism
+  §10.34's `--screen-inset-top` token deliberately tops up rather than
+  duplicates); moving it per-screen would reintroduce the four-different-
+  top-margins problem §10.34 just fixed, to solve a bug that already has a
+  one-line, fully general fix at the consuming side. `min-h-full` is the
+  better answer, not the one merely asked for by default.
+
+**Done when:** all nine sites use `min-h-full`; the guard fires on the
+pre-fix shape and is clean after; `AppShell`/Home and `ReturningUserScreen`
+confirmed by direct reproduction; `bun run check` green.
+
 ## 11. Decisions log
 
 - 2026-06-25 — Package manager: **bun**. Node: **24 LTS** (`.nvmrc`).
@@ -8360,6 +8462,12 @@ tell the same story as the confirm dialog.
   item 11. It works; the user does not like its placement or presentation, and
   the design export contains no biometric UI to fall back on. Waiting on the
   user to say what is wrong before any track touches it.
+- ✅ **CLOSED 2026-08-24 — Track AJ-G fixed all nine remaining files, plus
+  `ScreenLoading.tsx`'s own stale doc comment, and added
+  `scripts/no-in-flow-min-h-dvh.sh` (wired into `lint:units`) so the shape
+  can't silently reappear; full reasoning, the re-derivation of the file
+  list, and what was reproduced vs. read in §10.39.** Original entry kept
+  for the record:
 - **`min-h-dvh` inside the safe-area-padded `body` overflows the page on any
   real notched/home-indicator device — confirmed by reproduction, not just
   reasoned (Ajustes 1, Track AJ-A, 2026-08-24; full reasoning in §10.34).**
