@@ -159,6 +159,30 @@ is the PWA icon, plus the small mark the export does use on the auth screens,
 which Track AD builds with Lucide from `APP_NAME` per `AGENTS.md`. A real
 designed mark still replaces it without a redesign.
 
+### 12. The Add sheet's gear button — what should it actually do? — `owner: user`
+
+Raised 2026-08-25, Ajustes 1 Track AJ-C, while rebuilding the Add/Edit
+sheet against the design export nobody had read (`specs.md` §10.41, §12).
+`docs/ui/design-export-add-sheet.md` §2 draws a gear button in the sheet's
+header, opening app settings.
+
+It is **not built**. Traced: `/settings` is a sibling top-level route, not
+nested under the layout route that hosts `AppShell` (deliberately, so
+`ProfileSheet`'s own settings link closes it for free by unmounting
+`AppShell`). Wiring the Add sheet's gear the same way would unmount
+`AppShell` mid-entry and silently discard whatever the user had typed —
+`ProfileSheet` gets away with the same link only because it holds no draft
+to lose.
+
+This needs a product answer, not an engineering one: **what is the gear
+even for, mid-entry?** Two shapes exist and neither is a small fix: turning
+`/settings` into an overlay instead of a page-swap route (touches the
+whole app's navigation model), or a scoped "quick settings" popover inside
+the sheet (showing what, exactly — the currency? the default account? — no
+one has decided). Until there's an answer, the control is simply not
+rendered, the same way the camera/microphone aren't (a control that would
+work but do something surprising is worse than its absence).
+
 ### 11. Where the biometric option lives, and how it is presented — `owner: user`
 
 Raised 2026-08-24, from the first manual pass. The user set up a PIN, enabled

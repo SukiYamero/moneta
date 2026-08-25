@@ -337,7 +337,10 @@
     "picker": {
       "searchLabel": "Buscar categoría",
       "searchPlaceholder": "Buscar categoría",
-      "createOption": "Crear «{{query}}»"
+      "createOption": "Crear «{{query}}»",
+      "openAllAria": "Ver todas las categorías ({{count}})",
+      "customCta": "Nueva",
+      "sheetHeading": "Todas las categorías"
     },
     "form": {
       "createTitle": "Nueva categoría",
@@ -397,10 +400,12 @@
       "dateLabel": "Fecha",
       "categoryLabel": "Categoría",
       "categoryError": "Elegí una categoría",
-      "noteLabel": "Nota",
+      "noteLabel": "Descripción",
       "notePlaceholder": "Agregá una nota (opcional)",
       "saveCta": "Guardar",
-      "cancelCta": "Cancelar"
+      "cancelCta": "Cancelar",
+      "showMoreCta": "Más detalles",
+      "showLessCta": "Menos detalles"
     },
     "deleteConfirm": {
       "title": "¿Eliminar este movimiento?",

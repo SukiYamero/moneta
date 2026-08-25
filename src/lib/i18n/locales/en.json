@@ -337,7 +337,10 @@
     "picker": {
       "searchLabel": "Search category",
       "searchPlaceholder": "Search category",
-      "createOption": "Create “{{query}}”"
+      "createOption": "Create “{{query}}”",
+      "openAllAria": "See all categories ({{count}})",
+      "customCta": "Custom",
+      "sheetHeading": "All categories"
     },
     "form": {
       "createTitle": "New category",
@@ -397,10 +400,12 @@
       "dateLabel": "Date",
       "categoryLabel": "Category",
       "categoryError": "Choose a category",
-      "noteLabel": "Note",
+      "noteLabel": "Description",
       "notePlaceholder": "Add a note (optional)",
       "saveCta": "Save",
-      "cancelCta": "Cancel"
+      "cancelCta": "Cancel",
+      "showMoreCta": "More details",
+      "showLessCta": "Less details"
     },
     "deleteConfirm": {
       "title": "Delete this movement?",

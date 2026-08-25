@@ -14,8 +14,12 @@ const categoria = (overrides: Partial<Categoria> = {}): Categoria => ({
   ...overrides,
 })
 
+// `docs/ui/design-export-add-sheet.md` §2/specs.md §10.41: the inline
+// picker is a fixed column (count button + dashed "Custom" chip) beside a
+// horizontally-scrolling carousel — no inline search box any more, that
+// moved into `TagPickerSheet` (its own test file).
 describe('CategoryPicker', () => {
-  it('renders every non-archived category as a selectable chip', () => {
+  it('renders every non-archived category as a selectable chip in the carousel', () => {
     const categorias = [
       categoria({ id: 'a', nombre: 'Comida' }),
       categoria({ id: 'b', nombre: 'Transporte' }),
@@ -33,7 +37,7 @@ describe('CategoryPicker', () => {
     expect(screen.getByRole('button', { name: 'Transporte' })).toBeInTheDocument()
   })
 
-  it('excludes archived categories from the picker', () => {
+  it('excludes archived categories from the carousel and the count', () => {
     const categorias = [
       categoria({ id: 'a', nombre: 'Comida' }),
       categoria({ id: 'b', nombre: 'Viejo', archivado: true }),
@@ -48,6 +52,7 @@ describe('CategoryPicker', () => {
     )
 
     expect(screen.queryByRole('button', { name: 'Viejo' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /1/ })).toBeInTheDocument()
   })
 
   it("orders categories matching the sheet's tipo first, without hiding the others", () => {
@@ -66,65 +71,6 @@ describe('CategoryPicker', () => {
 
     const buttons = screen.getAllByRole('button').map((b) => b.textContent)
     expect(buttons.indexOf('Comida')).toBeLessThan(buttons.indexOf('Sueldo'))
-  })
-
-  it('search filters by name, accent- and case-insensitively', async () => {
-    const user = userEvent.setup()
-    const categorias = [
-      categoria({ id: 'a', nombre: 'Café' }),
-      categoria({ id: 'b', nombre: 'Transporte' }),
-    ]
-    render(
-      <CategoryPicker
-        categorias={categorias}
-        tipo="gasto"
-        onSelect={vi.fn()}
-        onCreateRequested={vi.fn()}
-      />,
-    )
-
-    await user.type(screen.getByRole('textbox'), 'CAFE')
-
-    expect(screen.getByRole('button', { name: 'Café' })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Transporte' })).not.toBeInTheDocument()
-  })
-
-  it('shows a "create" chip only when the query matches nothing, and calls onCreateRequested with the trimmed query', async () => {
-    const user = userEvent.setup()
-    const onCreateRequested = vi.fn()
-    render(
-      <CategoryPicker
-        categorias={[categoria({ nombre: 'Comida' })]}
-        tipo="gasto"
-        onSelect={vi.fn()}
-        onCreateRequested={onCreateRequested}
-      />,
-    )
-
-    expect(screen.queryByText(/crear/i)).not.toBeInTheDocument()
-
-    await user.type(screen.getByRole('textbox'), '  Gimnasio  ')
-
-    const createChip = screen.getByRole('button', { name: /gimnasio/i })
-    await user.click(createChip)
-
-    expect(onCreateRequested).toHaveBeenCalledWith('Gimnasio')
-  })
-
-  it('does not show a "create" chip when the query matches an existing category', async () => {
-    const user = userEvent.setup()
-    render(
-      <CategoryPicker
-        categorias={[categoria({ nombre: 'Comida' })]}
-        tipo="gasto"
-        onSelect={vi.fn()}
-        onCreateRequested={vi.fn()}
-      />,
-    )
-
-    await user.type(screen.getByRole('textbox'), 'comi')
-
-    expect(screen.queryByText(/crear/i)).not.toBeInTheDocument()
   })
 
   it('calls onSelect with the tapped category, single-select', async () => {
@@ -160,7 +106,7 @@ describe('CategoryPicker', () => {
     expect(screen.getByRole('button', { name: 'Comida' })).toHaveAttribute('aria-pressed', 'true')
   })
 
-  it('has no horizontally-scrolling container (wraps instead)', () => {
+  it('the carousel scrolls horizontally rather than wrapping', () => {
     const { container } = render(
       <CategoryPicker
         categorias={[categoria()]}
@@ -170,9 +116,93 @@ describe('CategoryPicker', () => {
       />,
     )
 
-    expect(container.querySelector('.overflow-x-auto')).not.toBeInTheDocument()
-    expect(
-      within(container).getByRole('button', { name: 'Comida' }).closest('.flex-wrap'),
-    ).toBeTruthy()
+    const scroller = container.querySelector('.overflow-x-auto')
+    expect(scroller).toBeTruthy()
+    expect(within(scroller as HTMLElement).getByRole('button', { name: 'Comida' })).toBeTruthy()
+  })
+
+  it('the dashed "Custom" chip calls onCreateRequested with an empty query, without opening the full picker', async () => {
+    const user = userEvent.setup()
+    const onCreateRequested = vi.fn()
+    render(
+      <CategoryPicker
+        categorias={[categoria()]}
+        tipo="gasto"
+        onSelect={vi.fn()}
+        onCreateRequested={onCreateRequested}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: /nueva/i }))
+
+    expect(onCreateRequested).toHaveBeenCalledWith('')
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+  })
+
+  it('the count button opens the full TagPickerSheet, showing every category and a search box', async () => {
+    const user = userEvent.setup()
+    const categorias = [
+      categoria({ id: 'a', nombre: 'Comida' }),
+      categoria({ id: 'b', nombre: 'Transporte' }),
+    ]
+    render(
+      <CategoryPicker
+        categorias={categorias}
+        tipo="gasto"
+        onSelect={vi.fn()}
+        onCreateRequested={vi.fn()}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: /ver todas/i }))
+
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    expect(screen.getByRole('textbox')).toBeInTheDocument()
+    // Two "Transporte" buttons now on screen — the carousel's own chip
+    // (behind the picker) and the picker's grid row.
+    expect(screen.getAllByRole('button', { name: /transporte/i }).length).toBeGreaterThan(0)
+  })
+
+  it('selecting a category from the full picker calls onSelect and closes the picker', async () => {
+    const user = userEvent.setup()
+    const onSelect = vi.fn()
+    const target = categoria({ id: 'cat_x', nombre: 'Comida' })
+    render(
+      <CategoryPicker
+        categorias={[target]}
+        tipo="gasto"
+        onSelect={onSelect}
+        onCreateRequested={vi.fn()}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: /ver todas/i }))
+    const dialog = screen.getByRole('dialog')
+    await user.click(within(dialog).getByRole('button', { name: 'Comida' }))
+
+    expect(onSelect).toHaveBeenCalledWith(target)
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('typing a query with no match in the full picker offers "crear «query»", which calls onCreateRequested and closes the picker', async () => {
+    const user = userEvent.setup()
+    const onCreateRequested = vi.fn()
+    render(
+      <CategoryPicker
+        categorias={[categoria({ nombre: 'Comida' })]}
+        tipo="gasto"
+        onSelect={vi.fn()}
+        onCreateRequested={onCreateRequested}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: /ver todas/i }))
+    await user.type(screen.getByRole('textbox'), '  Gimnasio  ')
+
+    const createChip = screen.getByRole('button', { name: /gimnasio/i })
+    await user.click(createChip)
+
+    expect(onCreateRequested).toHaveBeenCalledWith('Gimnasio')
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 })

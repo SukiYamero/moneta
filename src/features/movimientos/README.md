@@ -1,8 +1,10 @@
 # src/features/movimientos
 
 The movement sheet — creating, viewing, editing and deleting a `Movimiento`
-(Track F, Wave 4 stage 2). Spec: `specs.md` §10.23. One form, two sheets, no
-third copy of the fields (Decision 1):
+(Track F, Wave 4 stage 2; UI rebuilt by Track AJ-C, Ajustes 1, 2026-08-25).
+Spec: `specs.md` §10.23 (Decisions) + §10.41 (the current UI — supersedes
+§10.23's own UI subsection). One form, two sheets, no third copy of the
+fields (Decision 1):
 
 - `useMovimientoForm.ts` — field state, validation and submit; the only
   place either sheet writes. Money-adjacent, covered by TDD. Key behaviors:
@@ -24,25 +26,53 @@ third copy of the fields (Decision 1):
   - `applyParsedFields(patch)` is the seam stage 3 (voice) wires a parser
     into, per Decision 5 — no scan/voice button is rendered by this track.
 - `MovimientoFormFields.tsx` — the field set, presentational, driven
-  entirely by the hook's return value. Owns only the "create category from
-  query" modal's local open/prefill state (a UI concern, not validation).
-  Composes existing primitives only (`AmountField`, `DateChipPicker`,
-  `SegmentedControl`, `TextField`, `CategoryPicker`/`CategoryFormModal`
-  from `@/features/tags`) — this track adds no new shared primitive.
+  entirely by the hook's return value. Field order/layout follows
+  `docs/ui/design-export-add-sheet.md` §2 (specs.md §10.41): type toggle,
+  a centered date chip, the centered amount, categories, then the note
+  field behind a "ver más ⇄ ver menos" disclosure. Owns only that
+  disclosure's open flag and the "create category from query" modal's
+  local open/prefill state — both UI concerns, not validation; both reset
+  for free when the sheet closes (this component unmounts with it).
+  Composes existing primitives (`DateChipPicker`, `SegmentedControl`,
+  `TextField`, `CategoryPicker`/`CategoryFormModal` from `@/features/tags`)
+  plus this track's own `MovimientoAmountInput` — see below for why that
+  one isn't `AmountField`.
+- `MovimientoAmountInput.tsx` — the centered, borderless, auto-sizing
+  amount display (specs.md §10.41), deliberately not `AmountField.tsx`
+  (shared, read-only for this track): that component's bordered/labelled
+  `Input` has no adornment slot for an external currency-symbol sibling.
+  Reuses `parseAmountForInput`/`formatAmountForInput` directly — same
+  parsing rule, new markup only. Colors its digits by `tipo`, mirroring
+  `movimientoView.ts`'s (unexported) `AMOUNT_COLOR_CLASS`. Uses
+  `field-sizing: content` for the auto-width, with a `w-40` fallback
+  overridden via `supports-[field-sizing:content]:w-auto` — **not** an
+  implicit override; verified live (Chrome 151) that pairing
+  `field-sizing: content` with a plain fallback `width` does not make a
+  supporting browser disregard that width the way it's commonly described,
+  only an explicit `@supports` gate does.
 - `AddMovimientoSheet.tsx` — `BottomSheet` + the form in create mode,
-  opened by the `BottomNav` FAB via `movimientoSheetStore`. Every dismissal
-  path (backdrop, Escape, drag, Cancel) routes through one `handleClose`
-  that also resets the draft, so a cancelled create never resurfaces next
-  time the sheet opens.
+  opened by the `BottomNav` FAB via `movimientoSheetStore`. **No visible
+  heading** (the grab handle is the header the design draws; `ariaLabel`
+  still names the dialog) and **no Cancel button** — the design's action
+  row is camera + primary + mic; with the camera/mic not rendered (specs.md
+  §10.23 Decision 5), the one remaining button takes the full row.
+  Dismissing without saving is the sheet's existing backdrop-tap/Escape/
+  drag-to-dismiss, all routed through one `handleClose` that also resets
+  the draft, so a cancelled create never resurfaces next time the sheet
+  opens.
 - `MovimientoSheet.tsx` — `BottomSheet` hosting view ⇄ edit for an existing
   movement, driven by `movimientoSheetStore`'s `viewId`. View mode resolves
-  category/section for display (never a raw id — specs.md §10.22); Editar
-  swaps to `MovimientoFormFields` pre-filled via `formatAmountForInput`;
-  Eliminar opens a `ConfirmDialog` (a sibling of the `BottomSheet`, so it
-  correctly nests as the topmost overlay — the exact case
-  `useOverlay`'s own docs cite). **If the id it's showing stops resolving**
-  (deleted elsewhere), the sheet closes itself and raises a toast instead of
-  rendering blank or throwing on `undefined`.
+  category/section for display (never a raw id — specs.md §10.22), starts
+  flush under the grab handle like every other sheet (its old extra `pt-2`
+  was removed, specs.md §10.41); Editar swaps to `MovimientoFormFields`
+  pre-filled via `formatAmountForInput` — **edit keeps a two-button
+  Cancel/Save row**, unlike the create sheet, because edit's Cancel returns
+  to _view_ mode without writing, a distinct affordance a backdrop dismiss
+  can't provide. Eliminar opens a `ConfirmDialog` (a sibling of the
+  `BottomSheet`, so it correctly nests as the topmost overlay — the exact
+  case `useOverlay`'s own docs cite). **If the id it's showing stops
+  resolving** (deleted elsewhere), the sheet closes itself and raises a
+  toast instead of rendering blank or throwing on `undefined`.
 - `movimientoSheetStore.ts` — one zustand store, `{ addOpen, viewId }`, for
   all four entry points (the FAB plus Home/History/Search's row taps) to
   share instead of each screen inventing its own open state.
@@ -69,5 +99,13 @@ Both sheets are mounted once in `src/routes/AppShell.tsx`, beside
 - No `metodo` control — the field has no writer anywhere and is filed as a
   backlog item (specs.md §12, 2026-08-20) rather than a control invented
   outside what the design specifies.
-- No new shared primitive under `src/components/shared` — this folder only
-  composes what already existed before this track.
+- No gear/settings button on the create sheet, even though
+  `docs/ui/design-export-add-sheet.md` §2 draws one — navigating to
+  `/settings` from inside this sheet would unmount `AppShell` mid-entry and
+  silently discard the draft (`/settings` is a sibling top-level route, not
+  nested under the layout route hosting `AppShell` — `src/router.tsx`).
+  Escalated to specs.md §12/§10.41 for a product decision, not resolved
+  here.
+- No new primitive under `src/components/shared` beyond what already
+  existed before this track — `MovimientoAmountInput.tsx` lives in this
+  folder instead, deliberately (see above).

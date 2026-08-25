@@ -10,9 +10,19 @@ import { useMovimientoForm } from '@/features/movimientos/useMovimientoForm'
 import { useMovimientoSheetStore } from '@/features/movimientos/movimientoSheetStore'
 
 /**
- * `BottomSheet` + `useMovimientoForm` in create mode (specs.md §10.23).
- * One instance, mounted once in `AppShell` beside `ProfileSheet`, opened by
- * the `BottomNav` FAB via `movimientoSheetStore`.
+ * `BottomSheet` + `useMovimientoForm` in create mode (specs.md §10.23,
+ * §10.41). One instance, mounted once in `AppShell` beside `ProfileSheet`,
+ * opened by the `BottomNav` FAB via `movimientoSheetStore`.
+ *
+ * No visible heading — `docs/ui/design-export-add-sheet.md` §2 draws the
+ * sheet's header row as the grab handle alone (`BottomSheet` already
+ * renders that as fixed chrome); `ariaLabel` below still names the dialog
+ * for assistive tech. No Cancel button either: the export's action row is
+ * camera + primary + mic, never a text Cancel, and the camera/mic are
+ * deliberately not rendered (specs.md §10.41 Decision, preserving §10.23
+ * Decision 5) — the remaining primary button takes the row's full width.
+ * Dismissing without saving is the sheet's existing backdrop-tap/Escape/
+ * drag-to-dismiss, all already wired through `handleClose` below.
  */
 export const AddMovimientoSheet = () => {
   const open = useMovimientoSheetStore((s) => s.addOpen)
@@ -48,7 +58,6 @@ export const AddMovimientoSheet = () => {
       initialFocus={amountInputRef}
     >
       <div className="flex flex-col gap-5 pb-1">
-        <h2 className="text-lg font-extrabold">{t('add.heading')}</h2>
         <MovimientoFormFields
           tipo={form.tipo}
           onTipoChange={form.setTipo}
@@ -56,6 +65,7 @@ export const AddMovimientoSheet = () => {
           onAmountChange={form.setAmountRaw}
           amountErrorReason={form.amountErrorReason}
           amountInputRef={amountInputRef}
+          moneda={preferencias.monedaPrincipal}
           fecha={form.fecha}
           onFechaChange={form.setFecha}
           categorias={categorias}
@@ -70,26 +80,15 @@ export const AddMovimientoSheet = () => {
           firstDayOfWeek={preferencias.primerDiaSemana}
           disabled={form.submitting}
         />
-        <div className="flex gap-2.5">
-          <Button
-            type="button"
-            variant="secondary"
-            size="touch"
-            className="flex-1"
-            onClick={handleClose}
-          >
-            {t('form.cancelCta')}
-          </Button>
-          <Button
-            type="button"
-            size="touch"
-            className="flex-1"
-            disabled={form.submitting}
-            onClick={() => void form.submit()}
-          >
-            {t('form.saveCta')}
-          </Button>
-        </div>
+        <Button
+          type="button"
+          size="touch"
+          className="w-full"
+          disabled={form.submitting}
+          onClick={() => void form.submit()}
+        >
+          {t('form.saveCta')}
+        </Button>
       </div>
     </BottomSheet>
   )
