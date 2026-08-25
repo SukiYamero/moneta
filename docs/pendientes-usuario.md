@@ -208,22 +208,24 @@ misbehaving? A plain Latin/QWERTY keyboard (including `inputMode=decimal`
 numeric layouts) is not expected to exercise this at all — the concern is
 specifically an IME session.
 
-### 13. Does tapping `+` now raise the keyboard? — `owner: user`
+### 18. Saving a category does not work — `owner: user` (deferred by the user)
 
-Raised 2026-08-25, Ajustes 2 Track AJ2-B (`specs.md` §10.46), while fixing
-the Add sheet's amount input never raising iOS Safari's software keyboard.
-The fix (a synchronous `useLayoutEffect` focus instead of a deferred
-`requestAnimationFrame` inside a passive `useEffect`) is **CONFIRMED as the
-right mechanism** — proven by a unit test that fails against the old code
-and passes against the new one — but whether iOS Safari **itself** now
-raises the keyboard is **PLAUSIBLE only**: no agent in this repo can drive
-real iOS Safari. `specs.md` §10.46 already flagged this needed a
-one-line check here at merge; it had not actually been added until this
-review pass caught the gap.
+Raised 2026-08-25 by the user, from the same iPhone pass: "sigue sin poder
+guardar la categoría y necesitamos ajustar cosas allí una vez terminemos
+todo." **Deferred by the user's explicit decision** until the current
+adjustments close; filed here so it does not die in a conversation.
 
-**The check:** on a real iPhone, tap the `+` FAB. Does the software
-keyboard rise immediately, with the caret already in the amount field, no
-extra tap needed?
+**Not investigated, and deliberately not guessed at in code.** One lead is
+recorded so the eventual track does not start cold: `CategoryFormModal`'s
+Save is **disabled until the form is valid** (a comment in
+`useMovimientoForm.ts` names this as the precedent it deliberately did _not_
+follow). If that is what is happening, it is the same shape as the Add
+sheet's own "nothing happens" bug (`specs.md` §10.48) — the app knows why it
+will not save and does not say so anywhere the user can see. A disabled
+button with no stated reason is indistinguishable from a broken one.
+
+That is a hypothesis, not a finding. It must be reproduced before anything
+is changed.
 
 ### 11. Where the biometric option lives, and how it is presented — `owner: user`
 
@@ -245,28 +247,21 @@ on; the answer has to come from the user.
 
 **Not a bug, and not urgent.** Filed so it does not die in a conversation.
 
-### 15. Does the Add sheet stay put with the keyboard up now? — `owner: user`
+### 17. Is the background above the keyboard gone? — `owner: user`
 
-Raised 2026-08-25, Ajustes 3 Track AJ3-B (`specs.md` §10.49), fixing item 2
-of `docs/ajustes-3-plan.md`: tapping `+` correctly raised the keyboard
-(item 13, confirmed), but the sheet then appeared scrolled down, hiding
-the gasto/ingreso toggle at its top. The fix pins the sheet (and the
-create-category modal) to the actual visible area using
-`window.visualViewport`, rather than the full layout viewport `dvh`
-resolves against — **CONFIRMED only by unit test against a mocked
-viewport API; no agent here can drive real iOS Safari or a real Android
-device**, so whether it actually holds on a phone is PLAUSIBLE, not
-proven.
+Raised 2026-08-25 by the user's own report and fixed the same day
+(`specs.md` §10.52). With the Add sheet open and the keyboard up, the strip
+above the keyboard showed the app's canvas background plus the `+` FAB and
+the tab icons instead of the dimmed backdrop, because Track AJ3-B's
+keyboard fix clamped the backdrop along with the panel.
 
-**The check:** on a real iPhone, tap `+` on the Add sheet. Once the
-keyboard rises and the amount field is focused, is the gasto/ingreso
-toggle at the top of the sheet still visible, with no need to dismiss the
-keyboard and scroll back up? Separately, worth a look while the sheet
-being opened: the create-category modal (opened from the Add sheet's
-dashed "Custom" chip) previously took the full screen height with no
-reachable way to close it — the same shell fix now bounds and scrolls it,
-which is reasoned to fix this too but was never confirmed on a device
-either.
+**CONFIRMED by regression test** (both shells, each watched failing against
+the nested structure first). **Not confirmed on a device** — the same limit
+as items 13/15/16.
+
+**The check:** on a real iPhone, open the Add sheet and raise the keyboard.
+Is everything behind the sheet uniformly dimmed, with no strip of app
+background, no `+` and no tab icons anywhere?
 
 ### 16. Does a blocked Add tap bring you to the field that blocked it? — `owner: user`
 
@@ -292,6 +287,40 @@ category picker? Then, separately: leave the amount as something invalid
 ---
 
 ## Closed
+
+### 13. Does tapping `+` now raise the keyboard? — closed 2026-08-25 (user)
+
+**Confirmed on a real iPhone:** "toqué el + y sube el teclado bien, me pone
+el foco listo para escribir." Ajustes 2 Track AJ2-B's synchronous
+`useLayoutEffect` focus (`specs.md` §10.46) was CONFIRMED as the right
+mechanism by unit test and PLAUSIBLE on the device; it is now confirmed on
+the device too.
+
+Worth keeping for the next time this shape appears: the fix was reasoned
+from a platform rule (iOS Safari only opens the keyboard for a `.focus()`
+inside the task carrying user activation) that no test here could exercise.
+The unit test proved the _mechanism_ changed — focus became synchronous —
+and the user proved the _outcome_. Neither alone would have been enough.
+
+### 15. Does the Add sheet stay put with the keyboard up now? — closed 2026-08-25 (user)
+
+**Both halves confirmed on a real iPhone.** The gasto/ingreso toggle stays
+visible with the keyboard up ("si ya están a la vista expense y income lo veo
+bien"), and the create-category modal is now proportional to the viewport —
+it opens fully visible with the keyboard up and stretches back correctly when
+the keyboard closes. `specs.md` §10.49's device claim was PLAUSIBLE and is now
+CONFIRMED.
+
+Two things came out of the same pass and are **not** part of this item:
+
+- The three floating options above the keyboard are **Safari's own form
+  accessory bar**, not ours. Confirmed with the user, nothing to do.
+- **A regression the fix introduced**, reported in the same message and fixed
+  the same day (cross-track review, `specs.md` §10.52): the backdrop was
+  nested inside the wrapper the fix clamps, so it shrank too and let
+  `BottomNav`'s canvas gradient, the `+` FAB and the tab icons show through
+  above the keyboard. The backdrop is now an always-full-screen sibling.
+  **That fix is itself unconfirmed on a device** — see item 17.
 
 ### 3. The two undecided artboards — closed 2026-08-24 (user)
 

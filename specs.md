@@ -11361,6 +11361,29 @@ to revisit if it disagrees.
   separate JS `OVERLAY_MAX_HEIGHT_FRACTION` runtime constant. Not applied —
   `src/styles/index.css` is operator-owned; escalated instead.
 
+### 10.34.2 The zoom decision, reaffirmed with the correct facts (user, 2026-08-25)
+
+§10.34.1 corrected a premise the user's 2026-08-24 zoom decision rested on:
+`maximum-scale`/`user-scalable=no` are honored by Android Chrome and ignored
+by iOS Safari, so the app has never behaved uniformly here. Put back to the
+user with the real platform table.
+
+**Decision, unchanged but now informed: zoom stays unified off, and iOS
+keeping pinch-zoom is accepted as unfixable.** The user's words: "el zoom
+todo unificado apagado, no es posible hacer pinch zoom, como iOS no se puede
+ni modo."
+
+So the attributes stay — they do something on Android — and **no attempt is
+made to defeat iOS's override.** That is deliberate on two grounds, and both
+are worth recording so a future track does not "finish the job": WebKit
+overrides it as an accessibility guarantee authors are not meant to opt out
+of, and defeating it would mean intercepting gesture events, which
+`AGENTS.md` § UI's Pointer-Events rule and the reduced-motion/accessibility
+posture both cut against.
+
+What is different from 2026-08-24 is only the quality of the decision: the
+same answer, now given by someone who knows the two platforms disagree.
+
 ## 12. Backlog (pending verification / deferred work)
 
 - ✅ **CLOSED 2026-08-25 (operator, commit `07f6c16`) — the two stale
