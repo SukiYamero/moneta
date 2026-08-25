@@ -13,7 +13,11 @@ export const RouteErrorFallback = () => {
   const detail = isRouteErrorResponse(error) ? `${error.status} ${error.statusText}` : undefined
 
   return (
-    <main className="flex min-h-dvh flex-col items-center justify-center gap-3 bg-background px-7 text-center text-foreground">
+    // `min-h-full`, not `min-h-dvh`: `body` pads unconditionally by
+    // `env(safe-area-inset-*)`, so an in-flow `min-h-dvh` root demands the raw
+    // viewport on top of that and overflows by exactly the inset on a real
+    // notch/home indicator (specs.md §10.34, §10.39).
+    <main className="flex min-h-full flex-col items-center justify-center gap-3 bg-background px-7 text-center text-foreground">
       <p role="alert" className="text-base font-bold">
         {APP_NAME} tuvo un problema inesperado.
       </p>
