@@ -183,6 +183,23 @@ one has decided). Until there's an answer, the control is simply not
 rendered, the same way the camera/microphone aren't (a control that would
 work but do something surprising is worse than its absence).
 
+### 13. Does tapping `+` now raise the keyboard? — `owner: user`
+
+Raised 2026-08-25, Ajustes 2 Track AJ2-B (`specs.md` §10.46), while fixing
+the Add sheet's amount input never raising iOS Safari's software keyboard.
+The fix (a synchronous `useLayoutEffect` focus instead of a deferred
+`requestAnimationFrame` inside a passive `useEffect`) is **CONFIRMED as the
+right mechanism** — proven by a unit test that fails against the old code
+and passes against the new one — but whether iOS Safari **itself** now
+raises the keyboard is **PLAUSIBLE only**: no agent in this repo can drive
+real iOS Safari. `specs.md` §10.46 already flagged this needed a
+one-line check here at merge; it had not actually been added until this
+review pass caught the gap.
+
+**The check:** on a real iPhone, tap the `+` FAB. Does the software
+keyboard rise immediately, with the caret already in the amount field, no
+extra tap needed?
+
 ### 11. Where the biometric option lives, and how it is presented — `owner: user`
 
 Raised 2026-08-24, from the first manual pass. The user set up a PIN, enabled
