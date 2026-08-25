@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useRef, type ReactNode, type Ref, type RefObject } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  type ReactNode,
+  type Ref,
+  type RefObject,
+} from 'react'
 
 export interface UseOverlayOptions<T extends HTMLElement> {
   open: boolean
@@ -123,7 +131,7 @@ export const useOverlay = <T extends HTMLElement>({
     [ref],
   )
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!open) return
 
     const handle: OverlayHandle = { seq: seqRef.current! }
@@ -132,15 +140,22 @@ export const useOverlay = <T extends HTMLElement>({
 
     const triggerElement = document.activeElement as HTMLElement | null
 
-    // the panel mounts in this same effect pass — defer focus one frame so it's in the DOM
-    const raf = requestAnimationFrame(() => {
-      if (!isTopOverlay(handle)) return
+    // Focus synchronously, in the same commit (and so the same browser task)
+    // as the click/tap that opened this overlay: iOS Safari only raises the
+    // software keyboard for a `.focus()` call made inside the task that
+    // still carries user activation. A passive `useEffect` — let alone one
+    // that then deferred another frame via `requestAnimationFrame` — runs
+    // after that task has already ended, so focus landed but no keyboard
+    // followed. `useLayoutEffect` runs synchronously during the commit that
+    // mounts this panel, and refs are attached during the mutation phase
+    // that precedes layout effects, so `panelRef.current` is already the
+    // mounted node here — no frame to wait out.
+    if (isTopOverlay(handle)) {
       const panel = panelRef.current
-      if (!panel) return
       const target =
-        initialFocus?.current ?? panel.querySelector<HTMLElement>(FOCUSABLE_SELECTOR) ?? panel
-      target.focus()
-    })
+        initialFocus?.current ?? panel?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR) ?? panel
+      target?.focus()
+    }
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (!isTopOverlay(handle)) return
@@ -171,7 +186,6 @@ export const useOverlay = <T extends HTMLElement>({
     document.addEventListener('keydown', handleKeyDown)
 
     return () => {
-      cancelAnimationFrame(raf)
       document.removeEventListener('keydown', handleKeyDown)
       popOverlay(handle)
       releaseScrollLock()

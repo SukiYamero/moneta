@@ -147,6 +147,18 @@ describe('AddMovimientoSheet', () => {
     expect(screen.queryByRole('button', { name: /agregar gasto/i })).not.toBeInTheDocument()
   })
 
+  // docs/ui/design-export-add-sheet.md §2 draws the commit button at
+  // height:54px/border-radius:18px/font-size:15.5px/font-weight:800 — this
+  // pins the token classes rather than `size="touch"`'s 44px/12px/500
+  // touch-target defaults, which is all the sheet rendered before this fix.
+  it('sizes the primary action to the design export, not the bare touch-target size', () => {
+    useMovimientoSheetStore.setState({ addOpen: true })
+    render(<AddMovimientoSheet />)
+
+    const cta = screen.getByRole('button', { name: /agregar gasto/i })
+    expect(cta).toHaveClass('h-13.5', 'rounded-2xl', 'text-md', 'font-extrabold')
+  })
+
   // The count button opens `TagPickerSheet` as a second `BottomSheet`
   // nested above this one — a real, reachable case `useOverlay`'s
   // render-order stack (specs.md §10.5.1) must handle, not just the two
