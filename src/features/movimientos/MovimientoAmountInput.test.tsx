@@ -70,6 +70,20 @@ describe('MovimientoAmountInput', () => {
     expect(row?.children[1]).toBe(input)
   })
 
+  it("the row itself is w-full — jsdom has no layout engine to prove it, but a real-browser repro (specs.md §10.45) showed the row is otherwise shrink-to-fit under its flex-col items-center parent, making the input's max-w-[calc(100%-3rem)] resolve against the row's own unbounded content width instead of the sheet's real one, so a six-digit PEN amount overflowed the sheet with the clamp doing nothing", () => {
+    render(
+      <MovimientoAmountInput
+        value=""
+        onChange={() => {}}
+        locale="es-CO"
+        moneda="COP"
+        tipo="gasto"
+      />,
+    )
+    const row = screen.getByLabelText('Monto').parentElement
+    expect(row?.className).toContain('w-full')
+  })
+
   it('calls onChange with the raw typed text for a short, ungrouped amount', async () => {
     const user = userEvent.setup()
     const onChange = vi.fn()

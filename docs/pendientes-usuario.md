@@ -183,6 +183,31 @@ one has decided). Until there's an answer, the control is simply not
 rendered, the same way the camera/microphone aren't (a control that would
 work but do something surprising is worse than its absence).
 
+### 14. Does an IME/soft keyboard survive typing an amount? — `owner: user`
+
+Raised 2026-08-25, review-aj2-a (`specs.md` §10.45.1), reviewing Track
+AJ2-A's live-grouping amount input. `MovimientoAmountInput.tsx`'s
+`onChange` handler reformats the typed text and moves the caret directly
+on the native input's DOM node, synchronously, on every `input` event — it
+does not check `event.nativeEvent.isComposing` and does not special-case
+`compositionstart`/`compositionend`. Reasoned through and mechanically
+verified with jsdom's `compositionStart`/`change`/`compositionEnd` events
+that the handler does reformat mid-"composition" there, but jsdom does not
+model a real IME's composition-string overlay, so this cannot be confirmed
+or ruled out in this environment — forcibly rewriting `.value` and the
+selection while a real IME owns an active composition range is a
+known-risky pattern elsewhere (some editors special-case it for exactly
+this reason).
+
+**The check:** on a real device with an IME active (e.g. an Android
+keyboard set to Japanese or Chinese, or an iOS keyboard with predictive
+full-width numerals), open the Add sheet and type a multi-digit amount
+into the Monto field. Does the number and its grouping come out correct,
+with no duplicated/dropped characters and no composition candidate window
+misbehaving? A plain Latin/QWERTY keyboard (including `inputMode=decimal`
+numeric layouts) is not expected to exercise this at all — the concern is
+specifically an IME session.
+
 ### 13. Does tapping `+` now raise the keyboard? — `owner: user`
 
 Raised 2026-08-25, Ajustes 2 Track AJ2-B (`specs.md` §10.46), while fixing

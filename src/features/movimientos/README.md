@@ -55,7 +55,13 @@ fields (Decision 1):
   input's other side rather than pulled out of flow, since a flex row
   symmetric around the input keeps its true center pinned regardless of the
   symbol's own (locale-dependent) rendered width or how wide
-  `field-sizing: content` makes the input on any given keystroke. Its
+  `field-sizing: content` makes the input on any given keystroke. The row
+  itself carries `w-full` — without it, the row (a child of a `flex-col
+items-center` parent) is shrink-to-fit, and the input's
+  `max-w-[calc(100%-3rem)]` resolves against that unbounded content width
+  instead of the sheet's real one; a review pass reproduced this in a real
+  browser (a six-digit `PEN` amount overflowing the sheet with the clamp
+  doing nothing) before adding `w-full` (specs.md §10.45.1). Its
   `onChange` handler reformats and repositions the caret **synchronously on
   the native DOM node**, not via an effect keyed on the `value` prop — a
   real bug found building this: React bails out of the whole render+effects

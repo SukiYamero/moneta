@@ -5852,6 +5852,7 @@ green before this pass began (152 files, 1621 tests, the same two
 pre-existing `button.tsx`/`FirstSyncGate.tsx` warnings) and stayed green
 after every fix above was applied, re-run each time, not assumed from the
 prior run.
+
 ### 10.45 The amount display centers on its own and groups live as you type (Ajustes 2, Track AJ2-A, 2026-08-25)
 
 `docs/ajustes-2-plan.md` §3, items 2 and 4. Both traced correctly: the
@@ -5896,7 +5897,9 @@ so a later reader doesn't reintroduce them:**
   enough number could size the grid past the container, with the
   percentage then clamping the _already-oversized_ track rather than
   preventing it. A flex item's percentage `max-width`, by contrast,
-  resolves against the flex container's already-definite size, which is
+  resolves against the flex container's already-definite size — **this
+  clause was true only once the row itself actually has one, which it
+  didn't at merge time; see §10.45.1's correction** — which is
   exactly why the chosen technique bounds the input with
   `max-w-[calc(100%-3rem)]` (rather than the export's own
   `calc(100% - 48px)` on the symbol+input pair) with no such risk.
@@ -5998,6 +6001,177 @@ files, 1647 of 1648 tests passing, the one failure being the
 written and watched fail for the right reason (missing export / a real
 caret bug, not a typo in the test) before the implementation that made
 them pass.
+
+### 10.45.1 Review pass (Track review-aj2-a, 2026-08-25)
+
+Reviewed against `docs/ajustes-2-plan.md` §3, `docs/error-handling.md`,
+§10.45/§11's own entries, and `AGENTS.md`'s Review protocol (four things,
+not one: bugs, redundancy, optimization, better approaches).
+
+**The row-overflow clamp was inert — CONFIRMED by real-browser
+reproduction, not reasoning alone, and applied.** §10.45's centering
+section claims a flex item's percentage `max-width` "resolves against the
+flex container's already-definite width," and cites that as the reason the
+chosen technique avoids the exact failure mode the Grid alternative was
+rejected for. The premise doesn't hold for the actual DOM at merge time:
+the row (`flex items-center justify-center gap-2`) sits inside
+`MovimientoAmountInput`'s outer `flex flex-col items-center gap-2` —
+`items-center` on that parent means the row is _not_ stretched to the
+sheet's real width, it's shrink-to-fit, sized off its own children's
+content. `max-w-[calc(100%-3rem)]` on the input then resolves against that
+shrink-to-fit width, not the sheet's. Reproduced with a real Chromium
+(Playwright 1.62, matching `field-sizing: content`'s actual Baseline-2024
+Chromium/Safari support the file's own comment names) rendering the exact
+Tailwind classes at the app's own declared 360px minimum width
+(`AGENTS.md`): a `PEN` amount ("PEN 999.999" — `PEN` is a real `Moneda`
+whose `narrowSymbol` genuinely renders as the 3-character ISO code in this
+ICU build, not a hypothetical) pushed the row 422px wide against a 360px
+sheet — a 62px overflow — and, decisively, **removing `max-w-[calc(100%
+-3rem)]` entirely produced byte-identical row/input widths**, proving the
+clamp was doing nothing. Even a plain 4-digit `PEN` amount ("PEN 9.999")
+already overflowed. **Applied:** added `w-full` to the row
+(`MovimientoAmountInput.tsx`), which gives it the outer div's own already-
+definite width (that outer div _is_ stretched — its own parent,
+`MovimientoFormFields`' `flex flex-col gap-5`, has no `items-center`
+override) — re-verified in the same harness: `rowOverflowsSheet` false
+across all cases, row/input midpoints stay coincident (centering
+unaffected), and an overflowing number is now clipped/scrollable _inside_
+the input box rather than blowing the whole row past the sheet's edge.
+Locked in with a new jsdom test (`w-full` is a `className` assertion;
+jsdom can't run the layout engine that proved the bug, so the test
+comment says so and points here) and a corrected doc comment in
+`MovimientoAmountInput.tsx` itself.
+
+Residual, not fixed here: the `3rem`/48px reservation budgets for a
+narrow symbol like `$`/`R$`; a 3-character symbol (`PEN`, the one real
+`Moneda` that hits this) still gets squeezed harder than a numeric budget
+computed off the symbol's own rendered width would allow, even though it
+no longer overflows the sheet. Tuning the reservation to the actual symbol
+width is a UX polish call, not a correctness bug — flagged here rather
+than done unilaterally.
+
+**`handleChange`'s synchronous DOM mutation before `onChange` — reasoned
+through concretely, one gap found and escalated rather than fixed.**
+Checked each scenario named for this review:
+
+- **A parent that rejects or transforms the value.** Doesn't happen
+  today — `useMovimientoForm.ts`'s `setAmountRaw` stores whatever it's
+  handed verbatim (`README.md`/grep confirmed, no transform anywhere in
+  the round trip) — but even a hypothetical parent that did reject/clamp
+  is safe: since the resulting state differs from the DOM's already-set
+  value, React's normal (non-bailout) render path runs and
+  `ReactDOMInput`'s commit-phase reconciliation force-corrects
+  `node.value` to match `props.value`, going through the same patched
+  setter that keeps React's internal value tracker in sync. The dangerous
+  case is specifically the _no-op_ (`Object.is`-equal) reformat this fix
+  targets — a rejecting/transforming parent is definitionally not a
+  no-op.
+- **The DOM node and React's tracker disagreeing enough to swallow a
+  later legitimate `onChange`.** Traced through `inputValueTracking`'s
+  actual mechanism: real typing updates the DOM's `.value` without going
+  through the JS property setter (so the tracker goes stale, which is
+  what makes React fire `onChange` at all), while `el.value = formatted`
+  here **does** go through that same patched setter, updating the tracker
+  to match what was just written. Tracker and DOM stay in sync after this
+  handler runs either way, so the next real keystroke reliably goes stale
+  again and fires normally. No swallowed-`onChange` scenario found.
+- **A `disabled` race, edit-mode remount, `form.reset()`.** None apply:
+  no `<form>` element wraps this input anywhere in the sheet tree (grep
+  confirmed), a remount gets a fresh DOM node with its own fresh tracker,
+  and React's synchronous event-handling model means `disabled` can't
+  flip mid-handler.
+- **IME composition — PLAUSIBLE, not CONFIRMED, and not fixed.**
+  `handleChange` doesn't check `event.nativeEvent.isComposing` and
+  unconditionally reformats + moves the caret on every `input` event,
+  including ones fired while a composition session is open (verified
+  mechanically with `fireEvent.compositionStart`/`change`/`compositionEnd`
+  in jsdom — the handler reformats mid-"composition" there without
+  complaint). jsdom does not model a real composition string overlay, so
+  this cannot be confirmed or ruled out in this environment: on a real
+  device, forcibly rewriting `.value` and moving the selection while an
+  IME owns an active composition range is a known-risky pattern (some
+  editors special-case it for exactly this reason) and could corrupt or
+  prematurely end composition. `inputMode="decimal"` narrows but does not
+  eliminate this — some mobile keyboards still route digit entry through
+  composition for certain language/keyboard combinations. Not applied as
+  a guess: a defensive `if (event.nativeEvent.isComposing) return` (or
+  equivalent) is a plausible fix but unverifiable without a real IME, and
+  an incorrect guard could itself misbehave. **Filed as
+  `docs/pendientes-usuario.md` #14** — needs a human on a real device with
+  an active IME (e.g. an Android Japanese/Chinese keyboard), the same
+  class of check that file already exists for.
+
+**Formatter edge cases past the plan's own list — tried to break
+`formatAmountLive`/`digitsBeforeIndex`/`indexAfterDigitCount`, found
+nothing new.** Checked directly (script probes, not read from the test
+file alone): more than two typed fraction digits pass through ungrouped-
+but-correct (`"1234,56789"` → `"1.234,56789"`, never rounded — matches the
+documented "never claimed equivalent past 2 fraction digits" scope); a
+second decimal separator anywhere still bails to the raw string unchanged
+(`hasSecondDecimal` check, confirmed for `en-US` and `es-CO`); a leading
+decimal separator with no integer digits yet formats correctly
+(`".50"`/`",50"`); leading zeros in the integer part collapse silently
+(`"007"` → `"7"`) — checked and judged **not a bug**: `BigInt("007")` is
+`7n`, so this is the same "no leading zeros" behavior any numeric display
+already has (`formatAmountForInput` would never produce a leading zero
+either), not a data-loss risk, since the parsed _value_ for `"007"` and
+`"7"` is identical. A very long (30-digit) string groups correctly via
+`BigInt`, no precision loss (unlike a `Number()` round-trip). Edit-prefill
+vs. live-typing parity re-verified directly for several amount/locale
+pairs, not just re-read from the existing round-trip test — holds.
+
+**The `fr-FR` NBSP-vs-plain-space gap — checked, PLAUSIBLE, pre-existing,
+not this track's regression, not fixed.** This ICU build groups `fr-FR`
+with U+202F (narrow no-break space), confirmed directly. A raw ASCII
+U+0020 in the same position (e.g. a paste of a French-formatted number
+typed with a normal spacebar, which is how most people actually produce
+one) doesn't match the locale's real group separator, so
+`formatAmountLive` correctly bails (passes it through unchanged, per its
+own "don't mangle non-number-shaped input" rule) and `parseAmountForInput`
+downstream reports `malformed` for what a French user would consider a
+perfectly normal number. This is inherited from `separatorsFor`, which
+predates this track (already used by `parseAmountForInput` before AJ2-A
+touched the file) — not a regression this track introduced, and fixing it
+(accepting plain space as a group-separator alias wherever the locale's
+real one is a Unicode space variant) is a product decision about paste
+tolerance, not a mechanical fix. Flagged for a future track/backlog entry
+rather than guessed at here.
+
+**The `malformed` judgement call — verified reachable, not just
+asserted.** `formatAmountLive('abc', locale)` returns `'abc'` unchanged
+(confirmed, both directly and via the existing "leaves malformed pasted
+text untouched" test), `parseAmountForInput` then reports `malformed` for
+it, and `form.amount.errors.malformed` exists with real copy in all four
+locale files (`en`/`es`/`es-AR`/`pt-BR` — grepped directly). The judgement
+call in §10.45 holds.
+
+**Redundancy/optimization/better approach — nothing found.**
+`amountFormat.ts`'s new exports don't duplicate the pre-existing
+`parseAmount`/`parseAmountForInput`/`formatAmountForInput` — the fraction-
+preserving live formatter and the canonical dot-decimal parser can't share
+normalization logic because they need different output shapes from the
+same separator-stripping idea. `digitsBeforeIndex`/`indexAfterDigitCount`
+and `NORMALIZED_AMOUNT`/`DIGITS_ONLY` serve different, non-overlapping
+purposes (caret math vs. shape validation) — not duplicated logic under
+different names. No simpler wholesale approach considered better than
+digit-count-based caret math plus a shape-preserving live formatter; the
+two real defects found above are contained fixes, not architecture
+problems.
+
+**READMEs and specs.md checked against the code as it actually stands**
+(not pasted from a draft — both were written by the track itself, in the
+same commit, so no rot window existed the way §10.46.1 found for a
+handed-off draft): `src/features/movimientos/README.md` and
+`src/lib/i18n/README.md`'s `MovimientoAmountInput.tsx`/`amountFormat.ts`
+descriptions match the code post-fix (the `w-full` addition doesn't change
+any claim either README makes — neither described the row's own width
+mechanism in enough detail to be wrong about it).
+
+**Verified.** `bun run check`: typecheck clean; lint clean (same two
+pre-existing warnings, `button.tsx`/`FirstSyncGate.tsx`, untouched);
+`lint:units` clean; `vitest run` — 152 files, 1652 tests passing (1651
+baseline + 1 new regression test for the `w-full` fix), re-run after the
+fix, not assumed from a prior pass.
 
 ## 11. Decisions log
 
@@ -9882,6 +10056,7 @@ heights, while keeping Cancel's lighter weight so the row still reads
 primary-vs-secondary. Not requested verbatim by the plan; a judgment call
 made in scope (both files are this track's own), flagged for the operator
 to revisit if it disagrees.
+
 - 2026-08-25 — **§10.45 (Ajustes 2, Track AJ2-A): the amount input's
   centering deliberately diverges from the design export** — the digits
   alone are centered, with the currency symbol balanced by an invisible
@@ -9915,6 +10090,20 @@ to revisit if it disagrees.
   depend on a React re-render happening. Worth a general note for any
   future live-reformatting controlled input in this codebase, not just
   this one component.
+- 2026-08-25 — **§10.45's flex percentage-`max-width` claim was wrong as
+  written — the container needs `w-full`, not just "be a flex item," to
+  be definite.** Found and fixed by review-aj2-a (§10.45.1): reproduced in
+  a real Chromium that `max-w-[calc(100%-3rem)]` on the amount input did
+  nothing — a `PEN` amount (a real `Moneda`, narrowSymbol `"PEN"`)
+  overflowed the sheet by 62px at the app's declared 360px minimum, and
+  removing the clamp entirely produced identical widths, proving it was
+  inert. The row's own parent (`items-center`) left it shrink-to-fit
+  rather than stretched, so the percentage resolved against the row's own
+  unbounded content width. `w-full` on the row fixed it. General lesson:
+  a percentage `max-width`'s safety depends on its _immediate_ container
+  actually being definite-width — being a flex item is necessary but not
+  sufficient, the same subtlety §10.45 already correctly named for Grid
+  `auto`-tracks but didn't fully carry through to its own flex row.
 
 ## 12. Backlog (pending verification / deferred work)
 

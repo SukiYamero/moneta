@@ -68,15 +68,24 @@ const currencySymbolFor = (moneda: Moneda, locale: string): string => {
  * ignores it; a supporting engine gets `w-auto` back through the explicit
  * `supports-[…]` override below, never implicitly — see that comment.
  * `max-w-[calc(100%-3rem)]` (rather than the export's own `calc(100% -
- * 48px)` on the symbol+input pair) bounds the input alone against the
- * flex row's width — a flex item's percentage `max-width` resolves
- * against its container's definite width, so this stays well-defined
- * regardless of how wide the typed number gets, unlike the same
- * percentage placed on a CSS Grid `auto`-sized track (considered and
+ * 48px)` on the symbol+input pair) bounds the input alone against the flex
+ * row's width — a flex item's percentage `max-width` resolves against its
+ * container's *definite* width, which is why the row itself carries `w-full`
+ * here: without it, the row sits inside a `flex-col items-center` parent,
+ * whose cross-axis alignment leaves the row shrink-to-fit rather than
+ * stretched, so the percentage would resolve against the row's own
+ * content-driven (and therefore unbounded) width instead of the sheet's
+ * real, visible one — reproduced: a six-digit `PEN` amount ("PEN 999.999",
+ * a real `Moneda`/narrowSymbol pair, not a hypothetical) pushed the whole
+ * row 62px past a 360px sheet with `max-w-[calc(100%-3rem)]` in place and
+ * unchanged with it removed entirely, proving the clamp was inert until
+ * `w-full` gave the row something definite to resolve against. Unlike the
+ * same percentage placed on a CSS Grid `auto`-sized track (considered and
  * rejected: an auto track's contribution to grid sizing ignores an
  * indefinite percentage max-width, so a very long number could size the
  * track past the container before the percentage ever gets a chance to
- * clamp it).
+ * clamp it) — the flex version only avoids that failure once its own
+ * container is actually definite, not by virtue of being flex.
  */
 export const MovimientoAmountInput = ({
   value,
@@ -125,7 +134,7 @@ export const MovimientoAmountInput = ({
   return (
     <div className="flex flex-col items-center gap-2">
       <span className="text-xs font-semibold text-fg-tertiary">{t('form.amountLabel')}</span>
-      <div className="flex items-center justify-center gap-2">
+      <div className="flex w-full items-center justify-center gap-2">
         <span aria-hidden="true" className="shrink-0 text-6xl font-extrabold text-fg-faint">
           {symbol}
         </span>
