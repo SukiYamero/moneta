@@ -198,3 +198,36 @@ accidentally right and the _behaviour_ is the bug.
 
 **Blocked** until AJ-B's review pass releases `src/features/lock/**`, which it
 currently holds for the `FullScreenPanel` fix.
+
+## 9. AJ-G — the sweep AJ-A found and was right not to take
+
+AJ-A root-caused the welcome screen's scroll and the cause was not the copy
+stack: `min-h-dvh` on a root that sits **in normal flow inside a `body` already
+padded by `env(safe-area-inset-*)`** demands the full raw viewport regardless of
+what that padding already spent, so the page overflows by exactly the inset.
+
+**Zero in a desktop browser or DevTools emulation. Non-zero on any real notch or
+home indicator.** That is why it survived every review and every manual pass —
+including the user's own, which was done in a browser on a PC.
+
+Reproduced, not inferred: injecting a simulated `body { padding-top: 47px }` in a
+running browser overflowed by precisely that amount, and `min-h-full` (which
+resolves against the real `html`/`body`/`#root` chain, all `height: 100%`)
+removed it.
+
+**`src/routes/AppShell.tsx` has it** — reproduced on the real Home screen, where
+the whole shell including `BottomNav` scrolled as one unit. Eight more files
+share the shape: `AppErrorBoundary.tsx`, `RouteErrorFallback.tsx`,
+`boot/BootErrorScreen.tsx`, `auth/DrivePermissionScreen.tsx`,
+`auth/ReturningUserScreen.tsx`, `lock/LockScreen.tsx` (both branches),
+`sync/DriveDownloadScreen.tsx`, `components/shared/ScreenLoading.tsx`.
+`FullScreenPanel.tsx` is exempt — it is `fixed`/portaled, so it never sat in
+that padded content box.
+
+**One track, one owner, deliberately.** The obvious shortcut is to let each
+in-flight track fix the instance in its own files — AJ-E owns
+`ReturningUserScreen.tsx`, AJ-F owns `lock/**`, and so on. That is precisely
+the split that leaves a twin unfixed, which `AGENTS.md` names as this project's
+most expensive lesson. Both review passes were told explicitly not to touch it.
+
+Queued behind AJ-F, which currently holds `src/features/lock/**`.
