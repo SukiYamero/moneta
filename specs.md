@@ -5023,6 +5023,199 @@ pre-existing warnings — unchanged from `main`.
   style as the original text — `` `min-h-dvh` ``, not bare — to keep
   tripping the guard's own prose exemption; caught and fixed this against
   myself before it shipped).
+### 10.41 The Add/Edit sheet, rebuilt to the design export it had never been read against (Ajustes 1, Track AJ-C, 2026-08-25)
+
+**This supersedes §10.23's "UI" subsection only.** §10.23's Decisions 1–4 and
+6 stand unchanged (one form/two sheets, the store holds an id, mutations
+return `Promise<boolean>`, `parseAmountForInput`'s reasons, `metodo` stays
+unwritten). Decision 5 (no scan/voice control) also stands, but its
+"the design draws both, neither is built" framing is now stale — the design
+does draw both, and the operator's 2026-08-24 decision to still not render
+them is recorded below as this section's own decision, not inherited by
+implication.
+
+**Why this section exists.** §10.23's UI was written from prose on
+2026-08-20, before `docs/ui/Moneta_ Expense Manager UI.zip` was versioned
+the same day. The Add-sheet artboard sits between two other markers under
+its own bare `<!-- add sheet -->` comment rather than the `<!-- ===== NAME
+===== -->` banner every other artboard uses, so the marker-based extraction
+that became `design-export-reference.md` skipped it — nobody had ever
+diffed §10.23's prose UI against the artboard it was meant to describe. The
+gap was found 2026-08-24 by the user holding the running app, not by any
+review pass (three had already passed the old UI, because each checked code
+against spec, and the spec was the thing that was wrong). Full account,
+including the extracted markup: `docs/ui/design-export-add-sheet.md`.
+
+#### UI (replaces §10.23's UI subsection)
+
+Both `AddMovimientoSheet` (create) and `MovimientoSheet`'s edit mode render
+`MovimientoFormFields` in this order, per the artboard:
+
+1. **Type toggle** (`SegmentedControl`, gasto/ingreso) — unchanged from
+   §10.23; its metrics already matched the export closely enough (verified
+   visually, not just reasoned).
+2. **Date**, a centered chip (`DateChipPicker`, unchanged component) above
+   the amount, wrapped in `flex justify-center` — moved from below the
+   amount and losing its "Fecha" label, both per the export. No behavior
+   change to the picker itself.
+3. **Amount**, centered: a small "Monto" label, then a decorative currency
+   symbol beside a borderless, auto-sizing, huge input. New component,
+   `MovimientoAmountInput` (`src/features/movimientos/`) — see "why not
+   `AmountField`" below.
+4. **Categories**: `CategoryPicker` restructured to a fixed left column (a
+   count button opening the new `TagPickerSheet`, plus a dashed "Custom"
+   chip creating one directly) beside a horizontally-scrolling 2-row
+   carousel of `TagChip`s, ordered per §10.22 Decision 3 — search moved out
+   of this inline surface entirely (see below).
+5. **Note**, relabeled "Descripción" (matching the export; was "Nota"),
+   `maxLength={40}`, behind a "ver más ⇄ ver menos" disclosure toggle —
+   collapsed by default, local `useState` in `MovimientoFormFields` (a UI
+   concern, unmounts/resets with the sheet like the existing "create
+   category" modal state already does).
+6. **Actions**: the create sheet renders **one full-width primary button,
+   no Cancel** — the export's action row is camera + primary + mic, never a
+   text Cancel; with the camera/mic not rendered (below), the remaining
+   button naturally takes the row. Dismissing without saving is the sheet's
+   existing backdrop-tap/Escape/drag-to-dismiss, already wired through
+   `handleClose`. **Edit mode keeps its Cancel + Save row** — a deliberate,
+   reasoned divergence, not an oversight: edit's Cancel returns to _view_
+   mode without writing, a distinct affordance backdrop-dismiss can't
+   provide (that would close the whole sheet, not just abandon the edit),
+   and the export never modeled edit at all (no "MOVEMENT SHEET" artboard
+   was ever extracted — `docs/ui/design-export-add-sheet.md` §5).
+
+No visible heading on the create sheet (`BottomSheet`'s own grab handle is
+the header the export draws; `ariaLabel` still names the dialog for
+assistive tech). View/edit keep their existing headings (view's is
+`sr-only`, edit's is visible) — reasonable given the export drew neither.
+
+**The gear button is not rendered — escalated, not silently dropped.**
+Traced `src/router.tsx`: `/settings` is a **sibling top-level route**, not
+nested under the layout route that hosts `AppShell` (deliberately, so
+navigating there closes `ProfileSheet` for free by unmounting `AppShell`'s
+subtree — the router's own comment says so). `ProfileSheet` already links
+there safely because it holds no draft data to lose. `AddMovimientoSheet`
+is not that: navigating to `/settings` from its gear would unmount
+`AppShell` mid-entry, discarding whatever the user had typed (amount,
+category, note) with no confirmation and no path back to the draft —
+CONFIRMED by reading the router tree and `AppShell.tsx`, not just reasoned.
+That is strictly worse than any of the sheet's existing dismissal paths,
+none of which lose data silently mid-flow the way this would. Neither
+alternative found is this track's to build: (a) making `/settings` an
+overlay instead of a page swap is a routing/`AppShell` architecture change
+outside `src/features/movimientos`/`tags`; (b) a scoped in-sheet
+"quick-settings" popover has no product decision behind it (what would it
+even show mid-entry?). Omitting the control follows the same reasoning
+§10.23 Decision 5 already established for the camera/mic: a control that
+would work but do something surprising and undocumented is worse than its
+absence. **Filed to §12** for the operator to decide product intent — this
+is not closed by this track.
+
+**Why not `AmountField` for the amount display.** `AmountField.tsx` is
+read-only for this track (shared, `src/components/shared/**`) and its API
+— a bordered `Input` with a `<Label>` above, no adornment slot — cannot
+produce a borderless field with an external currency-symbol sibling without
+editing that file. Rather than propose editing a shared component for what
+is the _only_ field of its kind in the entire redesign, `MovimientoAmountInput`
+is a new, one-off presentational component in `src/features/movimientos/`,
+reusing `parseAmountForInput`/`formatAmountForInput` from
+`src/lib/i18n/amountFormat.ts` directly — the same parsing rule as
+`AmountField`, new markup only. It also colors its digits by `tipo`
+(`text-success`/`text-foreground`), mirroring `movimientoView.ts`'s private
+`AMOUNT_COLOR_CLASS` table (not exported, so duplicated as a two-entry
+`Record` rather than reaching into that file) — the export's own
+`{{amountColor}}` binding implies this and the pre-existing UI had no
+equivalent.
+
+**`field-sizing: content` — the one raw export value worth lifting, and a
+real bug found only by driving a live browser.** The initial build paired
+`field-sizing: content` with a `w-40` "graceful fallback," on the assumption
+(matching common blog-post framing of the feature) that a supporting
+browser simply disregards an explicit `width`. **Live-tested in Chrome 151
+via Playwright and found false**: with `w-40` present, the input stayed
+pinned to 160px regardless of typed content (`getComputedStyle(...).width`
+never moved off `160px` even though `scrollWidth` wanted more); only
+removing the `width` utility entirely let the box grow. The correct,
+spec-accurate progressive-enhancement shape is `@supports`-gated, not
+implicit — fixed by adding `supports-[field-sizing:content]:w-auto`
+alongside the `w-40` fallback, so a supporting browser's own `@supports`
+evaluation hands `width` back to the content-based algorithm (verified
+live afterward: same input, same typed value, computed width tracked the
+content correctly). `min-w-12`/`max-w-full` bound it in both cases. Firefox
+support was reasoned about, not driven (no non-Chromium engine available in
+this environment) — accepted as a residual gap, same shape as other tracks'
+Safari-only gaps in this project.
+
+**The tag picker** (`docs/ui/design-export-add-sheet.md` §3) is a new
+`TagPickerSheet.tsx`, opened by `CategoryPicker`'s count button: a search
+box (a raw `Input` + `Search` icon, not `TextField` — the export's search
+field carries no visible label) over a 2-column grid of `IconAvatar` +
+name rows (not `TagChip` — the export's full-picker rows are a visually
+distinct, wider layout from the inline carousel's pills), plus the same
+"crear «query»" affordance §10.22 already specifies. Selecting closes the
+picker (a picker's job is to hand back one thing); tapping "crear «query»"
+closes the picker first, then hands the query to the same
+`CategoryFormModal` flow the inline carousel's "Custom" chip already used —
+creating never auto-selects, matching the pre-existing inline behavior, so
+a newly created category shows up in the Add sheet's own carousel to tap
+afterward. Both `TagPickerSheet` and `CategoryFormModal` are ordinary
+`BottomSheet`/`CenterModal` instances mounted unconditionally with `open`
+toggling, so `useOverlay`'s render-order stack (§10.5.1) stacks them
+correctly regardless of which one a given flow opens through — the same
+mechanism `MovimientoSheet`'s delete `ConfirmDialog` already relies on,
+reused rather than re-derived. `CategoryPicker`'s external prop contract
+(`categorias`/`tipo`/`selectedId`/`onSelect`/`onCreateRequested`) is
+unchanged, so `src/routes/Kit.tsx`'s existing demo needed no edits.
+
+**`MovimientoSheet`'s view-mode `pt-2`** (flagged by Track AJ-B, §10.35, as
+this track's file to fix) is removed — every other sheet opens flush on its
+first visible content with no added top padding; the extra `pt-2` was
+compensating for having no _visible_ heading, not a real spacing need, and
+started this sheet ~8px lower than the rest. The `sr-only` heading stays
+for assistive tech.
+
+#### Data touched
+
+None beyond what §10.23 already specified — this section is layout/UI only.
+No `schema.ts` change, no new `dataStore` actions, no change to
+`useMovimientoForm`'s field/validation/submit logic.
+
+#### Done when
+
+- The Add sheet visually matches `docs/ui/design-export-add-sheet.md` §2 at
+  390×844 (verified live via Playwright): grabber-only header, centered
+  date chip above the amount, borderless auto-sizing amount, the fixed-
+  column-plus-carousel category layout, the note field behind "ver más".
+- The tag picker visually matches §3: search + 2-column grid + "crear
+  «query»", nested correctly above the Add/Edit sheet.
+- `CategoryPicker`'s prop contract is unchanged; `Kit.tsx` compiles with no
+  edits.
+- Edit mode renders the same field layout with its own Cancel/Save row;
+  view mode's icon block starts flush, matching every other sheet.
+- The `movimientos`/`tags` locale keys added (`form.showMoreCta`/
+  `showLessCta`, the renamed `noteLabel`, `picker.openAllAria`/`customCta`/
+  `sheetHeading`) exist in all four locale files.
+- `bun run check` green.
+
+#### Blast radius
+
+**Owned by Track AJ-C:** `src/features/movimientos/**` (new:
+`MovimientoAmountInput.tsx` + test; rewritten: `MovimientoFormFields.tsx`,
+`AddMovimientoSheet.tsx`, `MovimientoSheet.tsx`'s view-mode padding),
+`src/features/tags/**` (new: `categoryOrder.ts`, `TagPickerSheet.tsx` +
+test; rewritten: `CategoryPicker.tsx` + test), the four locale files (the
+`movimientos`/`tags` namespaces only), both features' `README.md`.
+
+**Explicitly not touched:** `src/components/shared/**` (read-only —
+`AmountField.tsx`, `DateChipPicker.tsx`, `SegmentedControl.tsx`,
+`BottomSheet.tsx`, `ConfirmDialog.tsx` named specifically; nothing else
+under that tree needed a change), `src/lib/dataStore.ts`, `schema.ts`,
+`src/routes/AppShell.tsx`, `src/routes/Kit.tsx` (compiles unedited),
+`src/styles/index.css`, `CategoryFormModal.tsx` (only how it's opened
+changed, not the component itself).
+
+**Escalated to §12, not resolved here:** the Add sheet's gear/settings
+control — see above.
 
 ## 11. Decisions log
 
@@ -8889,6 +9082,24 @@ tell the same story as the confirm dialog.
   checked against every existing consumer of the current behavior. Needs a
   real-browser verification pass (same method as §10.34/§10.39) before
   anyone applies it.
+- **The Add sheet's gear/settings button — not built, needs a product
+  decision (Ajustes 1, Track AJ-C, 2026-08-25; full reasoning in §10.41).**
+  `docs/ui/design-export-add-sheet.md` §2 draws a gear button in the sheet's
+  header opening app settings. Traced CONFIRMED: `/settings` is a sibling
+  top-level route (`src/router.tsx`), not nested under the layout route
+  hosting `AppShell` — navigating there from inside `AddMovimientoSheet`
+  would unmount `AppShell` mid-entry and silently discard whatever the user
+  had typed (amount, category, note), unlike `ProfileSheet`'s identical-
+  looking link to the same route, which is safe only because it holds no
+  draft to lose. Two possible fixes exist and neither is Track AJ-C's to
+  build: making `/settings` an overlay instead of a page-swap route (a
+  routing/`AppShell` architecture change), or a scoped in-sheet
+  quick-settings popover (no product decision exists for what it would even
+  show mid-entry). The control is not rendered in the meantime — the same
+  reasoning §10.23 Decision 5 already applies to the camera/mic: a control
+  that would work but do something surprising and undocumented is worse
+  than its absence. Needs the operator/user to decide product intent before
+  any track builds it.
 - **Diff every remaining design-export artboard against its spec section.**
   Raised 2026-08-24 (§11 same date). Nineteen artboards in
   `docs/ui/Moneta_ Expense Manager UI.zip` have never been compared to the

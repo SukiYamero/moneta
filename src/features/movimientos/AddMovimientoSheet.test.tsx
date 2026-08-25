@@ -70,7 +70,10 @@ describe('AddMovimientoSheet', () => {
 
     await user.type(screen.getByRole('textbox', { name: /monto/i }), '18000')
     await user.click(screen.getByRole('button', { name: 'Servicios' }))
-    await user.type(screen.getByRole('textbox', { name: /nota/i }), 'Internet')
+    // The note field is behind the "ver más" disclosure (docs/ui/
+    // design-export-add-sheet.md §2, specs.md §10.41).
+    await user.click(screen.getByRole('button', { name: /más detalles/i }))
+    await user.type(screen.getByRole('textbox', { name: /descripción/i }), 'Internet')
     await user.click(screen.getByRole('button', { name: /guardar/i }))
 
     await waitFor(() => expect(mCreateMovimiento).toHaveBeenCalledTimes(1))
@@ -87,13 +90,17 @@ describe('AddMovimientoSheet', () => {
     await waitFor(() => expect(useMovimientoSheetStore.getState().addOpen).toBe(false))
   })
 
-  it('Cancelar discards the draft — reopening starts blank again', async () => {
+  // The design (docs/ui/design-export-add-sheet.md §2, specs.md §10.41) has
+  // no Cancel button in the create sheet's action row — only the sheet's
+  // existing backdrop-tap/Escape/drag-to-dismiss, all routed through
+  // `handleClose`. Simulated here via Escape, the keyboard-reachable path.
+  it('dismissing without saving discards the draft — reopening starts blank again', async () => {
     const user = userEvent.setup()
     useMovimientoSheetStore.setState({ addOpen: true })
     const { rerender } = render(<AddMovimientoSheet />)
 
     await user.type(screen.getByRole('textbox', { name: /monto/i }), '5000')
-    await user.click(screen.getByRole('button', { name: /cancelar/i }))
+    await user.keyboard('{Escape}')
 
     expect(useMovimientoSheetStore.getState().addOpen).toBe(false)
     expect(mCreateMovimiento).not.toHaveBeenCalled()

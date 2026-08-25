@@ -1,12 +1,14 @@
 import { useState, type Ref } from 'react'
+import { ChevronDown } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { Locale } from 'date-fns'
-import type { Categoria, Seccion, TipoMovimiento } from '@/lib/schema'
-import { AmountField } from '@/components/shared/AmountField'
+import type { Categoria, Moneda, Seccion, TipoMovimiento } from '@/lib/schema'
+import { cn } from '@/lib/utils'
 import { DateChipPicker } from '@/components/shared/DateChipPicker'
 import { SegmentedControl, type SegmentedControlOption } from '@/components/shared/SegmentedControl'
 import { TextField } from '@/components/shared/TextField'
 import { CategoryPicker, CategoryFormModal } from '@/features/tags'
+import { MovimientoAmountInput } from '@/features/movimientos/MovimientoAmountInput'
 import type { AmountErrorReason } from '@/features/movimientos/useMovimientoForm'
 
 // `as const` (not `Record<AmountErrorReason, string>`) so each value keeps
@@ -25,6 +27,7 @@ export interface MovimientoFormFieldsProps {
   onAmountChange: (raw: string) => void
   amountErrorReason?: AmountErrorReason
   amountInputRef?: Ref<HTMLInputElement>
+  moneda: Moneda
   fecha: string
   onFechaChange: (iso: string) => void
   categorias: Categoria[]
@@ -40,12 +43,17 @@ export interface MovimientoFormFieldsProps {
   disabled?: boolean
 }
 
+const NOTE_MAX_LENGTH = 40
+
 /**
  * The field set shared by the create sheet and the edit form (specs.md
- * §10.23 Decision 1) — presentational, driven entirely by
- * `useMovimientoForm`'s return value. The only local state it owns is the
- * "create category from query" modal's open/prefill, which is a UI
- * concern, not form validation.
+ * §10.23 Decision 1, §10.41) — presentational, driven entirely by
+ * `useMovimientoForm`'s return value. Field order and layout follow
+ * `docs/ui/design-export-add-sheet.md` §2: type toggle, a centered date
+ * chip, the centered amount display, categories (fixed column + carousel),
+ * then the note field behind a "ver más" disclosure. The only local state
+ * this owns is that disclosure's open flag and the "create category from
+ * query" modal's open/prefill — both UI concerns, not form validation.
  *
  * Deliberately renders no scan/voice button (Decision 5) — the seam for
  * stage 3 is `useMovimientoForm`'s `applyParsedFields`, not a stub here.
@@ -57,6 +65,7 @@ export const MovimientoFormFields = ({
   onAmountChange,
   amountErrorReason,
   amountInputRef,
+  moneda,
   fecha,
   onFechaChange,
   categorias,
@@ -75,6 +84,7 @@ export const MovimientoFormFields = ({
   const [createCategory, setCreateCategory] = useState<{ open: boolean; initialName?: string }>({
     open: false,
   })
+  const [showMore, setShowMore] = useState(false)
 
   const typeOptions: SegmentedControlOption<TipoMovimiento>[] = [
     { value: 'gasto', label: t('form.type.gasto') },
@@ -82,7 +92,7 @@ export const MovimientoFormFields = ({
   ]
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-5">
       <SegmentedControl
         options={typeOptions}
         value={tipo}
@@ -90,19 +100,7 @@ export const MovimientoFormFields = ({
         aria-label={t('form.typeAriaLabel')}
       />
 
-      <AmountField
-        label={t('form.amountLabel')}
-        value={amountRaw}
-        onChange={onAmountChange}
-        locale={locale}
-        error={amountErrorReason ? t(AMOUNT_ERROR_KEY[amountErrorReason]) : undefined}
-        disabled={disabled}
-        placeholder="0"
-        ref={amountInputRef}
-      />
-
-      <div className="flex flex-col gap-1.5">
-        <span className="text-xs font-bold text-fg-tertiary">{t('form.dateLabel')}</span>
+      <div className="flex justify-center">
         <DateChipPicker
           value={fecha}
           onChange={onFechaChange}
@@ -112,8 +110,18 @@ export const MovimientoFormFields = ({
         />
       </div>
 
+      <MovimientoAmountInput
+        value={amountRaw}
+        onChange={onAmountChange}
+        locale={locale}
+        moneda={moneda}
+        tipo={tipo}
+        error={amountErrorReason ? t(AMOUNT_ERROR_KEY[amountErrorReason]) : undefined}
+        disabled={disabled}
+        ref={amountInputRef}
+      />
+
       <div className="flex flex-col gap-1.5">
-        <span className="text-xs font-bold text-fg-tertiary">{t('form.categoryLabel')}</span>
         <CategoryPicker
           categorias={categorias}
           tipo={tipo}
@@ -128,13 +136,31 @@ export const MovimientoFormFields = ({
         )}
       </div>
 
-      <TextField
-        label={t('form.noteLabel')}
-        value={nota}
-        onChange={onNotaChange}
-        placeholder={t('form.notePlaceholder')}
-        disabled={disabled}
-      />
+      <div className="flex flex-col items-center gap-1">
+        <button
+          type="button"
+          onClick={() => setShowMore((v) => !v)}
+          aria-expanded={showMore}
+          className="flex min-h-11 items-center gap-1.5 px-3 text-ms font-bold text-fg-tertiary"
+        >
+          {t(showMore ? 'form.showLessCta' : 'form.showMoreCta')}
+          <ChevronDown
+            className={cn('size-3 transition-transform', showMore && 'rotate-180')}
+            aria-hidden="true"
+          />
+        </button>
+        {showMore && (
+          <TextField
+            label={t('form.noteLabel')}
+            value={nota}
+            onChange={onNotaChange}
+            placeholder={t('form.notePlaceholder')}
+            maxLength={NOTE_MAX_LENGTH}
+            disabled={disabled}
+            containerClassName="w-full"
+          />
+        )}
+      </div>
 
       <CategoryFormModal
         open={createCategory.open}

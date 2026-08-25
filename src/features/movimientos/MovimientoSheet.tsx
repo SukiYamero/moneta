@@ -52,7 +52,12 @@ const MovimientoView = ({
   return (
     <div className="flex flex-col gap-5 pb-1">
       <h2 className="sr-only">{t('movimientos:view.heading')}</h2>
-      <div className="flex flex-col items-center gap-3 pt-2 text-center">
+      {/* No extra top padding here (specs.md §10.35/§10.41): every other
+          sheet opens directly on its first visible content with no added
+          `pt`, so this one shouldn't either — the `pt-2` this used to carry
+          was compensating for having no *visible* heading, not a real
+          spacing need, and started this sheet ~8px lower than the rest. */}
+      <div className="flex flex-col items-center gap-3 text-center">
         <IconAvatar icon={icon} tint={tint} size="lg" />
         <div className={`text-3xl font-extrabold ${amount.colorClass}`}>{amount.text}</div>
         <div className="text-base font-bold">{categoriaLabel}</div>
@@ -122,6 +127,7 @@ const MovimientoEditForm = ({
         amountRaw={form.amountRaw}
         onAmountChange={form.setAmountRaw}
         amountErrorReason={form.amountErrorReason}
+        moneda={monedaPrincipal}
         fecha={form.fecha}
         onFechaChange={form.setFecha}
         categorias={categorias}
