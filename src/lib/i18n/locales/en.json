@@ -397,11 +397,13 @@
           "notPositive": "The amount must be greater than zero"
         }
       },
-      "dateLabel": "Date",
-      "categoryLabel": "Category",
       "categoryError": "Choose a category",
       "noteLabel": "Description",
       "notePlaceholder": "Add a note (optional)",
+      "addCta": {
+        "gasto": "Add expense",
+        "ingreso": "Add income"
+      },
       "saveCta": "Save",
       "cancelCta": "Cancel",
       "showMoreCta": "More details",
