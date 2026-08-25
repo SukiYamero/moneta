@@ -102,67 +102,82 @@ export const BottomSheet = ({
   }
 
   return createPortal(
-    // `top`/`height` here override the `inset-0` class's top/bottom only
-    // while `viewportInset` is non-null (iOS panning the page, or any
-    // browser whose visual viewport has shrunk for the keyboard) — pinning
-    // this wrapper to the space actually visible instead of the full layout
-    // viewport `dvh` resolves against (specs.md §10.49). `undefined` values
-    // leave the class's `inset-0` in full effect, so the no-keyboard case is
-    // pixel-identical to before.
-    <div
-      className="fixed inset-0 z-50"
-      style={viewportInset ? { top: viewportInset.top, height: viewportInset.height } : undefined}
-    >
+    <>
+      {/* Always the full layout viewport, never clamped by `viewportInset`
+          below — a real iPhone showed `BottomNav` (also `fixed`, sharing
+          this `z-50`) through the strip a keyboard-shrunk visual viewport
+          leaves outside the corrected wrapper, because this backdrop used
+          to be nested *inside* that wrapper and shrank right along with it.
+          Dimming the whole screen unconditionally is what a backdrop is for
+          regardless of where the panel itself gets pinned (specs.md §10.49,
+          cross-track review). */}
       <div
         onClick={onClose}
-        className="absolute inset-0 animate-fade-in bg-black/55"
+        className="fixed inset-0 z-50 animate-fade-in bg-black/55"
         aria-hidden="true"
       />
+      {/* `top`/`height` here override the `inset-0` class's top/bottom only
+          while `viewportInset` is non-null (iOS panning the page, or any
+          browser whose visual viewport has shrunk for the keyboard) — pinning
+          the panel to the space actually visible instead of the full layout
+          viewport `dvh` resolves against (specs.md §10.49). `undefined` values
+          leave the class's `inset-0` in full effect, so the no-keyboard case is
+          pixel-identical to before. `pointer-events-none` (with `auto`
+          restored on the panel below) lets a tap that lands inside this box
+          but outside the panel fall through to the backdrop above instead of
+          being silently swallowed by an otherwise-invisible div. */}
       <div
-        ref={panelRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={labelledBy}
-        aria-label={ariaLabel}
-        tabIndex={-1}
-        style={{
-          transform: dragY ? `translateY(${dragY}px)` : undefined,
-          transitionDuration: dragging ? '0ms' : undefined,
-          // Clamps the panel to the same corrected space its wrapper now
-          // occupies — `max-h-[88dvh]` alone would still allow the sheet to
-          // grow taller than the keyboard-safe area and push its own top
-          // content (the gasto/ingreso toggle) back out of view.
-          maxHeight: viewportInset ? viewportInset.height * OVERLAY_MAX_HEIGHT_FRACTION : undefined,
-        }}
-        className={cn(
-          'absolute inset-x-0 bottom-0 flex max-h-[88dvh] flex-col rounded-t-5xl border-t border-border-subtle bg-card animate-sheet-up transition-transform duration-200 ease-out',
-          OVERLAY_PANEL_CLASS,
-          className,
-        )}
+        className="pointer-events-none fixed inset-0 z-50"
+        style={viewportInset ? { top: viewportInset.top, height: viewportInset.height } : undefined}
       >
-        {/* Fixed chrome — a sibling of the scrolling body below, not its
-            child, so dragging/scrolling the content never carries the
-            handle away with it (specs.md §10.35). */}
         <div
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={endDrag}
-          onPointerCancel={cancelDrag}
-          onLostPointerCapture={handleLostPointerCapture}
-          className="mt-2.5 mb-4.5 flex h-8 shrink-0 touch-none cursor-grab items-center justify-center active:cursor-grabbing"
+          ref={panelRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={labelledBy}
+          aria-label={ariaLabel}
+          tabIndex={-1}
+          style={{
+            transform: dragY ? `translateY(${dragY}px)` : undefined,
+            transitionDuration: dragging ? '0ms' : undefined,
+            // Clamps the panel to the same corrected space its wrapper now
+            // occupies — `max-h-[88dvh]` alone would still allow the sheet to
+            // grow taller than the keyboard-safe area and push its own top
+            // content (the gasto/ingreso toggle) back out of view.
+            maxHeight: viewportInset
+              ? viewportInset.height * OVERLAY_MAX_HEIGHT_FRACTION
+              : undefined,
+          }}
+          className={cn(
+            'pointer-events-auto absolute inset-x-0 bottom-0 flex max-h-[88dvh] flex-col rounded-t-5xl border-t border-border-subtle bg-card animate-sheet-up transition-transform duration-200 ease-out',
+            OVERLAY_PANEL_CLASS,
+            className,
+          )}
         >
-          <div className="h-1.25 w-9.5 rounded-full bg-border-strong" />
-        </div>
-        {/* `overscroll-y-contain`: a scroll-locked page (body `overflow:
-            hidden`, useOverlay.ts) still lets a touch drag past this box's
-            own scroll boundary chain into rubber-banding the page behind it
-            on iOS Safari — containing the overscroll here keeps that bounce
-            inside the sheet's own body instead of leaking to the backdrop. */}
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-5.5 pb-7">
-          {children}
+          {/* Fixed chrome — a sibling of the scrolling body below, not its
+              child, so dragging/scrolling the content never carries the
+              handle away with it (specs.md §10.35). */}
+          <div
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={endDrag}
+            onPointerCancel={cancelDrag}
+            onLostPointerCapture={handleLostPointerCapture}
+            className="mt-2.5 mb-4.5 flex h-8 shrink-0 touch-none cursor-grab items-center justify-center active:cursor-grabbing"
+          >
+            <div className="h-1.25 w-9.5 rounded-full bg-border-strong" />
+          </div>
+          {/* `overscroll-y-contain`: a scroll-locked page (body `overflow:
+              hidden`, useOverlay.ts) still lets a touch drag past this box's
+              own scroll boundary chain into rubber-banding the page behind it
+              on iOS Safari — containing the overscroll here keeps that bounce
+              inside the sheet's own body instead of leaking to the backdrop. */}
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-5.5 pb-7">
+            {children}
+          </div>
         </div>
       </div>
-    </div>,
+    </>,
     document.body,
   )
 }

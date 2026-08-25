@@ -127,5 +127,30 @@ describe('CenterModal', () => {
       expect(wrapper.style.height).toBe('350px')
       expect(dialog.style.maxHeight).toBe(`${350 * 0.88}px`)
     })
+
+    it('never shrinks the backdrop along with the keyboard-safe wrapper', () => {
+      // Same shared bug as BottomSheet's own regression test: the backdrop
+      // used to be nested inside the wrapper it now sits beside, so it
+      // shrank along with the keyboard-safe correction and let whatever
+      // sits behind (BottomNav included) show through the strip the
+      // wrapper no longer covers (cross-track review, specs.md §10.49).
+      const viewport = new FakeVisualViewport()
+      vi.stubGlobal('visualViewport', viewport)
+      render(<Harness open onClose={() => {}} />)
+
+      const dialog = screen.getByRole('dialog')
+      const wrapper = dialog.parentElement as HTMLElement
+      const backdrop = document.querySelector('[aria-hidden="true"]') as HTMLElement
+
+      act(() => {
+        viewport.offsetTop = 80
+        viewport.height = 350
+        viewport.dispatchEvent(new Event('resize'))
+      })
+
+      expect(wrapper.contains(backdrop)).toBe(false)
+      expect(backdrop.style.top).toBe('')
+      expect(backdrop.style.height).toBe('')
+    })
   })
 })
