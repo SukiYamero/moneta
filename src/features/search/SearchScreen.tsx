@@ -159,7 +159,7 @@ export const SearchScreen = () => {
   ])
 
   return (
-    <main className="flex min-h-full animate-fade-in flex-col px-5 pt-6">
+    <main className="flex min-h-full animate-fade-in flex-col px-5 pt-(--screen-inset-top)">
       <div className="flex items-center gap-3">
         <div className="min-w-0 flex-1">
           <h1 className="text-5xl font-extrabold tracking-tight text-balance">{t('title')}</h1>

@@ -37,7 +37,15 @@
       })()
     </script>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!-- maximum-scale/user-scalable disable pinch-zoom; touch-action:
+         manipulation in index.css disables double-tap-to-zoom — a
+         deliberate accessibility trade-off for a native-feel app whose
+         type scale is already rem-based and honors the system font size
+         (user decision, 2026-08-24; specs.md §10.34, §11). -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
     <meta name="description" content="Personal finance, stored in your own Google Drive." />
     <title>{{APP_NAME}}</title>
   </head>

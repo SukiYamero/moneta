@@ -40,7 +40,7 @@ export const Home = () => {
       : null
 
   return (
-    <main className="min-h-full px-5 pt-2 pb-1">
+    <main className="min-h-full px-5 pt-(--screen-inset-top) pb-1">
       <HomeHeader />
       <Link
         to="/search"

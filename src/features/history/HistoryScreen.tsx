@@ -104,7 +104,7 @@ export const HistoryScreen = () => {
   const weekBoundaryUnknown = scope === 'semana' && config === null
 
   return (
-    <main className="flex min-h-full animate-push-in flex-col pt-14">
+    <main className="flex min-h-full animate-push-in flex-col pt-(--screen-inset-top)">
       <h1 className="sr-only">{t('title')}</h1>
 
       <div className="flex items-center gap-2.5 px-5 pb-3.5">
