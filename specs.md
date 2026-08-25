@@ -3927,6 +3927,101 @@ default across restarts once both markers are set (today it never does — see
 "net finding" above) is a product question about §10.31/§10.33, not a defect
 in this track's own change.
 
+### 10.37.1 Track AJ-E, reviewed
+
+Review pass, 2026-08-24, in `moneta-worktrees/review-aj-e` cut from `main`
+right after AJ-E merged. Read-only for `authStore.ts`, `RequireAuth.tsx`,
+`ProfilesSection.tsx`, `AppShell.tsx`, `switchProfile.ts`; findings only.
+
+**The three factual clauses in the modal copy — each traced, not assumed.**
+
+1. _"Es un perfil aparte, solo en este dispositivo."_ CONFIRMED by reading
+   `continueAsGuest()` (`authStore.ts`): it calls `setActiveProfileId
+(DEFAULT_PROFILE_ID)`, a distinct profile/database from the lapsed
+   Google profile's own (§10.15 — one dexie database per profile). Nothing
+   in the guest path touches Drive or any sync mechanism.
+2. _"Tus datos de Google no se tocan."_ CONFIRMED — `continueAsGuest()`'s
+   only writes are `setActiveProfileId` and `markGuestUsed()`
+   (`deviceStore.ts`); neither reads nor writes the Google profile's
+   database.
+3. _"Puedes volver a ellos cuando quieras desde tu perfil."_ CONFIRMED by
+   tracing the full path, not by trusting the track's own report: `status
+=== 'guest'` renders `children` immediately in `RequireAuth.tsx` with no
+   further gating; `AppShell.tsx` mounts `ProfileSheet` unconditionally
+   (`profileOpen` is plain local state, not read from `authStore`);
+   `ProfilesSection.tsx` renders every profile from the registry via
+   `useProfiles()` with no filter on kind or on the current auth status;
+   `switchTo` → `switchProfile.ts`'s `switchToProfile()` has no status gate
+   either (§10.31 §3's own decision — the PIN gates opening the app, not
+   moving inside it). A guest genuinely reaches the lapsed Google profile
+   in the switcher and can rebind to it. The sentence is true.
+
+**Is anyone stranded? CONFIRMED, not just re-asserted.** Read
+`authStore.ts`'s `restore()` directly (not the track's paraphrase of it):
+`hasLoggedInBefore()` is checked first (line ~430); `hasUsedGuestBefore()`
+is only consulted in the branch where the account marker is `false`. So on
+a device with both markers set, cold restart always attempts the Google
+path first. Traced two outcomes, both real: silent re-auth succeeds (token
+happened to refresh) → straight to the Google profile; fails again → back
+to `ReturningUserScreen`, guest one tap away. Nobody loses data or gets
+walled off — the cost is re-tapping guest once per cold boot, a UX
+tradeoff already owned by §10.31/§10.33, not a defect in this change.
+
+**Does the dialog actually gate it? CONFIRMED.** `continueAsGuest()` is
+only reachable through `onConfirm`; the test suite exercises open-without-
+calling, confirm-calls-once, cancel-calls-never. Double-tap/race safety
+does not come from a `busy` flag on the dialog's own confirm button (there
+is none — same as every other `ConfirmDialog` call site in this codebase,
+e.g. `useSignOutConfirm`'s `confirmSignOut`) but from `authStore.ts`'s own
+`authGeneration` counter: `continueAsGuest()` bumps it on entry and gates
+its final `set()` on the snapshot still matching, so a second call (or a
+`login()` resolving underneath it) can race the writes but never lands a
+torn state — this is existing, correct `authStore` design, not something
+this track added or needs to add.
+
+**Findings, by category.**
+
+- _Redundancy (escalated, not applied)._ The guest button's Tailwind class
+  string in `ReturningUserScreen.tsx` is byte-for-byte identical to
+  `WelcomeScreen.tsx`'s own guest button. Two hand-maintained copies of one
+  control is exactly the shape this project's reviews exist to catch, and
+  the precedent for fixing it already exists in the same directory —
+  `GoogleSignInButton.tsx` was extracted for the identical reason on the
+  primary CTA. A `GuestSignInButton`-shaped extraction is warranted, not
+  reflexive. **Not applied here**: collapsing the duplication requires
+  editing `WelcomeScreen.tsx`, which is outside this review's file
+  ownership, and extracting a shared component used at only one of the two
+  call sites would add indirection without removing the duplication.
+  Recommend a small follow-up track, scoped to both files, do the
+  extraction.
+- _Better approach (escalated, not applied)._ `ConfirmDialog`'s confirm
+  button is hardcoded `variant="destructive"` (the component's own doc
+  comment calls it "delete-style"). Every other call site is an actual
+  delete; `IdentitySection`'s sign-out confirm was already a softer stretch
+  of that semantic, and this guest confirmation stretches it further — a
+  destructive/red CTA on an action that is, by this section's own copy,
+  reversible and non-destructive. Cosmetic, not a correctness bug, and
+  `ConfirmDialog.tsx` is outside this review's file ownership
+  (`src/components/shared/**`) — flagged for the operator rather than
+  changed here.
+- _Bugs found:_ none. The `RequireAuth.test.tsx` one-line edit is
+  mechanical and does not weaken the boot-flash regression: the test's real
+  assertion (`ReturningUserScreen`'s heading renders, never `WelcomeScreen`)
+  is untouched; only a now-incorrect "no guest button" line (guest is
+  legitimately present now) was swapped for a "no legal copy" check, which
+  captures the restriction that actually still holds.
+- _Locale parity:_ `es-AR`'s new `guestConfirm.description` uses "podés"
+  (voseo), consistent with the rest of that file's register (`Tenés`,
+  `Intentá`, `aceptás`) rather than `es`'s "puedes" pasted in unchanged.
+  `en`/`pt-BR` say the same three clauses, not merely something in the same
+  shape.
+
+**Verified:** `bun run check` green — 148 test files, 1583 tests, same 2
+pre-existing `react/only-export-components` warnings (`button.tsx`,
+`FirstSyncGate.tsx`) as `main`. No code changes were needed in this review;
+findings above are escalated rather than applied, per the file-ownership
+boundary this pass was given.
+
 ### Wave 3 — staging and dependencies
 
 Not everything runs in parallel. A track in a later stage is **blocked** until
