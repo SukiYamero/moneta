@@ -38,5 +38,6 @@ export {
   type SkeletonGroupProps,
 } from '@/components/shared/Skeleton'
 export { ScreenLoading, type ScreenLoadingProps } from '@/components/shared/ScreenLoading'
+export { ScreenHeader, type ScreenHeaderProps } from '@/components/shared/ScreenHeader'
 export { usePendingDelay, type UsePendingDelayOptions } from '@/components/shared/usePendingDelay'
 export { TextField, type TextFieldProps } from '@/components/shared/TextField'

@@ -60,6 +60,12 @@ export default defineConfig({
     environment: 'jsdom',
     globals: false,
     setupFiles: ['./src/test/setup.ts'],
-    css: false,
+    // `false` would mock every `.css` import to an empty string — including
+    // an explicit `?raw` request, which otherwise bypasses CSS processing
+    // entirely and should return the file's literal source text. Narrowly
+    // un-mocking just `index.css` is what lets `screenChrome.test.ts` pin
+    // the `--screen-inset-top` token's actual declaration (specs.md
+    // §10.34) instead of asserting against an empty string.
+    css: { include: [/index\.css/] },
   },
 })

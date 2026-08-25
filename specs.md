@@ -3992,6 +3992,132 @@ path itself (guest accounts have no PIN lock, §10.2.1, so `SecuritySection`
 never renders the entry point without a real signed-in session) was
 verified only via the unit suite and reasoning, not live in a browser.
 
+### 10.34 The shell standard — zoom, the welcome screen, and one top-inset token (Ajustes 1, Track AJ-A)
+
+Written 2026-08-24 from `docs/ajustes-1-plan.md`'s items 1–3 — the first real
+manual pass on a phone. Not a new feature; a standard for the app's shell so
+the third item's defect (four screens, four different top margins, no shared
+source of truth) cannot silently come back.
+
+- **Zoom is off, everywhere** (user decision, 2026-08-24; trade-off named
+  explicitly). `index.html`'s viewport now carries `maximum-scale=1.0,
+user-scalable=no` (kills pinch-zoom) and `index.css`'s `html` carries
+  `touch-action: manipulation` (kills double-tap-to-zoom — the one gesture
+  the viewport meta alone doesn't reach). **Accepted trade-off:** this also
+  removes the user's own zoom as an accessibility fallback. Justified because
+  the type scale is already `rem`-based and honors the system font size
+  instead (`AGENTS.md` § UI). The pre-existing comment above
+  `-webkit-tap-highlight-color: transparent` falsely claimed "no
+  double-tap-to-zoom flash" — that rule only ever removed the tap highlight.
+  Fixed by making the code true (adding the missing mechanism) rather than
+  softening the claim.
+- **The welcome screen's scroll was a structural bug, not a content-length
+  one — confirmed by reproduction, not just reasoned.** `WelcomeScreen`'s
+  root used `min-h-dvh` while sitting in normal flow inside `body`, which
+  unconditionally pads by `env(safe-area-inset-top/bottom)`. `min-h-dvh`
+  demands at least the _full raw viewport_ regardless of what `body`'s own
+  padding left available in its content box — so on any device with a
+  non-zero safe-area inset (any real notch or home indicator; **zero** in a
+  desktop browser or DevTools emulation, which is exactly why this wasn't
+  caught sooner), the screen is forced taller than the space `body` actually
+  gave it, and the whole page becomes scrollable by exactly the inset
+  amount. Reproduced directly (not just reasoned about) by injecting a
+  simulated `body { padding-top: 47px; padding-bottom: 34px }` in a running
+  browser: the untouched code overflowed by precisely the padding-top
+  amount; swapping `min-h-dvh` → `min-h-full` (resolving against the real
+  `html`/`body`/`#root` ancestor chain, all `height: 100%`, instead of the
+  raw viewport) removed it. Fixed in `WelcomeScreen.tsx` and, because it
+  mirrors `Home`'s geometry, in `PreContentSkeleton.tsx` too.
+  - A second, smaller, genuinely content-driven overflow remained even after
+    that fix, only in the worst realistic case (Spanish copy — the
+    default locale — plus an inline login-cancelled error, both showing at
+    once) at a ~360×640 viewport: about 32px over budget. Closed by tightening
+    three spacings that had slack (`WelcomeScreen`'s divider `my-6` → `my-3`,
+    its action-stack `pb-11` → `pb-8`, its hero `gap-6` → `gap-5`) — verified
+    to still fit with real margin even under a larger simulated inset
+    (59px + 34px). §10.10's "generous separation" for the guest divider is
+    preserved qualitatively (still visibly wider than the plain `gap-4`
+    between every other stacked item), just no longer the widest value that
+    would fit — zero scroll now outranks the widest possible gap.
+  - **Not fixed here, flagged for the operator (CONFIRMED, not merely
+    reasoned):** the identical `min-h-dvh`-inside-padded-`body` pattern is
+    present in `src/routes/AppShell.tsx` — reproduced the same way, on the
+    real Home screen: the same simulated inset scrolled the whole app shell
+    (BottomNav included) by the same amount. Nine more files share the exact
+    same shape (`min-h-dvh` on a plain in-flow root, not a `fixed`/portaled
+    one, so not exempt the way `FullScreenPanel.tsx` is):
+    `AppErrorBoundary.tsx`, `RouteErrorFallback.tsx`,
+    `boot/BootErrorScreen.tsx`, `auth/DrivePermissionScreen.tsx`,
+    `auth/ReturningUserScreen.tsx`, `lock/LockScreen.tsx` (both branches),
+    `sync/DriveDownloadScreen.tsx`, `components/shared/ScreenLoading.tsx`.
+    None of these are this track's files to edit; the fix, if the operator
+    wants it, is the same one-line swap in each.
+- **The top-inset standard.** Measured on `main`: Home `pt-2` (8px) · Search
+  `pt-6` (24px) · History `pt-14` (56px) · Settings `pt-14` (56px) — no
+  shared token, no shared header component, and Home additionally sat at the
+  literal top edge in a browser (no notch to speak of) because `pt-2` was the
+  _entire_ clearance. **Chosen model:** one shared token,
+  `--screen-inset-top` (`src/styles/index.css`), applied as
+  `pt-(--screen-inset-top)` by every top-level screen; a screen with a
+  back-bar header (only `SettingsScreen` today — `HistoryScreen`'s own row is
+  period-navigation chevrons + a year menu, not a back button, so it keeps
+  its bespoke markup) renders its header as the first element _inside_ that
+  padded container, owning its own height, rather than the token trying to
+  encode "floor + header" as a second magic number. This is the model the
+  batch's own brief sketched, evaluated rather than assumed: the alternative
+  considered and rejected was **two tokens** (one inset for header-less
+  screens, a taller one for header-having ones) — rejected because it still
+  leaves two hand-typed numbers with no relationship to each other, exactly
+  the shape this fix exists to eliminate, versus one number plus a component
+  that owns its own height composing cleanly with any future screen
+  regardless of whether it has a header.
+  - `--screen-inset-top: max(calc(1.5rem - env(safe-area-inset-top)), 0rem)`.
+    Not `max(1.5rem, env(safe-area-inset-top))`: `body` already contributes
+    `env(safe-area-inset-top)` once, unconditionally, to every screen in
+    normal flow (the same mechanism the scroll bug above turns on) — folding
+    it into this token _again_ via a bare `max()` would double-count it on a
+    real notched device. This expression instead **tops up** to a 1.5rem
+    floor above whatever `body` already gave, landing at exactly 1.5rem
+    where the ambient inset is `0` (browser chrome) and contributing nothing
+    more where the ambient inset already clears the floor (a real notch).
+    1.5rem was chosen because it's Search's own pre-existing `pt-6` — already
+    a value the design used for a header-less screen, not a new invented
+    number.
+  - Net effect: Home gains clearance (8px → 24px, fixing the top-edge
+    complaint), Search is unchanged, History/Settings lose 32px of
+    unexplained empty space above their header row (56px → 24px before the
+    row's own height).
+  - New shared primitive: `src/components/shared/ScreenHeader.tsx` (`title`,
+    `onBack`, `backLabel`, optional `titleId`) — `SettingsScreen.tsx`'s first
+    consumer. `src/features/lock/LockSettings.tsx` renders the
+    byte-identical back+title row independently (confirmed by reading it)
+    and is not migrated here — outside this track's file ownership, flagged
+    for the operator/whoever owns `src/features/lock/**`.
+  - **Test, and its honest scope:** `src/styles/screenChrome.test.ts` pins
+    the standard as a source-text check (`?raw` imports, the
+    `themeBootScript.test.ts` pattern) — it asserts the token is defined
+    with the required shape (a `max()`, a floor, `env(safe-area-inset-top)`
+    present) and that every screen's source still contains
+    `pt-(--screen-inset-top)` rather than a reverted hardcoded value. It
+    **proves** a future edit that quietly reverts one screen to `pt-2`/
+    `pt-6`/`pt-14` fails immediately. It does **not** prove the token
+    resolves to the correct pixel value in a real browser or that the four
+    screens visually line up — `jsdom` doesn't evaluate CSS custom
+    properties or `env()`; that was checked directly in a running browser
+    instead (`bun run dev`, 390×844 and 360×640, plus a simulated
+    `body` safe-area inset for the notched-device case neither viewport
+    alone exercises).
+  - `vite.config.ts`'s `test.css` was narrowed from `false` to
+    `{ include: [/index\.css/] }` — `false` mocks every `.css` import,
+    including an explicit `?raw` one, to an empty string, which made the
+    token assertion above meaningless until this change. Scoped to just
+    `index.css` so no other test's CSS handling changes.
+
+**Done when:** pinch/double-tap zoom off; the welcome screen doesn't scroll
+at any size in the ~360–430px × ~640px+ range, including with an inline
+error showing; Home/Search/History/Settings/PreContentSkeleton share
+`--screen-inset-top`; `bun run check` green.
+
 ## 11. Decisions log
 
 - 2026-06-25 — Package manager: **bun**. Node: **24 LTS** (`.nvmrc`).
@@ -7769,6 +7895,13 @@ authStore`), caught by a batch of test files failing on
     143/1,518 — 2 new files, 26 new tests: `adoption.test.ts`'s 8,
     `GuestAdoptionPrompt.test.tsx`'s 7, plus `authStore.test.ts`'s 9 new
     login/accept/decline cases and 2 new `RequireAuth.test.tsx` cases).
+- 2026-08-24 — **Zoom off, everywhere (user decision, Ajustes 1 Track AJ-A,
+  §10.34).** Pinch-zoom and double-tap-zoom both disabled app-wide
+  (`index.html` viewport `maximum-scale`/`user-scalable`, `index.css`
+  `touch-action: manipulation`). Accepted trade-off, named explicitly: this
+  removes the user's own zoom as an accessibility fallback. Justified
+  because the type scale is already `rem`-based and honors the system font
+  size instead.
 
 ### 2026-08-24 — the two parked artboards, and a design export nobody diffs
 
@@ -7815,6 +7948,32 @@ was in until a user held the running app. Filed to §12, not fixed here.
   item 11. It works; the user does not like its placement or presentation, and
   the design export contains no biometric UI to fall back on. Waiting on the
   user to say what is wrong before any track touches it.
+- **`min-h-dvh` inside the safe-area-padded `body` overflows the page on any
+  real notched/home-indicator device — confirmed by reproduction, not just
+  reasoned (Ajustes 1, Track AJ-A, 2026-08-24; full reasoning in §10.34).**
+  `body` unconditionally pads by `env(safe-area-inset-top/bottom)`
+  (`src/styles/index.css`); an element in normal flow inside it that uses
+  `min-h-dvh` demands the _full raw viewport_ regardless of what that
+  padding left available, forcing the whole page to become scrollable by
+  exactly the inset amount — invisible in a desktop browser or DevTools
+  emulation, where the inset is `0`, which is why this had gone unnoticed.
+  Reproduced directly in a running browser (injected
+  `body { padding-top: 47px; padding-bottom: 34px }`) on both
+  `WelcomeScreen` (fixed, this track) and, unfixed, `src/routes/AppShell.tsx`
+  — the real Home screen, BottomNav included, scrolled as one unit by
+  exactly the injected inset. Nine more files share the identical shape (a
+  plain in-flow `min-h-dvh` root, not `fixed`/portaled the way
+  `FullScreenPanel.tsx` is, which is why that one file is _not_ on this
+  list): `AppErrorBoundary.tsx`, `RouteErrorFallback.tsx`,
+  `features/boot/BootErrorScreen.tsx`, `features/auth/DrivePermissionScreen.tsx`,
+  `features/auth/ReturningUserScreen.tsx`, `features/lock/LockScreen.tsx`
+  (both branches), `features/sync/DriveDownloadScreen.tsx`,
+  `components/shared/ScreenLoading.tsx`. The fix, where wanted, is the same
+  one-line swap used here: `min-h-dvh` → `min-h-full` (resolves against the
+  real `html`/`body`/`#root` ancestor chain — all `height: 100%` — instead
+  of the raw viewport, so it can never demand more room than `body`'s own
+  padded content box actually has). Not fixed in this batch: every listed
+  file is outside Track AJ-A's file ownership.
 
 - ✅ **CLOSED 2026-08-21 — operator decision + implementation, full
   reasoning in §11 ("The §12 adoption-resume gap closed").** Resuming an

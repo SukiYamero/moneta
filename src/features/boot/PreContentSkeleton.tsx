@@ -26,11 +26,24 @@ const noop = () => {}
  * in the meantime) — and the Add/Profile buttons are wired to `noop` since
  * their sheets need feature state this span doesn't have. `inert` keeps
  * both non-interactive without a different visual treatment.
+ *
+ * `min-h-full`, not `min-h-dvh` (specs.md §10.34): `body` already pads by
+ * `env(safe-area-inset-top/bottom)`, so a `min-h-dvh` root here would be
+ * forced to at least the full viewport height while sitting inside a
+ * `body` content box already shrunk by that same inset — overflowing it
+ * by exactly the inset amount on any real notched/home-indicator device
+ * (invisible in browser chrome, where the inset is `0`, which is why nobody
+ * had seen it). `min-h-full` resolves against the real ancestor chain
+ * (`html`/`body`/`#root` are all `height: 100%`) instead of the raw
+ * viewport, so it can never demand more room than `body`'s own padded
+ * content box actually has. `AppShell.tsx` has the identical `min-h-dvh`
+ * root and is very likely subject to the same bug — flagged for the
+ * operator, not fixed here (outside this track's file ownership).
  */
 export const PreContentSkeleton = () => (
-  <div className="relative flex min-h-dvh flex-col bg-background text-foreground">
+  <div className="relative flex min-h-full flex-col bg-background text-foreground">
     <div className="flex-1 overflow-y-auto pb-(--bottom-nav-clearance)">
-      <main className="min-h-full px-5 pt-2 pb-1">
+      <main className="min-h-full px-5 pt-(--screen-inset-top) pb-1">
         <HomeLoadingState />
       </main>
     </div>

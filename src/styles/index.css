@@ -17,10 +17,20 @@ body {
     env(safe-area-inset-left);
 }
 
-/* Native-app feel: no double-tap-to-zoom flash, no callout menus on
-   long-press, no visible tap highlight — see AGENTS.md § UI. */
+/* Native-app feel, no visible tap highlight — see AGENTS.md § UI. */
 * {
   -webkit-tap-highlight-color: transparent;
+}
+
+/* Zoom is off everywhere (user decision, 2026-08-24; specs.md §10.34, §11):
+   this pairs with index.html's viewport `maximum-scale`/`user-scalable`
+   (which disables pinch-zoom) to also disable double-tap-to-zoom — the one
+   gesture the viewport meta alone doesn't reach. Accepted trade-off: this
+   also removes the user's own zoom as an accessibility fallback, justified
+   because the type scale is already rem-based and honors the system font
+   size instead. */
+html {
+  touch-action: manipulation;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -138,6 +148,17 @@ body {
      grows the bar instead of squeezing its icons. */
   --bottom-nav-height: 6rem;
   --bottom-nav-clearance: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom));
+
+  /* The one top-inset every top-level screen shares (specs.md §10.34):
+     where a screen's content — or, for a screen with a header row, that
+     row itself — starts. `body`'s own padding (below) already contributes
+     `env(safe-area-inset-top)` once, unconditionally, to everything in
+     normal flow; this tops that up to a 1.5rem floor rather than adding
+     the same inset a second time, so it is correct both where the inset is
+     `0` (browser chrome) and where it's a real notch (a device where the
+     ambient inset already clears the floor contributes nothing more
+     here). A screen opts in with `pt-(--screen-inset-top)`. */
+  --screen-inset-top: max(calc(1.5rem - env(safe-area-inset-top)), 0rem);
 
   /* Easing — the "native sheet" curve used for every sheet/push/pop
      transition in the design. This is what makes it feel native, not web. */

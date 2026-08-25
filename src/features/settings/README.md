@@ -7,8 +7,10 @@ writable rows. Wrapped in `RequireAuth` and code-split at the router level
 no `BottomNav` and its own unmount is what closes the Profile sheet that
 opened it (no explicit close callback needed).
 
-- `SettingsScreen.tsx` — the route's content: back button + title, then the
-  two sections below. Owns `dataStore.load()`/loading/error handling itself
+- `SettingsScreen.tsx` — the route's content: `src/components/shared/ScreenHeader.tsx`
+  (back button + title, shared with any future back-bar screen — `specs.md`
+  §10.34), then the two sections below. Owns `dataStore.load()`/loading/error
+  handling itself
   (Tier 2 skeleton, `InlineErrorState` + retry) rather than assuming
   `Config` is already resolved — usually true (Home is the index route) but
   not guaranteed for a direct/deep link. Wraps each section in its own

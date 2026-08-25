@@ -120,6 +120,34 @@ arbitrary value (`gap-[7px]`) for a one-off. If the same odd spacing value
 turns out to recur as a deliberate rhythm (not coincidence) across many
 components, that's a signal to add a named token then — not before.
 
+## Screen layout constants — the exception to "not centralized"
+
+Two values are layout constants a _screen_, not a component, must agree with
+its siblings on — the opposite case from the spacing rule above, which is
+about per-component one-offs:
+
+- `--bottom-nav-height` / `--bottom-nav-clearance` — the tab bar's own height
+  and the clearance any scrollable content under it needs (specs.md §10.x,
+  Wave 2). Every screen and the `Toaster` size off the same token so a
+  change to the bar's height propagates everywhere at once.
+- `--screen-inset-top` (specs.md §10.34, Ajustes 1 Track AJ-A) — the one gap
+  between the safe area and the first pixel of any top-level screen's
+  content (or its header row, for a screen that has one). Measured on `main`
+  before this fix: Home `pt-2` (8px), Search `pt-6` (24px), History/Settings
+  `pt-14` (56px) — four hand-typed values with no relationship to each
+  other, which is exactly what let them drift apart in the first place.
+  `max(calc(1.5rem - env(safe-area-inset-top)), 0rem)`: **tops up** to a
+  1.5rem floor above whatever `body`'s own blanket
+  `env(safe-area-inset-top)` padding already contributed, rather than
+  re-adding that inset a second time (`body` already gives it to every
+  screen in normal flow, unconditionally) — a bare `max(1.5rem,
+env(safe-area-inset-top))` here would double-count it on a real notch.
+  1.5rem is Search's own pre-existing value, not an invented number. A
+  screen with a back-bar header (`src/components/shared/ScreenHeader.tsx`)
+  renders that header as the first element _inside_ the token's padding,
+  owning its own height, rather than encoding "inset + header" as a second
+  magic number per screen.
+
 ## Icons: Lucide, not Phosphor
 
 The design's canvas uses Phosphor icons loaded from an `unpkg.com` CDN —

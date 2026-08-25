@@ -1,10 +1,15 @@
 import { useEffect } from 'react'
-import { ChevronLeft } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
 import { useDataStore } from '@/lib/dataStore'
 import { repoErrorCopyKey } from '@/lib/errorCopy'
-import { InlineErrorState, Skeleton, SkeletonGroup, usePendingDelay } from '@/components/shared'
+import {
+  InlineErrorState,
+  ScreenHeader,
+  Skeleton,
+  SkeletonGroup,
+  usePendingDelay,
+} from '@/components/shared'
 import { CategoriesSection } from '@/features/settings/CategoriesSection'
 import { PreferencesEditor } from '@/features/settings/PreferencesEditor'
 
@@ -36,20 +41,12 @@ export const SettingsScreen = () => {
   const showLoading = usePendingDelay(isPending)
 
   return (
-    <main className="flex min-h-full animate-push-in flex-col pt-14">
-      <div className="flex items-center gap-2.5 px-5 pb-3.5">
-        <button
-          type="button"
-          onClick={() => navigate(-1)}
-          aria-label={t('settings:back')}
-          className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg bg-secondary text-foreground"
-        >
-          <ChevronLeft className="size-4" />
-        </button>
-        <h1 className="min-w-0 flex-1 truncate text-xl font-extrabold tracking-tight">
-          {t('settings:title')}
-        </h1>
-      </div>
+    <main className="flex min-h-full animate-push-in flex-col pt-(--screen-inset-top)">
+      <ScreenHeader
+        title={t('settings:title')}
+        onBack={() => navigate(-1)}
+        backLabel={t('settings:back')}
+      />
 
       <div className="flex flex-1 flex-col gap-6 px-5 pb-8">
         {showLoading ? (
