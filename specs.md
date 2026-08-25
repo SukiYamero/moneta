@@ -4252,6 +4252,91 @@ at any size in the ~360–430px × ~640px+ range, including with an inline
 error showing; Home/Search/History/Settings/PreContentSkeleton share
 `--screen-inset-top`; `bun run check` green.
 
+#### 10.34.1 Review pass (Track review-aj-a)
+
+Reviewed against `AGENTS.md` § Review protocol's four categories. No bugs,
+no redundancy needing a fix, no cost regression — nothing applied; two
+items escalated below. `bun run check`: 148 files, 1583 tests, the same 2
+pre-existing `react/only-export-components` warnings — unchanged from
+`main`.
+
+- **The token's `body`-coupling — CONFIRMED, reproduced, not just read.**
+  Traced every real consumer (`Home`, `SearchScreen`, `HistoryScreen`,
+  `SettingsScreen`, `PreContentSkeleton` — `ScreenHeader.tsx`'s own mention
+  is prose, not a class) up through `RequireAuth`/`BootGate`/
+  `FirstSyncGate`/`AppShell`/`router.tsx`: none render any DOM of their own
+  or sit in a `fixed`/portaled ancestor, so all six are genuine normal-flow
+  descendants of the padded `body`, exactly what the arithmetic assumes. In
+  a running browser (`bun run dev`, 390×844): with no simulated inset, Home
+  and Settings both measured exactly 24px (`1.5rem`) of top clearance, no
+  scroll — the zero-inset branch. With a simulated real notch (injecting
+  `body { padding-top: 47px; padding-bottom: 34px }` **and**, since JS
+  cannot fake `env()`, overriding `--screen-inset-top` directly to the
+  value its own `calc()` would produce under a real 47px inset — `0rem`,
+  since 47px already clears the 1.5rem floor — Home's content started at
+  exactly 47px from the top, not 71px: no double-count. The residual page
+  scroll under that same simulated inset reproduces the already-known,
+  already-flagged `AppShell.tsx` `min-h-dvh` bug (§12), not a new one — a
+  tenth `min-h-dvh` instance was searched for and not found:
+  `FullScreenPanel.tsx`'s own `min-h-dvh` is the one already-named exempt
+  case (`fixed inset-0`, not in-flow), not a miss.
+- **`vite.config.ts`'s `css.include` — cost measured, not assumed.**
+  Toggling it back to `css: false` breaks exactly the two tests the change
+  exists for and nothing else (147/148 files, 2 failures, both in
+  `screenChrome.test.ts`); the full-suite duration with it on (26–36s) and
+  off (24s) overlaps entirely within this machine's own run-to-run
+  variance — no measurable cost. Grepped for every import of
+  `styles/index.css`: only `main.tsx` (real import) and
+  `screenChrome.test.ts` (`?raw`) reference it, so no other test
+  transitively pays for real CSS processing. A `node:fs`-based alternative
+  that avoids touching `vite.config.ts` at all was considered and rejected:
+  `tsconfig.app.json`'s `types` is `["vite/client", "google.accounts"]`
+  only, deliberately excluding Node's ambient types under `src/`
+  (`themeBootScript.test.ts`'s own comment says why) — `node:fs` in a
+  colocated test wouldn't typecheck without widening that, which is a
+  bigger, more global change than the one actually made. The chosen
+  approach is the right one, not merely an acceptable one.
+- **Escalated, not fixed — `ScreenHeader`'s API was shaped around its only
+  caller.** Read `src/features/lock/LockSettings.tsx` as it stands today
+  (post-`FullScreenPanel` `header` prop, §10.35.1): its header row renders a
+  title **and** a subtitle (`settings.panelSubtitle`) in the same block;
+  `ScreenHeader.tsx` has no subtitle slot. Migrating that file to
+  `ScreenHeader` will need an API change (an optional `subtitle` prop, or a
+  `children` slot) before it fits a second consumer — not something to
+  pre-build speculatively here with no second caller yet exercising it
+  (`docs/ui/design-tokens.md`'s own "don't pre-invent a step used once"
+  reasoning applies the same way to a component prop). Whoever next touches
+  `src/features/lock/**` should decide the shape then, against the real
+  second call site.
+- **Escalated, not fixed — a second, differently-shaped "safe-top-inset"
+  expression exists in `FullScreenPanel.tsx`.** Its header/body padding use
+  a bare `max(1.5rem, env(safe-area-inset-top))` — correctly, because a
+  `fixed inset-0` panel gets none of `body`'s ambient padding for free, so
+  it must add the full inset itself rather than topping one up (using
+  `--screen-inset-top` there would be wrong, not just redundant — it would
+  silently undercount on a real notch). Not a bug, but it is a second
+  hand-typed "1.5rem safe-top" number with no named relationship to the
+  first, in a file outside this track's ownership — worth a named token
+  (e.g. `--overlay-inset-top`) the next time `FullScreenPanel.tsx` is
+  touched, not urgent enough to justify touching a read-only file for.
+- **The zoom trade-off's own justification — spot-checked, holds.** Grepped
+  every `text-[...]` arbitrary value and every inline `fontSize`/`font-size`
+  under `src/`: the only two arbitrary sizes in the whole tree
+  (`WelcomeScreen.tsx`'s `text-[2.125rem]`, `button.tsx`'s `text-[0.8rem]`)
+  are both `rem`, and no component sizes text in `px`. The "already
+  `rem`-based, honors system font size" claim in `index.html`/`index.css`/
+  §10.34/§11 is accurate as written, not just asserted.
+- **`screenChrome.test.ts`'s honesty — fine as scoped, not padding.** It is
+  a source-text pin, and says so in its own doc comment; that is the
+  correct shape for what `jsdom` can actually prove here, not a weaker
+  substitute for a real-browser check (which this pass also did,
+  separately, above).
+- **`HistoryScreen`'s bespoke header — not a miss.** It is chevrons +
+  centered title/subtitle + a year-menu trigger, structurally different
+  from `ScreenHeader`'s back-button + single-line-title row; forcing it
+  through `ScreenHeader` would need conditional slots for a component with
+  exactly one other caller. Leaving it bespoke, as AJ-A argued, is correct.
+
 ## 11. Decisions log
 
 - 2026-06-25 — Package manager: **bun**. Node: **24 LTS** (`.nvmrc`).
