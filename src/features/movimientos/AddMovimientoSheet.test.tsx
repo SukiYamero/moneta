@@ -182,7 +182,7 @@ describe('AddMovimientoSheet', () => {
 
       expect(screen.getAllByRole('dialog')).toHaveLength(1)
       expect(useMovimientoSheetStore.getState().addOpen).toBe(true)
-      expect(screen.getByRole('textbox', { name: /monto/i })).toHaveValue('5000')
+      expect(screen.getByRole('textbox', { name: /monto/i })).toHaveValue('5.000')
     })
 
     it('a second Escape, once the picker is gone, dismisses the Add sheet itself', async () => {
