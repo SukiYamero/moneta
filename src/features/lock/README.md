@@ -57,10 +57,12 @@ dev/test-harness layout.
     from "user cancelled" (privacy), which is why the platform check —
     not the assertion's own error — is what decides.
 - `LockSettings.tsx` — the account lock's full-screen settings panel
-  (`FullScreenPanel`, back-arrow header passed as the `header` prop — fixed
-  chrome, not scrolling content, specs.md §10.35.1), reached by tapping the
-  "Bloqueo con PIN" row in `src/features/profile/SecuritySection.tsx`. One
-  card: the "Pedir PIN al abrir" toggle (turning it on opens `PinSetup` in
+  (`FullScreenPanel`, `@/components/shared/ScreenHeader` — the same
+  primitive `SettingsScreen.tsx` uses, with its optional `subtitle` —
+  passed as the `header` prop: fixed chrome, not scrolling content,
+  specs.md §10.35.1), reached by tapping the "Bloqueo con PIN" row in
+  `src/features/profile/SecuritySection.tsx`. One card: the "Pedir PIN al
+  abrir" toggle (turning it on opens `PinSetup` in
   `'new'` mode; turning it off calls `lockStore.reset()` directly — the same
   action "Olvidé mi PIN" offers, matching the behavior the prior
   `/kit`-only harness already shipped and tested), plus "Cambiar PIN"
@@ -97,14 +99,20 @@ dev/test-harness layout.
   body — the same fixed-chrome/scrolling-body split `BottomSheet`'s grab
   handle needed, reported as this shell's own identical bug in `specs.md`
   §10.35 and fixed here in §10.35.1. The top safe-area inset
-  (`pt-[max(1.5rem,env(safe-area-inset-top))]`) travels with `header` so it
-  clears the notch regardless of how tall the body grows (falls back onto
-  the body itself if a future consumer passes no `header`); the bottom inset
-  stays on the body, same as `BottomSheet`'s `pb-7`. `LockSettings`/
-  `PinSetup` pass their header row via `header`, not as a first `children`
-  element — the split can't infer "this child is the header" the way
-  `BottomSheet`'s own handle (owned by the shell, never consumer content)
-  could.
+  (`pt-(--overlay-inset-top)`, `src/styles/index.css`) travels with `header`
+  so it clears the notch regardless of how tall the body grows (falls back
+  onto the body itself if a future consumer passes no `header`); the bottom
+  inset stays on the body (`pb-(--overlay-inset-bottom)`), same shape as
+  `BottomSheet`'s `pb-7`. Both tokens are a bare `max(1.5rem, env(...))` —
+  correct for a `fixed` panel, which gets none of `body`'s ambient
+  safe-area padding for free, unlike the in-flow `--screen-inset-top`
+  token (`specs.md` §10.34), which tops that padding up instead of adding
+  it again; named so the two "1.5rem clear of the notch" expressions read
+  as one relationship, not two files that happen to agree on a number.
+  `LockSettings`/`PinSetup` pass their header row via `header`, not as a
+  first `children` element — the split can't infer "this child is the
+  header" the way `BottomSheet`'s own handle (owned by the shell, never
+  consumer content) could.
 - `errorCopy.ts` — maps a raw `pinLock.ts`/`lockStore.ts` error message to a
   translation key in the `lock` namespace's `errors` group
   (`unlockErrorCopy`, `enableLockErrorCopy`) — never the raw message

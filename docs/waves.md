@@ -721,11 +721,22 @@ Check this table against `git worktree list` at the start of any parallel
 session; prune anything stale (merged-but-not-removed, or on disk but
 missing/finished here).
 
-| Path                                      | Branch                | Status                   |
-| ----------------------------------------- | --------------------- | ------------------------ |
-| `../moneta-worktrees/aj-a-shell-standard` | `aj-a-shell-standard` | active (Ajustes 1, AJ-A) |
-| `../moneta-worktrees/aj-e-return-guest`   | `aj-e-return-guest`   | active (Ajustes 1, AJ-E) |
-| `../moneta-worktrees/aj-f-pin-copy`       | `aj-f-pin-copy`       | active (Ajustes 1, AJ-F) |
+| Path                      | Branch | Status |
+| ------------------------- | ------ | ------ |
+| _(none — see note below)_ |        |        |
+
+**Pruned 2026-08-25 (cross-track review, `review-cross`):** AJ-A, AJ-E and
+AJ-F's rows (`aj-a-shell-standard`, `aj-e-return-guest`, `aj-f-pin-copy`) all
+claimed `active` against `git worktree list`/`git branch -a` showing neither
+the worktree directories nor the branches still existed — all three tracks
+had merged (`31411ff`, `67ce17a`, `ffd3118`) days earlier without their rows
+being removed. The same failure this table's own comment already names for
+AH (below), recurring three more times in the very next batch: the rule
+("prune the moment the track merges") isn't self-enforcing, only checked
+when a later session happens to look. Worth a process note past this one
+cleanup: this table has now needed an out-of-band prune twice — a track
+finishing its own work is evidently not a reliable trigger for also editing
+this file's status column.
 
 Wave 4.1 stage 1 (2026-08-20): AD, AE and AF each merged with its own review
 pass applied, plus an operator cross-track pass — every worktree removed. AH

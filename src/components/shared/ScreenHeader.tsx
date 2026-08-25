@@ -5,6 +5,7 @@ export interface ScreenHeaderProps {
   onBack: () => void
   backLabel: string
   titleId?: string
+  subtitle?: string
 }
 
 /**
@@ -13,12 +14,16 @@ export interface ScreenHeaderProps {
  * (specs.md §10.34) — the row owns its own height (the button's 44px touch
  * target plus its `pb-3.5`), so "where does content start" stays one
  * number (the token) with this as an element inside it, not a second
- * hand-typed inset. `SettingsScreen.tsx` is the first consumer;
- * `src/features/lock/LockSettings.tsx` renders the byte-identical row
- * independently (not migrated here — outside this track's file ownership,
- * flagged for the operator).
+ * hand-typed inset. `SettingsScreen.tsx` and `LockSettings.tsx` (which
+ * needs the optional `subtitle` line) are its two consumers.
  */
-export const ScreenHeader = ({ title, onBack, backLabel, titleId }: ScreenHeaderProps) => (
+export const ScreenHeader = ({
+  title,
+  onBack,
+  backLabel,
+  titleId,
+  subtitle,
+}: ScreenHeaderProps) => (
   <div className="flex items-center gap-2.5 px-5 pb-3.5">
     <button
       type="button"
@@ -28,8 +33,11 @@ export const ScreenHeader = ({ title, onBack, backLabel, titleId }: ScreenHeader
     >
       <ChevronLeft className="size-4" />
     </button>
-    <h1 id={titleId} className="min-w-0 flex-1 truncate text-xl font-extrabold tracking-tight">
-      {title}
-    </h1>
+    <div className="min-w-0 flex-1">
+      <h1 id={titleId} className="truncate text-xl font-extrabold tracking-tight">
+        {title}
+      </h1>
+      {subtitle && <p className="text-sm font-medium text-muted-foreground">{subtitle}</p>}
+    </div>
   </div>
 )

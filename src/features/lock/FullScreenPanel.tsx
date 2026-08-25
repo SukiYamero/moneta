@@ -57,17 +57,15 @@ export const FullScreenPanel = ({
         className,
       )}
     >
-      {header !== undefined && (
-        <div className="shrink-0 pt-[max(1.5rem,env(safe-area-inset-top))]">{header}</div>
-      )}
+      {header !== undefined && <div className="shrink-0 pt-(--overlay-inset-top)">{header}</div>}
       <div
         className={cn(
           // overscroll-y-contain: keep a touch drag past this box's own
           // scroll boundary from chaining into rubber-banding the (locked)
           // page behind it on iOS Safari — same reasoning as BottomSheet's
           // body (specs.md §10.35.1).
-          'flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-y-contain pb-[max(1.5rem,env(safe-area-inset-bottom))]',
-          header === undefined && 'pt-[max(1.5rem,env(safe-area-inset-top))]',
+          'flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-y-contain pb-(--overlay-inset-bottom)',
+          header === undefined && 'pt-(--overlay-inset-top)',
         )}
       >
         {children}

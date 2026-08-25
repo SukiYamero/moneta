@@ -42,7 +42,11 @@ fields (Decision 1):
   (shared, read-only for this track): that component's bordered/labelled
   `Input` has no adornment slot for an external currency-symbol sibling.
   Reuses `parseAmountForInput`/`formatAmountForInput` directly — same
-  parsing rule, new markup only. Colors its digits by `tipo`, mirroring
+  parsing rule, new markup only — and `isAmountInputInvalid` for its
+  `aria-invalid` check, shared with `AmountField.tsx` (both used to
+  re-derive that check independently from the same parser's result;
+  extracted into `amountFormat.ts` so the two can't drift, specs.md
+  §10.41.1/§12). Colors its digits by `tipo`, mirroring
   `movimientoView.ts`'s (unexported) `AMOUNT_COLOR_CLASS`. Uses
   `field-sizing: content` for the auto-width, with a `w-40` fallback
   overridden via `supports-[field-sizing:content]:w-auto` — **not** an
