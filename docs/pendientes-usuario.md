@@ -255,13 +255,24 @@ above the keyboard showed the app's canvas background plus the `+` FAB and
 the tab icons instead of the dimmed backdrop, because Track AJ3-B's
 keyboard fix clamped the backdrop along with the panel.
 
-**CONFIRMED by regression test** (both shells, each watched failing against
-the nested structure first). **Not confirmed on a device** — the same limit
-as items 13/15/16.
+**Still reported by the user a third time after §10.52's fix** — so Track
+AJ4-A (`specs.md` §10.53) made two further changes, neither trusting the
+same geometry reasoning a third time: the backdrop now overscans well past
+`inset-0` on every edge (uncoverable regardless of whether the pan/shrink
+model is exactly right), and `BottomNav` itself now hides
+(`opacity-0 pointer-events-none`, never unmounts) while _any_ overlay is
+open, discovered via the shared overlay stack rather than a check specific
+to the Add sheet — so even if the backdrop's geometry is still somehow
+wrong, there is nothing visible left underneath it to bleed through.
+
+**CONFIRMED by regression test** (both shells' overscan, `BottomNav`'s
+hide-and-refocus, each watched failing first). **Not confirmed on a
+device** — no iOS device is available in this environment, same limit as
+items 13/15/16.
 
 **The check:** on a real iPhone, open the Add sheet and raise the keyboard.
 Is everything behind the sheet uniformly dimmed, with no strip of app
-background, no `+` and no tab icons anywhere?
+background, no `+` and no tab icons anywhere — this time for good?
 
 ### 16. Does a blocked Add tap bring you to the field that blocked it? — `owner: user`
 
@@ -283,6 +294,34 @@ category picker? Then, separately: leave the amount as something invalid
 (e.g. just a decimal separator) with a category already picked, and tap Add
 — does the keyboard stay up with the amount field still focused and visible
 (not covered), rather than flickering or losing your place?
+
+### 19. Keeping the app in portrait — what actually locks, and the guard screen's design — `owner: user`
+
+Raised 2026-08-25, Track AJ4-A (`specs.md` §10.53), from "the app should
+never enter landscape." Built: `vite.config.ts`'s manifest already declared
+`orientation: 'portrait'` (pre-existing); a mobile-browser-tab fallback
+(`useIsLandscape`/`LandscapeGuard`) now blocks the screen with a minimal,
+deliberately provisional "rotate your phone" message when no real lock is
+possible. `screen.orientation.lock()` is not called anywhere — it only
+works fullscreen or installed on Chromium and isn't implemented by iOS
+Safari at all, so calling it would silently do nothing on the platform that
+most needs the fallback.
+
+Two things need you, not more engineering:
+
+- **You said you're designing this guard screen yourself** ("voy
+  trabajando en el diseño de esa pantalla"). What's shipped is intentionally
+  a placeholder (existing tokens, a generic icon, plain copy) — replace it
+  whenever your design is ready; the file to edit is
+  `src/components/shared/LandscapeGuard.tsx` alone.
+- **The device check, no agent here can run:** on your iPhone, install the
+  app to the home screen and try to rotate it to landscape — does it
+  actually stay in portrait, or does the screen rotate? Separately, on a
+  real mobile browser tab (not installed), rotate the phone — does the
+  "rotate your phone" message appear and go away correctly as you rotate
+  back? (Coverage note, not a question for you: that guard currently only
+  covers the three bottom-nav tabs, not the pre-auth/lock screens or
+  `/settings` — see `specs.md` §12.)
 
 ---
 

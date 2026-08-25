@@ -168,6 +168,7 @@ describe('BottomSheet', () => {
       const dialog = screen.getByRole('dialog')
       const wrapper = dialog.parentElement as HTMLElement
       const backdrop = document.querySelector('[aria-hidden="true"]') as HTMLElement
+      const backdropTopBeforeResize = backdrop.style.top
 
       act(() => {
         viewport.offsetTop = 120
@@ -175,9 +176,35 @@ describe('BottomSheet', () => {
         viewport.dispatchEvent(new Event('resize'))
       })
 
+      // The backdrop's own inline `top` (its static overscan, specs.md
+      // §10.53) is untouched by `viewportInset` — it never reads from the
+      // hook at all, so it cannot shrink or shift with it either.
       expect(wrapper.contains(backdrop)).toBe(false)
-      expect(backdrop.style.top).toBe('')
+      expect(backdrop.style.top).toBe(backdropTopBeforeResize)
       expect(backdrop.style.height).toBe('')
+    })
+  })
+
+  describe('backdrop overscan — uncoverable regardless of pan/shrink (specs.md §10.53)', () => {
+    // A plain `inset-0` box spans exactly the layout viewport per spec,
+    // which this repo's own reasoning says already contains any visible
+    // pan/shrink combination the keyboard causes on iOS — but that
+    // reasoning is unverified against a real device, and the backdrop has
+    // already needed two device-reported fixes for the same visible symptom
+    // (specs.md §10.49, §10.52). Overscanning the backdrop well beyond the
+    // viewport in every direction makes it uncoverable by any pan/shrink up
+    // to that margin without depending on which exact geometry model is
+    // right.
+    it('extends the backdrop past every edge of the layout viewport, not just inset-0', () => {
+      render(<Harness open onClose={() => {}} />)
+      const backdrop = document.querySelector('[aria-hidden="true"]') as HTMLElement
+
+      expect(backdrop.className).toMatch(/(^|\s)fixed(\s|$)/)
+      expect(backdrop.className).not.toMatch(/inset-0/)
+      expect(backdrop.style.top).toBe('-50dvh')
+      expect(backdrop.style.bottom).toBe('-50dvh')
+      expect(backdrop.style.left).toBe('-50dvw')
+      expect(backdrop.style.right).toBe('-50dvw')
     })
   })
 

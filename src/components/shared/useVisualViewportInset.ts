@@ -21,6 +21,24 @@ export const OVERLAY_MAX_HEIGHT_FRACTION = 0.88
  */
 const VIEWPORT_MATCH_TOLERANCE_PX = 1
 
+/**
+ * How far the overlay backdrop extends beyond the layout viewport's own
+ * edges, in each axis — insurance against `position: fixed`'s rendered box
+ * narrowing under a real device's keyboard-driven pan in a way this repo
+ * cannot reproduce or measure (no iOS device here). A plain `inset-0`
+ * backdrop already spans exactly the layout viewport per spec, which
+ * should contain any visible pan/shrink the keyboard causes — but that
+ * reasoning has already been wrong twice for this exact symptom (specs.md
+ * §10.49 nested the backdrop inside the clamped wrapper and it shrank with
+ * it; §10.52 un-nested it but left it exactly viewport-sized). Overscanning
+ * by half a viewport in every direction makes the backdrop uncoverable by
+ * any pan/shrink up to that margin without depending on which exact
+ * geometry model is right — half a screen is comfortably more than any
+ * real keyboard height (~35-40% of screen) or the pan it causes.
+ */
+export const OVERLAY_BACKDROP_OVERSCAN_BLOCK = '-50dvh'
+export const OVERLAY_BACKDROP_OVERSCAN_INLINE = '-50dvw'
+
 export interface VisualViewportInset {
   /**
    * Distance in px from the layout viewport's top edge to the visual

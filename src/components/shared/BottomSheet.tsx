@@ -7,6 +7,8 @@ import {
   type OverlayShellProps,
 } from '@/components/shared/useOverlay'
 import {
+  OVERLAY_BACKDROP_OVERSCAN_BLOCK,
+  OVERLAY_BACKDROP_OVERSCAN_INLINE,
   OVERLAY_MAX_HEIGHT_FRACTION,
   useVisualViewportInset,
 } from '@/components/shared/useVisualViewportInset'
@@ -110,10 +112,19 @@ export const BottomSheet = ({
           to be nested *inside* that wrapper and shrank right along with it.
           Dimming the whole screen unconditionally is what a backdrop is for
           regardless of where the panel itself gets pinned (specs.md §10.49,
-          cross-track review). */}
+          cross-track review). Overscanning past `inset-0` on every edge
+          (specs.md §10.53) removes the remaining dependency on `fixed`
+          rendering exactly the full layout viewport under a real device's
+          keyboard-driven pan — unverified from this repo twice already. */}
       <div
         onClick={onClose}
-        className="fixed inset-0 z-50 animate-fade-in bg-black/55"
+        style={{
+          top: OVERLAY_BACKDROP_OVERSCAN_BLOCK,
+          bottom: OVERLAY_BACKDROP_OVERSCAN_BLOCK,
+          left: OVERLAY_BACKDROP_OVERSCAN_INLINE,
+          right: OVERLAY_BACKDROP_OVERSCAN_INLINE,
+        }}
+        className="fixed z-50 animate-fade-in bg-black/55"
         aria-hidden="true"
       />
       {/* `top`/`height` here override the `inset-0` class's top/bottom only
