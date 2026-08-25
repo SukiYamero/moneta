@@ -18,10 +18,7 @@ export const ScreenLoading = ({ className }: ScreenLoadingProps = {}) => {
   const { t } = useTranslation('common')
 
   return (
-    // `min-h-full`, not `min-h-dvh`: `body` pads unconditionally by
-    // `env(safe-area-inset-*)`, so an in-flow `min-h-dvh` root demands the raw
-    // viewport on top of that and overflows by exactly the inset on a real
-    // notch/home indicator (specs.md §10.34, §10.39).
+    // `min-h-full`, not `min-h-dvh`: overflows body's safe-area padding (specs.md §10.39).
     <div
       className={cn(
         'flex min-h-full flex-col items-center justify-center gap-6 bg-background px-8 text-center text-foreground',
