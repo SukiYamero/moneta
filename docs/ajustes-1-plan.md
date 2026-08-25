@@ -260,3 +260,50 @@ hand-maintained copies of one control is the shape this project's most
 valuable review findings have taken.
 
 Blocked until AJ-A's review pass releases `WelcomeScreen.tsx`.
+
+## 11. Batch closed — 2026-08-25
+
+Eleven tracks, each with its own review pass, plus the cross-track pass
+`AGENTS.md` § Review protocol item 6 requires. `main` green at every merge;
+final state **152 test files, 1618 tests**, with the same two pre-existing
+`react/only-export-components` warnings the batch started with.
+
+Beyond AJ-A through AJ-J: **AJ-I** (a storage read failure that could talk a
+person into deleting a live profile) and the final cross-track pass, neither
+of which was in the original plan. Both came from a review escalating
+something outside its own scope.
+
+### The number worth keeping
+
+**Four of the batch's five most serious defects were found by a track doing
+something else.**
+
+- AJ-A found `AppShell`'s safe-area overflow while standardising top margins.
+- AJ-B found the identical shape in the lock panels while fixing a grab handle.
+- AJ-E's review found `ConfirmDialog` painting harmless actions as deletes.
+- AJ-H's review found `readOwnerMarker`'s conflation, the one that could cost
+  a profile.
+- And AJ-J, sent to pick between two CSS values, found that the shell's middle
+  pane had never scrolled independently at all — the file's own comment had
+  claimed it did since the day it was written.
+
+None of these was in any brief. What they have in common is that each lives in
+a **seam**: between a stylesheet and a component, between a component and its
+twin in another folder, between a lib function and the UI that acts on its
+return value. A reviewer scoped to one track cannot see a seam by
+construction, and neither can a test suite that was written against the same
+misunderstanding as the code.
+
+The practical consequence, and it is the batch's main process finding: **the
+per-track review protocol is necessary and is not sufficient.** The cross-track
+pass is not a formality at the end — in this batch it found a fifth instance
+(`PreContentSkeleton`) of a shape a track had just fixed, and corrected two
+claims earlier commits had made about their own completeness.
+
+### Still the user's, and unchanged by any of this
+
+`docs/pendientes-usuario.md` items 4, 5, 6, 8, 10, 11 and the new 12 (what the
+Add sheet's gear button should do). Two things this batch changed **cannot be
+verified on a desktop at all** — the URL-bar transition and the software
+keyboard against the new fixed-height shell. Chromium on a laptop cannot show
+either; they need a real phone.
