@@ -140,3 +140,61 @@ copy AJ-B's grabber split.
 Its `pt-[max(1.5rem,env(safe-area-inset-top))]` is a candidate for whatever
 token AJ-A lands. Deliberately **not** reconciled inside either track — that
 belongs to the cross-track pass, or the two of them race on the same value.
+
+## 8. Two items added mid-batch by the user (2026-08-24)
+
+### AJ-E — the returning screen's second action, take two
+
+Track AJ-D removed the redundant button and rejected "continue as guest" on
+§10.21's own prohibition. **The user overruled that, with information AJ-D did
+not have:** Google's sign-in already opens the account chooser by default, so a
+"use another account" button really is redundant — what belongs in that slot is
+an escape hatch for someone who does not want to sign in again, behind a modal
+that says plainly that the account's data will not be there in guest mode.
+
+`specs.md` outranks the code; it does not outrank the person who wrote it. So
+§10.21's prohibition is **amended in an append-only §10.37**, not circumvented.
+
+The risk the track was told to find before writing any copy: this screen only
+renders for a device holding a Google profile with real data, and guest mode is
+a separate database (§10.15) that §10.33 makes persistent. If the way back —
+the profile switcher (§10.31) — is not reachable or not discoverable, the button
+strands people and no modal wording fixes that.
+
+### AJ-F — "Olvidé mi PIN" describes a deletion that does not happen
+
+Raised by the user as a wording complaint: the dialog talks about deleting data
+and it frightens them. **Traced by the operator, and the copy is not merely
+scary — it appears to be false.** Current `es` copy:
+
+> title: "¿Restablecer el acceso?"
+> description: "Sin el PIN no podemos abrir los datos de este dispositivo: **se
+> van a borrar** y vas a tener que iniciar sesión de nuevo."
+> confirm: "**Borrar y salir**"
+
+What the code actually does, read end to end:
+
+- `LockScreen.confirmForgot` → `lockStore.reset()` → `resetVault()` +
+  `authStore.logout()`.
+- `resetVault()` (`src/lib/pinLock.ts`) deletes the **token vault row**, the
+  "has logged in before" marker and the persisted Drive decision. Nothing else.
+- `logout()` (`src/lib/authStore.ts`) resets in-memory auth state, clears the
+  Drive decision, invalidates the vault and the boot state. **It touches no
+  financial data.**
+- The movements live in the profile's own Dexie database (§10.15) and survive.
+
+There is also a second false claim in the same sentence: "sin el PIN no podemos
+abrir los datos" implies the local data is encrypted at rest. **It is not** —
+§10.2 put encrypting the local financial cache explicitly out of scope, and the
+PIN wraps the cached _token_, not the data. This is recorded in
+`docs/pendientes-usuario.md` item 9's closing note.
+
+So the honest fix is not gentler wording, it is **true** wording — which happens
+to be shorter and less frightening, which is what the user wanted. The track
+must also verify the claim in the other direction before writing anything: does
+signing back in with the same Google account actually return the person to the
+same profile and its data (§10.15/§10.31)? If it does not, the current copy is
+accidentally right and the _behaviour_ is the bug.
+
+**Blocked** until AJ-B's review pass releases `src/features/lock/**`, which it
+currently holds for the `FullScreenPanel` fix.
