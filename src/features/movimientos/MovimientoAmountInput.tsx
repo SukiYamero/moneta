@@ -46,11 +46,9 @@ const currencySymbolFor = (moneda: Moneda, locale: string): string => {
  * `field-sizing: content` (Baseline 2024, Chromium/Safari; not yet in
  * Firefox) is the one raw value the design export is worth lifting as-is —
  * the only sane way to get an auto-width centered numeric display without
- * measuring text in JS. `w-40` is the graceful fallback: a browser that
- * ignores `field-sizing` just renders a fixed, comfortably-sized field
- * instead of the browser's ~20-character default input width; one that
- * supports it ignores `w-40` and sizes to the typed content, `min-w-12`/
- * `max-w-full` still bounding it either way.
+ * measuring text in JS. `w-40` is the fallback width for an engine that
+ * ignores it; a supporting engine gets `w-auto` back through the explicit
+ * `supports-[…]` override below, never implicitly — see that comment.
  */
 export const MovimientoAmountInput = ({
   value,
