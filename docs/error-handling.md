@@ -286,6 +286,47 @@ ask "is this actually the caller's requested case, or did I just fail to
 answer the question and pick the shape that compiles?" If it's the latter,
 throw.
 
+### 4.1 A swallow is justified by its caller, never by its neighbours
+
+Added 2026-08-25, from the third instance of this shape in one folder.
+
+`readOwnerMarker()` self-caught a rejected IndexedDB read and returned
+`undefined` — the same value it returns for a database that genuinely carries
+no marker. Its doc comment defended that choice explicitly: the conflation
+"matches every other read in this module family."
+
+**It did match, and it was still wrong.** The registry's other reads degrade
+into a convenience — a recency fallback, an empty list — where a wrong answer
+costs a retry. This one fed `switchToProfile`'s `if (!marker) return
+{ outcome: 'profile-database-gone' }`, which drove a dialog telling a person
+their data was gone, whose confirm deleted the only pointer to a database that
+was still perfectly intact. Nothing in the app enumerates IndexedDB databases,
+so that is unrecoverable.
+
+The rule, and it generalises past this file:
+
+> **What makes a swallow safe is what the caller does with the degraded value,
+> not whether the surrounding code looks the same.** Before you catch, name the
+> consumer and the worst decision it can make on the value you are about to
+> return. "Every other read here does it" is not an argument — it is a
+> restatement of the fact that nobody checked.
+
+Two related instances were fixed on 2026-08-21 (`switchToProfile` reporting a
+success it had not earned, `countGuestMovements` hiding a storage failure as
+zero, commit `2713a42`). This third one sat in the same folder and survived
+that sweep because the review that ran it checked a **different** property of
+the same function — its isolation from `schema.ts` and sync — and found that
+solid. Checking one property of a function is not checking the function.
+
+The fix shape, for reference: the reader stops catching, so `undefined` means
+only "absent"; the **decision site** catches once and returns a distinct
+outcome (`'switch-check-failed'`) the caller cannot mistake for "gone"; the UI
+routes it to an ordinary "that didn't happen, try again", never the
+irreversible path. `ensureOwnerMarker`'s write-side swallow was judged in the
+same pass and deliberately kept — provenance, never a decision input, and
+retried by every future bind. Same file, opposite verdict, because the callers
+differ.
+
 ## 5. `cause` chaining, messages, and secrets
 
 Use the native `ErrorOptions`/`{ cause }` (ES2022, already the pattern in
