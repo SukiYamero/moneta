@@ -721,16 +721,24 @@ Check this table against `git worktree list` at the start of any parallel
 session; prune anything stale (merged-but-not-removed, or on disk but
 missing/finished here).
 
-| Path                                      | Branch                | Status                    |
-| ----------------------------------------- | --------------------- | ------------------------- |
-| `../moneta-worktrees/review-ah`           | `review-ah`           | active (AH's review pass) |
-| `../moneta-worktrees/aj-a-shell-standard` | `aj-a-shell-standard` | active (Ajustes 1, AJ-A)  |
-| `../moneta-worktrees/aj-b-sheet-chrome`   | `aj-b-sheet-chrome`   | active (Ajustes 1, AJ-B)  |
-| `../moneta-worktrees/aj-d-return-action`  | `aj-d-return-action`  | active (Ajustes 1, AJ-D)  |
+| Path                                      | Branch                | Status                   |
+| ----------------------------------------- | --------------------- | ------------------------ |
+| `../moneta-worktrees/aj-a-shell-standard` | `aj-a-shell-standard` | active (Ajustes 1, AJ-A) |
+| `../moneta-worktrees/aj-b-sheet-chrome`   | `aj-b-sheet-chrome`   | active (Ajustes 1, AJ-B) |
+| `../moneta-worktrees/aj-d-return-action`  | `aj-d-return-action`  | active (Ajustes 1, AJ-D) |
 
 Wave 4.1 stage 1 (2026-08-20): AD, AE and AF each merged with its own review
 pass applied, plus an operator cross-track pass — every worktree removed. AH
-(§10.33) is the mid-wave addition the stage's own seam produced.
+(§10.33) is the mid-wave addition the stage's own seam produced; its
+`review-ah` row was **pruned 2026-08-24** — the work had merged (`d6907b2`),
+but neither the worktree nor the branch still existed, and the row had sat
+here claiming `active`.
+
+That is the exact failure this table's own rule exists to catch, so it is
+worth naming rather than quietly deleting: a stale `active` row is not
+neutral — it tells the next session that a writer is holding a branch that
+is gone. Check this table against `git worktree list` at the **start** of a
+session, not the end.
 
 Wave 4 stage 3, step 2: AB = §10.26 sync goes live (merged and removed
 2026-08-20, along with its own review pass); AC = §10.27 + the review debt
