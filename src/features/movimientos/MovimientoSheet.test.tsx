@@ -166,7 +166,12 @@ describe('MovimientoSheet — edit mode', () => {
 
     expect(await screen.findByText(/ingresa un monto/i)).toBeInTheDocument()
     expect(amountInput).not.toHaveFocus()
-    expect(scrollIntoView).toHaveBeenCalled()
+    // `toHaveBeenCalled()` alone would pass even if the effect scrolled the
+    // wrong section — assert on `this` (the element `scrollIntoView` was
+    // actually called on) to prove it targeted the amount section.
+    expect(scrollIntoView).toHaveBeenCalledOnce()
+    const scrolledTo = scrollIntoView.mock.contexts[0] as HTMLElement
+    expect(scrolledTo.contains(amountInput)).toBe(true)
   })
 })
 

@@ -86,9 +86,16 @@ describe('AddMovimientoSheet', () => {
 
     await user.click(screen.getByRole('button', { name: /agregar gasto/i }))
 
-    expect(await screen.findByText(/elige una categoría/i)).toBeInTheDocument()
+    const categoryError = await screen.findByText(/elige una categoría/i)
     expect(amountInput).not.toHaveFocus()
-    expect(scrollIntoView).toHaveBeenCalled()
+    // `toHaveBeenCalled()` alone would pass even if the effect scrolled the
+    // wrong section — assert on `this` (the element `scrollIntoView` was
+    // actually called on) to prove it targeted the category section, not
+    // just that some element's `scrollIntoView` ran.
+    expect(scrollIntoView).toHaveBeenCalledOnce()
+    const scrolledTo = scrollIntoView.mock.contexts[0] as HTMLElement
+    expect(scrolledTo.contains(categoryError)).toBe(true)
+    expect(scrolledTo.contains(amountInput)).toBe(false)
   })
 
   it('saves a movement with the picked category, amount and note, then closes the sheet', async () => {

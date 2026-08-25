@@ -55,9 +55,12 @@ fields (Decision 1):
   needs. (This replaced the shared `AmountField.tsx` primitive in the one
   form it served — Ajustes 3 deleted `AmountField.tsx` once nothing else
   used it, specs.md §10.48.) Reuses `isAmountInputInvalid` for its
-  `aria-invalid` check (re-derived independently from the same parser's
-  result, extracted into `amountFormat.ts` so a second consumer couldn't
-  drift from it, specs.md §10.41.1/§12), and `formatAmountLive` for
+  `aria-invalid` check — extracted into `amountFormat.ts` when a second
+  consumer (`AmountField`) read the same parser's result independently and
+  could drift from it (specs.md §10.41.1/§12); `AmountField` is gone
+  (specs.md §10.48), so this is the helper's only caller today, kept
+  separate as a property of the parse result rather than inlined. Also uses
+  `formatAmountLive` for
   live-grouping the typed digits under the locale's own convention on
   every keystroke (specs.md §10.45).
   Colors its digits by `tipo`, mirroring `movimientoView.ts`'s (unexported)

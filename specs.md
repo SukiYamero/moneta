@@ -10880,9 +10880,13 @@ to revisit if it disagrees.
 
 ## 12. Backlog (pending verification / deferred work)
 
-- **Two stale `AmountField` references survive its deletion, outside
-  Track AJ3-A's writable set (§10.48, 2026-08-25).**
-  `src/components/ui/README.md` still says `TextField.tsx`/`AmountField.tsx`
+- ✅ **CLOSED 2026-08-25 (operator, commit `07f6c16`) — the two stale
+  `AmountField` references outside Track AJ3-A's writable set (§10.48).**
+  `src/components/ui/README.md` repointed from `AmountField.tsx` to
+  `MovimientoAmountInput.tsx` as the ui-primitives consumer;
+  `MovimientoAmountInput.tsx`'s own doc comment stopped contrasting itself
+  against the deleted component. Original entry kept for the record:
+  `src/components/ui/README.md` still said `TextField.tsx`/`AmountField.tsx`
   "own the label association, error wiring and 44px touch target" for
   `input.tsx`/`label.tsx`'s consumers — `AmountField.tsx` no longer exists.
   `src/features/movimientos/MovimientoAmountInput.tsx`'s own doc comment
