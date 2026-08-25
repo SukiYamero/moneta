@@ -57,7 +57,8 @@ dev/test-harness layout.
     from "user cancelled" (privacy), which is why the platform check —
     not the assertion's own error — is what decides.
 - `LockSettings.tsx` — the account lock's full-screen settings panel
-  (`FullScreenPanel`, back-arrow header), reached by tapping the
+  (`FullScreenPanel`, back-arrow header passed as the `header` prop — fixed
+  chrome, not scrolling content, specs.md §10.35.1), reached by tapping the
   "Bloqueo con PIN" row in `src/features/profile/SecuritySection.tsx`. One
   card: the "Pedir PIN al abrir" toggle (turning it on opens `PinSetup` in
   `'new'` mode; turning it off calls `lockStore.reset()` directly — the same
@@ -66,7 +67,8 @@ dev/test-harness layout.
   (opens `PinSetup` in `'change'` mode) and "Bloquear ahora"
   (`lockStore.lock()`) once enabled. Footer policy line.
 - `PinSetup.tsx` — the full-screen create/confirm PIN flow (`FullScreenPanel`,
-  X-close, uppercase kicker resolving to "Nuevo PIN"/"Cambiar PIN"). Two
+  kicker/X-close row passed as `header`, resolving to "Nuevo PIN"/"Cambiar
+  PIN"). Two
   steps (create → confirm) driven by one `useEffect` watching `pin.length`;
   a mismatch on confirm shows an error and clears back to an empty confirm
   entry. Offers a biometric enroll `Toggle` on the confirm step only when
@@ -89,7 +91,20 @@ dev/test-harness layout.
   `LockSettings`/`PinSetup` (`useOverlay`'s focus-trap/Escape/scroll-lock,
   same as `BottomSheet`/`CenterModal`, `z-[55]` so it sits above the
   Profile sheet it opens from). Not `src/components/shared/`: exactly two
-  consumers, both inside this feature.
+  consumers, both inside this feature. `flex flex-col` shell of a `shrink-0`
+  `header` (optional prop, the back-button/title or kicker/close row both
+  consumers pass) plus a `min-h-0 flex-1 overflow-y-auto overscroll-y-contain`
+  body — the same fixed-chrome/scrolling-body split `BottomSheet`'s grab
+  handle needed, reported as this shell's own identical bug in `specs.md`
+  §10.35 and fixed here in §10.35.1. The top safe-area inset
+  (`pt-[max(1.5rem,env(safe-area-inset-top))]`) travels with `header` so it
+  clears the notch regardless of how tall the body grows (falls back onto
+  the body itself if a future consumer passes no `header`); the bottom inset
+  stays on the body, same as `BottomSheet`'s `pb-7`. `LockSettings`/
+  `PinSetup` pass their header row via `header`, not as a first `children`
+  element — the split can't infer "this child is the header" the way
+  `BottomSheet`'s own handle (owned by the shell, never consumer content)
+  could.
 - `errorCopy.ts` — maps a raw `pinLock.ts`/`lockStore.ts` error message to a
   translation key in the `lock` namespace's `errors` group
   (`unlockErrorCopy`, `enableLockErrorCopy`) — never the raw message

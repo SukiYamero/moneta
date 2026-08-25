@@ -118,20 +118,22 @@ export const PinSetup = ({ open, onClose, mode }: PinSetupProps) => {
       onClose={handleClose}
       ariaLabel={t(kickerKey)}
       initialFocus={inputRef}
+      header={
+        <div className="flex items-center justify-between px-5">
+          <span className="text-xs font-bold tracking-wide text-muted-foreground uppercase">
+            {t(kickerKey)}
+          </span>
+          <button
+            type="button"
+            onClick={handleClose}
+            aria-label={t('setup.close')}
+            className="flex min-h-11 min-w-11 items-center justify-center rounded-lg text-foreground"
+          >
+            <X aria-hidden="true" className="size-5" />
+          </button>
+        </div>
+      }
     >
-      <div className="flex items-center justify-between px-5">
-        <span className="text-xs font-bold tracking-wide text-muted-foreground uppercase">
-          {t(kickerKey)}
-        </span>
-        <button
-          type="button"
-          onClick={handleClose}
-          aria-label={t('setup.close')}
-          className="flex min-h-11 min-w-11 items-center justify-center rounded-lg text-foreground"
-        >
-          <X aria-hidden="true" className="size-5" />
-        </button>
-      </div>
       <div className="flex flex-1 flex-col items-center justify-center gap-6 px-6 text-center">
         <div className="space-y-2">
           <h1 className="text-xl font-extrabold tracking-tight">{t(titleKey)}</h1>
