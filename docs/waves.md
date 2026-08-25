@@ -721,8 +721,9 @@ Check this table against `git worktree list` at the start of any parallel
 session; prune anything stale (merged-but-not-removed, or on disk but
 missing/finished here).
 
-| Path | Branch | Status |
-| ---- | ------ | ------ |
+| Path                        | Branch             | Status |
+| --------------------------- | ------------------ | ------ |
+| `../moneta-worktrees/rev-x` | `review-ajustes-3` | active |
 
 **Pruned 2026-08-25 (cross-track review, `review-ajustes-2`):** AJ2-A's row
 (`../moneta-worktrees/aj2-a`, `aj2-a-amount-display`) still claimed `active`
