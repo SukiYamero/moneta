@@ -5852,6 +5852,152 @@ green before this pass began (152 files, 1621 tests, the same two
 pre-existing `button.tsx`/`FirstSyncGate.tsx` warnings) and stayed green
 after every fix above was applied, re-run each time, not assumed from the
 prior run.
+### 10.45 The amount display centers on its own and groups live as you type (Ajustes 2, Track AJ2-A, 2026-08-25)
+
+`docs/ajustes-2-plan.md` §3, items 2 and 4. Both traced correctly: the
+`$` was in the same `justify-center` flex row as the digits
+(`MovimientoAmountInput.tsx`), pulling the digits' true center off by
+`(symbolWidth + gap) / 2`; and `amountRaw` was passed through
+`onChange(event.target.value)` verbatim on every keystroke, with no
+formatter on the typing path at all.
+
+**Centering — the deliberate divergence, recorded per the plan's own
+instruction (§3).** The design export (`docs/ui/design-export-add-sheet.md`
+§2) centers `[symbol, digits]` as one group; the user asked for the digits
+alone to be centered, with the symbol immediately to their left and not
+shifting that center. Implemented as a symmetric flex row: real symbol ·
+input · an **invisible mirror of the same symbol** (`aria-hidden`,
+`invisible`), all under one `justify-center gap-2`. Because the row is
+symmetric around the input regardless of the symbol's own rendered width
+(locale-dependent — "R$", "$", "S/" differ), the input's midpoint always
+lands on the row's midpoint, with `field-sizing: content` free to resize it
+on every keystroke without any percentage/pixel math to keep in sync with
+the symbol.
+
+**Two other techniques were considered and rejected, both worth recording
+so a later reader doesn't reintroduce them:**
+
+- **Pulling the symbol out of flow via `position: absolute`.** Technically
+  "out of the centering flow" in the literal sense the plan's wording
+  suggests, but it needs the gap between the symbol and the input's left
+  edge expressed as a `right: calc(100% + Xrem)` offset, and at typing
+  time the input's own edge is exactly what's moving — the offset stays
+  correct but the symbol can then run past the sheet's own edges for a
+  long number, with no natural stopping point to bound it against the way
+  a max-width bounds the input itself.
+- **CSS Grid `1fr auto 1fr`**, symbol/input/spacer, which centers the
+  `auto` column algebraically regardless of its content width — the
+  textbook fix for "adjacent label, unaffected centering." Rejected once
+  traced through the Grid Sizing Algorithm: an item's percentage
+  `max-width` is indefinite during the `auto`-track sizing pass (the same
+  rule that makes `height: 50%` inside `height: auto` resolve as `auto`),
+  so the track claims the number's **full, unclamped** max-content width
+  before the percentage ever gets a chance to constrain it — a long
+  enough number could size the grid past the container, with the
+  percentage then clamping the _already-oversized_ track rather than
+  preventing it. A flex item's percentage `max-width`, by contrast,
+  resolves against the flex container's already-definite size, which is
+  exactly why the chosen technique bounds the input with
+  `max-w-[calc(100%-3rem)]` (rather than the export's own
+  `calc(100% - 48px)` on the symbol+input pair) with no such risk.
+
+**Live grouping.** `formatAmountLive(raw, locale)` (new,
+`src/lib/i18n/amountFormat.ts`) strips the locale's own group separators
+from the integer part and re-inserts them via `Intl.NumberFormat(locale)
+.format(BigInt(integerDigits))` — never a hand-rolled separator table,
+same rule §10.14 already set for `parseAmountForInput`. The fraction is
+left **exactly as typed**, never round-tripped through `Number()`: that is
+what keeps a trailing decimal separator (`"1,"` on its way to `"1,50"`) and
+a trailing fraction zero (`"1,50"` must not collapse to `"1,5"`) alive
+mid-entry. Verified against a dot-grouping locale (`es-CO`), a
+comma-grouping one (`en-US`), and a space-grouping one (`fr-FR`, asserted
+against `Intl`'s own output rather than a hard-coded space character —
+this ICU build groups `fr-FR` with U+202F, not a plain space, caught by
+the test itself rather than assumed). A genuinely no-grouping locale has
+no real BCP-47 example in this ICU build, so that case is covered by
+stubbing `Intl.NumberFormat` in the test to a formatter that never emits a
+`group` part, exercising `separatorsFor`'s `''` fallback path directly.
+
+**The judgement call this track owned (malformed).** Once live typing
+reformats on every keystroke, `parseAmountForInput`'s `malformed` reason
+becomes unreachable from a real keyboard — decided to accept this rather
+than avoid it, and to make the boundary explicit rather than incidental:
+`formatAmountLive` reformats only what already has the _shape_ of a number
+in progress (digits, the locale's own group/decimal separators, an
+optional leading sign, at most one decimal separator) and returns anything
+else **completely unchanged**. A paste of real garbage (`"abc"`, `"$100"`)
+therefore still reaches `parseAmountForInput` untouched and still resolves
+to `malformed`, so `isAmountInputInvalid`'s malformed branch and the
+`form.amount.errors.malformed` copy stay live, exercised code — checked
+against `docs/error-handling.md`'s "never delete an error path another
+consumer still depends on" before deciding this, not after. One narrow
+edge inside that boundary needed its own call: a string that is _entirely_
+group-separator noise with zero digits (a lone `"."` in `es-CO`, where `.`
+groups thousands) collapses under naive stripping to `""`, which would
+silently read as `empty` instead of `malformed` — fixed by treating "typed
+something for the integer part, stripped to nothing" as separator noise
+too, passed through unchanged like any other non-number-shaped input,
+covered by its own test.
+
+**A real bug found and fixed while building the caret-preservation
+half, worth recording past this one component.** The known-good technique
+(count digits before the caret, reformat, place the caret after that same
+digit count) was implemented first as a `useLayoutEffect` keyed on the
+`value` prop, the natural-looking place for it. It failed one specific,
+reproducible case: backspacing directly over a grouping separator (the
+separator is derived, so `formatAmountLive` regenerates the _exact same
+string_ the field already had) sent the caret to the end of the field
+instead of leaving it in place. Traced, not guessed: `setValue(sameString)`
+is `Object.is`-equal to the current state, so React bails out of the
+re-render **and every effect that would have run with it** — yet its own
+controlled-input machinery still force-corrects the DOM `.value`
+independently of that bailout, with no caret placement of its own. Fixed by
+moving the reformat + `el.value =` + `el.setSelectionRange(...)` directly
+into the `onChange` handler, synchronous on the native DOM node, before
+`onChange(formatted)` is even called — this works whether or not React
+ends up re-rendering at all, since it no longer depends on one happening.
+Generalizes past this component: **any caret-preservation effect gated on
+a controlled input's `value` prop is unsound** whenever the transform
+being applied can legitimately produce a no-op (same in, same out) —
+which a live-reformatter that derives cosmetic characters, by definition,
+regularly does.
+
+**Edit-mode/live-typing parity**, required by the plan: a test asserts
+`formatAmountLive(formatAmountForInput(amount, locale), locale) ===
+formatAmountForInput(amount, locale)` across several amounts/locales — the
+prefilled string, run back through the live formatter, comes out
+byte-for-byte identical. Holds for the realistic range (≤2 typed fraction
+digits, the domain `formatAmountForInput` itself targets via
+`maximumFractionDigits: 2`); `formatAmountLive` deliberately never rounds
+a longer typed fraction, so the two are not claimed equivalent past that
+domain — no legitimate caller needs them to be.
+
+`useMovimientoForm.ts` and `MovimientoFormFields.tsx` needed no changes —
+`amountRaw`/`onAmountChange` already round-trip whatever
+`MovimientoAmountInput` produces, and `amountInputRef` already forwards
+through as `ref`.
+
+**One cross-track ripple, outside this track's writable set, flagged
+rather than fixed.** `AddMovimientoSheet.test.tsx` (`docs/ajustes-2-plan.md`
+§4: owned by Track AJ2-B) has one assertion,
+`expect(screen.getByRole('textbox', {name: /monto/i})).toHaveValue('5000')`
+at line 173, that types `"5000"` and checks the field still shows the raw
+digits after a nested-sheet Escape — a proxy for "the draft survived,"
+not a deliberate test of ungrouped output. Live grouping now correctly
+renders that as `"5.000"` (es-CO, the test's default locale), so this one
+assertion needs updating to `'5.000'` — a one-line, unambiguous fix, but in
+a file this track may not write. Everything else in the full suite (1647
+of 1648 tests) is unaffected.
+
+**Verified.** `bun run check`: typecheck clean; lint clean (same two
+pre-existing `react/only-export-components` warnings, `button.tsx` /
+`FirstSyncGate.tsx`, untouched); `lint:units` clean; `vitest run` — 152
+files, 1647 of 1648 tests passing, the one failure being the
+`AddMovimientoSheet.test.tsx` ripple above. 30 new tests (19 in
+`amountFormat.test.ts`, 11 in `MovimientoAmountInput.test.tsx`), all
+written and watched fail for the right reason (missing export / a real
+caret bug, not a typo in the test) before the implementation that made
+them pass.
 
 ## 11. Decisions log
 
@@ -9736,6 +9882,39 @@ heights, while keeping Cancel's lighter weight so the row still reads
 primary-vs-secondary. Not requested verbatim by the plan; a judgment call
 made in scope (both files are this track's own), flagged for the operator
 to revisit if it disagrees.
+- 2026-08-25 — **§10.45 (Ajustes 2, Track AJ2-A): the amount input's
+  centering deliberately diverges from the design export** — the digits
+  alone are centered, with the currency symbol balanced by an invisible
+  mirror of itself rather than pulled into the same centered group the
+  artboard draws. This is the user's own explicit request
+  (`docs/ajustes-2-plan.md` §3), not a track judgement call to relitigate;
+  recorded here per that same section's instruction so a later reader
+  implementing the artboard faithfully doesn't "fix" this back.
+- 2026-08-25 — **§10.45: once live-typed amount input is reformatted on
+  every keystroke, `parseAmountForInput`'s `malformed` reason becomes
+  unreachable from a real keyboard — accepted, not avoided.**
+  `formatAmountLive` only reformats input that already has the shape of a
+  number in progress; anything else (a pasted `"abc"`, a stray `"$100"`)
+  passes through completely untouched, so `malformed` stays reachable via
+  paste and the existing `isAmountInputInvalid`/error-copy path for it
+  stays exercised, live code — not deleted. `docs/error-handling.md`'s
+  "never delete an error path another consumer still depends on" checked
+  explicitly before this was decided.
+- 2026-08-25 — **A caret-preservation effect keyed on a controlled input's
+  `value` prop is unsound whenever the reformat can legitimately be a
+  no-op.** Found and fixed building §10.45's live-grouping caret handling:
+  `useLayoutEffect(() => {...}, [value])` never ran when `formatAmountLive`
+  regenerated the exact same string the field already had (e.g.
+  backspacing a grouping separator that just reappears), because
+  `setValue(sameString)` is `Object.is`-equal to the current state and
+  React bails out of the whole render+effects cycle for that update —
+  while its own controlled-input machinery still force-corrects the DOM
+  `.value` independently of that bailout. Fixed by moving the reformat and
+  the caret placement directly into the `onChange` handler, synchronous on
+  the native DOM node, before calling `onChange` at all — this doesn't
+  depend on a React re-render happening. Worth a general note for any
+  future live-reformatting controlled input in this codebase, not just
+  this one component.
 
 ## 12. Backlog (pending verification / deferred work)
 

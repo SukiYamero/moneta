@@ -38,22 +38,41 @@ fields (Decision 1):
   plus this track's own `MovimientoAmountInput` — see below for why that
   one isn't `AmountField`.
 - `MovimientoAmountInput.tsx` — the centered, borderless, auto-sizing
-  amount display (specs.md §10.41), deliberately not `AmountField.tsx`
-  (shared, read-only for this track): that component's bordered/labelled
-  `Input` has no adornment slot for an external currency-symbol sibling.
-  Reuses `parseAmountForInput`/`formatAmountForInput` directly — same
-  parsing rule, new markup only — and `isAmountInputInvalid` for its
+  amount display (specs.md §10.41/§10.45), deliberately not
+  `AmountField.tsx` (shared, read-only for this track): that component's
+  bordered/labelled `Input` has no adornment slot for an external
+  currency-symbol sibling. Reuses `isAmountInputInvalid` for its
   `aria-invalid` check, shared with `AmountField.tsx` (both used to
   re-derive that check independently from the same parser's result;
   extracted into `amountFormat.ts` so the two can't drift, specs.md
-  §10.41.1/§12). Colors its digits by `tipo`, mirroring
-  `movimientoView.ts`'s (unexported) `AMOUNT_COLOR_CLASS`. Uses
-  `field-sizing: content` for the auto-width, with a `w-40` fallback
-  overridden via `supports-[field-sizing:content]:w-auto` — **not** an
-  implicit override; verified live (Chrome 151) that pairing
-  `field-sizing: content` with a plain fallback `width` does not make a
-  supporting browser disregard that width the way it's commonly described,
-  only an explicit `@supports` gate does.
+  §10.41.1/§12), and `formatAmountLive` for live-grouping the typed digits
+  under the locale's own convention on every keystroke (specs.md §10.45).
+  Colors its digits by `tipo`, mirroring `movimientoView.ts`'s (unexported)
+  `AMOUNT_COLOR_CLASS`. **Centers the digits alone, not the
+  `[symbol, digits]` pair** — a deliberate divergence from the design
+  export the user asked for directly (specs.md §10.45, §11 2026-08-25): the
+  currency symbol is balanced by an invisible mirror of itself on the
+  input's other side rather than pulled out of flow, since a flex row
+  symmetric around the input keeps its true center pinned regardless of the
+  symbol's own (locale-dependent) rendered width or how wide
+  `field-sizing: content` makes the input on any given keystroke. Its
+  `onChange` handler reformats and repositions the caret **synchronously on
+  the native DOM node**, not via an effect keyed on the `value` prop — a
+  real bug found building this: React bails out of the whole render+effects
+  cycle whenever a state update is `Object.is`-equal to the current state,
+  which a live reformatter that regenerates the same string (e.g.
+  backspacing a grouping separator that just reappears) does routinely
+  (specs.md §10.45, §11 2026-08-25). Uses `field-sizing: content` for the
+  auto-width, with a `w-40` fallback overridden via
+  `supports-[field-sizing:content]:w-auto` — **not** an implicit override;
+  verified live (Chrome 151) that pairing `field-sizing: content` with a
+  plain fallback `width` does not make a supporting browser disregard that
+  width the way it's commonly described, only an explicit `@supports` gate
+  does. Bounded by `max-w-[calc(100%-3rem)]`, a flex item's percentage
+  `max-width` (resolves against the container's already-definite size) —
+  deliberately not the same percentage on a CSS Grid `auto`-track item,
+  which was considered and rejected (specs.md §10.45) since that track's
+  contribution to grid sizing ignores an indefinite percentage max-width.
 - `AddMovimientoSheet.tsx` — `BottomSheet` + the form in create mode,
   opened by the `BottomNav` FAB via `movimientoSheetStore`. **No visible
   heading** (the grab handle is the header the design draws; `ariaLabel`

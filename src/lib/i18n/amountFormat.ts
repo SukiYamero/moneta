@@ -94,3 +94,110 @@ export const isAmountInputInvalid = (
   const isMalformed = !parsed.ok && parsed.reason === 'malformed'
   return error !== undefined || isMalformed
 }
+
+const DIGITS_ONLY = /^\d*$/
+
+/**
+ * Live-reformats a raw amount string as the user types it, grouping the
+ * integer part under `locale`'s own convention via `Intl` (never a
+ * hand-rolled separator table, same rule as the rest of this file) while
+ * leaving the fraction exactly as typed — a trailing decimal separator
+ * ("1," on its way to "1,50") and a trailing fraction zero ("1,50") must
+ * survive, and neither can if the fraction is ever round-tripped through
+ * `Number()`.
+ *
+ * Deliberately a no-op (returns `raw` unchanged) for anything that is not
+ * yet the shape of a number in progress — a second decimal separator, or a
+ * character that is neither a digit, the locale's own separators, nor a
+ * leading sign. **This is the judgement call this track owns**: normal
+ * keyboard typing can only ever produce digits (plus the separators this
+ * function itself just inserted), so in practice `malformed` becomes
+ * unreachable from the keyboard — but a paste of genuine garbage ("abc",
+ * "$100") is passed through untouched here and still reaches
+ * `parseAmountForInput`'s `malformed` reason downstream, so
+ * `isAmountInputInvalid` and the `form.amount.errors.malformed` copy stay
+ * live, exercised code rather than a dead path (`docs/error-handling.md`:
+ * never delete an error path another consumer still depends on).
+ */
+export const formatAmountLive = (raw: string, locale: string): string => {
+  const { decimal, group } = separatorsFor(locale)
+  const negative = raw.startsWith('-')
+  const body = negative ? raw.slice(1) : raw
+
+  const decimalIndex = body.indexOf(decimal)
+  const hasSecondDecimal = decimalIndex !== -1 && body.includes(decimal, decimalIndex + 1)
+  if (hasSecondDecimal) return raw
+
+  const integerPart = decimalIndex === -1 ? body : body.slice(0, decimalIndex)
+  const fractionPart = decimalIndex === -1 ? undefined : body.slice(decimalIndex + decimal.length)
+
+  const integerDigits = integerPart.split(group).join('')
+  if (!DIGITS_ONLY.test(integerDigits)) return raw
+  // Something was typed for the integer part, but stripping every group
+  // separator left no digits at all (e.g. a lone "." in a locale where "."
+  // groups thousands) — that is separator noise, not "no integer part yet"
+  // (which is integerPart === '', a normal state while typing ",50"), so it
+  // must not silently collapse to an empty, well-formed-looking string.
+  if (integerPart !== '' && integerDigits === '') return raw
+  if (fractionPart !== undefined && !DIGITS_ONLY.test(fractionPart)) return raw
+
+  const groupedInteger =
+    integerDigits === '' ? '' : new Intl.NumberFormat(locale).format(BigInt(integerDigits))
+  const sign = negative ? '-' : ''
+
+  return fractionPart === undefined
+    ? sign + groupedInteger
+    : sign + groupedInteger + decimal + fractionPart
+}
+
+const isDigitAt = (text: string, index: number): boolean => {
+  const code = text.charCodeAt(index)
+  return code >= 48 /* '0' */ && code <= 57 /* '9' */
+}
+
+/**
+ * Counts the digit characters in `text` before `index` — the "how far
+ * through the number, ignoring separators, is the caret" half of the
+ * known-good reflow technique (specs.md §10.45): reformat on every
+ * keystroke, but describe the caret's position in digits, not raw string
+ * offset, since inserting/removing a separator shifts the offset without
+ * the user having moved past any digit.
+ */
+export const digitsBeforeIndex = (text: string, index: number): number => {
+  const clamped = Math.min(Math.max(index, 0), text.length)
+  let count = 0
+  for (let i = 0; i < clamped; i++) {
+    if (isDigitAt(text, i)) count++
+  }
+  return count
+}
+
+/**
+ * The inverse half: given a reformatted string, finds the index right
+ * after the `digitCount`-th digit — where the caret belongs once the
+ * string has been regrouped. Falls to the end of the string if it has
+ * fewer digits than `digitCount` (e.g. the user just deleted a digit).
+ *
+ * Lands **after any separator run that immediately follows that digit**,
+ * not right after the digit itself: those two positions carry the same
+ * digit count (a separator contributes none), so "right after the digit"
+ * is not the only valid answer, and landing before a separator the user
+ * just typed is the wrong one — it silently re-typed the caret in front of
+ * the separator, so the next keystroke inserted ahead of it instead of
+ * after it (reproduced: typing "1,50" landed on "150," without this).
+ */
+export const indexAfterDigitCount = (text: string, digitCount: number): number => {
+  if (digitCount <= 0) return 0
+  let seen = 0
+  for (let i = 0; i < text.length; i++) {
+    if (isDigitAt(text, i)) {
+      seen++
+      if (seen === digitCount) {
+        let end = i + 1
+        while (end < text.length && !isDigitAt(text, end)) end++
+        return end
+      }
+    }
+  }
+  return text.length
+}
