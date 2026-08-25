@@ -21,8 +21,8 @@ import {
   getMovimientoVisual,
   resolveCategoria,
 } from '@/components/shared/movimientoView'
-import { MOVIMIENTO_PRIMARY_CTA_CLASS } from '@/features/movimientos/AddMovimientoSheet'
 import { MovimientoFormFields } from '@/features/movimientos/MovimientoFormFields'
+import { MOVIMIENTO_PRIMARY_CTA_CLASS } from '@/features/movimientos/movimientoPrimaryCta'
 import { useMovimientoForm } from '@/features/movimientos/useMovimientoForm'
 import { useMovimientoSheetStore } from '@/features/movimientos/movimientoSheetStore'
 

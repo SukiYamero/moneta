@@ -191,21 +191,33 @@ describe('useOverlay — nested overlays (bugs 2 & 3)', () => {
 describe('useOverlay — item 1: initial focus lands in the same task as the trigger click', () => {
   /**
    * This proves the *mechanism* only — that `.focus()` now runs
-   * synchronously inside the click that opens the overlay, not a mechanism
-   * this environment can use to prove iOS Safari actually raises its
-   * software keyboard (no agent here can drive real iOS Safari; that stays
-   * unverified, see the AJ2-B report).
+   * synchronously inside the click that opens the overlay, not that iOS
+   * Safari actually raises its software keyboard (no agent here can drive
+   * real iOS Safari; that stays unverified, see the AJ2-B report).
    *
-   * A raw, synchronous `.click()` wrapped in `act` — not `user-event`,
-   * whose async, promise-based steps would themselves cross a task
-   * boundary and mask the exact timing this test exists to catch — proves
-   * the point: asserting focus immediately after, with no `await`/
-   * `waitFor`, only ever passes if focus was set inside the same
-   * synchronous flush as the click. Before this change (a passive
-   * `useEffect` deferring focus into a `requestAnimationFrame`), this
-   * exact assertion fails — focus lands a task or more later, which is the
-   * bug: iOS Safari only opens the keyboard for a `.focus()` still inside
-   * the task that carries user activation.
+   * A raw, synchronous `.click()` wrapped in `act`, not `user-event`: the
+   * property under test is "zero scheduler yields between the click and
+   * the focus call," and `user-event`'s API is itself `async` — an
+   * `await user.click()` cannot prove the absence of a yield its own call
+   * necessarily introduces, whatever margin happens to exist between that
+   * yield and this bug's `requestAnimationFrame` delay. (That margin was
+   * checked, not assumed: a `user-event` version of this exact assertion
+   * also fails against the pre-fix implementation in this environment —
+   * jsdom's `requestAnimationFrame` polyfill runs later than `user-event`'s
+   * own internal delay here, so it isn't a masking risk today. But that's
+   * an implementation detail of jsdom's timers, not something this test
+   * can rely on going forward — a synchronous call is the only instrument
+   * that proves the actual claim outright, matching the existing "reaching
+   * for the banned `fireEvent`" precedent in `BottomSheet.test.tsx`: a
+   * native DOM call used where `user-event`'s API structurally cannot make
+   * the same guarantee, not a general preference over it.) Asserting focus
+   * immediately after, with no `await`/`waitFor`, only ever passes if
+   * focus was set inside the same synchronous flush as the click. Before
+   * this change (a passive `useEffect` deferring focus into a
+   * `requestAnimationFrame`), this exact assertion fails — focus lands a
+   * task or more later, which is the bug: iOS Safari only opens the
+   * keyboard for a `.focus()` still inside the task that carries user
+   * activation.
    */
   it('focuses initialFocus synchronously when open flips true inside a click handler', () => {
     const Harness = () => {

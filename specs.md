@@ -5594,11 +5594,15 @@ triggering click — is **CONFIRMED as the mechanism fix**, not just
 reasoned: `useOverlay.ts`'s effect is now a `useLayoutEffect` with the `rAF`
 removed, focusing synchronously; `useOverlay.test.tsx` adds a test that
 renders a click-to-open harness, fires a raw, synchronous `.click()`
-wrapped in `act` (not `user-event`, whose async steps would themselves
-cross a task boundary and mask the exact timing under test — matching the
-existing "reaching for the banned `fireEvent`" precedent in
-`BottomSheet.test.tsx`, a native DOM call instead of the banned helper, not
-`user-event`), and asserts focus with no `await`/`waitFor` in between.
+wrapped in `act` — not `user-event`, whose own API is `async`, so an
+`await user.click()` cannot prove the zero-scheduler-yield property this
+test exists to assert, whatever margin happens to separate that yield from
+this bug's `requestAnimationFrame` delay (checked by review-aj2-b, not
+assumed by this track: see §10.46.1) — matching the existing "reaching for
+the banned `fireEvent`" precedent in `BottomSheet.test.tsx`, a native DOM
+call used where `user-event`'s API structurally cannot make the same
+guarantee, not `user-event`. It asserts focus with no `await`/`waitFor` in
+between.
 Reverting the fix locally and re-running that one test reproduced the
 original bug (focus still on `<body>` immediately after the click) before
 the fix was restored — traced, not assumed. Refs attach during the
@@ -5658,11 +5662,13 @@ default spacing scale (unmodified in this project's `@theme`) makes
 `h-13.5` exactly 54px. `font-extrabold` is Tailwind's unmodified default
 (800), matching the export exactly.
 
-Exported one constant, `MOVIMIENTO_PRIMARY_CTA_CLASS` (`AddMovimientoSheet.tsx`,
-imported by `MovimientoSheet.tsx`) — `'h-13.5 rounded-2xl text-md font-extrabold'`
-— rather than a `button.tsx` size variant: this shape has exactly two call
-sites, nowhere near the 19 a shared variant would touch, so no escalation
-was warranted (`docs/ajustes-2-plan.md` §3's escalation rule). Applied to
+Exported one constant, `MOVIMIENTO_PRIMARY_CTA_CLASS` — `'h-13.5 rounded-2xl
+text-md font-extrabold'` — rather than a `button.tsx` size variant: this
+shape has exactly two call sites, nowhere near the 19 a shared variant
+would touch, so no escalation was warranted (`docs/ajustes-2-plan.md` §3's
+escalation rule). Landed as an export from `AddMovimientoSheet.tsx`
+imported by `MovimientoSheet.tsx`; review-aj2-b moved it to its own module,
+`movimientoPrimaryCta.ts` — see §10.46.1. Applied to
 the Add sheet's single full-width CTA and, per §10.41 ("edit mode inherits
 the Add sheet's layout"), to `MovimientoEditForm`'s Save button — **the
 same commit action in the same layout**, so it moves with the Add sheet's
@@ -5717,6 +5723,135 @@ above), `MovimientoAmountInput.tsx`/`MovimientoFormFields.tsx`/
 **Handed to the operator, not written here:** the
 `src/features/movimientos/README.md` line (AJ2-A owns that file) — see this
 track's final report.
+
+### 10.46.1 Review pass (Track review-aj2-b, 2026-08-25)
+
+Reviewed against `docs/ajustes-2-plan.md` §3, §10.46/§11's own entries, and
+`AGENTS.md`'s Review protocol (four things, not one: bugs, redundancy,
+optimization, better approaches).
+
+**The `useLayoutEffect` nesting-order reasoning — CONFIRMED sound, traced
+analytically and reproduced by test, not just re-read.** `pushOverlay`
+sorts the module-level stack by `seq` (assigned at each instance's first
+render, so a nested overlay's `seq` is always higher than its ancestor's)
+rather than by push order, which makes "topmost" invariant to whether
+pushes happen synchronously (new code) or after a deferred `rAF` (old
+code): whichever instance checks `isTopOverlay` first, it's trivially top
+if nothing else has pushed yet, and correctly not-top once the deeper
+instance's push lands, because the array is re-sorted on every push, not
+appended-and-trusted. Children-run-before-parents holds for layout effects
+exactly as it did for passive ones — the only thing that moved is _when_
+within the commit lifecycle the check runs, not _which order_ instances
+run in. `useOverlay.test.tsx`'s `bug 3` test (`NestedOverlaysHarness`,
+both `BottomSheet` and `CenterModal` mounted already `open`) is exactly
+this simultaneous-mount case and passes unmodified — re-run directly, not
+assumed from the commit message. The real nested case in this codebase,
+`MovimientoSheet.tsx`'s `ConfirmDialog` sibling to its `BottomSheet`, never
+hits the simultaneous-mount path at all: both `useOverlay` instances mount
+together (view/edit sheet's first render), but `confirmOpen` starts
+`false`, so only the sheet's own effect ever does anything until the user
+taps "Eliminar" — a later, separate commit where only the modal's `open`
+dependency changed. Sequential opens were never at risk from this change;
+the interesting case is the simultaneous one, and the stack's sort-by-seq
+design (not this commit) is what already made it safe.
+
+**The `animate-sheet-up` interaction — checked, no problem found.** The
+class is present in the panel's `className` from its first render, so the
+CSS `@keyframes` animation is driven by the browser's own paint scheduler
+from first paint regardless of when `.focus()` runs inside the preceding
+layout effect — a synchronous focus call one macrotask earlier doesn't
+retrigger or skip the keyframe. The one real interaction — iOS raising the
+keyboard resizes the visual viewport under a `fixed`/`absolute`-positioned
+sheet — is a pre-existing property of focusing an input at all, not
+something this timing change introduces; if anything, focusing sooner
+means the keyboard's own async animation starts closer to the sheet's own
+instead of well after it. Not something this review's file set (or this
+track's) owns fixing, and no evidence it's actually wrong.
+
+**The primary-CTA token math — CONFIRMED, verified directly against
+`src/styles/index.css`, not re-read from the commit's own claim:**
+`--radius-2xl: 18px` (line 117), `--text-md: 0.9375rem` = 15px (line 132,
+against the export's 15.5px — a 0.5px gap with no dedicated token, already
+named and accepted in §10.46, not a new finding), `h-13.5` = 54px under
+Tailwind's unmodified 0.25rem spacing scale, `font-extrabold` = 800.
+Traced the actual override mechanism too: `Button` composes
+`cn(buttonVariants({ variant, size, className }))`, and `cn` is
+`twMerge(clsx(...))` — `className` is appended last by `cva`, so
+`MOVIMIENTO_PRIMARY_CTA_CLASS`'s `h-13.5`/`rounded-2xl`/`text-md`/
+`font-extrabold` correctly beat `size="touch"`'s `h-11`/`rounded-lg`
+(base)/`text-sm` (base)/`font-medium` (base) as same-group Tailwind
+conflicts, not by accident of string order. Edit's Cancel button
+(`h-13.5 rounded-2xl`, no typography) was verified the same way — its own
+judgment call (documented in §11) reads as correct: a `flex` row of two
+explicit-height buttons needs matching heights or it visibly misaligns,
+and giving Cancel the weight-800 half would blur which button is primary.
+
+**The `MOVIMIENTO_PRIMARY_CTA_CLASS` export site — changed.** Judged
+against `AGENTS.md`'s "feature-only helpers are colocated inside that
+feature's folder" and this codebase's own precedent for exactly this
+shape: `tintClasses.ts` and `categoryIcons.ts`
+(`src/components/shared/README.md`) both exist because two-or-more
+consumers needing the same class-string/lookup table get a small dedicated
+module, not one consumer's file becoming the other's dependency;
+`IconAvatar.tsx` re-exporting `IconAvatarTint` from `@/lib/iconAvatarTint`
+rather than declaring it is the same instinct one layer down (specs.md
+§11, 2026-08-20). `AddMovimientoSheet.tsx` exporting a constant
+`MovimientoSheet.tsx` depends on is the identical shape this codebase has
+already twice moved away from, for the same reason: a component file
+should own its own render, not double as the source of truth for a value
+a sibling component needs for unrelated reasons. Not a lint failure
+(`allowConstantExport: true` in `.oxlintrc.json` is exactly why
+`react/only-export-components` stayed silent here — verified against the
+config, not assumed) and not gold-plating either, since it's an established
+convention with two prior instances, not a novel one invented for this
+review. **Applied:** moved the constant, doc comment and all, into a new
+`src/features/movimientos/movimientoPrimaryCta.ts`; both sheets now import
+from there. No behavior change — `bun run check` still green after.
+
+**The `act` + synchronous `.click()` over `user-event` — the literal
+justification given was checked and found FALSE; the underlying choice is
+still correct, for a different reason.** The commit and this section both
+say `user-event`'s async steps "would themselves cross a task boundary and
+mask the exact timing under test." Reproduced directly: reverted
+`useOverlay.ts` to the pre-fix `rAF`-in-`useEffect` implementation locally,
+added a byte-for-byte copy of the existing test with `await user.click()`
+in place of `act(() => trigger.click())`, and ran it against the reverted
+code — **it also failed**, consistently across 5 runs, for the same reason
+the existing test fails: jsdom's `requestAnimationFrame` polyfill runs
+later than `user-event`'s own internal dispatch delay, so nothing was
+masked here. Restored both files to the merged state afterward; no
+temporary changes survived. So the specific claim ("`user-event` would
+mask this bug") does not hold, at least in this environment today, and
+should not have been asserted as the reason. **The choice to avoid
+`user-event` anyway is still right, for a narrower and sturdier reason:**
+the property under test is "zero scheduler yields between the click and
+the focus call," and `user-event`'s API is itself `async` — `await
+user.click()` cannot prove the absence of a yield its own call introduces,
+independent of whatever margin happens to exist between that yield and
+this specific bug's `rAF` delay. That margin is jsdom/`user-event`
+implementation detail, not a property the test can rely on holding in a
+future dependency bump; a synchronous call is the only instrument able to
+prove the actual claim. This is the same shape as the `BottomSheet.test.tsx`
+`pointercancel` precedent it cites — a native DOM call used because
+`user-event`'s API structurally cannot make the guarantee needed, not a
+general preference for it over `user-event` — but the _specific_ analogy
+drawn (framing it as "masking," implying a false pass) doesn't hold, since
+`user-event` demonstrably still fails here. **Applied:** corrected the
+doc comment in `useOverlay.test.tsx` and the matching paragraph in §10.46
+above to state the structural reason instead of the disproven one. The
+test itself (mechanism, assertion, pass/fail behavior) is unchanged.
+
+**Everything else checked and found correct, no change:** the
+`initialFocus` sweep's four-consumer enumeration in §10.46 above matches
+the actual call sites (`AddMovimientoSheet.tsx`/`Kit.tsx`/`PinSetup.tsx`/
+`CategoryFormModal.tsx`, verified by grep, not re-trusted from the prose);
+the Escape/Tab-trap/scroll-lock/focus-restore non-regression claim holds —
+`useOverlay.test.tsx`'s full nested-overlay suite (bugs 1–3, the
+scroll-lock refcount tests) still passes unmodified; `bun run check` was
+green before this pass began (152 files, 1621 tests, the same two
+pre-existing `button.tsx`/`FirstSyncGate.tsx` warnings) and stayed green
+after every fix above was applied, re-run each time, not assumed from the
+prior run.
 
 ## 11. Decisions log
 
@@ -9588,9 +9723,13 @@ button (54px/18px-radius/15.5px/800) only ever needed two call sites —
 `AddMovimientoSheet`'s Add and `MovimientoSheet`'s edit-mode Save (§10.41:
 edit inherits the Add sheet's layout) — nowhere near the 19 call sites
 `size="touch"` has, so no `button.tsx` escalation was warranted. The one
-constant (`MOVIMIENTO_PRIMARY_CTA_CLASS`) is exported from
-`AddMovimientoSheet.tsx` and imported by `MovimientoSheet.tsx` rather than
-duplicated. Edit's Cancel button, sitting beside Save in the same row,
+constant (`MOVIMIENTO_PRIMARY_CTA_CLASS`) lives in its own
+`movimientoPrimaryCta.ts` module, imported by both sheets, rather than
+duplicated (originally landed as an export from `AddMovimientoSheet.tsx`
+imported by `MovimientoSheet.tsx`; moved by review-aj2-b, §10.46.1, to
+match this codebase's own `tintClasses.ts`/`categoryIcons.ts` precedent
+for a class-string table two components share). Edit's Cancel button,
+sitting beside Save in the same row,
 takes the height/radius half of that class only, not the typography half —
 matching Save's height so the row doesn't render two mismatched button
 heights, while keeping Cancel's lighter weight so the row still reads
