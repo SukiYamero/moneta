@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/lib/authStore'
 import { listProfiles, type ProfileRecord } from '@/lib/profiles'
 import { getInitials } from '@/lib/initials'
+import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { loginErrorCopy } from '@/features/auth/errorCopy'
 import { GoogleSignInButton } from '@/features/auth/GoogleSignInButton'
 
@@ -27,17 +28,27 @@ const mostRecentGoogleProfile = (profiles: ProfileRecord[]): ProfileRecord | nul
 
 /**
  * specs.md §10.21: a returning user whose silent re-auth failed sees their
- * own name and one button, never the first-run pitch. Rendered by
- * `RequireAuth` once the boot-time restore has settled without reaching
- * `'authenticated'`, for a device the login marker already proves has
- * signed in before.
+ * own name and a primary "continue with Google" action, never the first-run
+ * pitch. Rendered by `RequireAuth` once the boot-time restore has settled
+ * without reaching `'authenticated'`, for a device the login marker already
+ * proves has signed in before.
+ *
+ * specs.md §10.37: a second action, "continue as guest," was added back
+ * after §10.36 removed the redundant "use another account" — gated behind
+ * a confirm dialog rather than a bare button, since tapping it rebinds the
+ * app to a different, empty local profile (specs.md §10.15) while this
+ * profile's real data stays untouched one profile over. The dialog is the
+ * one place that says so; it does not repeat §10.21's forbidden first-run
+ * pitch or legal copy.
  */
 export const ReturningUserScreen = () => {
   const { t } = useTranslation('auth')
   const status = useAuthStore((s) => s.status)
   const error = useAuthStore((s) => s.error)
   const login = useAuthStore((s) => s.login)
+  const continueAsGuest = useAuthStore((s) => s.continueAsGuest)
   const busy = status === 'authenticating'
+  const [guestConfirmOpen, setGuestConfirmOpen] = useState(false)
 
   // Device-local only (specs.md §11, 2026-08-19: `authStore.user` is empty
   // here — there is no live session to have populated it from). Degrades to
@@ -111,7 +122,27 @@ export const ReturningUserScreen = () => {
             ? t('return.continueCtaNamed', { name: firstName })
             : t('return.continueCtaGeneric')}
         </GoogleSignInButton>
+        <button
+          type="button"
+          onClick={() => setGuestConfirmOpen(true)}
+          disabled={busy}
+          className="flex h-14 items-center justify-center rounded-2xl border border-border-subtle bg-transparent text-base font-bold text-foreground transition-opacity disabled:opacity-60"
+        >
+          {t('return.guestCta')}
+        </button>
       </div>
+      <ConfirmDialog
+        open={guestConfirmOpen}
+        onClose={() => setGuestConfirmOpen(false)}
+        onConfirm={() => {
+          setGuestConfirmOpen(false)
+          continueAsGuest()
+        }}
+        title={t('return.guestConfirm.title')}
+        description={t('return.guestConfirm.description')}
+        confirmLabel={t('return.guestConfirm.confirmCta')}
+        cancelLabel={t('return.guestConfirm.cancelCta')}
+      />
     </main>
   )
 }

@@ -388,9 +388,10 @@ describe('RequireAuth', () => {
       await waitFor(() =>
         expect(screen.getByRole('heading', { name: /hola de nuevo/i })).toBeInTheDocument(),
       )
-      // Distinct from WelcomeScreen even though its generic-fallback CTA
-      // shares the same label: no guest option and no first-run legal copy.
-      expect(screen.queryByRole('button', { name: /invitado/i })).not.toBeInTheDocument()
+      // Distinct from WelcomeScreen even though both offer a guest path
+      // (specs.md §10.37): this screen's guest entry is gated behind a
+      // confirm dialog, and no first-run legal copy renders alongside it.
+      expect(screen.queryByRole('button', { name: /términos/i })).not.toBeInTheDocument()
     })
 
     it('never renders Welcome for a known-returning device whose restore() succeeds', async () => {

@@ -32,7 +32,14 @@
       "reassurance": "Fazer login de novo não afeta o que já está salvo neste dispositivo.",
       "expiredChip": "Expirada",
       "continueCtaNamed": "Continuar como {{name}}",
-      "continueCtaGeneric": "Continuar com o Google"
+      "continueCtaGeneric": "Continuar com o Google",
+      "guestCta": "Continuar como convidado",
+      "guestConfirm": {
+        "title": "Continuar como convidado?",
+        "description": "É um perfil separado, só neste dispositivo. Seus dados do Google não são tocados: você pode voltar a eles quando quiser, pelo seu perfil.",
+        "confirmCta": "Continuar como convidado",
+        "cancelCta": "Cancelar"
+      }
     },
     "errors": {
       "missingClientId": "Erro de configuração. Tente novamente mais tarde.",
