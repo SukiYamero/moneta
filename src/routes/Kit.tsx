@@ -137,6 +137,10 @@ export const Kit = () => {
   // (useOverlay.ts) exists for.
   const [movementSheetOpen, setMovementSheetOpen] = useState(false)
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+  // Non-destructive variant demo (specs.md §10.40): the gallery only showed
+  // `destructive` before this — the confirm button's other paint had no
+  // visual-QA entry of its own.
+  const [signOutConfirmOpen, setSignOutConfirmOpen] = useState(false)
   // initialFocus demo: the amount input should get focus on open even
   // though it isn't the sheet's first focusable descendant.
   const [addSheetOpen, setAddSheetOpen] = useState(false)
@@ -393,6 +397,13 @@ export const Kit = () => {
           >
             Sheet con initialFocus
           </button>
+          <button
+            type="button"
+            onClick={() => setSignOutConfirmOpen(true)}
+            className="min-h-11 rounded-md bg-secondary px-4 text-sm font-bold text-secondary-foreground"
+          >
+            Confirm no destructivo
+          </button>
         </div>
       </Section>
 
@@ -437,6 +448,17 @@ export const Kit = () => {
           </p>
         </div>
       </CenterModal>
+
+      <ConfirmDialog
+        open={signOutConfirmOpen}
+        onClose={() => setSignOutConfirmOpen(false)}
+        onConfirm={() => setSignOutConfirmOpen(false)}
+        title="¿Cerrar sesión?"
+        description="Esto no borra tus datos guardados en este dispositivo."
+        confirmLabel="Cerrar sesión"
+        cancelLabel="Cancelar"
+        destructive={false}
+      />
 
       {/* Nested-overlay demo: proves the overlay stack (useOverlay.ts) — the
           delete-confirm CenterModal is the topmost overlay while it's open:
