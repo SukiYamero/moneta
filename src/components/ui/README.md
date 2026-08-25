@@ -16,5 +16,6 @@ as React` and `function` declarations; the namespace import was fixed to a
   named import, the `function` declaration was left as-is since this
   directory is the one `func-style` exemption). Not used directly by
   feature code — composed into `src/components/shared/TextField.tsx` and
-  `AmountField.tsx`, which own the label association, error wiring and
-  44px touch target these primitives don't provide on their own.
+  `src/features/movimientos/MovimientoAmountInput.tsx`, which own the label
+  association, error wiring and 44px touch target these primitives don't
+  provide on their own.

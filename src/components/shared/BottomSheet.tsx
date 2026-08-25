@@ -6,10 +6,10 @@ import {
   useOverlay,
   type OverlayShellProps,
 } from '@/components/shared/useOverlay'
-import { useVisualViewportInset } from '@/components/shared/useVisualViewportInset'
-
-/** Matches the panel's own `max-h-[88dvh]` fallback — kept as one constant so the two never drift apart. */
-const OVERLAY_MAX_HEIGHT_FRACTION = 0.88
+import {
+  OVERLAY_MAX_HEIGHT_FRACTION,
+  useVisualViewportInset,
+} from '@/components/shared/useVisualViewportInset'
 
 /**
  * `className` merges onto the *outer* panel (matching `CenterModal`), not

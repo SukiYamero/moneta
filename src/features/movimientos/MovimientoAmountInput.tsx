@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils'
 export interface MovimientoAmountInputProps {
   value: string
   onChange: (raw: string) => void
-  /** BCP-47, from `useLocaleFormatting()` — same no-default convention as `AmountField`/`MovimientoRow`. */
+  /** BCP-47, from `useLocaleFormatting()` — same no-default convention as `MovimientoRow`. */
   locale: string
   moneda: Moneda
   /** Colors the digits — mirrors `movimientoView.ts`'s `AMOUNT_COLOR_CLASS` (income reads success-green, expense reads plain foreground). Kept as a small local table rather than importing a private module-scope const from that shared file. */
@@ -40,14 +40,12 @@ const currencySymbolFor = (moneda: Moneda, locale: string): string => {
 
 /**
  * The Add/Edit sheet's centered, borderless, auto-sizing amount display
- * (`docs/ui/design-export-add-sheet.md` §2, specs.md §10.41/§10.45) —
- * deliberately not `AmountField` (bordered, labelled, no adornment slot):
- * that shared component has no way to produce a borderless field with an
- * external currency-symbol sibling short of editing it, and this is the
- * sheet's one giant display field, not a form-list row like every other
- * `AmountField` consumer. Reuses `parseAmountForInput` (via
- * `isAmountInputInvalid`) for the same parsing rule, and `formatAmountLive`
- * for the live-grouping-as-you-type behavior this component owns.
+ * (`docs/ui/design-export-add-sheet.md` §2, specs.md §10.41/§10.45) — now the
+ * app's only amount input, after the bordered/labelled `AmountField` it was
+ * built alongside was deleted for having no production caller left (specs.md
+ * §10.47/§10.48). Reuses `parseAmountForInput` (via `isAmountInputInvalid`)
+ * for the shared parsing rule, and `formatAmountLive` for the
+ * live-grouping-as-you-type behavior this component owns.
  *
  * **Centering (specs.md §10.45):** the digits, not the `[symbol, digits]`
  * pair, must sit in the true center — a deliberate divergence from the

@@ -1,5 +1,26 @@
 import { useEffect, useState } from 'react'
 
+/**
+ * Shared with `BottomSheet`/`CenterModal`, which clamp their panel to this
+ * fraction of the corrected height — one export so the two shells (and
+ * their `max-h-[88dvh]` fallback classes, which must keep matching this
+ * number even though Tailwind's arbitrary-value syntax can't reference a
+ * JS constant) can't silently drift apart the way two separately-declared
+ * `0.88`s already had (specs.md §10.49).
+ */
+export const OVERLAY_MAX_HEIGHT_FRACTION = 0.88
+
+/**
+ * `document.documentElement.clientHeight` is spec'd to always be an
+ * integer; `visualViewport.height`/`offsetTop` are `double`s that come out
+ * fractional at plenty of ordinary, keyboard-free browser/page zoom levels
+ * (Chrome's own devicePixelRatio scaling among them). Comparing the two
+ * with strict equality would then spuriously read "keyboard shrunk it" on
+ * a zoomed page with no keyboard and no pan at all — this tolerance keeps
+ * that comparison meaningful.
+ */
+const VIEWPORT_MATCH_TOLERANCE_PX = 1
+
 export interface VisualViewportInset {
   /**
    * Distance in px from the layout viewport's top edge to the visual
@@ -44,7 +65,9 @@ export const useVisualViewportInset = (enabled: boolean): VisualViewportInset | 
 
     const update = () => {
       const matchesLayoutViewport =
-        viewport.offsetTop === 0 && viewport.height === document.documentElement.clientHeight
+        Math.abs(viewport.offsetTop) < VIEWPORT_MATCH_TOLERANCE_PX &&
+        Math.abs(viewport.height - document.documentElement.clientHeight) <
+          VIEWPORT_MATCH_TOLERANCE_PX
       setInset(matchesLayoutViewport ? null : { top: viewport.offsetTop, height: viewport.height })
     }
 
