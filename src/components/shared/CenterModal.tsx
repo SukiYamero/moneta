@@ -5,12 +5,12 @@ import {
   useOverlay,
   type OverlayShellProps,
 } from '@/components/shared/useOverlay'
-import { useVisualViewportInset } from '@/components/shared/useVisualViewportInset'
+import {
+  OVERLAY_MAX_HEIGHT_FRACTION,
+  useVisualViewportInset,
+} from '@/components/shared/useVisualViewportInset'
 
 export type CenterModalProps = OverlayShellProps<HTMLDivElement>
-
-/** Matches `BottomSheet`'s own fraction — a centered popup gets the same share of the visible space. */
-const OVERLAY_MAX_HEIGHT_FRACTION = 0.88
 
 /** The centered popup shell (Delete confirm, Info tooltip, Custom tag modal, Group editor…). */
 export const CenterModal = ({

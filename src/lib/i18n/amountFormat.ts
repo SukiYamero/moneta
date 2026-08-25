@@ -80,10 +80,13 @@ export const formatAmountForInput = (value: number, locale: string): string =>
  * malformed typed text under `locale`. Deliberately **not** true for
  * `not_positive` (e.g. a bare `0`): that's a valid keystroke on the way to
  * `0,50`, not a typo (`docs/error-handling.md`'s malformed/not_positive
- * split, specs.md §10.23 Decision 4). Both `AmountField` and
- * `MovimientoAmountInput` read this off the same `parseAmountForInput`
- * result — extracted so the "how do I read this result as invalid" logic
- * can't drift between the two independently of the parsing rule itself.
+ * split, specs.md §10.23 Decision 4). Extracted when two components read
+ * this off the same `parseAmountForInput` result and the "how do I read
+ * this result as invalid" logic could drift between them; `AmountField`
+ * has since been deleted (specs.md §10.48), so `MovimientoAmountInput` is
+ * the only caller today. Kept separate because the rule is a property of
+ * the parse result, not of any one component's markup — but that is now a
+ * judgement, not the drift-prevention it was.
  */
 export const isAmountInputInvalid = (
   value: string,
