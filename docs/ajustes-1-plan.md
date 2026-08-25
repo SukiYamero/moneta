@@ -122,3 +122,21 @@ folder check (item 4), the first-download view (item 5), the four new screens in
 light plus `#f72121`/`#af7809` (item 10), and the guest cliff end-to-end (item 6).
 Item 3 was answered 2026-08-24: **both artboards stay, frozen** — their viability
 gets looked at once everything else is built, not now.
+
+## 7. Routed mid-batch
+
+**The `FullScreenPanel` twin.** AJ-B's shape sweep found that
+`src/features/lock/FullScreenPanel.tsx` carries the identical defect it was
+fixing: the panel is the `overflow-y-auto` box and its consumers
+(`LockSettings`, PIN setup) render their header row as that box's first child,
+so scrolling those panels scrolls their header away. Confirmed by the operator
+by reading the file.
+
+It was read-only for AJ-B, correctly — it did not widen its own scope. Routed
+to **AJ-B's review pass**, which owns it now, with an explicit instruction to
+decide the right shape for a full-screen panel with a real header rather than
+copy AJ-B's grabber split.
+
+Its `pt-[max(1.5rem,env(safe-area-inset-top))]` is a candidate for whatever
+token AJ-A lands. Deliberately **not** reconciled inside either track — that
+belongs to the cross-track pass, or the two of them race on the same value.

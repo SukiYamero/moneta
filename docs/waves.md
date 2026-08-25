@@ -721,11 +721,11 @@ Check this table against `git worktree list` at the start of any parallel
 session; prune anything stale (merged-but-not-removed, or on disk but
 missing/finished here).
 
-| Path                                      | Branch                | Status                   |
-| ----------------------------------------- | --------------------- | ------------------------ |
-| `../moneta-worktrees/aj-a-shell-standard` | `aj-a-shell-standard` | active (Ajustes 1, AJ-A) |
-| `../moneta-worktrees/aj-b-sheet-chrome`   | `aj-b-sheet-chrome`   | active (Ajustes 1, AJ-B) |
-| `../moneta-worktrees/aj-d-return-action`  | `aj-d-return-action`  | active (Ajustes 1, AJ-D) |
+| Path                                      | Branch                | Status                                          |
+| ----------------------------------------- | --------------------- | ----------------------------------------------- |
+| `../moneta-worktrees/aj-a-shell-standard` | `aj-a-shell-standard` | active (Ajustes 1, AJ-A)                        |
+| `../moneta-worktrees/review-aj-b`         | `review-aj-b`         | active (AJ-B review + the FullScreenPanel twin) |
+| `../moneta-worktrees/review-aj-d`         | `review-aj-d`         | active (AJ-D review)                            |
 
 Wave 4.1 stage 1 (2026-08-20): AD, AE and AF each merged with its own review
 pass applied, plus an operator cross-track pass — every worktree removed. AH

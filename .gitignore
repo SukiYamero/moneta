@@ -29,3 +29,13 @@ coverage
 *.njsproj
 *.sln
 *.sw?
+
+# Playwright MCP writes to the repo root even when an agent is working in a
+# worktree, so verification screenshots and a11y snapshots land here as
+# untracked scratch. Two of them were committed by accident on 2026-08-19 and
+# sat in the root until 2026-08-24. Root-level images are never sources in
+# this project — real assets live in `public/` or `src/`.
+.playwright-mcp/
+/*.png
+/*.jpg
+/*.webp
