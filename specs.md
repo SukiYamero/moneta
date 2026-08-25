@@ -6516,6 +6516,118 @@ it renders inside, not by touching the modal's own contents).
 **Handed to the operator, not written here:** the
 `src/components/shared/README.md` line (Track AJ3-A owns that file this
 batch) — see this track's final report.
+### 10.50 `DateChipPicker`'s grid stops changing height, and its aria-labels stop being hardcoded Spanish (Ajustes 3, Track AJ3-C, 2026-08-25)
+
+`docs/ajustes-3-plan.md` §4 Track AJ3-C, over `src/components/shared/DateChipPicker.tsx`
+alone. Layout (where the date chip sits in the Add sheet) is the user's
+in-progress redesign and was not touched — only the picker's own markup,
+which was already hand-rolled (§2 item 4: nothing from a library to fight).
+
+**The row-count jump — CONFIRMED, fixed with a constant 6-week (42-cell)
+grid.** The old code fed `eachDayOfInterval` the interval
+`startOfWeek(startOfMonth) → endOfWeek(endOfMonth)`, which is 28, 35 or 42
+cells depending on the month, so the popover was a full row taller on a
+6-week month. Reproduced directly rather than assumed: in this machine's
+local timezone, March 2026 and February 2027 (both `weekStartsOn: 1`, the
+default) land on 42 and 28 cells respectively under the old formula — a
+real, not hypothetical, 14-cell (2-row) difference. Fixed by always taking
+6 weeks from `startOfWeek(startOfMonth(viewMonth))`, regardless of the
+month's real span (`WEEK_ROWS = 6`, a named constant with its own comment).
+**Why 6, not the month's own week count, and not 5:** this is the same
+convention Apple Calendar's and Google Calendar's month views use, and it
+is the only constant that works — 6 is the maximum number of weeks any
+month can ever require (a 31-day month starting on the week's last one or
+two days spans 6 rows), so it never has to truncate a real day, unlike a
+5-week (35-cell) constant which would be wrong for the real 6-week months
+above. The design export's own artboard (`docs/ui/design-export-add-sheet.md`
+§2) uses `hint-placeholder-count="35"` on its `newCalCells` repeater —
+read and weighed, but treated as the design tool's own placeholder guess
+for an unbounded list, not a deliberate "always 5 weeks" spec: 35 cells
+cannot represent a real 6-week month at all, so a literal reading would be
+a functional regression, not a stylistic choice. **Covered by a test that
+fails against the pre-fix code**: renders the picker open on March 2026 and
+February 2027 in turn and asserts 42 day cells (`aria-pressed` count)
+both times — verified this fails on the old code (42 vs. 28) by stashing
+just the component change and re-running the test before restoring the fix,
+not just written and trusted.
+
+**The three hardcoded Spanish `aria-label`s — not an oversight, a recorded,
+open deferral; closed here.** `specs.md`'s own text (this section's
+predecessor entries, `docs/wave-2/track-m.md`) already states plainly that
+Track M (Wave 2) deliberately left `"Selector de fecha"`/`"Mes anterior"`/
+`"Mes siguiente"` hardcoded because the component had no assigned i18n
+namespace at the time, and named the fix explicitly: "whoever next touches
+`DateChipPicker` for copy should pick a namespace." That is what this track
+does. New reserved namespace **`dateChipPicker`** (`groupLabel`/`prevMonth`/
+`nextMonth`), added key-identical across all four locale files
+(`es`/`en`/`es-AR`/`pt-BR`; `resources.test.ts`'s key-parity check passed).
+Chosen over folding into `common` because the label set belongs to one
+specific shared component, not generic app-wide copy — the same shape
+`toast`/`nav` already use for their own shared components. Spanish/
+Argentine copy is identical (generic nouns, no voseo difference); English
+and Portuguese translated directly. Existing tests needed no text changes:
+the test suite's default locale is `es` (`src/test/setup.ts`), and the new
+`es` strings are byte-identical to the old hardcoded ones.
+
+**Visual pass — token-only, no new token added (none needed, none
+requested from the operator).** Three changes, each traced to an existing
+token or an existing codebase precedent rather than invented:
+
+- The popover container's radius moved from `rounded-lg` (`--radius-lg`,
+  14px) to `rounded-xl` (`--radius-xl`, 16px) — the design export's own
+  calendar box is `border-radius:16px` exactly
+  (`docs/ui/design-export-add-sheet.md` §2), so this is a correction toward
+  a value already read from the artboard, not a new invention.
+- A visible "today" marker (`ring-1 ring-inset ring-primary`) on an
+  in-month, not-selected day cell — the picker previously drew no
+  distinction between "today" and any other day, which every native
+  calendar (the same Apple/Google Calendar precedent above) does draw.
+  Uses the existing `--primary` token via `ring-primary`, no new color.
+- Two easing corrections, not additions: the chip's chevron rotation and
+  the day-cell hover already had `transition-*` classes with Tailwind's
+  _default_ (non-token) timing function — `AGENTS.md`'s
+  "`--ease-ios`/`animate-*` for any transition" wasn't being met even
+  though nothing looked broken. Both now read `duration-200 ease-ios`.
+  Confirmed `ease-ios` is a real, already-generated Tailwind utility (not
+  something to invent): built a throwaway Tailwind CLI bundle against this
+  project's own `@theme` block and grepped the output — `.ease-ios { ...
+transition-timing-function: cubic-bezier(0.32, 0.72, 0, 1); }` is already
+  there, generated straight from `--ease-ios` in `src/styles/index.css`,
+  the same mechanism that already makes `rounded-xs`/`text-2xs` work from
+  their own `--radius-xs`/`--text-2xs` tokens. The open popover panel also
+  gained `animate-pop-in` (the same token `CenterModal` uses for its own
+  expand-in), so its appearance is an eased transition rather than an
+  instant swap.
+- Deliberately **not** changed: cell/chip spacing, font sizes, weekday-row
+  styling, nav-button hover (no precedent for hover feedback on this class
+  of small icon button anywhere else in `src/components/shared/`, so none
+  was invented here either) — the brief was the height jump and the
+  "unstyled" impression, not a redesign of the picker's whole visual
+  language.
+
+**Not done, and why:** the chip's placement in the Add sheet is the user's
+in-progress redesign (`docs/ajustes-3-plan.md` §1) and was left exactly
+where it is. `MovimientoFormFields.tsx`, `Kit.tsx`,
+`src/components/shared/README.md` and `src/lib/i18n/README.md` are
+out-of-scope/owned-elsewhere per the plan's file-ownership table; no lines
+for those are held back for the operator because none of them need to
+change to describe this track's edits accurately as written (the
+`DateChipPicker` bullets already describe behavior, not implementation
+detail down to easing/radius values).
+
+**What was verified vs. reasoned, honestly:** the row-count fix and the
+i18n retrofit are CONFIRMED — reproduced (the stash-and-rerun above) or
+directly measured (the `--ease-ios` Tailwind-CLI check, the key-parity
+test run). The claim that the result "reads as deliberate" on an actual
+phone is **not verified on real hardware** — this pass reasoned about it
+against the design export and existing token usage, the same honesty limit
+`docs/ajustes-3-plan.md` names explicitly for this track ("you cannot see
+this on a real phone").
+
+**Verified.** `bun run check`: typecheck clean; lint clean (same two
+pre-existing warnings, `button.tsx`/`FirstSyncGate.tsx`, untouched, no new
+ones); `lint:units` clean (no arbitrary px introduced); `vitest run` — 152
+files, 1653 tests (+1: the new fixed-grid regression test).
 
 ## 11. Decisions log
 
@@ -10483,6 +10595,17 @@ to revisit if it disagrees.
   runtime-computed from the live `visualViewport` state (changes every
   keyboard open/close, every device), not a static design constant, so it
   was never a candidate for a token in the first place.
+- 2026-08-25 — **`DateChipPicker`'s month grid: a constant 6 weeks (42
+  cells), always** (§10.50), matching Apple Calendar's/Google Calendar's own
+  month-view convention — the maximum any month can require, so it is the
+  only fixed count that never truncates a real day. Not the month's real
+  week count (28/35/42, the old behavior) and not a 5-week/35-cell constant,
+  which is too small for the real 6-week months that exist.
+- 2026-08-25 — New i18n namespace **`dateChipPicker`** (`groupLabel`/
+  `prevMonth`/`nextMonth`), closing the deferral `docs/wave-2/track-m.md`
+  and this file both already recorded rather than reopening the question of
+  whether the hardcoded Spanish was deliberate — it was explicitly marked
+  as a leftover for whoever next touched the component's copy.
 
 ## 12. Backlog (pending verification / deferred work)
 

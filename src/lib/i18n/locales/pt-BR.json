@@ -530,5 +530,10 @@
       "enableDefault": "Não foi possível ativar o bloqueio. Tente de novo.",
       "disableDefault": "Não foi possível desativar o bloqueio. Tente de novo."
     }
+  },
+  "dateChipPicker": {
+    "groupLabel": "Seletor de data",
+    "prevMonth": "Mês anterior",
+    "nextMonth": "Próximo mês"
   }
 }

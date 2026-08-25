@@ -3,17 +3,17 @@ import {
   addDays,
   addMonths,
   eachDayOfInterval,
-  endOfMonth,
-  endOfWeek,
   format,
   isSameDay,
   isSameMonth,
+  isToday,
   parseISO,
   startOfMonth,
   startOfWeek,
   subMonths,
   type Locale,
 } from 'date-fns'
+import { useTranslation } from 'react-i18next'
 import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useEscapeToClose } from '@/components/shared/useOverlay'
@@ -54,6 +54,14 @@ export interface DateChipPickerProps {
 
 const WEEKDAY_SLOTS = [0, 1, 2, 3, 4, 5, 6]
 
+// A fixed 6-week (42-cell) grid, not the 4-6 weeks a month's real span
+// needs: the same convention Apple Calendar and Google Calendar's month
+// view use, because 6 is the maximum any month can ever require (a 31-day
+// month starting on the week's last couple of days spans 6 rows) — so it's
+// the only constant that never has to truncate a real day, and the grid's
+// height stops changing when the user pages between months.
+const WEEK_ROWS = 6
+
 /** A chip showing the selected date that expands into an inline month grid (Add/Edit/Filter sheets). */
 export const DateChipPicker = ({
   value,
@@ -64,6 +72,7 @@ export const DateChipPicker = ({
   className,
   ref,
 }: DateChipPickerProps) => {
+  const { t } = useTranslation('dateChipPicker')
   const selected = parseISO(value)
   const [open, setOpen] = useState(false)
   const [viewMonth, setViewMonth] = useState(() => startOfMonth(selected))
@@ -85,8 +94,7 @@ export const DateChipPicker = ({
 
   const weekStartsOn = firstDayOfWeek
   const gridStart = startOfWeek(startOfMonth(viewMonth), { weekStartsOn })
-  const gridEnd = endOfWeek(endOfMonth(viewMonth), { weekStartsOn })
-  const days = eachDayOfInterval({ start: gridStart, end: gridEnd })
+  const days = eachDayOfInterval({ start: gridStart, end: addDays(gridStart, WEEK_ROWS * 7 - 1) })
   const weekdayLabels = WEEKDAY_SLOTS.map((offset) =>
     format(addDays(gridStart, offset), 'EEEEE', { locale: dateFnsLocale }),
   )
@@ -129,7 +137,10 @@ export const DateChipPicker = ({
           <CalendarDays className="size-3.5 text-fg-faint" aria-hidden="true" />
           {dayMonthFormatter.format(selected)}
           <ChevronDown
-            className={cn('size-2.5 text-fg-faint transition-transform', open && 'rotate-180')}
+            className={cn(
+              'size-2.5 text-fg-faint transition-transform duration-200 ease-ios',
+              open && 'rotate-180',
+            )}
             aria-hidden="true"
           />
         </span>
@@ -138,14 +149,14 @@ export const DateChipPicker = ({
       {open && (
         <div
           role="group"
-          aria-label="Selector de fecha"
-          className="mt-3 rounded-lg border border-border-subtle bg-surface-sunken p-3.5"
+          aria-label={t('groupLabel')}
+          className="mt-3 animate-pop-in rounded-xl border border-border-subtle bg-surface-sunken p-3.5"
         >
           <div className="mb-2.5 flex items-center justify-between">
             <button
               type="button"
               onClick={() => setViewMonth((m) => subMonths(m, 1))}
-              aria-label="Mes anterior"
+              aria-label={t('prevMonth')}
               className="flex min-h-11 min-w-11 items-center justify-center"
             >
               <span className="flex size-7 items-center justify-center rounded-sm bg-muted">
@@ -158,7 +169,7 @@ export const DateChipPicker = ({
             <button
               type="button"
               onClick={() => setViewMonth((m) => addMonths(m, 1))}
-              aria-label="Mes siguiente"
+              aria-label={t('nextMonth')}
               className="flex min-h-11 min-w-11 items-center justify-center"
             >
               <span className="flex size-7 items-center justify-center rounded-sm bg-muted">
@@ -185,11 +196,14 @@ export const DateChipPicker = ({
                   aria-pressed={isSelected}
                   aria-label={format(day, 'PPPP', { locale: dateFnsLocale })}
                   className={cn(
-                    'flex aspect-square items-center justify-center rounded-sm text-ms font-semibold',
+                    'flex aspect-square items-center justify-center rounded-sm text-ms font-semibold transition-colors duration-200 ease-ios',
                     isSelected
                       ? 'bg-primary text-primary-foreground'
                       : inMonth
-                        ? 'text-foreground hover:bg-muted'
+                        ? cn(
+                            'text-foreground hover:bg-muted',
+                            isToday(day) && 'ring-1 ring-inset ring-primary',
+                          )
                         : 'text-fg-disabled',
                   )}
                 >

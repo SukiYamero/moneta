@@ -530,5 +530,10 @@
       "enableDefault": "Couldn't enable the lock. Try again.",
       "disableDefault": "Couldn't disable the lock. Try again."
     }
+  },
+  "dateChipPicker": {
+    "groupLabel": "Date picker",
+    "prevMonth": "Previous month",
+    "nextMonth": "Next month"
   }
 }
