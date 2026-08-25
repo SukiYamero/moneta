@@ -11,6 +11,7 @@ import {
 import { useDataStore } from '@/lib/dataStore'
 import { toast } from '@/lib/toastStore'
 import { useLocaleFormatting } from '@/lib/i18n/localeFormatting'
+import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { BottomSheet } from '@/components/shared/BottomSheet'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
@@ -20,6 +21,7 @@ import {
   getMovimientoVisual,
   resolveCategoria,
 } from '@/components/shared/movimientoView'
+import { MOVIMIENTO_PRIMARY_CTA_CLASS } from '@/features/movimientos/AddMovimientoSheet'
 import { MovimientoFormFields } from '@/features/movimientos/MovimientoFormFields'
 import { useMovimientoForm } from '@/features/movimientos/useMovimientoForm'
 import { useMovimientoSheetStore } from '@/features/movimientos/movimientoSheetStore'
@@ -143,11 +145,16 @@ const MovimientoEditForm = ({
         disabled={form.submitting}
       />
       <div className="flex gap-2.5">
+        {/* Height/radius match the Save button so the row reads as one
+            control, not two mismatched heights — but typography stays
+            `size="touch"`'s default (12px/500) rather than picking up
+            `MOVIMIENTO_PRIMARY_CTA_CLASS`'s weight: Cancel is secondary,
+            not the commit action the bigger type calls out. */}
         <Button
           type="button"
           variant="secondary"
           size="touch"
-          className="flex-1"
+          className="h-13.5 flex-1 rounded-2xl"
           onClick={onCancel}
         >
           {t('form.cancelCta')}
@@ -155,7 +162,7 @@ const MovimientoEditForm = ({
         <Button
           type="button"
           size="touch"
-          className="flex-1"
+          className={cn('flex-1', MOVIMIENTO_PRIMARY_CTA_CLASS)}
           disabled={form.submitting}
           onClick={() => void form.submit()}
         >

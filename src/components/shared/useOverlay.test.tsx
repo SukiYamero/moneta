@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { act, useRef, useState } from 'react'
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -185,6 +185,57 @@ describe('useOverlay — nested overlays (bugs 2 & 3)', () => {
     rerender(<ClosedHarness />)
 
     expect(document.body.style.overflow).toBe(previousOverflow)
+  })
+})
+
+describe('useOverlay — item 1: initial focus lands in the same task as the trigger click', () => {
+  /**
+   * This proves the *mechanism* only — that `.focus()` now runs
+   * synchronously inside the click that opens the overlay, not a mechanism
+   * this environment can use to prove iOS Safari actually raises its
+   * software keyboard (no agent here can drive real iOS Safari; that stays
+   * unverified, see the AJ2-B report).
+   *
+   * A raw, synchronous `.click()` wrapped in `act` — not `user-event`,
+   * whose async, promise-based steps would themselves cross a task
+   * boundary and mask the exact timing this test exists to catch — proves
+   * the point: asserting focus immediately after, with no `await`/
+   * `waitFor`, only ever passes if focus was set inside the same
+   * synchronous flush as the click. Before this change (a passive
+   * `useEffect` deferring focus into a `requestAnimationFrame`), this
+   * exact assertion fails — focus lands a task or more later, which is the
+   * bug: iOS Safari only opens the keyboard for a `.focus()` still inside
+   * the task that carries user activation.
+   */
+  it('focuses initialFocus synchronously when open flips true inside a click handler', () => {
+    const Harness = () => {
+      const [open, setOpen] = useState(false)
+      const amountInputRef = useRef<HTMLInputElement>(null)
+      return (
+        <>
+          <button type="button" onClick={() => setOpen(true)}>
+            Agregar
+          </button>
+          <BottomSheet
+            open={open}
+            onClose={() => setOpen(false)}
+            ariaLabel="Agregar movimiento"
+            initialFocus={amountInputRef}
+          >
+            <input ref={amountInputRef} aria-label="Monto" />
+          </BottomSheet>
+        </>
+      )
+    }
+
+    render(<Harness />)
+    const trigger = screen.getByRole('button', { name: 'Agregar' })
+
+    act(() => {
+      trigger.click()
+    })
+
+    expect(screen.getByRole('textbox', { name: 'Monto' })).toHaveFocus()
   })
 })
 

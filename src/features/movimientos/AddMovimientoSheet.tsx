@@ -3,11 +3,25 @@ import { useTranslation } from 'react-i18next'
 import { CONFIG_SEMILLA, type TipoMovimiento } from '@/lib/schema'
 import { useDataStore } from '@/lib/dataStore'
 import { useLocaleFormatting } from '@/lib/i18n/localeFormatting'
+import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { BottomSheet } from '@/components/shared/BottomSheet'
 import { MovimientoFormFields } from '@/features/movimientos/MovimientoFormFields'
 import { useMovimientoForm } from '@/features/movimientos/useMovimientoForm'
 import { useMovimientoSheetStore } from '@/features/movimientos/movimientoSheetStore'
+
+/**
+ * The commit action's own size, per `docs/ui/design-export-add-sheet.md`
+ * §2 (54px/18px-radius/~15.5px/800) — `size="touch"` on `Button` is a
+ * touch-target minimum (44px/12px/500), not this. A per-call-site override
+ * rather than a new `button.tsx` variant: this shape has exactly two call
+ * sites (this sheet's Add and `MovimientoSheet`'s edit-mode Save — specs.md
+ * §10.41 has edit inherit the Add sheet's layout), nowhere near the 19
+ * call sites a shared variant would touch. Exported so `MovimientoSheet`
+ * imports the same constant instead of a second, driftable copy of the
+ * class string.
+ */
+export const MOVIMIENTO_PRIMARY_CTA_CLASS = 'h-13.5 rounded-2xl text-md font-extrabold'
 
 // `as const satisfies Record<...>` (not a template-literal `t()` call) for
 // the same reason `MovimientoFormFields`' `AMOUNT_ERROR_KEY` is one: `t()`'s
@@ -94,7 +108,7 @@ export const AddMovimientoSheet = () => {
         <Button
           type="button"
           size="touch"
-          className="w-full"
+          className={cn('w-full', MOVIMIENTO_PRIMARY_CTA_CLASS)}
           disabled={form.submitting}
           onClick={() => void form.submit()}
         >

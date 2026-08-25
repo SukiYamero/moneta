@@ -5580,6 +5580,144 @@ filed to §12**, not decided here.
 pre-existing `react/only-export-components` warnings (`button.tsx`,
 `FirstSyncGate.tsx`) — unchanged from the batch's own final state.
 
+### 10.46 The `+` FAB now raises the keyboard; the sheet's primary CTA sized to the export (Ajustes 2, Track AJ2-B, 2026-08-25)
+
+Items 1 and 3 of `docs/ajustes-2-plan.md` §2/§3.
+
+**Item 1 — mechanism.** `useOverlay.ts`'s initial-focus effect focused
+`initialFocus?.current` inside a `requestAnimationFrame` nested inside a
+passive `useEffect` — two hops past the click's own task. iOS Safari only
+opens the software keyboard for a `.focus()` call still inside the task
+that carries user activation, so focus landed but no keyboard followed. The
+plan's hypothesis — switch to a synchronous focus in the same commit as the
+triggering click — is **CONFIRMED as the mechanism fix**, not just
+reasoned: `useOverlay.ts`'s effect is now a `useLayoutEffect` with the `rAF`
+removed, focusing synchronously; `useOverlay.test.tsx` adds a test that
+renders a click-to-open harness, fires a raw, synchronous `.click()`
+wrapped in `act` (not `user-event`, whose async steps would themselves
+cross a task boundary and mask the exact timing under test — matching the
+existing "reaching for the banned `fireEvent`" precedent in
+`BottomSheet.test.tsx`, a native DOM call instead of the banned helper, not
+`user-event`), and asserts focus with no `await`/`waitFor` in between.
+Reverting the fix locally and re-running that one test reproduced the
+original bug (focus still on `<body>` immediately after the click) before
+the fix was restored — traced, not assumed. Refs attach during the
+commit's mutation phase, before layout effects run, so `panelRef.current`
+is already the mounted node when the effect body executes; no frame needs
+waiting out, and the "defer focus one frame so it's in the DOM" comment the
+old code carried no longer applies.
+
+**What is NOT proven, and cannot be from this repo.** Whether iOS Safari
+itself now raises the keyboard is **PLAUSIBLE, not CONFIRMED** — no agent
+here can drive real iOS Safari. `docs/pendientes-usuario.md` gets a
+one-line check for the user at merge (per `docs/ajustes-2-plan.md` §9):
+does tapping `+` now show the keyboard with the caret in the amount field.
+
+**`initialFocus` sweep — all four consumers, enumerated:**
+
+- `AddMovimientoSheet.tsx` (via `BottomSheet`) — the target of this fix:
+  the amount input now gets a synchronous `.focus()` from the FAB tap.
+- `src/routes/Kit.tsx`'s `initialFocus` demo (via `BottomSheet`, same
+  `AmountField`-shaped input) — dev-only (`/kit`, gated on `import.meta.env.DEV`),
+  read-only for this track; same behavior change, no user impact, not edited.
+- `PinSetup.tsx` (via `FullScreenPanel`, opened from inside the already-open
+  Profile sheet) — focuses a visually-hidden (`sr-only`, not `display:none`,
+  so still focusable) `inputMode="numeric"` PIN input. This is an
+  **improvement**: PIN entry is exactly the case a rising numeric keyboard
+  should follow focus, and the plan's own framing agreed.
+  `PinSetup.test.tsx` and `FullScreenPanel.test.tsx` still pass unchanged —
+  neither asserted focus timing.
+- `CategoryFormModal.tsx` (via `CenterModal`, opened from the Add sheet's
+  dashed "Custom" chip or the tag picker's "crear «query»" affordance) —
+  focuses a real, visible `TextField` the user is about to type a category
+  name into. The plan flagged this as possibly "a keyboard appearing where
+  one did not before"; on inspection this reads as **consistent with**, not
+  wrong against, the same reasoning that makes PinSetup better — it's a
+  real text field whose entire purpose is immediate typing, opened by a
+  direct user tap. Not obviously a regression; flagged here rather than
+  silently judged, since it's a product-feel call the operator may want to
+  weigh in on. `CategoryFormModal.test.tsx` still passes unchanged.
+
+**Non-regression, re-verified, not just assumed:** the nesting stack (only
+the topmost overlay claims initial focus — still governed by the same
+`isTopOverlay(handle)` check, now evaluated synchronously instead of a
+frame later), Escape, the Tab trap, the refcounted scroll lock, and focus
+restored to the trigger on close. All of `useOverlay.test.tsx`'s existing
+bug-1/bug-2/bug-3 nesting tests pass unmodified; `BottomSheet.test.tsx`,
+`CenterModal.test.tsx`, `PinSetup.test.tsx`, `FullScreenPanel.test.tsx`,
+`CategoryFormModal.test.tsx` all pass unmodified — 71 tests across the
+eight affected files.
+
+**Item 3 — the primary CTA.** `docs/ui/design-export-add-sheet.md` §2 draws
+the commit button at `height:54px; border-radius:18px; font-size:15.5px;
+font-weight:800`; `Button size="touch"` (44px/12px-`--text-sm`/500) is a
+touch-target minimum, not this — verified against `src/styles/index.css`
+directly rather than trusted from the plan: `--radius-2xl: 18px` (line 117),
+`--text-sm: 12px` / `--text-md: 15px` (lines 129/132), and Tailwind's
+default spacing scale (unmodified in this project's `@theme`) makes
+`h-13.5` exactly 54px. `font-extrabold` is Tailwind's unmodified default
+(800), matching the export exactly.
+
+Exported one constant, `MOVIMIENTO_PRIMARY_CTA_CLASS` (`AddMovimientoSheet.tsx`,
+imported by `MovimientoSheet.tsx`) — `'h-13.5 rounded-2xl text-md font-extrabold'`
+— rather than a `button.tsx` size variant: this shape has exactly two call
+sites, nowhere near the 19 a shared variant would touch, so no escalation
+was warranted (`docs/ajustes-2-plan.md` §3's escalation rule). Applied to
+the Add sheet's single full-width CTA and, per §10.41 ("edit mode inherits
+the Add sheet's layout"), to `MovimientoEditForm`'s Save button — **the
+same commit action in the same layout**, so it moves with the Add sheet's
+CTA. **Decision, not a mechanical copy:** edit's Cancel button (same
+`flex gap-2.5` row as Save) picks up only the height/radius half of the
+class (`h-13.5 rounded-2xl`), not the typography half — a `flex` row with
+two explicit-height buttons doesn't stretch to match, so leaving Cancel at
+44px would have shipped a visibly mismatched row; giving it the full
+treatment (weight 800) would have blurred the primary/secondary hierarchy
+the two-button row exists to express. View mode's Editar/Eliminar row
+(`MovimientoView`) is untouched — neither is the commit action this item is
+about, and the plan named only the save button. `size="touch"`'s base
+44px/12px/500 stays global and unedited (per the plan's explicit "do not
+change its typography globally"); this is exactly two call-site overrides.
+
+#### Data touched
+
+None. Layout/focus/typography only.
+
+#### Done when
+
+- Opening the Add sheet from the FAB focuses the amount input inside the
+  same synchronous task as the click — CONFIRMED by test
+  (`useOverlay.test.tsx`). The keyboard itself is PLAUSIBLE only; added to
+  `docs/pendientes-usuario.md` at merge for the user to check on a real
+  phone.
+- `initialFocus`'s three other consumers enumerated and reasoned about
+  above; none regress their own existing tests.
+- The Add sheet's primary CTA and the edit sheet's Save button render at
+  54px/18px-radius/15px(`--text-md`)/800 — pinned by a class assertion in
+  both `AddMovimientoSheet.test.tsx` and `MovimientoSheet.test.tsx`.
+- `bun run check` green: 152 files, 1621 tests (three new — one in each of
+  `useOverlay.test.tsx`, `AddMovimientoSheet.test.tsx`,
+  `MovimientoSheet.test.tsx`), typecheck/lint clean, the same two
+  pre-existing `react/only-export-components` warnings, unchanged.
+
+#### Blast radius
+
+**Owned by Track AJ2-B:** `src/components/shared/useOverlay.ts` + test,
+`src/features/movimientos/AddMovimientoSheet.tsx` + test,
+`src/features/movimientos/MovimientoSheet.tsx` + test.
+`src/components/shared/BottomSheet.tsx` was read/re-verified but needed no
+edit — the fix lives entirely in `useOverlay.ts`, which it already builds
+on.
+
+**Explicitly not touched:** `button.tsx` (no shared variant warranted, see
+above), `MovimientoAmountInput.tsx`/`MovimientoFormFields.tsx`/
+`amountFormat.ts`/`movimientoSheetStore.ts` (Track AJ2-A's surface),
+`BottomNav.tsx`, `AppShell.tsx`, `src/styles/index.css`, `src/routes/Kit.tsx`
+(behavior changes, not edited — reported above instead).
+
+**Handed to the operator, not written here:** the
+`src/features/movimientos/README.md` line (AJ2-A owns that file) — see this
+track's final report.
+
 ## 11. Decisions log
 
 - 2026-06-25 — Package manager: **bun**. Node: **24 LTS** (`.nvmrc`).
@@ -9424,6 +9562,41 @@ fix turned out to satisfy the original ask for free: true is shorter than the
 hedge the false version needed. `lock.settings.footerPolicy` had the opposite
 defect (true but silent about the forced sign-out) and is now reconciled to
 tell the same story as the confirm dialog.
+
+### 2026-08-25 — Overlay initial focus moved from a deferred `rAF`/passive effect to a synchronous `useLayoutEffect`
+
+Track AJ2-B (§10.46). The FAB's `+` focused the amount input correctly but
+never raised iOS Safari's software keyboard — traced to `useOverlay.ts`
+focusing inside a `requestAnimationFrame` nested inside a passive
+`useEffect`, both of which run after the click's own task ends, and iOS
+Safari only grants a keyboard to a `.focus()` still inside that task.
+Switched to `useLayoutEffect` with the `rAF` removed; a new test proves the
+mechanism (a synchronous `.click()` wrapped in `act`, asserting focus with
+no `await` in between) and was verified to fail against the old
+implementation before the fix, not just pass against the new one. This
+changes all four `initialFocus` consumers, not just the Add sheet:
+`PinSetup.tsx`'s PIN input and `CategoryFormModal.tsx`'s name field now also
+get keyboard-raising focus, which reads as correct for both (immediate-entry
+fields opened by a direct tap) rather than a regression — recorded so
+neither reads as an unintended side effect later. The keyboard itself
+remains unverified — no agent here can drive real iOS Safari.
+
+### 2026-08-25 — The Add/Edit sheet's primary CTA gets a two-call-site override, not a `button.tsx` variant; edit's Cancel matches its height only
+
+Track AJ2-B (§10.46). `docs/ui/design-export-add-sheet.md` §2's commit
+button (54px/18px-radius/15.5px/800) only ever needed two call sites —
+`AddMovimientoSheet`'s Add and `MovimientoSheet`'s edit-mode Save (§10.41:
+edit inherits the Add sheet's layout) — nowhere near the 19 call sites
+`size="touch"` has, so no `button.tsx` escalation was warranted. The one
+constant (`MOVIMIENTO_PRIMARY_CTA_CLASS`) is exported from
+`AddMovimientoSheet.tsx` and imported by `MovimientoSheet.tsx` rather than
+duplicated. Edit's Cancel button, sitting beside Save in the same row,
+takes the height/radius half of that class only, not the typography half —
+matching Save's height so the row doesn't render two mismatched button
+heights, while keeping Cancel's lighter weight so the row still reads
+primary-vs-secondary. Not requested verbatim by the plan; a judgment call
+made in scope (both files are this track's own), flagged for the operator
+to revisit if it disagrees.
 
 ## 12. Backlog (pending verification / deferred work)
 

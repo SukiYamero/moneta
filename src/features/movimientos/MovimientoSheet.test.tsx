@@ -123,6 +123,27 @@ describe('MovimientoSheet — edit mode', () => {
     )
     await waitFor(() => expect(screen.getByRole('button', { name: /editar/i })).toBeInTheDocument())
   })
+
+  // specs.md §10.41 has edit inherit the Add sheet's layout — Save is the
+  // same commit action as the Add sheet's own CTA, so it takes the same
+  // design-export sizing (docs/ui/design-export-add-sheet.md §2). Cancel
+  // matches its height/radius only (row alignment), keeping its lighter
+  // touch-target typography since it isn't the commit action.
+  it('sizes Save to the design export and matches Cancel to it in height only', async () => {
+    const user = userEvent.setup()
+    state.movimientos = [movimiento()]
+    useMovimientoSheetStore.setState({ viewId: 'mov_1' })
+    render(<MovimientoSheet />)
+
+    await user.click(screen.getByRole('button', { name: /editar/i }))
+
+    const save = screen.getByRole('button', { name: /guardar/i })
+    expect(save).toHaveClass('h-13.5', 'rounded-2xl', 'text-md', 'font-extrabold')
+
+    const cancel = screen.getByRole('button', { name: /cancelar/i })
+    expect(cancel).toHaveClass('h-13.5', 'rounded-2xl')
+    expect(cancel).not.toHaveClass('font-extrabold')
+  })
 })
 
 describe('MovimientoSheet — delete', () => {
