@@ -362,6 +362,23 @@ session, and the operator/orchestrator owns running it.
 ## Working in parallel (multiple agents)
 
 - One agent = one branch = one worktree. Never two writers on the same branch.
+- **The rule is one writer per _checkout_, not per branch, and it binds the
+  operator too.** A reviewer that applies fixes is a writer; so is the
+  operator applying a doc line. Concretely: **review passes get worktrees,
+  and while any agent is running, the operator does not commit to `main`** —
+  operator edits queue until every agent has returned. Never `git add -A` on
+  a shared checkout; stage named paths.
+  Measured, not feared. On 2026-08-25 the operator ran three review passes
+  directly on the `main` checkout while committing to it, and `git add -A`
+  swept a reviewer's uncommitted functional fix into an unrelated docs
+  commit (`specs.md` §10.49.2). Two of the three reviewers had to work
+  around it on their own and one refused to write its findings at all. The
+  lesson was then written down — **and the operator repeated it in the same
+  session**, committing to `main` while the cross-track review was live. A
+  rule that had just been recorded as the lesson was broken by the role
+  that recorded it, minutes later. That is why this is phrased as a
+  mechanical constraint ("no commits to `main` while an agent runs") and
+  not as advice to be careful.
 - Each task declares the files it owns (see the wave/track plan in
   `docs/waves.md`); do not edit files owned by another in-flight track.
 - `specs.md` edits from parallel tracks are **append-only**: add your own §10
