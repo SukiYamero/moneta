@@ -44,24 +44,31 @@ export const LockSettings = ({ open, onClose }: LockSettingsProps) => {
   }
 
   return (
-    <FullScreenPanel open={open} onClose={onClose} labelledBy={titleId}>
-      <div className="flex items-center gap-2.5 px-5 pb-3.5">
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label={t('settings.back')}
-          className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg bg-secondary text-foreground"
-        >
-          <ChevronLeft className="size-4" />
-        </button>
-        <div className="min-w-0 flex-1">
-          <h1 id={titleId} className="truncate text-xl font-extrabold tracking-tight">
-            {t('settings.panelTitle')}
-          </h1>
-          <p className="text-sm font-medium text-muted-foreground">{t('settings.panelSubtitle')}</p>
+    <FullScreenPanel
+      open={open}
+      onClose={onClose}
+      labelledBy={titleId}
+      header={
+        <div className="flex items-center gap-2.5 px-5 pb-3.5">
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label={t('settings.back')}
+            className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg bg-secondary text-foreground"
+          >
+            <ChevronLeft className="size-4" />
+          </button>
+          <div className="min-w-0 flex-1">
+            <h1 id={titleId} className="truncate text-xl font-extrabold tracking-tight">
+              {t('settings.panelTitle')}
+            </h1>
+            <p className="text-sm font-medium text-muted-foreground">
+              {t('settings.panelSubtitle')}
+            </p>
+          </div>
         </div>
-      </div>
-
+      }
+    >
       <div className="flex flex-1 flex-col gap-4 px-5 pb-8">
         <div className="flex flex-col gap-4 rounded-3xl border border-border-subtle bg-card px-4 py-3.75">
           <div className="flex items-center gap-3">

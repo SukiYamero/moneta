@@ -28,11 +28,17 @@ doesn't belong to any one `src/features/**` folder. See `specs.md` §10.5.
   sheets, Tag picker). `BottomSheetProps` is `OverlayShellProps<HTMLDivElement>`
   (see `useOverlay.ts` above). Accepts `initialFocus`/`ref`. The panel is a
   `flex flex-col` of two children, not one scrolling box: the grab handle
-  (`shrink-0`, carries the drag handlers) and a `flex-1 min-h-0 overflow-y-auto`
-  body that owns the horizontal/bottom padding — scrolling long content (e.g.
-  `ProfileSheet`'s five sections) never carries the handle away with it
-  (`specs.md` §10.35). `max-h-[88dvh]` stays on the outer panel; `className`
-  still merges onto that outer panel, matching `CenterModal`'s contract.
+  (`shrink-0`, carries the drag handlers) and a `flex-1 min-h-0 overflow-y-auto
+overscroll-y-contain` body that owns the horizontal/bottom padding —
+  scrolling long content (e.g. `ProfileSheet`'s five sections) never carries
+  the handle away with it (`specs.md` §10.35), and `overscroll-y-contain`
+  keeps a drag past the body's own scroll boundary from rubber-banding the
+  scroll-locked page behind it on iOS (`specs.md` §10.35.1). `max-h-[88dvh]`
+  stays on the outer panel; `className` still merges onto that outer panel,
+  matching `CenterModal`'s contract — it targets the _outer_ panel, not the
+  padded/scrollable body, so a future consumer wanting to override the
+  body's padding needs a dedicated prop, not `className` (no current
+  consumer does this, `specs.md` §10.35).
 - `ConfirmDialog.tsx` — delete-style confirmation built on `CenterModal`;
   generates its own `labelledBy` from `title` via `useId()`, so callers
   pass no aria props. Confirm/Cancel use `Button`'s `destructive`/

@@ -3899,6 +3899,99 @@ handle's `getBoundingClientRect()` before/after — same fixed position
 relative to the dialog, confirmed outside the `.overflow-y-auto` box both
 times.
 
+### 10.35.1 Review AJ-B: FullScreenPanel's identical shape, plus two gaps in §10.35 itself (2026-08-24)
+
+Review pass over §10.35's `BottomSheet` split, and the `FullScreenPanel.tsx`
+fix §10.35 flagged for the operator to route (routed here).
+
+**`FullScreenPanel.tsx` fix — not a copy of `BottomSheet`'s split.**
+`BottomSheet`'s grab handle is chrome the shell itself owns, never consumer
+content, so the split needed no new prop: the handle is simply not part of
+`children`. `LockSettings`/`PinSetup`'s back-button/kicker row **is**
+consumer content (it varies per consumer — a back arrow vs. an X-close), so
+`FullScreenPanel` gained an optional `header` prop instead: fixed chrome
+(`shrink-0`) rendered as a sibling of a `min-h-0 flex-1 overflow-y-auto`
+body, carrying `LockSettings`'/`PinSetup`'s former first `children` element.
+The top safe-area inset (`pt-[max(1.5rem,env(safe-area-inset-top))]`) moved
+onto `header` (falling back onto the body itself with no `header`, so a
+future headerless consumer isn't silently left without the inset); the
+bottom inset stayed on the body, mirroring `BottomSheet`'s `pb-7`. Neither
+inset value changed — `src/styles/index.css` is Track AJ-A's this stage
+(defining a shared screen-top-spacing token that may subsume this exact
+value); reconciling that is the operator's cross-track call, not this pass's.
+Both consumers updated to pass their header row via `header=` — verified by
+the full lock suite (46 tests) plus a new `FullScreenPanel.test.tsx`
+mirroring `BottomSheet.test.tsx`'s structural assertion (header outside the
+`.overflow-y-auto` box).
+
+**Shape sweep, once more.** Grepped every `overflow-y-auto` in the tree
+after the `FullScreenPanel` fix: `PreContentSkeleton.tsx`, `AppShell.tsx`
+and `DrivePermissionScreen.tsx` all already separate their fixed chrome
+(nav bar / status-dot header) from their scrollable body as distinct
+siblings — the shape this section fixes doesn't recur there. Nothing else
+found.
+
+**Two gaps in §10.35's own fix, both closed here:**
+
+- **`overscroll-y-contain` added to both scrollable bodies**
+  (`BottomSheet`'s and `FullScreenPanel`'s). Neither `overflow-y-auto` box
+  had it, on `main` or after §10.35: a drag past the body's own scroll
+  boundary can chain into rubber-banding the page behind it on iOS Safari
+  even though `useOverlay.ts` sets `document.body.style.overflow = 'hidden'`
+  while an overlay is open — that lock doesn't stop the chained bounce, only
+  `overscroll-behavior` on the scrolling element itself does. No other
+  `overscroll-behavior` existed anywhere in the codebase before this.
+- **`BottomSheet`'s grab-handle row dropped a pre-existing redundancy**:
+  `mx-auto` + `w-full` on the handle row, present since before §10.35, did
+  nothing — the row is a direct child of a `flex flex-col` panel with no
+  `items-*` override, so it already stretches to full width by default
+  (`align-items: stretch`), leaving `mx-auto` centering a box with no space
+  to center within. Removed both; confirmed visually via Playwright
+  (`getBoundingClientRect()` before/after) that the row still spans full
+  width and the grab bar stays centered.
+
+**Reasoned through, not changed:**
+
+- **Drag transform vs. mid-scroll body** — CONFIRMED, not just reasoned:
+  drove a real drag gesture via Playwright (`page.mouse`) on the guest
+  Profile sheet with its body pre-scrolled. The body's `scrollTop` was
+  unchanged throughout the drag (partial drag, released below threshold,
+  and a full dismiss past threshold), and the panel's `translateY` tracked
+  drag distance correctly in both cases — a CSS transform on the flex
+  container that holds a scrolling child doesn't touch that child's own
+  scroll state, and `useOverlay`'s focus-trap/initial-focus queries
+  (`panel.querySelector`) are scoped to the outer `ref` target, which still
+  contains both the handle and the body as descendants, so nesting one more
+  level changed nothing there either.
+- **`className`'s prop contract** — confirmed no current consumer of either
+  shell passes a `className` that would land on the wrong box (§10.35 already
+  verified this for `BottomSheet`). Documented the trap directly on
+  `BottomSheetProps` (a doc comment, not a type change) rather than adding a
+  dedicated padding-override prop nobody has needed yet — the same
+  "defaulted parameter nobody passed" shape this project has flagged before
+  as not worth guarding against before a real consumer needs it.
+- **`useOverlay.ts` scroll-container identity** — read-only for this pass;
+  reasoned, not driven, since it isn't mine to edit. Its focus-trap/
+  initial-focus/Tab-cycle logic all query `panel.querySelectorAll(...)`
+  against the outer `ref` target, not against whichever box happens to be
+  `overflow-y-auto` — nesting the scrollable box one level deeper under
+  that same ref changes nothing it depends on. PLAUSIBLE, not CONFIRMED (no
+  test drives `useOverlay` against the new DOM shape directly), but no
+  concrete failure scenario found.
+
+**Verified.** `bun run check`: 146 test files (145 → 146, the new
+`FullScreenPanel.test.tsx`), 1568 tests (1564 → 1568), typecheck/lint clean,
+same two pre-existing `react/only-export-components` warnings
+(`button.tsx`, `FirstSyncGate.tsx`). Visually confirmed at 390×844 via
+Playwright against a real `bun run dev` (guest flow, since driving an
+authenticated session needs a real OAuth popup outside this pass's reach):
+the Profile sheet's drag-while-scrolled behavior above, and the
+`overscroll-y-contain` utility resolving to real `overscroll-behavior-y:
+contain` CSS on both bodies. `FullScreenPanel`'s `LockSettings`/`PinSetup`
+path itself (guest accounts have no PIN lock, §10.2.1, so `SecuritySection`
+never renders the entry point without a real signed-in session) was
+verified only via the unit suite and reasoning, not live in a browser.
+
 ## 11. Decisions log
 
 - 2026-06-25 — Package manager: **bun**. Node: **24 LTS** (`.nvmrc`).

@@ -7,6 +7,13 @@ import {
   type OverlayShellProps,
 } from '@/components/shared/useOverlay'
 
+/**
+ * `className` merges onto the *outer* panel (matching `CenterModal`), not
+ * the scrollable body — the body owns its own horizontal/bottom padding
+ * (specs.md §10.35). A caller passing `px-*`/`pb-*` today would land on the
+ * wrong box; no current consumer does (verified §10.35), but a future one
+ * wanting to override that padding needs a dedicated prop, not `className`.
+ */
 export type BottomSheetProps = OverlayShellProps<HTMLDivElement>
 
 const DRAG_DISMISS_THRESHOLD_PX = 120
@@ -122,11 +129,18 @@ export const BottomSheet = ({
           onPointerUp={endDrag}
           onPointerCancel={cancelDrag}
           onLostPointerCapture={handleLostPointerCapture}
-          className="mx-auto mt-2.5 mb-4.5 flex h-8 w-full shrink-0 touch-none cursor-grab items-center justify-center active:cursor-grabbing"
+          className="mt-2.5 mb-4.5 flex h-8 shrink-0 touch-none cursor-grab items-center justify-center active:cursor-grabbing"
         >
           <div className="h-1.25 w-9.5 rounded-full bg-border-strong" />
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto px-5.5 pb-7">{children}</div>
+        {/* `overscroll-y-contain`: a scroll-locked page (body `overflow:
+            hidden`, useOverlay.ts) still lets a touch drag past this box's
+            own scroll boundary chain into rubber-banding the page behind it
+            on iOS Safari — containing the overscroll here keeps that bounce
+            inside the sheet's own body instead of leaking to the backdrop. */}
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-5.5 pb-7">
+          {children}
+        </div>
       </div>
     </div>,
     document.body,
