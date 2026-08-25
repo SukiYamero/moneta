@@ -4608,6 +4608,103 @@ other reshaping. `bun run check`: 150 test files (149 → 150), 1589 tests
 **Escalated, not built here:** none. Both items this track was dispatched
 to resolve were resolved within its own file ownership.
 
+#### 10.40.1 Track AJ-H, reviewed
+
+Review pass, 2026-08-25, in `moneta-worktrees/review-aj-h` cut from `main`
+right after AJ-H merged. `src/features/movimientos/**` read-only for this
+pass (another track in flight there); `src/components/ui/**` read-only
+(shadcn-generated) — findings only on both.
+
+**All seven classifications re-derived independently, against the mutation,
+not trusted from the label:** matched AJ-H's exactly — destructive:
+`MovimientoSheet.tsx` (`src/lib/dataStore.ts`'s `deleteMovimiento` removes
+the entry outright with no soft-delete/trash, confirmed by reading
+`dataStore.ts` itself even though `MovimientoSheet.tsx`'s own call site is
+out of edit scope this pass — another track owns
+`src/features/movimientos/**` right now), `CategoriesSection.tsx`,
+`Kit.tsx`; not destructive: `IdentitySection.tsx`, `ReturningUserScreen.tsx`,
+`LockScreen.tsx`, `ProfilesSection.tsx`. Grepped every `<ConfirmDialog`
+call site: all seven pass `destructive` as an explicit literal (`destructive`
+or `destructive={false}`), no spread, no wrapper — the required prop is
+genuinely unavoidable, not just typed as such.
+
+**`ProfilesSection.tsx` — the one this pass was told to scrutinize.**
+CONFIRMED by reading, not reasoned from the label: traced
+`useProfiles.ts`'s `removeGoneProfile` → `@/lib/profiles/profileRegistry.ts`'s
+`removeProfile(id)` (`profileTable.delete(id)` plus clearing the active
+pointer only if it named the removed id) — the confirm's own mutation
+touches only the device's registry row, never the profile's actual Dexie
+database; there is no `Dexie.delete()` anywhere in this path. AJ-H's
+classification holds on that basis.
+
+One layer up is worth naming for the operator, though it doesn't change the
+verdict: the dialog only opens when `switchProfile.ts` reports
+`'profile-database-gone'`, which fires whenever
+`profileOwner.ts`'s `readOwnerMarker()` returns `undefined` — and that
+function's own doc comment says `undefined` means either "the database is
+genuinely gone" **or** "storage was unreadable" (a transient IndexedDB
+error), collapsed to the same signal on purpose. `switchProfile.ts`
+separately argues this can't misfire today because every profile reachable
+through the switcher has necessarily been bound (and therefore marked)
+before. That argument is sound for the registry's current shape, but it
+means the "not destructive" classification is inherited from a promise made
+in `src/lib/profiles/**`, not re-derivable from `ProfilesSection.tsx` alone
+— if that upstream guarantee ever weakens (a migration, a new profile
+creation path that doesn't bind-then-mark), a transient read failure would
+show this exact "gone" dialog for a database that isn't actually gone, and
+confirming would strand it: grepped the whole tree for
+`indexedDB.databases()` or any other enumeration — none exists, so there is
+no way back once the registry row is removed. **Escalated, not fixed**
+(`src/lib/profiles/**` is out of this pass's file ownership): worth a
+second look whenever `switchProfile.ts`/`profileOwner.ts` next changes,
+not urgent enough to justify touching read-only files for.
+
+**The `default` variant, read in both themes.** `button.tsx`'s `default` is
+`bg-primary text-primary-foreground hover:bg-primary/80` — the same green
+fill the app already uses for its ordinary primary CTAs (`Home`'s "Abrir
+sheet" in the `/kit` gallery, `WelcomeScreen`'s Google button surface is the
+one deliberate exception). Verified in a running `bun run dev` instance
+(`/kit`, 390×844 emulated), both themes: with `kurobello-theme` in
+`localStorage` at `oscuro`/`claro`, the confirm button reads as a clear,
+legible primary action next to a neutral `secondary` Cancel in both — never
+red, never confusable with the `destructive` paint. No regression.
+
+**Redundancy found and fixed: the `/kit` gallery only demoed
+`destructive`.** `README.md`'s own claim ("renders every component/variant
+for visual QA") wasn't true of `ConfirmDialog` after this track — only the
+destructive nested-sheet demo existed, nothing for the paint this track
+introduced. Added a second, standalone trigger + `ConfirmDialog` instance
+with `destructive={false}` (mirrors `IdentitySection`'s sign-out copy) next
+to the existing modal demos in `Kit.tsx`; updated
+`src/components/shared/README.md`'s gallery line to match. Not a behavior
+change to any real screen — `bun run check` unaffected (150/1589, same as
+before this pass).
+
+**`GuestSignInButton` extraction — no difference flattened.** Both callers
+pass `disabled={busy}` with identical semantics (Google login in flight);
+neither needs a busy label swap of its own the way `GoogleSignInButton`
+does, because the guest button is never the one whose own action is
+pending — so `disabled: boolean` (not `busy: boolean`) is the more accurate
+prop for this component, not an inconsistency worth changing. `onClick`
+and children (label) correctly stay the caller's job, matching the
+`GoogleSignInButton` precedent's own division of labor. `WelcomeScreen`'s
+and `ReturningUserScreen`'s own tests exercise the guest button by
+role/label, not by inspecting `GuestSignInButton` internals — adequate,
+behavior-level coverage; `ConfirmDialog.test.tsx`'s own variant test
+already covers the paint regression risk directly.
+
+**Nothing else found.** `ConfirmDialog.tsx`'s doc comment still accurately
+describes the component; no dead code; ADR text in `specs.md` §10.40 itself
+checked against the code and found accurate line for line.
+
+**Escalated, not fixed:** the `readOwnerMarker`/`profileOwner.ts` conflation
+above, in `src/lib/profiles/**` — out of this pass's ownership.
+
+**Verified.** `bun run check`: 150 test files, 1589 tests, typecheck/lint
+clean, same two pre-existing `react/only-export-components` warnings
+(`button.tsx`, `FirstSyncGate.tsx`) — unchanged from `main`, unchanged by
+this pass's one non-behavioral gallery addition.
+
 ### 10.39 The min-h-dvh sweep — nine screens, re-derived and re-verified, plus a mechanical guard (Ajustes 1, Track AJ-G, 2026-08-24)
 
 One owner for the whole defect, per §9 of `docs/ajustes-1-plan.md`, so the

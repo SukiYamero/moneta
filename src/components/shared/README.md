@@ -223,5 +223,7 @@ Categoria[]` prop (no default, same no-silent-fallback rule as
 
 Dev-only gallery: `src/routes/Kit.tsx` (`/kit`, gated on
 `import.meta.env.DEV`) renders every component/variant for visual QA,
-including a nested-overlay demo (sheet with a delete-confirm modal inside)
-and an `initialFocus` demo.
+including a nested-overlay demo (sheet with a delete-confirm modal inside),
+an `initialFocus` demo, and both `ConfirmDialog` `destructive` paints
+(review pass `review-aj-h`, `specs.md` §10.40.1 — the gallery only had the
+`destructive` one before).
