@@ -3843,6 +3843,62 @@ offline**, which closes a claim `specs.md` §3 has made since the beginning;
 Wave 4 tracks share it" move that already paid off with the Toast; and
 **§10.15 / §10.18**, which make local data correct and reachable.
 
+### 10.35 BottomSheet grab handle — fixed chrome, not scrolling content (Ajustes 1, Track AJ-B, 2026-08-24)
+
+Found on the first real manual pass on a phone (`docs/ajustes-1-plan.md` item
+4): scrolling the Profile sheet's content scrolled the grab handle away with
+it. A native sheet keeps the handle as fixed chrome; only the body scrolls.
+
+**Cause.** `BottomSheet.tsx`'s panel was itself the single `overflow-y-auto`
+box, and the grabber was that same box's first child — dragging or scrolling
+moved handle and content together because they were one scroll container.
+
+**Fix.** The panel is now a `flex flex-col` shell of two children: the drag
+handle (`shrink-0`, keeping its own drag handlers, pointer-capture guards,
+`pointercancel`/`lostpointercapture` handling and the
+`DRAG_DISMISS_THRESHOLD_PX` threshold — none of that logic changed) and a
+`flex-1 min-h-0 overflow-y-auto` body that now carries the horizontal
+(`px-5.5`) and bottom (`pb-7`) padding the panel used to hold directly.
+`max-h-[88dvh]` stays on the outer panel, so short content still sizes to fit
+(verified in the `/kit` gallery) and only content taller than 88dvh scrolls,
+now without the handle. `className` still merges onto the outer panel, same
+contract as `CenterModal`.
+
+**Consumer sweep.** Every current consumer — `ProfileSheet`, `MovimientoSheet`,
+`AddMovimientoSheet`, `FilterSheet`, and the three `/kit` demos — passes no
+`className` override today, so none needed a change for the padding move.
+
+**Space above first content — investigated, not a BottomSheet defect.** No
+consumer stacks its own top padding on top of the shell's fixed handle
+spacing: `ProfileSheet`, `AddMovimientoSheet`, `FilterSheet`, and
+`MovimientoSheet`'s edit mode all open directly on an `<h2>` with no extra
+`pt`. The one real divergence is `MovimientoSheet`'s **view** mode, which has
+no heading and gives its icon block its own `pt-2`, starting that sheet's
+first visible content ~8px lower than the others'. `src/features/movimientos/**`
+is Track AJ-C's (stage 2) — not touched here, flagged for that track/the
+operator to decide whether the view mode should gain a heading or drop the
+extra `pt-2`.
+
+**Shape sweep (`AGENTS.md` § Fix the shape, not the instance).**
+`CenterModal.tsx` has no `overflow-y-auto` at all (its content — delete
+confirm, info tooltip, custom tag, group editor — is short by design), so the
+same shape doesn't exist there. `src/features/lock/FullScreenPanel.tsx`
+**does** have it: its own panel is the `overflow-y-auto` box, and
+`LockSettings.tsx` renders a back-button-plus-title row as that same box's
+first child — scrolling `LockSettings`'/`PinSetup`'s content would scroll
+that header away identically to the bug just fixed here. Not fixed in this
+track: `FullScreenPanel.tsx` is explicitly read-only for AJ-B. Reported for
+the operator to route (a near-identical fix: split it into fixed
+header + `flex-1 min-h-0 overflow-y-auto` body).
+
+**Verified.** `bun run check` green (145 → still 145 test files, 1563 → 1564
+tests, the one new structural test). Visually confirmed at 390×844 via
+Playwright against a real `bun run dev`: opened the guest Profile sheet
+(overflows on a phone-height viewport), scrolled its body, and captured the
+handle's `getBoundingClientRect()` before/after — same fixed position
+relative to the dialog, confirmed outside the `.overflow-y-auto` box both
+times.
+
 ## 11. Decisions log
 
 - 2026-06-25 — Package manager: **bun**. Node: **24 LTS** (`.nvmrc`).

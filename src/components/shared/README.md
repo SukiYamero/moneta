@@ -26,7 +26,13 @@ doesn't belong to any one `src/features/**` folder. See `specs.md` §10.5.
   all handled — the last one is the reliable catch-all for a drag that ends
   outside the window). Highest-reuse shell (Filter/Movement/Profile/Add
   sheets, Tag picker). `BottomSheetProps` is `OverlayShellProps<HTMLDivElement>`
-  (see `useOverlay.ts` above). Accepts `initialFocus`/`ref`.
+  (see `useOverlay.ts` above). Accepts `initialFocus`/`ref`. The panel is a
+  `flex flex-col` of two children, not one scrolling box: the grab handle
+  (`shrink-0`, carries the drag handlers) and a `flex-1 min-h-0 overflow-y-auto`
+  body that owns the horizontal/bottom padding — scrolling long content (e.g.
+  `ProfileSheet`'s five sections) never carries the handle away with it
+  (`specs.md` §10.35). `max-h-[88dvh]` stays on the outer panel; `className`
+  still merges onto that outer panel, matching `CenterModal`'s contract.
 - `ConfirmDialog.tsx` — delete-style confirmation built on `CenterModal`;
   generates its own `labelledBy` from `title` via `useId()`, so callers
   pass no aria props. Confirm/Cancel use `Button`'s `destructive`/
