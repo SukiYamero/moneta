@@ -6173,6 +6173,146 @@ pre-existing warnings, `button.tsx`/`FirstSyncGate.tsx`, untouched);
 baseline + 1 new regression test for the `w-full` fix), re-run after the
 fix, not assumed from a prior pass.
 
+### 10.47 Cross-track review of the whole Ajustes 2 batch (`review-ajustes-2`, 2026-08-25)
+
+`AGENTS.md` § Review protocol item 6, over `docs/ajustes-2-plan.md`'s two
+tracks (AJ2-A §10.45/§10.45.1, AJ2-B §10.46/§10.46.1) after both merged and
+were reviewed. Not a re-review of either track — both per-track passes were
+thorough and applied real fixes — only what a track-scoped reviewer is
+structurally blind to: drift between the two, one concept solved twice, a
+rule kept in one place and dropped in its twin, and the shared surface both
+touched.
+
+**`MovimientoAmountInput` vs `AmountField` — verified independently, not
+fixed, escalated.** `AmountField.tsx` (`src/components/shared/`) has **zero
+production call sites** — grepped directly: the only references are
+`src/routes/Kit.tsx`'s dev-only `/kit` demo, `AmountField.tsx`'s own test,
+and the `src/components/shared/index.ts` barrel re-export. This predates
+Ajustes 2: Ajustes 1's Track AJ-C (`db56f3a`, "rebuild the Add/Edit sheet to
+the design export nobody had read") swapped `AmountField` for a new
+`MovimientoAmountInput` inside `MovimientoFormFields.tsx` and documented why
+(§10.41, "Why not `AmountField`") — its bordered/labelled API can't produce
+the borderless design without editing a shared component for what was, at
+the time, the redesign's only field of this kind. That reasoning justified
+_not editing_ `AmountField`; it never revisited whether `AmountField` should
+keep existing once nothing used it. Ajustes 2's AJ2-A then added live
+grouping, self-centering and direct-DOM-mutation `onChange` handling to
+`MovimientoAmountInput` alone (correctly — `AmountField.tsx` was outside
+AJ2-A's writable set per the plan's own file-ownership table), which widens
+the _behavioral_ gap between the two components on top of the
+already-existing _markup_ gap, but doesn't change `AmountField`'s
+already-zero production status — that was already true before this batch
+started. **Not fixed here — an operator decision, per the plan's own
+instruction to escalate rather than act on a shared-component deletion or
+rewrite:**
+
+- Delete `AmountField.tsx` + its test + the `Kit.tsx` demo + the barrel
+  export. It's fully superseded in the one place it was built for, and
+  `src/components/shared/README.md`'s entry ("locale-aware amount input for
+  `Movimiento.monto`") currently reads as live documentation of a component
+  no `Movimiento.monto` form actually uses.
+- Fold `MovimientoAmountInput`'s live-grouping/centering behavior into
+  `AmountField` (or have one compose the other) so a future bordered/
+  labelled money field doesn't silently ship without it.
+- Leave both as-is: `AmountField` stays a documented shared primitive
+  (exercised in `/kit`) for a bordered/labelled money field that doesn't
+  exist yet but might (a budget field, a goal amount) — but if one is ever
+  built, its author needs to know to check `MovimientoAmountInput` for the
+  live-grouping/centering behavior first, since neither `AmountField.tsx`'s
+  doc comment nor its README entry mentions that a sibling amount input
+  elsewhere in the app behaves differently.
+
+No recommendation forced past this — all three are legitimate, and which
+one is right depends on whether a second production money field is coming,
+which is a product question, not a code one.
+
+**Focus-timing × `field-sizing: content` × DOM-mutating `onChange` —
+checked, no defect found.** Traced the actual commit lifecycle rather than
+reasoning abstractly: `BottomSheet` renders `if (!open) return null`, so the
+entire subtree — including `MovimientoAmountInput`'s real `<input>` node —
+mounts in the _same_ commit that flips `open` true; refs attach bottom-up
+during that commit's mutation phase, strictly before `useOverlay`'s
+`useLayoutEffect` (which does the synchronous `.focus()`) runs — this is the
+same ordering §10.46/§10.46.1 already verified for `panelRef` and holds
+identically for `amountInputRef`, a child ref one level deeper. `.focus()`
+itself doesn't require `field-sizing: content`'s width to already be
+resolved — a browser computes layout on demand (forced synchronous layout)
+for whatever a focus-triggered scroll needs, it doesn't need it precomputed
+— and `MovimientoAmountInput`'s DOM-mutating logic lives entirely in
+`handleChange`, wired to the `input` event, which focus does not fire.
+There is no code path where the synchronous pre-paint focus and the
+live-reformat DOM mutation execute in the same tick. The one genuinely
+open question — how iOS Safari's visual-viewport resize (keyboard rising)
+interacts with a sheet whose amount field is _already_ focused and already
+auto-sizing when the resize starts, versus the old deferred-focus timing —
+is real-device-only, the same unverifiable-from-this-repo class already
+covered by `docs/pendientes-usuario.md` #13; not filing a duplicate item
+for it.
+
+**Process finding: two-for-two disproven claims written into `specs.md` by
+the track that wrote them, both caught only because the review pass ran an
+adversarial reproduction instead of trusting the prose — worth naming past
+either instance.** `review-aj2-b` (§10.46.1) disproved AJ2-B's own claim
+that `user-event` would "mask" the keyboard-focus bug; `review-aj2-a`
+(§10.45.1) disproved AJ2-A's own claim that a flex item's percentage
+`max-width` "resolves against the flex container's already-definite width"
+in this specific DOM tree. Both false claims share one shape: each cites a
+**general, textbook-true rule** (a CSS spec mechanic; an assumption about
+`user-event`'s async timing) as the _reason_ a specific implementation
+choice is safe or correct, without empirically checking that the concrete
+situation in front of the track actually satisfies that rule's own
+precondition — whether the row's own immediate container was actually
+definite-width (it wasn't, until `w-full`), whether `user-event`'s
+scheduling gap was actually wider than this bug's own `rAF` delay in this
+jsdom version (it wasn't tested until the review pass tried it). Both
+survived to a commit because the track that wrote the justification also
+wrote the code it was justifying and had no built-in reason to try to break
+its own claim before recording it as settled fact in `specs.md` — the
+falsification only happened once a _second_, independent pass treated the
+claim as a hypothesis rather than a given. Two out of two tracks in one
+batch is a small sample, but it's not zero, and it's the same failure both
+times: a plausible mechanical justification, sourced from a real principle,
+applied without confirming the instance actually meets the principle's own
+assumptions. Not proposing a process change unilaterally — flagging it as
+the kind of finding `AGENTS.md`'s "name systematic blind spots" asks for,
+for the operator to decide whether it's worth a standing habit (e.g., "try
+to falsify a definitive mechanical claim — remove the fix, swap the
+alternative — before writing it into `specs.md` as fact," which is exactly
+what both review passes did after the fact).
+
+**`docs/waves.md`'s worktree log — CONFIRMED stale, fixed.** The table
+still carried `../moneta-worktrees/aj2-a` / `aj2-a-amount-display` /
+`active` against `git worktree list` and `git branch -vv` showing neither —
+the directory (`../moneta-worktrees/`) is empty and the branch doesn't
+exist. AJ2-A merged (`7336c34`) and was reviewed (`11273f2`) without the
+row being removed, even though its sibling AJ2-B correctly dropped its own
+row at merge (`fa55828`) — one track in the same batch followed the "prune
+the moment you merge" rule and the other didn't. Restored the table to
+`(none)` and added a prune note in the same style as the table's existing
+ones, naming this as a fourth recurrence of the exact failure the table's
+own comment already tracks.
+
+**Shared surface — checked, consistent, nothing else to fix.** Both
+sheets' primary-CTA class (`MOVIMIENTO_PRIMARY_CTA_CLASS` from
+`movimientoPrimaryCta.ts`) matches in both components and both tests
+(`h-13.5 rounded-2xl text-md font-extrabold`, asserted in
+`AddMovimientoSheet.test.tsx` and `MovimientoSheet.test.tsx`). This batch's
+own `specs.md` numbering (§10.45/§10.45.1/§10.46/§10.46.1) lands in clean
+numeric order, unlike Ajustes 1's (flagged separately in §12).
+`docs/pendientes-usuario.md` #13 and #14 both cross-reference the correct
+spec sections and accurately describe the current code. The
+`initialFocus` four-consumer enumeration in §10.46 matches the actual call
+sites (re-grepped, not re-trusted). `src/features/movimientos/README.md`,
+`src/components/shared/README.md` and `src/lib/i18n/README.md` all match
+the code as it stands post-batch (the `AmountField` entries are accurate
+descriptions of the component, just silent on its now-zero-consumer status
+— see the escalation above).
+
+**Verified.** `bun run check`: typecheck clean; lint clean (same two
+pre-existing warnings, `button.tsx`/`FirstSyncGate.tsx`, untouched);
+`lint:units` clean; `vitest run` — 152 files, 1652 tests, unchanged (this
+pass added no code, only `docs/waves.md`'s prune and this section).
+
 ## 11. Decisions log
 
 - 2026-06-25 — Package manager: **bun**. Node: **24 LTS** (`.nvmrc`).
@@ -10104,6 +10244,26 @@ to revisit if it disagrees.
   actually being definite-width — being a flex item is necessary but not
   sufficient, the same subtlety §10.45 already correctly named for Grid
   `auto`-tracks but didn't fully carry through to its own flex row.
+- 2026-08-25 — **`AmountField.tsx` has had zero production call sites since
+  Ajustes 1's `db56f3a` swapped it for `MovimientoAmountInput.tsx`; nobody
+  had said so out loud until the Ajustes 2 cross-track review (§10.47).**
+  Not fixed — deleting or rewriting a shared component is an operator call,
+  not a review-pass one. Filed to §12 Backlog for the operator to pick one
+  of: delete it, fold `MovimientoAmountInput`'s live-grouping/centering
+  behavior into it, or leave it as a documented kit-only primitive for a
+  bordered/labelled money field that doesn't exist in production yet — not
+  `docs/pendientes-usuario.md`, since this needs an operator/architecture
+  call, not the user in a browser or the design canvas.
+- 2026-08-25 — **Process finding (§10.47): two tracks in the same batch
+  each wrote a mechanically-justified claim into `specs.md` that was false,
+  and both were caught only because a later review pass tried to falsify
+  it rather than re-read it.** AJ2-B's `user-event`-masks-the-bug claim and
+  AJ2-A's flex-percentage-`max-width`-resolves-against-a-definite-container
+  claim share one shape: a true general principle, cited as the reason a
+  specific instance is safe, without checking the instance actually meets
+  the principle's own precondition. Named as a pattern worth a standing
+  habit — try to break a definitive mechanical claim before recording it as
+  fact — not acted on unilaterally here.
 
 ## 12. Backlog (pending verification / deferred work)
 
@@ -11411,6 +11571,25 @@ string` on `ProfileRecord`/`deviceStore.ts`'s `ProfileRow` (a Dexie version
   bind. Full sweep of every other `catch` in `src/lib/profiles/**` found
   nothing else of the same shape — see §10.42 for the per-function
   reasoning. `bun run check` green: 150 files, 1,591 tests (2 new).
+
+- 2026-08-25 — **`AmountField.tsx` (`src/components/shared/`) has zero
+  production call sites — decide its fate (Ajustes 2 cross-track review,
+  §10.47).** Grepped directly: only `src/routes/Kit.tsx`'s dev-only `/kit`
+  demo, `AmountField.test.tsx`, and the `src/components/shared/index.ts`
+  barrel reference it. This dates to Ajustes 1's `db56f3a`, which swapped
+  it for `MovimientoAmountInput.tsx` in the one form it served and
+  documented why (§10.41) without revisiting whether `AmountField` should
+  keep existing once nothing used it; Ajustes 2's AJ2-A then widened the
+  _behavioral_ gap (live grouping, self-centering) on top of the
+  already-existing _markup_ gap, without changing `AmountField`'s already-
+  zero production status. Not fixed — deleting or rewriting a shared
+  component is an operator call. Three options, no forced pick: delete
+  `AmountField.tsx` + its test + the `Kit.tsx` demo + the barrel export;
+  fold `MovimientoAmountInput`'s live-grouping/centering into it so a
+  future bordered/labelled money field doesn't silently ship without that
+  behavior; or leave it as a documented kit-only primitive, with the
+  caveat that its own doc comment/README don't currently warn a future
+  author that a sibling amount input elsewhere behaves differently.
 
 ### Development waves (parallel tracks, sequencing, worktree log)
 

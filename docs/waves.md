@@ -721,9 +721,20 @@ Check this table against `git worktree list` at the start of any parallel
 session; prune anything stale (merged-but-not-removed, or on disk but
 missing/finished here).
 
-| Path                        | Branch                 | Status |
-| --------------------------- | ---------------------- | ------ |
-| `../moneta-worktrees/aj2-a` | `aj2-a-amount-display` | active |
+| Path                      | Branch | Status |
+| ------------------------- | ------ | ------ |
+| _(none — see note below)_ |        |        |
+
+**Pruned 2026-08-25 (cross-track review, `review-ajustes-2`):** AJ2-A's row
+(`../moneta-worktrees/aj2-a`, `aj2-a-amount-display`) still claimed `active`
+against `git worktree list`/`git branch -vv` showing neither — the track
+merged (`7336c34`) and was reviewed (`11273f2`) without the row being
+removed, even though its sibling AJ2-B correctly dropped its own row at
+merge (`fa55828`). Same failure this table already names below, a fourth
+time: one track in the same batch followed the rule and the other did not,
+which is more evidence the rule needs an enforced trigger (a merge-commit
+checklist item, a lint, something other than a track remembering) rather
+than another manual prune.
 
 **Pruned 2026-08-25 (cross-track review, `review-cross`):** AJ-A, AJ-E and
 AJ-F's rows (`aj-a-shell-standard`, `aj-e-return-guest`, `aj-f-pin-copy`) all
