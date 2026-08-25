@@ -7566,7 +7566,51 @@ authStore`), caught by a batch of test files failing on
     `GuestAdoptionPrompt.test.tsx`'s 7, plus `authStore.test.ts`'s 9 new
     login/accept/decline cases and 2 new `RequireAuth.test.tsx` cases).
 
+### 2026-08-24 — the two parked artboards, and a design export nobody diffs
+
+**"Notificaciones" and "Escaneo de factura" stay in the canvas, frozen** (user).
+Not aspirational, not deleted: parked, with a named moment to revisit — their
+viability gets assessed at the end, once everything else is built. The risk
+that someone implements one by mistake is real, which is why this line exists
+and why `docs/waves.md` § "Deliberately not in this wave" already names both.
+Nothing in any current wave may build against either.
+
+**The process finding behind it, which is worth more than the decision.** The
+same session found that §10.23's UI section describes a labelled vertical form
+while the design export's Add-sheet artboard describes a calculator-style
+sheet. The code implemented the spec faithfully, so every review pass since
+agreed with it — a track-scoped reviewer checks code against spec, and here the
+spec was the thing that was wrong. The artboard had never been read: it is the
+only one in the export introduced by a bare `<!-- add sheet -->` comment
+instead of the `<!-- ===== NAME ===== -->` banner the others use, so a
+marker-based search skipped it. Extracted verbatim, for the first time, to
+`docs/ui/design-export-add-sheet.md`.
+
+**The rule that follows: a versioned design export that is never diffed against
+the spec sections describing the same screens is decoration.** Sixteen further
+artboards are in exactly that position today — `GROUPS LIST`, `GROUP SCREEN`,
+`GROUP EDITOR`, `SETTINGS SCREEN`, `VOICE`, `ESCANEO`, `DICTADO EN EDICIÓN`,
+`SKELETON`, `TOAST`, `SYNC INDICATOR`, `INFO TOOLTIP`, `DELETE CONFIRM`,
+`SIGN-OUT CONFIRM`, `FILTER SHEET`, `MOVEMENT SHEET`, `SEARCH SCREEN`,
+`PROFILE SHEET`, `CUSTOM TAG MODAL`, `AUTH: WELCOME`. That is not proof they
+diverge; it is proof nobody has checked, which is the position the Add sheet
+was in until a user held the running app. Filed to §12, not fixed here.
+
 ## 12. Backlog (pending verification / deferred work)
+
+- **Diff every remaining design-export artboard against its spec section.**
+  Raised 2026-08-24 (§11 same date). Nineteen artboards in
+  `docs/ui/Moneta_ Expense Manager UI.zip` have never been compared to the
+  spec sections that claim to describe the same screens. One such gap
+  (§10.23's Add sheet) shipped a screen the user did not recognise, past
+  1563 passing tests and several review passes. This is a batch of small,
+  boring diffs; it is also the only way to know whether other screens carry
+  the same defect. **Do not start it inside an adjustment batch** — it is its
+  own piece of work.
+- **Where the biometric option lives** — see `docs/pendientes-usuario.md`
+  item 11. It works; the user does not like its placement or presentation, and
+  the design export contains no biometric UI to fall back on. Waiting on the
+  user to say what is wrong before any track touches it.
 
 - ✅ **CLOSED 2026-08-21 — operator decision + implementation, full
   reasoning in §11 ("The §12 adoption-resume gap closed").** Resuming an

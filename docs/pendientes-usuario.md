@@ -19,27 +19,6 @@ nobody else can make, and verification that needs a human in a browser.
 
 ## Open
 
-### 3. Three canvas-vs-code questions, two of them cosmetic — `owner: user`
-
-Asked 2026-08-19. **The two that mattered are resolved**, recorded here so
-they are not re-asked:
-
-- **Drive status row — resolved 2026-08-20.** The canvas was ahead and the
-  code caught up: Track AB shipped the row in the profile sheet (§10.26).
-- **"AUTH: ACCOUNT CHOOSER" — resolved 2026-08-20.** It is a mock of Google's
-  own dialog, which we never render. What the user actually wanted from it
-  became Track AG (§10.31, the profile switcher).
-
-What is still genuinely open is only what to do with two artboards, and
-neither blocks any code:
-
-- **"Notificaciones" preference.** No notification system exists, and with no
-  backend there can be no push (§6). Remove from the canvas, or keep it as
-  aspirational knowing it needs an explicit §6 exception?
-- **"Escaneo de factura" screen.** Receipt scanning is deferred _indefinitely_
-  (§11, 2026-08-18). Keep the artboard as a memory of the idea, or remove it so
-  nobody implements it by mistake?
-
 ### 10. Look at the new screens on light — `owner: user`
 
 Raised 2026-08-20, at the end of Wave 4.1 stage 1. Four screens were built in
@@ -58,6 +37,22 @@ Pairs with what already needed your eye from §10.30: `#f72121` (the light rose
 had nowhere to go but pure red) and `#af7809` (any yellow earning contrast on
 white goes brown). One pass over the app in light mode answers all of it.
 
+**Partially answered 2026-08-24 (user): "el tema claro funciona bien."** The
+theme itself is confirmed working, and PIN setup and the lock-settings panel
+were both driven in that session (the user set a PIN and enabled biometrics).
+
+Three things in this item are still not confirmed, and they are not the same
+question as "does light mode work":
+
+- the **returning-user screen** on light — it only renders when a session has
+  lapsed, so it is not on the path the user walked;
+- the **PIN lock screen** on light (entering the PIN), as opposed to setting
+  one up;
+- the **judgment call** on `#f72121` and `#af7809` — whether pure red and
+  brown are acceptable, which no measurement can answer.
+
+Stays open, narrowed to those three.
+
 ### 4. Verify `connectDrive` against a real Drive — `owner: user`
 
 Open in `specs.md` §12 since Wave 1 and **no agent can close it**: it needs a
@@ -68,6 +63,19 @@ The check: first run creates the `KuroBello` folder plus its files; a second run
 closes.
 
 **Asked again 2026-08-20 (Wave 4.1 dispatch): not tested yet.** Stays open.
+
+**Partially exercised 2026-08-24, and it is important to be precise about what
+that does and does not prove.** The user signed in with Google in a browser,
+created movements, saw the sync indicator read as connected, reloaded, and the
+movements were still there.
+
+That proves the OAuth round-trip and local persistence. **It does not prove
+this item.** A reload survives on IndexedDB alone (§10.3.1) — it says nothing
+about a file in Drive. And the specific thing this item exists for is the
+**second** run: find-before-create. What still has to be seen with human eyes
+is `drive.google.com` itself — **exactly one** `KuroBello` folder after the
+first run, and **still exactly one**, not two, after signing out and back in.
+Stays open.
 
 ### 5. Who designs the first-run download view? — `owner: undecided`
 
@@ -151,9 +159,46 @@ is the PWA icon, plus the small mark the export does use on the auth screens,
 which Track AD builds with Lucide from `APP_NAME` per `AGENTS.md`. A real
 designed mark still replaces it without a redesign.
 
+### 11. Where the biometric option lives, and how it is presented — `owner: user`
+
+Raised 2026-08-24, from the first manual pass. The user set up a PIN, enabled
+biometrics, and **it worked end to end** — the machine's own biometric prompt
+came up. The mechanism is not in question.
+
+What they did not like is **where the control sits and how it is shown**. Their
+words: "funciona… sin embargo, dónde está ubicado y cómo lo mostramos no me
+gustó."
+
+Nothing more specific than that yet, and it is deliberately not guessed at
+here. Before any track touches it, the user says what is wrong with the
+placement — it is a design judgment, and §10.2's biometric half was built by
+the operator without a canvas artboard to work from, because the design export
+contains **no biometric UI anywhere** (confirmed by exhaustive search,
+`docs/ui/design-export-reference.md` §4). So there is no reference to fall back
+on; the answer has to come from the user.
+
+**Not a bug, and not urgent.** Filed so it does not die in a conversation.
+
 ---
 
 ## Closed
+
+### 3. The two undecided artboards — closed 2026-08-24 (user)
+
+**Decided: both stay, frozen.** "Notificaciones" and "Escaneo de factura" keep
+their artboards, and their viability gets looked at **at the end**, once
+everything else is built — not now, and not as part of any current wave.
+
+So they are neither aspirational nor deleted: they are parked, with a named
+moment to revisit. The risk this leaves open is that someone implements one by
+mistake, which is why it is also written into `specs.md` §11 and why
+`docs/waves.md` § "Deliberately not in this wave" already names both.
+
+The other two questions in this item were resolved on 2026-08-20 and are kept
+here so they are not re-asked: the **Drive status row** (the canvas was ahead,
+Track AB shipped it, §10.26) and **"AUTH: ACCOUNT CHOOSER"** (it is a mock of
+Google's own dialog, which we never render; what the user actually wanted from
+it became Track AG, §10.31).
 
 ### 1. Design the PIN screens in the canvas — closed 2026-08-20 (user)
 
