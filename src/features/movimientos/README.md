@@ -20,6 +20,11 @@ fields (Decision 1):
     write, independent of whether the picker can currently highlight them.
   - A `submitting` flag blocks a second concurrent submit (the double-tap
     guard specs.md calls out by name).
+  - `submitAttempts` counts every `submit()` call, blocked or not (specs.md
+    §10.48) — unlike `amountErrorReason`/`categoriaMissing`, it changes on
+    a repeated tap that hits the same already-invalid state, which is what
+    `MovimientoFormFields` needs to re-trigger its scroll-to-error effect
+    on a second blocked tap.
   - A refused or failed write (`dataStore`'s mutations return `boolean` —
     specs.md §10.23 Decision 3) never calls `onSaved` and never clears the
     typed fields — the caller decides what "may I close?" means.
@@ -35,18 +40,26 @@ fields (Decision 1):
   for free when the sheet closes (this component unmounts with it).
   Composes existing primitives (`DateChipPicker`, `SegmentedControl`,
   `TextField`, `CategoryPicker`/`CategoryFormModal` from `@/features/tags`)
-  plus this track's own `MovimientoAmountInput` — see below for why that
-  one isn't `AmountField`.
+  plus this track's own `MovimientoAmountInput` — see below for why it
+  isn't a bordered/labelled `TextField`-style field. On a submit blocked by
+  an invalid amount or a missing category, blurs whatever currently holds
+  focus (dismissing the software keyboard, which is what was hiding the
+  category error below the fold — Ajustes 3, `docs/ajustes-3-plan.md`
+  item 3, specs.md §10.48) and scrolls the offending field's section into
+  view, keyed on `useMovimientoForm`'s `submitAttempts` counter rather than
+  the error flags themselves (a repeated tap in the same invalid state
+  doesn't change those flags, but must still re-trigger the scroll).
 - `MovimientoAmountInput.tsx` — the centered, borderless, auto-sizing
-  amount display (specs.md §10.41/§10.45), deliberately not
-  `AmountField.tsx` (shared, read-only for this track): that component's
-  bordered/labelled `Input` has no adornment slot for an external
-  currency-symbol sibling. Reuses `isAmountInputInvalid` for its
-  `aria-invalid` check, shared with `AmountField.tsx` (both used to
-  re-derive that check independently from the same parser's result;
-  extracted into `amountFormat.ts` so the two can't drift, specs.md
-  §10.41.1/§12), and `formatAmountLive` for live-grouping the typed digits
-  under the locale's own convention on every keystroke (specs.md §10.45).
+  amount display (specs.md §10.41/§10.45): a bordered/labelled `TextField`
+  has no adornment slot for an external currency-symbol sibling, which this
+  needs. (This replaced the shared `AmountField.tsx` primitive in the one
+  form it served — Ajustes 3 deleted `AmountField.tsx` once nothing else
+  used it, specs.md §10.48.) Reuses `isAmountInputInvalid` for its
+  `aria-invalid` check (re-derived independently from the same parser's
+  result, extracted into `amountFormat.ts` so a second consumer couldn't
+  drift from it, specs.md §10.41.1/§12), and `formatAmountLive` for
+  live-grouping the typed digits under the locale's own convention on
+  every keystroke (specs.md §10.45).
   Colors its digits by `tipo`, mirroring `movimientoView.ts`'s (unexported)
   `AMOUNT_COLOR_CLASS`. **Centers the digits alone, not the
   `[symbol, digits]` pair** — a deliberate divergence from the design

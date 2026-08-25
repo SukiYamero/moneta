@@ -129,6 +129,7 @@ const MovimientoEditForm = ({
         amountRaw={form.amountRaw}
         onAmountChange={form.setAmountRaw}
         amountErrorReason={form.amountErrorReason}
+        submitAttempts={form.submitAttempts}
         moneda={monedaPrincipal}
         fecha={form.fecha}
         onFechaChange={form.setFecha}

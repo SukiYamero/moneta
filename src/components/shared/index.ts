@@ -1,5 +1,3 @@
-export { AmountField } from '@/components/shared/AmountField'
-export type { AmountFieldProps } from '@/components/shared/AmountField'
 export { BottomNav, type BottomNavProps } from '@/components/shared/BottomNav'
 export { BottomSheet, type BottomSheetProps } from '@/components/shared/BottomSheet'
 export { CenterModal, type CenterModalProps } from '@/components/shared/CenterModal'

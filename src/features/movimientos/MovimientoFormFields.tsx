@@ -1,4 +1,4 @@
-import { useState, type Ref } from 'react'
+import { useEffect, useRef, useState, type Ref } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { Locale } from 'date-fns'
@@ -27,6 +27,8 @@ export interface MovimientoFormFieldsProps {
   onAmountChange: (raw: string) => void
   amountErrorReason?: AmountErrorReason
   amountInputRef?: Ref<HTMLInputElement>
+  /** Increments on every submit tap, blocked or not (`useMovimientoForm`'s `submitAttempts`) — drives bringing whichever field blocked the save on screen, since `amountErrorReason`/`categoriaMissing` alone don't change on a repeated tap in the same invalid state. */
+  submitAttempts: number
   moneda: Moneda
   fecha: string
   onFechaChange: (iso: string) => void
@@ -65,6 +67,7 @@ export const MovimientoFormFields = ({
   onAmountChange,
   amountErrorReason,
   amountInputRef,
+  submitAttempts,
   moneda,
   fecha,
   onFechaChange,
@@ -85,6 +88,31 @@ export const MovimientoFormFields = ({
     open: false,
   })
   const [showMore, setShowMore] = useState(false)
+  const amountSectionRef = useRef<HTMLDivElement>(null)
+  const categorySectionRef = useRef<HTMLDivElement>(null)
+
+  // A blocked submit (item 3, docs/ajustes-3-plan.md §2/§4) previously left
+  // its only feedback wherever the field it belongs to happens to sit —
+  // fine on a screen with no keyboard up, invisible on a phone where the
+  // focused amount field's software keyboard covers everything below it.
+  // Keyed on `submitAttempts` (not `amountErrorReason`/`categoriaMissing`
+  // themselves), which changes on every tap including a repeated one that
+  // hits the same already-invalid state — those two flags wouldn't. Blurs
+  // whatever's currently focused first (dismissing the keyboard hands the
+  // full viewport back, independent of any one layout), then brings the
+  // first thing that blocked the save on screen.
+  useEffect(() => {
+    if (submitAttempts === 0) return
+    const target = amountErrorReason
+      ? amountSectionRef.current
+      : categoriaMissing
+        ? categorySectionRef.current
+        : null
+    if (!target) return
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
+    target.scrollIntoView?.({ block: 'center' })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [submitAttempts])
 
   const typeOptions: SegmentedControlOption<TipoMovimiento>[] = [
     { value: 'gasto', label: t('form.type.gasto') },
@@ -110,18 +138,20 @@ export const MovimientoFormFields = ({
         />
       </div>
 
-      <MovimientoAmountInput
-        value={amountRaw}
-        onChange={onAmountChange}
-        locale={locale}
-        moneda={moneda}
-        tipo={tipo}
-        error={amountErrorReason ? t(AMOUNT_ERROR_KEY[amountErrorReason]) : undefined}
-        disabled={disabled}
-        ref={amountInputRef}
-      />
+      <div ref={amountSectionRef}>
+        <MovimientoAmountInput
+          value={amountRaw}
+          onChange={onAmountChange}
+          locale={locale}
+          moneda={moneda}
+          tipo={tipo}
+          error={amountErrorReason ? t(AMOUNT_ERROR_KEY[amountErrorReason]) : undefined}
+          disabled={disabled}
+          ref={amountInputRef}
+        />
+      </div>
 
-      <div className="flex flex-col gap-1.5">
+      <div ref={categorySectionRef} className="flex flex-col gap-1.5">
         <CategoryPicker
           categorias={categorias}
           tipo={tipo}

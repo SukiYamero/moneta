@@ -6629,6 +6629,116 @@ this on a real phone").
 pre-existing warnings, `button.tsx`/`FirstSyncGate.tsx`, untouched, no new
 ones); `lint:units` clean (no arbitrary px introduced); `vitest run` — 152
 files, 1653 tests (+1: the new fixed-grid regression test).
+### 10.48 Item 3 (the Add button doing nothing) reproduced, not assumed, and fixed; `AmountField.tsx` deleted (Ajustes 3, Track AJ3-A, 2026-08-25)
+
+**Reproduction, before any fix.** The plan's hypothesis (`docs/ajustes-3-plan.md`
+§2 item 3, §4) was that `useMovimientoForm.submit()`'s guard returns
+silently when no category is picked, with the plan itself flagging that
+`AddMovimientoSheet.test.tsx` already has a passing end-to-end test saving a
+movement once a category is picked — so "submit is broken" cannot be the
+answer. Traced, not guessed: `submit()` does **not** fail silently in the
+sense of doing nothing — it sets `attempted`/now `submitAttempts`, and
+`MovimientoFormFields` already renders a `role="alert"` `categoriaMissing`
+message right under the category picker (this is exactly what
+`useMovimientoForm.test.ts`'s existing, already-passing "flags a missing
+category on submit" test and `AddMovimientoSheet.test.tsx`'s existing
+"shows a distinct inline error" test both prove). **CONFIRMED by reading**:
+before this track's change, nothing in `submit()` or `MovimientoFormFields`
+ever moved focus, scrolled, or otherwise drew attention to that message —
+it just appeared wherever it sits in the DOM. Combined with two already-
+established facts — `AddMovimientoSheet` passes `initialFocus={amountInputRef}`
+(so the software keyboard rises the instant the sheet opens) and item 2
+(**CONFIRMED by the user on iOS**, same plan §2) that a scroll-locked
+sheet's top gets dragged out of view once that keyboard is up — the
+category-missing message sitting below the amount field, below the fold
+the keyboard creates, is a well-evidenced explanation for "tapped Add,
+nothing happened": the message was real and in the DOM, just not
+somewhere the user was looking. **This mechanism itself is PLAUSIBLE, not
+CONFIRMED** — no iOS device is available in this environment to watch the
+keyboard actually cover that exact message; the reasoning rests on two
+independently-established facts (the `initialFocus` wiring, read directly;
+item 2, confirmed by the user) rather than a fresh repro of the combined
+failure.
+
+**Fix — layout-independent, not a restructure.** `useMovimientoForm` gained
+`submitAttempts: number` (increments on every `submit()` call, reset
+alongside `reset()`) — unlike `amountErrorReason`/`categoriaMissing`, this
+changes even when a second tap hits the exact same invalid state, which is
+what a view needs to re-trigger on a repeated blocked tap.
+`MovimientoFormFields` wraps the amount input and the category section
+each in a plain ref'd `<div>` (no new styling — an inert wrapper, so no
+visual change) and runs a `useEffect` keyed on `submitAttempts`: if the
+save was blocked, it blurs whatever currently holds focus (dismissing the
+keyboard restores the full viewport regardless of which sheet layout is
+active) and calls `.scrollIntoView({ block: 'center' })`
+(`?.()`-guarded, matching `PeriodPickerRow.tsx`'s existing jsdom-has-none
+guard) on whichever section actually blocked the save. Chosen over the
+plan's other two named shapes (a toast, disabling the action with a
+reason): `docs/error-handling.md` §7 prefers inline "next to what failed"
+over a toast whenever the form's own surface still exists, which it does
+here — the sheet never closed — so this keeps the existing `role="alert"`
+messages as the one error surface rather than inventing a second one, and
+just makes that existing surface reliably reachable. It is also the
+shape least coupled to the Add sheet's current field order — the effect
+only needs a ref on each field's own section, not an assumption about
+what comes before/after it, so it should survive the user's in-progress
+redesign (§1) untouched. Applied identically to `MovimientoSheet`'s edit
+form, not only `AddMovimientoSheet` — both render the same
+`MovimientoFormFields`, so the same defect shape (item 3's plan title:
+"fix the shape, not the instance") existed there too, just harder to hit
+since edit mode doesn't auto-focus the amount field.
+
+**TDD, each watched failing for the right reason before the fix:**
+`useMovimientoForm.test.ts`'s new `submitAttempts` counter test (failed
+with `expected undefined to be +0`, property didn't exist);
+`AddMovimientoSheet.test.tsx`'s and `MovimientoSheet.test.tsx`'s new
+blur+`scrollIntoView` tests (both re-verified failing by temporarily
+short-circuiting the new effect with `if (true) return` and re-running —
+both failed on the missing `scrollIntoView` call, confirming the tests
+exercise the fix and not something else).
+
+**`AmountField.tsx` deleted — the user's decision** (plan §2 item 6; the
+Ajustes 2 cross-track review, §10.47, had already found zero production
+call sites and filed the three options to §12 Backlog, now closed there).
+Removed: `src/components/shared/AmountField.tsx`, its test, the barrel
+export in `src/components/shared/index.ts`, and its `Kit.tsx` "AmountField"
+gallery section. `Kit.tsx` also had a second, unrelated use — the
+`initialFocus` demo's stand-in text input happened to be an `AmountField`
+— ported to `TextField` (already imported, same `label`/`value`/`onChange`/
+`ref` shape) so that demo keeps its actual point (that a sheet can focus a
+descendant other than its first focusable one) without depending on the
+deleted component. **Confirmed `parseAmountForInput`/`formatAmountForInput`/
+`isAmountInputInvalid` keep their remaining callers** (`useMovimientoForm.ts`,
+`MovimientoAmountInput.tsx`) — grepped directly, nothing orphaned in
+`amountFormat.ts` by this deletion. (`parseAmount`, a different export in
+that same file, has no production caller either, only its own test file —
+true before this change and not something this deletion caused; left
+alone, `amountFormat.ts` is outside this track's writable set.)
+
+**Sweep for stragglers — grepped, not assumed.** Fixed (writable):
+`src/components/shared/README.md`'s `AmountField.tsx` entry removed;
+`src/lib/i18n/README.md`'s `amountFormat.ts` entry repointed from
+`AmountField.tsx` to its real remaining consumers; `src/features/movimientos/README.md`
+and `useMovimientoForm.ts`'s own doc comments updated to stop describing
+`MovimientoAmountInput`/the amount field's locale prop against a component
+that no longer exists. **Left alone — outside this track's writable
+set, reported rather than fixed:** `src/components/ui/README.md` still
+says `TextField.tsx`/`AmountField.tsx` "own the label association…" (stale,
+not this track's file); `src/features/movimientos/MovimientoAmountInput.tsx`'s
+own doc comment still contrasts itself against `AmountField` in three
+places (that file isn't in AJ3-A's writable list even though it's this
+folder's own component — flagged for whoever next touches it);
+`docs/wave-3-plan.md`, `docs/wave-4-plan.md`, `docs/waves.md`,
+`docs/wave-3/u.md`, `docs/ui/design-export-add-sheet.md` all still name
+`AmountField` — left as-is deliberately, being historical wave-plan/design
+records of a batch that already shipped, not live documentation of current
+call sites.
+
+**Verified.** `bun run check`: typecheck clean; lint clean (same two
+pre-existing warnings, `button.tsx`/`FirstSyncGate.tsx`, untouched);
+`lint:units` clean; `vitest run` — 151 files, 1647 tests (net: −1 file/−5
+tests from deleting `AmountField.test.tsx`, +3 new tests for this track's
+fix).
 
 ## 11. Decisions log
 
@@ -10607,8 +10717,35 @@ to revisit if it disagrees.
   and this file both already recorded rather than reopening the question of
   whether the hardcoded Spanish was deliberate — it was explicitly marked
   as a leftover for whoever next touched the component's copy.
+- 2026-08-25 — **`AmountField.tsx` deleted — the user's decision** (Ajustes
+  3, Track AJ3-A, full reasoning in §10.48). One amount input in
+  production (`MovimientoAmountInput.tsx`), not two with a shared parser
+  and independently-derived validity — closes the §12 backlog item and the
+  §11 escalation above that both left this as an open operator/user call.
+- 2026-08-25 — **A view reacting to "the user just tried and failed" needs
+  a counter, not the derived error flags themselves (§10.48).** Building
+  the scroll-to-error fix for item 3: `amountErrorReason`/`categoriaMissing`
+  don't change on a second submit tap that hits the same already-invalid
+  state, so an effect keyed on them alone never re-fires on a repeated
+  blocked tap. `useMovimientoForm.submitAttempts` (incremented on every
+  `submit()` call regardless of outcome) is the general shape for this —
+  worth reusing if a future form needs the same "did the user just attempt
+  this again" signal rather than re-deriving one per form.
 
 ## 12. Backlog (pending verification / deferred work)
+
+- **Two stale `AmountField` references survive its deletion, outside
+  Track AJ3-A's writable set (§10.48, 2026-08-25).**
+  `src/components/ui/README.md` still says `TextField.tsx`/`AmountField.tsx`
+  "own the label association, error wiring and 44px touch target" for
+  `input.tsx`/`label.tsx`'s consumers — `AmountField.tsx` no longer exists.
+  `src/features/movimientos/MovimientoAmountInput.tsx`'s own doc comment
+  (three spots) still explains itself by contrast with `AmountField` —
+  accurate as history, stale as a description of what exists today. Neither
+  file was in AJ3-A's writable set (`docs/ajustes-3-plan.md` §4) even
+  though the second lives in this track's own folder; fix both the next
+  time either file is opened for related work, same standing as
+  `docs/error-handling.md` §7's own "residual, lower-severity gap" note.
 
 - **`specs.md` §10 has no table of contents and its subsections no longer
   land in numeric order — flagged by the cross-track review, §10.44,
@@ -10681,6 +10818,11 @@ to revisit if it disagrees.
   that would work but do something surprising and undocumented is worse
   than its absence. Needs the operator/user to decide product intent before
   any track builds it.
+- ✅ **CLOSED 2026-08-25 (Ajustes 3, Track AJ3-A) — moot: `AmountField.tsx`
+  deleted (specs.md §10.48, the user's own decision).** `isAmountInputInvalid`
+  now has exactly one production consumer (`MovimientoAmountInput.tsx`), so
+  the two-files-drifting-apart risk this item raised can no longer occur.
+  Original entry kept for the record:
 - **`MovimientoAmountInput` and `AmountField` each re-derive
   `isMalformed`/`invalid` from `parseAmountForInput`'s result independently
   — same four lines in two files (review-aj-c, §10.41.1, 2026-08-25).** Both
@@ -11916,6 +12058,9 @@ string` on `ProfileRecord`/`deviceStore.ts`'s `ProfileRow` (a Dexie version
   nothing else of the same shape — see §10.42 for the per-function
   reasoning. `bun run check` green: 150 files, 1,591 tests (2 new).
 
+- ✅ **CLOSED 2026-08-25 (Ajustes 3, Track AJ3-A) — the user picked the
+  first of the three options below: deleted. Full reasoning in §10.48.**
+  Original entry kept for the record:
 - 2026-08-25 — **`AmountField.tsx` (`src/components/shared/`) has zero
   production call sites — decide its fate (Ajustes 2 cross-track review,
   §10.47).** Grepped directly: only `src/routes/Kit.tsx`'s dev-only `/kit`

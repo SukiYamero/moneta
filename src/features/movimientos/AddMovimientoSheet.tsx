@@ -78,6 +78,7 @@ export const AddMovimientoSheet = () => {
           onAmountChange={form.setAmountRaw}
           amountErrorReason={form.amountErrorReason}
           amountInputRef={amountInputRef}
+          submitAttempts={form.submitAttempts}
           moneda={preferencias.monedaPrincipal}
           fecha={form.fecha}
           onFechaChange={form.setFecha}

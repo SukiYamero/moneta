@@ -54,7 +54,8 @@ JSON resources — no `i18next-http-backend`, no CDN.
   comment for the count).
 - `amountFormat.ts` — `parseAmount(raw, locale)` and its inverse
   `formatAmountForInput(value, locale)`, the pure locale money helpers
-  behind `src/components/shared/AmountField.tsx`. Built on
+  behind `src/features/movimientos/MovimientoAmountInput.tsx` (parsing/
+  formatting) and `useMovimientoForm.ts` (prefilling an edit form). Built on
   `Intl.NumberFormat(locale).formatToParts` to read the locale's actual
   decimal/group separators (`es-CO` groups `.`/decimals `,`; `en-US` the
   reverse) — never a hand-rolled parser (`specs.md` §10.14). `parseAmount`

@@ -1,7 +1,6 @@
 import { useRef, useState, type ReactNode } from 'react'
 import { Gift, House, Search, Trash2, Utensils } from 'lucide-react'
 import {
-  AmountField,
   BottomSheet,
   CenterModal,
   ConfirmDialog,
@@ -147,7 +146,6 @@ export const Kit = () => {
   const amountInputRef = useRef<HTMLInputElement>(null)
   const [addSheetAmount, setAddSheetAmount] = useState('')
   const [textFieldValue, setTextFieldValue] = useState('')
-  const [amountFieldValue, setAmountFieldValue] = useState('')
   const [pickerTipo, setPickerTipo] = useState<TipoMovimiento>('gasto')
   const [pickerSelectedId, setPickerSelectedId] = useState<string | undefined>('cat_comida')
   const [categoryModalOpen, setCategoryModalOpen] = useState(false)
@@ -337,23 +335,6 @@ export const Kit = () => {
         />
       </Section>
 
-      <Section title="AmountField">
-        <AmountField
-          label="Monto"
-          value={amountFieldValue}
-          onChange={setAmountFieldValue}
-          locale={locale}
-          placeholder="0"
-        />
-        <AmountField
-          label="Monto (con error)"
-          value="12.34.56"
-          onChange={() => {}}
-          locale={locale}
-          error="El monto no es válido"
-        />
-      </Section>
-
       <Section title="InfoButton">
         <InfoButton onClick={() => setInfoOpen(true)} label="Sobre el balance" />
       </Section>
@@ -510,11 +491,11 @@ export const Kit = () => {
             onChange={setType}
             aria-label="Tipo de movimiento"
           />
-          <AmountField
+          <TextField
             label="Monto"
             value={addSheetAmount}
             onChange={setAddSheetAmount}
-            locale={locale}
+            inputMode="decimal"
             ref={amountInputRef}
           />
         </div>

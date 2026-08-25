@@ -63,6 +63,34 @@ describe('AddMovimientoSheet', () => {
     expect(mCreateMovimiento).not.toHaveBeenCalled()
   })
 
+  // Item 3 (docs/ajustes-3-plan.md §2/§4): the category-missing message
+  // already rendered before this fix (test above) — the bug is that on a
+  // real phone it renders behind the software keyboard the amount field's
+  // `initialFocus` just opened, so a tap that fails validation reads as
+  // "nothing happened". jsdom can't reproduce keyboard occlusion, but it
+  // can verify the two things that fix it: the field that blocked the save
+  // is brought on screen, and whatever still holds focus (which is holding
+  // the keyboard up) is blurred first, regardless of whether jsdom's
+  // `scrollIntoView` (unimplemented — stubbed here, same as
+  // `PeriodPickerRow.tsx`) is even present.
+  it('blurs focus and scrolls the category section into view when a submit is blocked by a missing category', async () => {
+    const user = userEvent.setup()
+    const scrollIntoView = vi.fn()
+    HTMLElement.prototype.scrollIntoView = scrollIntoView
+    useMovimientoSheetStore.setState({ addOpen: true })
+    render(<AddMovimientoSheet />)
+
+    const amountInput = screen.getByRole('textbox', { name: /monto/i })
+    await user.type(amountInput, '18000')
+    expect(amountInput).toHaveFocus()
+
+    await user.click(screen.getByRole('button', { name: /agregar gasto/i }))
+
+    expect(await screen.findByText(/elige una categoría/i)).toBeInTheDocument()
+    expect(amountInput).not.toHaveFocus()
+    expect(scrollIntoView).toHaveBeenCalled()
+  })
+
   it('saves a movement with the picked category, amount and note, then closes the sheet', async () => {
     const user = userEvent.setup()
     useMovimientoSheetStore.setState({ addOpen: true })

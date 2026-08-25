@@ -32,7 +32,7 @@ export interface UseMovimientoFormArgs {
   mode: MovimientoFormMode
   /** The movement being edited — required (and read) only when `mode === 'edit'`. */
   initial?: Movimiento
-  /** BCP-47, from `useLocaleFormatting()` — no default, same convention as `AmountField`/`MovimientoRow`. */
+  /** BCP-47, from `useLocaleFormatting()` — no default, same convention as `MovimientoRow`. */
   locale: string
   monedaPrincipal: Moneda
   /** Every category (archived or not) — resolves `applyParsedFields`'s `categoriaId` to a `seccionId`. */
@@ -59,6 +59,8 @@ export interface UseMovimientoFormResult {
   setNota: (value: string) => void
   submitting: boolean
   submit: () => Promise<void>
+  /** Increments on every `submit()` call, blocked or not — unlike `amountErrorReason`/`categoriaMissing`, this changes even when the same invalid state is hit twice in a row, so a view can key an effect off it to react to a fresh tap rather than the (unchanged) derived error flags. */
+  submitAttempts: number
   /** Discards whatever is typed and returns to `mode`'s defaults — used when a create sheet is dismissed without saving. */
   reset: () => void
   applyParsedFields: (patch: MovimientoFormPatch) => void
@@ -126,6 +128,7 @@ export const useMovimientoForm = ({
   // just surfaced as an inline message instead since this form has more
   // than one required field).
   const [attempted, setAttempted] = useState(false)
+  const [submitAttempts, setSubmitAttempts] = useState(0)
 
   const parsedAmount = useMemo(
     () => parseAmountForInput(fields.amountRaw, locale),
@@ -145,6 +148,7 @@ export const useMovimientoForm = ({
   const reset = () => {
     setFields(defaultsFor(mode, initial, locale))
     setAttempted(false)
+    setSubmitAttempts(0)
   }
 
   const applyParsedFields = (patch: MovimientoFormPatch) =>
@@ -165,6 +169,7 @@ export const useMovimientoForm = ({
   const submit = async () => {
     if (submitting) return
     setAttempted(true)
+    setSubmitAttempts((n) => n + 1)
     if (!parsedAmount.ok || fields.categoriaId === undefined || fields.seccionId === undefined)
       return
 
@@ -217,6 +222,7 @@ export const useMovimientoForm = ({
     setNota,
     submitting,
     submit,
+    submitAttempts,
     reset,
     applyParsedFields,
   }
