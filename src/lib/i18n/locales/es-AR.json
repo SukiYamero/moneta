@@ -32,8 +32,7 @@
       "reassurance": "Volver a iniciar sesión no toca lo que ya está guardado en este dispositivo.",
       "expiredChip": "Caducada",
       "continueCtaNamed": "Continuar como {{name}}",
-      "continueCtaGeneric": "Continuar con Google",
-      "useAnotherAccount": "Usar otra cuenta"
+      "continueCtaGeneric": "Continuar con Google"
     },
     "errors": {
       "missingClientId": "Error de configuración. Intentá más tarde.",

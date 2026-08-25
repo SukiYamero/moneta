@@ -68,10 +68,21 @@ Onboarding screens and the route guard that sits in front of the app.
   alone, which would resolve to a more-recently-touched guest/local profile
   if one exists), shows an account card (initials avatar, name, an expired
   chip on the `--warning` token — never the design export's literal
-  untokenized hex) and one primary "Continuar como `<name>`" Google button;
-  "Usar otra cuenta" is a second, differently-labeled call to the exact same
-  `login()` — GIS's own popup is the real account chooser, this app has no
-  separate one. No guest option, no value proposition, no legal copy.
+  untokenized hex) and **one** action: the primary "Continuar como `<name>`"
+  Google button. specs.md §10.36 removed the second "Usar otra cuenta"
+  button that used to sit below it — it called the exact same `login()`
+  as the primary, so it was one control promising a different outcome and
+  delivering the identical one. Replacing it with "continue as guest," the
+  user's own suggestion, was considered and rejected: this screen only ever
+  renders for a device with a lapsed **Google** profile holding real local
+  data, and guest mode is a separate profile with its own, empty database —
+  routing here into guest would reproduce the guest cliff (§10.25/§10.31/
+  §10.32/§10.33) from the other direction. A genuinely distinct second
+  action (forcing Google's account chooser via GIS's `select_account`
+  prompt) is possible in principle but needs `src/lib/auth.ts` and
+  `src/lib/authStore.ts` changes outside this track's file ownership —
+  escalated, not built here. No guest option, no value proposition, no legal
+  copy.
   Degrades to a generic greeting/CTA (no name) when the registry has nothing
   yet or ever — never a blank. The reassurance line ("volver a iniciar
   sesión no toca lo que ya está guardado en este dispositivo") claims only

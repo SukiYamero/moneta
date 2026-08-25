@@ -90,12 +90,16 @@ describe('ReturningUserScreen', () => {
     expect(login).toHaveBeenCalledOnce()
   })
 
-  it('calls login() from "use another account" too', async () => {
-    const login = vi.fn()
-    useAuthStore.setState({ login })
+  // A second, differently-labeled control calling the same login() promises a
+  // different outcome and delivers the identical one. §10.21 allows a
+  // secondary action here but forbids the guest option outright, so there is
+  // no honest destination for one until auth can force an account chooser
+  // (specs.md §10.36).
+  it('renders exactly one action — no second control duplicating the primary CTA', async () => {
     render(<ReturningUserScreen />)
-    await userEvent.click(await screen.findByRole('button', { name: /usar otra cuenta/i }))
-    expect(login).toHaveBeenCalledOnce()
+    await waitFor(() => expect(screen.getByRole('heading')).toBeInTheDocument())
+    expect(screen.getAllByRole('button')).toHaveLength(1)
+    expect(screen.queryByRole('button', { name: /otra cuenta/i })).not.toBeInTheDocument()
   })
 
   it('shows a busy state on the primary button while authenticating', async () => {
