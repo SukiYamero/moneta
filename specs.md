@@ -5313,6 +5313,112 @@ rather than touched.
 test, and the two nested-overlay tests) after this pass's changes; typecheck
 and lint clean, the same two pre-existing `only-export-components` warnings.
 
+### 10.43 `AppShell.tsx`'s root: `h-full`, not `min-h-full` — resolving §12's escalation (Ajustes 1, Track AJ-J, 2026-08-25)
+
+§12's entry (escalated by review-aj-g, §10.39.1) framed the choice as
+`min-h-full` (a floor) vs `h-full` (a fixed value), asked for a real-browser
+verification pass before anyone applies it, and named the exact risks to
+check: the URL bar, the software keyboard, the safe-area interaction, and
+overscroll/rubber-banding. Each was investigated; `h-full` is adopted.
+
+- **The leaf-route collapse — CONFIRMED by reproduction, before and after.**
+  Temporarily threw inside `Home.tsx` (reverted before committing) to render
+  `RouteErrorFallback` nested in `AppShell`'s pane, at 390×844 via Playwright
+  against a real `bun run dev`, guest mode. Pre-fix: the fallback's `<main>`
+  (`min-h-full`) measured 50.14px tall, top-aligned — collapsed to content
+  size, exactly as §12 described. Post-fix (`AppShell`'s root switched to
+  `h-full`): the same element measured 748px (844 − `--bottom-nav-clearance`),
+  centered — filling the pane. Combined with a simulated
+  `body { padding-top: 47px; padding-bottom: 34px }` inset (the §10.34/§10.39
+  method): still 0px document overflow, fallback fills 47px–714px correctly
+  clear of both insets. No regression at either call site.
+- **A second, independent defect found and fixed as the same side effect —
+  CONFIRMED, not something §12 named.** With the pre-existing `min-h-full`,
+  injecting 2000px of content into the scroll pane made
+  `document.documentElement.scrollHeight` grow to match it (3110px) while the
+  pane's own `scrollHeight`/`clientHeight` were equal (no internal scrollbar
+  ever engaged) — the **whole document scrolls**, not the pane, for any
+  screen with real content taller than one viewport. `BottomNav`'s own
+  `fixed` positioning masked this visually (it always tracks the true
+  viewport regardless of what scrolls), so the shell only _looked_ like it
+  had an independently-scrolling middle pane. Same repro after switching to
+  `h-full`: pane `scrollHeight` 3110px vs `clientHeight` 844px, document
+  `scrollHeight` stays 844px, `pane.scrollTop` moves independently of
+  `window.scrollY` (which stays 0). The "fixed shell, independently
+  scrolling middle pane" model `AppShell.tsx`'s own comment already claimed
+  was aspirational until this change, not actually true for any screen with
+  enough content to overflow one viewport.
+- **The URL bar — REASONED, not directly observable (Chromium desktop/
+  Playwright has no address-bar-hide-on-scroll to drive).** Current CSS
+  viewport-unit semantics resolve a bare `%`/`vh` height on `html` against
+  the _large_ viewport (URL bar hidden) — a fixed magnitude that does not
+  itself track the bar showing/hiding, unlike `dvh`. `position: fixed`
+  (`BottomNav`) anchors to that same large/layout-viewport reference frame
+  in both current engines. `h-full` cascades that identical fixed magnitude
+  down to `AppShell`'s root, so the shell and `BottomNav` share one constant
+  reference frame — no gap, jump, or overlap as the bar transitions, because
+  neither one moves relative to the other. `min-h-dvh` would have been the
+  actual hazard here (a _dynamic_ magnitude next to a _fixed_-frame nav), and
+  is exactly what the guard already bans in flow. `h-full` doesn't introduce
+  a new risk relative to the `min-h-full` it replaces — both resolve against
+  the same constant chain; only the _distribution_ to the flex-1 child
+  changes (definite vs. content-driven), which is the fix itself.
+- **The software keyboard — REASONED, not tested (no virtual keyboard in
+  Playwright/Chromium desktop; not testable on real iOS/Android from here).**
+  `h-full` vs `min-h-full` doesn't change keyboard-avoidance behavior: both
+  derive proportionally from the same `html`/`body`/`#root` chain, so if a
+  platform actually resizes that chain when the keyboard opens (Android
+  Chrome's more common default) both models shrink together and the pane
+  stays fully scrollable within whatever height results; if a platform
+  doesn't resize it (iOS Safari's default — the keyboard overlays instead)
+  neither model reacts, and reachability depends on the browser's own
+  scroll-into-view-on-focus behavior against the nearest scroll container.
+  That scroll container is `AppShell`'s pane either way — and, per the
+  finding above, only actually engages as a real internal scrollbar once the
+  shell has a definite height, so `h-full` plausibly makes focus-scrolling
+  _more_ reliable than the pre-fix state (where the "container" was the
+  whole document), though this wasn't isolated from other variables and
+  isn't claimed as proven. `/search`'s text input and the Add sheet's amount
+  field (a portaled `fixed` overlay, unaffected by `AppShell`'s own height
+  model either way) were not driven with a real on-screen keyboard.
+- **The safe-area interaction — CONFIRMED, no double-count.** `h-full`
+  doesn't touch `body`'s padding or `--bottom-nav-clearance`/
+  `--screen-inset-top`; it only changes how `AppShell`'s own root height is
+  specified (definite vs. floor) against the same already-padded ancestor
+  chain. The simulated-inset repro above (0px overflow, correct fill bounds)
+  is the direct evidence.
+- **Overscroll/rubber-banding — addressed, not merely reasoned about.** Per
+  the second finding above, `AppShell`'s pane is now, for the first time,
+  the app's genuine sole scroll container. Matching `BottomSheet`/
+  `FullScreenPanel`'s existing precedent (specs.md §10.35.1 — an
+  at-boundary drag chaining into a scroll-locked ancestor), the pane gained
+  `overscroll-y-contain`. Not independently reproduced on real WebKit
+  momentum scrolling (out of reach here); applied on the same reasoning the
+  precedent already used, at the point where it newly applies.
+- **What `h-full` does NOT change:** `body`/`#root`'s own `height: 100%`
+  (`src/styles/index.css`, read-only for this track — no edit needed or
+  made); `BottomNav.tsx`/other `src/components/shared/**` (unowned, not
+  touched); `min-h-full` on `Home.tsx`/`HistoryScreen.tsx`/`SearchScreen.tsx`'s
+  own roots in that same pane, or the "min-h-full is the fix, everywhere"
+  `min-h-dvh` sweep's own guard (§10.39) — none of that is superseded, since
+  those are a _descendant's_ own root inside a now-definite pane, not the
+  pane's own height model. A future audit may want to revisit whether those
+  screens' own `min-h-full` should become `h-full` too now that their
+  container is definite, but no such need was found — their real content is
+  normally taller than the pane already, so the floor never engages there.
+- **What this track could not test:** real iOS Safari and Android Chrome —
+  the URL-bar transition, the on-screen keyboard, and momentum-scroll
+  rubber-banding all needed a real device/engine this environment (Playwright
+  on Chromium only) cannot provide. Every claim above is marked CONFIRMED
+  only where directly reproduced in Chromium, REASONED where it rests on
+  documented cross-engine viewport-unit/`position:fixed` semantics instead.
+
+**Verified.** `bun run check`: 152 test files (unchanged — no new file, two
+tests added to the existing `AppShell.test.tsx`), 1608 → 1610 tests,
+typecheck/lint clean, same two pre-existing `react/only-export-components`
+warnings (`button.tsx`, `FirstSyncGate.tsx`), `no-in-flow-min-h-dvh.sh`
+unaffected (neither file uses `min-h-dvh`).
+
 ## 11. Decisions log
 
 - 2026-06-25 — Package manager: **bun**. Node: **24 LTS** (`.nvmrc`).
@@ -9178,6 +9284,22 @@ tell the same story as the confirm dialog.
   checked against every existing consumer of the current behavior. Needs a
   real-browser verification pass (same method as §10.34/§10.39) before
   anyone applies it.
+  - **Resolved (Ajustes 1, Track AJ-J, 2026-08-25; full reasoning in
+    §10.43).** `h-full` adopted. Verified by real-browser reproduction
+    (Playwright/Chromium, 390×844, guest mode): the leaf-route collapse is
+    gone (fallback fills 748px centered, was 50px top-aligned), holds under
+    a simulated safe-area inset (0px overflow), and a second, independent
+    defect this entry didn't name was found and fixed by the same change —
+    with the old floor, real long content scrolled the whole document, not
+    the pane, for every screen (`BottomNav`'s `fixed` positioning only made
+    it look otherwise). The URL-bar and software-keyboard risks named in
+    the brief were reasoned from documented cross-engine viewport-unit/
+    `position:fixed` semantics, not directly observable in Chromium
+    desktop — real iOS Safari/Android Chrome verification remains
+    not performed (no device available in this environment). The pane
+    gained `overscroll-y-contain`, matching `BottomSheet`/`FullScreenPanel`
+    precedent, now that it's the shell's genuine sole scroll container.
+    `bun run check` green.
 - **The Add sheet's gear/settings button — not built, needs a product
   decision (Ajustes 1, Track AJ-C, 2026-08-25; full reasoning in §10.41).**
   `docs/ui/design-export-add-sheet.md` §2 draws a gear button in the sheet's
