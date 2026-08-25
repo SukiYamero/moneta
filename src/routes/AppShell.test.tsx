@@ -51,6 +51,43 @@ describe('AppShell layout', () => {
     const scrollPane = container.querySelector('.overflow-y-auto')
     expect(scrollPane?.className).toMatch(/pb-\(--bottom-nav-clearance\)/)
   })
+
+  // jsdom doesn't run layout, so this can't prove the pixel-filling behavior
+  // (verified instead in a real browser, specs.md §10.43) — it pins the
+  // *shape* of the decision, so a future "simplification" back to a floor
+  // can't silently reintroduce the leaf-route collapse (specs.md §12).
+  // `h-full`, not `min-h-full`/`min-h-dvh`: a floor leaves the one flex-1
+  // child's height content-driven rather than definite.
+  it('roots the shell at a definite h-full, not a min-h-full floor or min-h-dvh', () => {
+    const { container } = render(
+      <RouterProvider
+        router={createMemoryRouter(
+          [{ element: <AppShell />, children: [{ index: true, element: <div>content</div> }] }],
+          { initialEntries: ['/'] },
+        )}
+      />,
+    )
+    const root = container.firstElementChild
+    expect(root?.className).toMatch(/(^|\s)h-full(\s|$)/)
+    expect(root?.className).not.toMatch(/min-h-full/)
+    expect(root?.className).not.toMatch(/min-h-dvh/)
+  })
+
+  // Matches BottomSheet/FullScreenPanel's precedent (specs.md §10.35.1): once
+  // the shell root is a definite height, this pane is the app's real (and
+  // only) scroll container, so an at-boundary drag shouldn't chain into it.
+  it('contains overscroll on the scroll pane', () => {
+    const { container } = render(
+      <RouterProvider
+        router={createMemoryRouter(
+          [{ element: <AppShell />, children: [{ index: true, element: <div>content</div> }] }],
+          { initialEntries: ['/'] },
+        )}
+      />,
+    )
+    const scrollPane = container.querySelector('.overflow-y-auto')
+    expect(scrollPane?.className).toMatch(/overscroll-y-contain/)
+  })
 })
 
 describe('AppShell resilience', () => {

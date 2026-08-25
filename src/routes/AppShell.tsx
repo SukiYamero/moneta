@@ -30,9 +30,18 @@ export const AppShell = () => {
   const openAdd = useMovimientoSheetStore((s) => s.openAdd)
 
   return (
-    // `min-h-full`, not `min-h-dvh`: overflows body's safe-area padding (specs.md §10.39).
-    <div className="relative flex min-h-full flex-col bg-background text-foreground">
-      <div className="flex-1 overflow-y-auto pb-(--bottom-nav-clearance)">
+    // `h-full`, not `min-h-full`: a floor leaves the flex-1 pane's own height
+    // content-driven rather than definite, so a percentage-height descendant
+    // (e.g. RouteErrorFallback nested as a leaf-route error) collapses to
+    // content size instead of filling it (specs.md §12, §10.43). `h-full`
+    // resolves against the real html/body/#root chain, same as `min-h-full`
+    // (specs.md §10.39) — not `min-h-dvh`, still banned in flow (guard).
+    <div className="relative flex h-full flex-col bg-background text-foreground">
+      {/* overscroll-y-contain: with a definite shell height, this pane is
+          the app's real (and only) scroll container — an at-boundary drag
+          shouldn't chain into the shell root or the document behind it,
+          same reasoning as BottomSheet/FullScreenPanel (specs.md §10.35.1). */}
+      <div className="flex-1 overflow-y-auto overscroll-y-contain pb-(--bottom-nav-clearance)">
         <Outlet />
       </div>
       <BottomNav

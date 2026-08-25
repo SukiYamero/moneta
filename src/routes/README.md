@@ -7,6 +7,14 @@ Route-level page components, wired into `src/router.tsx`.
   screen: the nav is persistent across all three tabs (the design layers it
   above both screen overlays), so remounting it per tab would flash and
   break the native feel the `--ease-ios` transitions exist to create.
+  Root is `h-full` (a definite height), not `min-h-full` (a floor) —
+  `specs.md` §10.43: this gives the one `flex-1 overflow-y-auto` middle
+  pane a definite own height, so it's the app's real (and only) scroll
+  container — confirmed a floor left the whole document scrolling instead
+  for real long content, and a percentage-height leaf-route error
+  (`RouteErrorFallback`) collapsed to content size rather than filling the
+  pane. The pane carries `overscroll-y-contain` for the same reason
+  `BottomSheet`/`FullScreenPanel` do (`specs.md` §10.35.1).
 - `AppShell.tsx` also owns the profile sheet's `open` state and renders
   `<ProfileSheet>` (`src/features/profile`) alongside `BottomNav` — the
   shared nav takes `profileOpen`/`onOpenProfile` as props so

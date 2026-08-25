@@ -20,22 +20,14 @@ export const RouteErrorFallback = () => {
     // as `errorElement` in two structurally different spots (src/router.tsx):
     // replacing the whole top-level layout route (RequireAuth/BootGate/
     // FirstSyncGate/AppShell throwing) — a direct descendant of the same
-    // html/body/#root chain as the other eight files, where `min-h-full`
-    // fills and centers correctly (reproduced) — or replacing just a leaf
-    // route (Home/Search/History throwing) inside AppShell's own
-    // `flex-1 overflow-y-auto` pane. In that second, nested case `min-h-full`
-    // does NOT fill: AppShell's root is `min-h-full` too (a floor, not a
-    // fixed height), so its flex-1 child's own height is content-driven, not
-    // definite, and a percentage-based min-height on a descendant collapses
-    // to content size instead of filling the pane (reproduced — the message
-    // still renders in full, just top-aligned instead of centered; no
-    // overflow, no clipped/unreadable content). `min-h-dvh` isn't a fix
-    // either: reverting to it here would refill the nested case (dvh is
-    // viewport-relative, immune to the ancestor's indefinite height) but
-    // reintroduce the original bug for the far more common top-level case,
-    // and would fail the lint guard for this shape. Fixing the nested case
-    // for real needs a change outside this file (see specs.md §10.39.1) —
-    // flagged there rather than patched speculatively.
+    // html/body/#root chain as the other eight files — or replacing just a
+    // leaf route (Home/Search/History throwing) inside AppShell's own
+    // `flex-1 overflow-y-auto` pane. Both fill and center correctly
+    // (reproduced, specs.md §10.43): AppShell's root is `h-full` (a definite
+    // value, not a floor — specs.md §12), so its one flex-1 child's height is
+    // itself definite, and this file's own `min-h-full` resolves against
+    // that instead of collapsing to content size the way it did against the
+    // old `min-h-full` floor.
     <main className="flex min-h-full flex-col items-center justify-center gap-3 bg-background px-7 text-center text-foreground">
       <p role="alert" className="text-base font-bold">
         {APP_NAME} tuvo un problema inesperado.
