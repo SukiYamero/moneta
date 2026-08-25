@@ -83,7 +83,12 @@ JSON resources — no `i18next-http-backend`, no CDN.
 - `locales/*.json` — one file per locale (`es`, `en`, `es-AR`, `pt-BR`), each
   with the same reserved namespace keys at the top level: `common`, `auth`,
   `driveConsent`, `toast`, `nav`, `home`, `search`, `history`, `update`,
-  `errors`, `profile`, `tags`, `settings`, `lock`
+  `errors`, `profile`, `tags`, `settings`, `lock`, `sync`, `movimientos`,
+  `dateChipPicker`. **This list is no longer maintained by hand alone** —
+  `resources.test.ts` asserts `I18N_NAMESPACES` and `es.json`'s top-level
+  keys are the same set, because three of them had silently drifted out of
+  the array by 2026-08-25 and everything still worked (resources load
+  inline, so an unregistered namespace resolves anyway).
   (`docs/wave-2-plan.md` §1.6; `profile` added `specs.md` §10.18, Wave 3
   stage 3; `tags` added `specs.md` §10.22, Wave 4 Track G1 — the category
   picker's copy, plus a `colors.*` group of localized `IconAvatarTint`

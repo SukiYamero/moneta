@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { I18N_NAMESPACES } from '@/lib/i18n'
 import es from '@/lib/i18n/locales/es.json'
 import en from '@/lib/i18n/locales/en.json'
 import esAR from '@/lib/i18n/locales/es-AR.json'
@@ -43,5 +44,21 @@ describe('flattenKeys distinguishes an empty-object namespace from an absent one
     const withEmptyNamespace = flattenKeys({ common: {}, auth: { a: '1' } }).toSorted()
     const missingNamespace = flattenKeys({ auth: { a: '1' } }).toSorted()
     expect(missingNamespace).not.toEqual(withEmptyNamespace)
+  })
+})
+
+// `I18N_NAMESPACES` is the reserved list i18next is initialized with, and
+// it drifts silently: a namespace added to the locale files still resolves
+// at runtime (resources are loaded inline, no backend), so nothing fails
+// when the array is not updated to match. Measured, not feared — three
+// namespaces had drifted out of it by 2026-08-25 (`movimientos`, plus
+// `sync` and `dateChipPicker` from the README's copy of the same list),
+// each added by a track whose plan made `index.ts` read-only, each
+// resolving fine and each leaving the declared contract wrong. Two review
+// passes closed one of them and did not ask whether its twins had the same
+// gap. This asserts the two can never disagree again.
+describe('I18N_NAMESPACES matches the locale files it declares', () => {
+  it('lists exactly the top-level namespaces present in es', () => {
+    expect([...I18N_NAMESPACES].toSorted()).toEqual(Object.keys(es).toSorted())
   })
 })

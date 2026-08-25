@@ -22,6 +22,7 @@ export const I18N_NAMESPACES = [
   'settings',
   'lock',
   'sync',
+  'movimientos',
   'dateChipPicker',
 ] as const
 
