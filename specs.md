@@ -4807,6 +4807,96 @@ not `` `min-h-dvh` ``: ...), matching `WelcomeScreen.tsx`/
 pre-fix shape and is clean after; `AppShell`/Home and `ReturningUserScreen`
 confirmed by direct reproduction; `bun run check` green.
 
+### 10.42 A transient owner-marker read failure could not be told apart from "this profile's data is gone" (Ajustes 1, Track AJ-I, 2026-08-24)
+
+Escalated as the batch's most serious defect: `src/lib/profiles/profileOwner.ts`'s
+`readOwnerMarker` self-caught a storage read failure and returned `undefined`
+— the exact same value it returns for a database that genuinely never carried
+the marker. `switchProfile.ts` (§10.31 §2) treats that `undefined` as "this
+profile's database was cleared" and reports `'profile-database-gone'`;
+`ProfilesSection.tsx`'s confirm dialog for that outcome calls
+`useProfiles.ts`'s `removeGoneProfile` → `profileRegistry.ts`'s
+`removeProfile(id)`, which deletes the registry row — the only pointer to
+that profile's database — for good. There is no `indexedDB.databases()`
+enumeration anywhere in the app to rebuild a lost pointer.
+
+**Traced, CONFIRMED at every step in the chain**, not merely reasoned: read
+`profileOwner.ts`/`switchProfile.ts`/`useProfiles.ts`/`profileRegistry.ts`
+directly, and reproduced with a test that mocks `profileOwner.get()` to
+reject — before the fix, `readOwnerMarker` resolved `undefined` for that
+rejection exactly as it does for a genuinely absent row (`profileOwner.test.ts`,
+now inverted to assert the opposite); `switchProfile.ts`'s existing
+`'profile-database-gone'` test already proves that outcome's only gate is
+`!marker`, which cannot distinguish the two. A live IndexedDB failure that
+can trigger this — Safari storage eviction, a blocked version-change from
+another tab, quota pressure, private browsing — was not itself reproduced in
+a browser (out of scope for this pass, per `AGENTS.md`'s verification norms);
+the chain from "the read throws" to "the registry row is deleted" is
+CONFIRMED by direct code trace and test, the real-world trigger frequency is
+reasoned, not measured.
+
+**This is the third instance of a shape this project has now fixed three
+times in the same module family.** `specs.md` §11, 2026-08-21 (commit
+`2713a42`) fixed `switchToProfile()` reporting `'switched'` for a rebind that
+never landed, and `countGuestMovements()` degrading a storage failure to `0`
+— both `docs/error-handling.md` §4 ("never a success-shaped value for a
+failure"). `readOwnerMarker` sat in the same file family, self-caught the
+same way, and was not swept: that review's own record (§11, 2026-08-21)
+explicitly checked "owner-marker isolation" and found it "solid" — but that
+checked isolation from `schema.ts`/sync, a different property, never this
+read's failure-vs-absence conflation. The doc comment removed by this fix
+even said the conflation was deliberate and "matches every other read in
+this module family" — true of `profileRegistry.ts`'s reads (`listProfiles`,
+`getActiveProfileId`, …), which really do only ever gate a convenience
+(recency fallback, an empty list), but false of this one, whose result gates
+an irreversible delete. The lesson for future sweeps: "matches the rest of
+the module" is not sufficient justification for a swallow — what the
+_caller_ does with the degraded value is what decides whether swallowing is
+safe, and that has to be checked at each read individually, not asserted by
+pattern-matching the surrounding file.
+
+**Fix:** `readOwnerMarker` no longer self-catches — a storage failure now
+propagates, so `undefined` means only "genuinely absent" (`docs/error-handling.md`
+§4, same shape as `adoptGuestMovements`/`countGuestMovements`'s existing
+fix). `switchProfile.ts` catches the read at its own call site and returns a
+new, distinct `SwitchProfileResult` outcome, `'switch-check-failed'`, never
+`'profile-database-gone'`, on a thrown failure. `useProfiles.ts` routes it to
+the same `profile:profiles.switchError` toast an ordinary failed switch
+already uses — an honest "this didn't happen, try again," never the
+gone-profile removal dialog, which stays reachable only from a marker
+genuinely confirmed absent. `ensureOwnerMarker` (the same file's write path)
+was checked and left self-catching: its failure is pure provenance, never a
+decision input, and every future bind idempotently retries the identical
+write — the genuine best-effort case `docs/error-handling.md` §2 describes,
+unlike the read this fix changes.
+
+**Shape sweep of `src/lib/profiles/**`(every`catch`, and every read that
+could hand back an ordinary-looking value for a failure):** `profileOwner.ts`fixed as above.`profileRegistry.ts`'s reads (`listProfiles`, `getProfile`,
+`getActiveProfileId`) and `getActiveProfile`'s defensive write all correctly
+self-catch — none of their degraded values (`[]`, `undefined`, falling back
+to recency) drives anything irreversible; losing them only means a slightly
+stale or recency-resolved registry view, with its own route back (the next
+successful read corrects it). `removeProfile`'s self-catch is correct in the
+other direction: a failed delete just leaves the row in place, retriable,
+never reported as removed when it wasn't. `resolveGoogleProfile`/
+`registerProfile`/the three sync-watermark writers deliberately do **not**
+self-catch already (a caller establishing a session or recording a sync
+result needs to know if it didn't land) — unchanged, correct as-is.
+`adoption.ts`'s `countGuestMovements`/`adoptGuestMovements`already don't
+self-catch (§11, 2026-08-21);`resumePendingAdoption`'s one remaining
+self-catch is a fire-and-forget boot-time background retry with its own
+`console.warn`and a guaranteed next-boot retry — the genuine best-effort
+case, unchanged.`profileDb.ts`/`index.ts` do no I/O. **Nothing else found.**
+
+**Done when:** `readOwnerMarker` propagates a storage failure instead of
+resolving it as absence; `switchProfile.ts` reports `'switch-check-failed'`
+distinctly from `'profile-database-gone'` on that failure, touching neither
+the pointer nor sync; `useProfiles.ts`/`ProfilesSection.tsx`'s destructive
+confirm is reachable only from a marker confirmed genuinely absent; the i18n
+`profile` namespace needs no new key (the existing `switchError` copy is
+already the honest "didn't happen, try again" line, in all four locales);
+`bun run check` green.
+
 ## 11. Decisions log
 
 - 2026-06-25 — Package manager: **bun**. Node: **24 LTS** (`.nvmrc`).
@@ -9854,6 +9944,29 @@ string` on `ProfileRecord`/`deviceStore.ts`'s `ProfileRow` (a Dexie version
   built here. `bun run check` green: 145 files, 1,563 tests (same count —
   one bug-encoding test removed, one regression test added, confirmed to
   fail against the pre-fix markup and pass after it).
+
+- 2026-08-24 — **§10.42 implemented (Ajustes 1, Track AJ-I): `readOwnerMarker`
+  no longer conflates a storage read failure with a genuinely absent owner
+  marker.** CONFIRMED, reproduced: before this fix, a rejected
+  `database.profileOwner.get()` resolved `undefined`, indistinguishable from
+  a database that never carried the marker, which `switchProfile.ts` reports
+  as `'profile-database-gone'` — a `ProfilesSection.tsx` dialog whose confirm
+  irreversibly deletes the profile's only registry pointer, with no
+  `indexedDB.databases()` enumeration anywhere to rebuild it. The third
+  instance of the exact shape §11's 2026-08-21 entry (commit `2713a42`) fixed
+  twice already in the same module family, missed then because that review's
+  "owner-marker isolation" check verified isolation from `schema.ts`/sync, a
+  different property, never this read's failure-vs-absence conflation.
+  `readOwnerMarker` now propagates instead of self-catching;
+  `switchProfile.ts` catches at its own call site and returns a new
+  `'switch-check-failed'` outcome, never `'profile-database-gone'`, on a
+  thrown failure; `useProfiles.ts` routes it to the existing
+  `switchError` toast rather than the gone-profile removal dialog.
+  `ensureOwnerMarker`'s own self-catch was checked and left as-is — genuine
+  provenance, not a decision input, retried idempotently on every future
+  bind. Full sweep of every other `catch` in `src/lib/profiles/**` found
+  nothing else of the same shape — see §10.42 for the per-function
+  reasoning. `bun run check` green: 150 files, 1,591 tests (2 new).
 
 ### Development waves (parallel tracks, sequencing, worktree log)
 

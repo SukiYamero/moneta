@@ -63,14 +63,26 @@ createdAt })` writes only if the database doesn't already carry one
   so neither of those two (which already import each other's exports at
   their own top level) risks a value-level import cycle by also depending
   on this one. `switchProfile.ts` reads this marker as its "is the target's
-  database actually there" check.
+  database actually there" check — which is why `readOwnerMarker`
+  deliberately does **not** self-catch (`specs.md` §11, 2026-08-24,
+  `docs/error-handling.md` §4): a resolved `undefined` means the row is
+  genuinely absent, a thrown failure means the read didn't happen, and the
+  switcher must not treat those as the same fact — the former drives an
+  irreversible registry removal in the UI, the latter is not evidence of
+  anything about the database. `ensureOwnerMarker` stays self-catching: its
+  failure is pure provenance (never a decision input) and every future bind
+  retries the same idempotent write, the genuine best-effort case
+  `docs/error-handling.md` §2 describes.
 - `switchProfile.ts` — `switchToProfile(target)` (`specs.md` §10.31): no
   PIN (decided by the user — the PIN gates opening the app, not moving
   inside it), no new rebind path (`src/lib/boot.ts`'s `run()` is reused
   exactly as sign-out + sign-in-as-a-different-account already reuses it).
   Order: no-op if `target` is already active → pre-check the target's owner
-  marker (absent means its storage was cleared — returns
-  `'profile-database-gone'` without touching anything) → set the explicit
+  marker, catching `readOwnerMarker`'s read separately from testing its
+  result (absent means its storage was cleared — returns
+  `'profile-database-gone'` without touching anything; the read itself
+  throwing returns a distinct `'switch-check-failed'` instead, never
+  `'profile-database-gone'` — `specs.md` §11, 2026-08-24) → set the explicit
   pointer → `useBootStore.getState().run()` → verify the rebind actually
   landed (`run()` never rejects — it swallows its own failures into
   `status: 'error'` — so this checks `getActiveProfileBinding()` against

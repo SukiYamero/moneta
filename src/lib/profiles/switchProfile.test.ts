@@ -181,6 +181,43 @@ describe('switchToProfile', () => {
     expect(mStopSyncSession).not.toHaveBeenCalled()
   })
 
+  // A transient read failure (Safari eviction, a blocked version change, quota
+  // pressure) must not be reported the same way as a genuinely missing marker
+  // — 'profile-database-gone' drives an irreversible registry removal in the
+  // UI (ProfilesSection's confirm), and this is not evidence the database is
+  // gone. Simulates the read throwing, distinct from the "no marker" test
+  // below, which never registers a mock at all.
+  it('reports a check failure, distinct from profile-database-gone, when reading the target owner marker throws', async () => {
+    const { useBootStore } = await import('@/lib/boot')
+    await useBootStore.getState().run()
+
+    await registerProfile({
+      id: 'switch-check-fails',
+      label: 'Cuenta de Google',
+      kind: 'google',
+      databaseName: 'kurobello-switch-check-fails',
+    })
+    const targetDb = getProfileDatabase('kurobello-switch-check-fails')
+    await targetDb.profileOwner.put({ id: 1, kind: 'google', createdAt: 'T1' })
+    const target = (await getProfile('switch-check-fails'))!
+
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const getSpy = vi
+      .spyOn(targetDb.profileOwner, 'get')
+      .mockRejectedValue(new Error('IDB blocked'))
+
+    const result = await switchToProfile(target)
+
+    expect(result).toEqual({ outcome: 'switch-check-failed' })
+    expect(getActiveProfileBinding()!.profile.id).toBe(DEFAULT_PROFILE_ID) // never rebound
+    expect(await getActiveProfileId()).not.toBe('switch-check-fails')
+    expect(mStopSyncSession).not.toHaveBeenCalled()
+    expect(mStartSyncSession).not.toHaveBeenCalled()
+
+    getSpy.mockRestore()
+    warn.mockRestore()
+  })
+
   it('removeProfile deletes the registry row for a gone profile, never the default profile', async () => {
     const { getActiveProfile } = await import('@/lib/profiles')
     await getActiveProfile() // adopts the default profile so there is a row to (not) remove

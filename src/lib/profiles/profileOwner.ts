@@ -29,19 +29,19 @@ export const ensureOwnerMarker = async (
 }
 
 /**
- * `undefined` means either "never marked" (a database created before this
- * feature shipped, or genuinely never bound) or "storage unreadable" — both
- * degrade to the same caller-visible answer, matching every other read in
- * this module family. The switcher (`switchProfile.ts`) is what turns that
- * into "this profile's database looks gone."
+ * `undefined` means only "never marked" (a database created before this
+ * feature shipped, or genuinely never bound) — the switcher (`switchProfile.ts`)
+ * turns that into "this profile's database looks gone" and offers an
+ * irreversible registry removal. Deliberately does not self-catch
+ * (docs/error-handling.md §4): a storage read failure is not the same fact
+ * as a genuinely absent row, and conflating the two would make that removal
+ * reachable on a transient IndexedDB failure (Safari eviction, a blocked
+ * version change, quota pressure) rather than an actually-cleared database.
+ * The caller decides how to degrade a thrown failure; this function only
+ * ever promises "absent" when the row is actually absent.
  */
 export const readOwnerMarker = async (
   database: ProfileDb,
 ): Promise<ProfileOwnerRow | undefined> => {
-  try {
-    return await database.profileOwner.get(OWNER_ROW_ID)
-  } catch (e) {
-    console.warn('profiles: could not read the owner marker, treating as absent', e)
-    return undefined
-  }
+  return await database.profileOwner.get(OWNER_ROW_ID)
 }

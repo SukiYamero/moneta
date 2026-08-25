@@ -37,8 +37,13 @@ directly or is a deliberately inert stub.
   to it via `profiles/switchProfile.ts`'s `switchToProfile()` — no PIN, no
   confirmation, no second rebind path (it reuses `boot.ts`'s own). A
   profile whose database has been cleared reports itself as gone
-  (`switchToProfile()`'s owner-marker pre-check) and offers removal through
-  a `ConfirmDialog` rather than failing opaquely. The local/default
+  (`switchToProfile()`'s owner-marker pre-check finding the marker
+  genuinely absent) and offers removal through a `ConfirmDialog` rather
+  than failing opaquely. That pre-check's storage read failing (not
+  finding the marker absent, but failing to read at all) is a distinct
+  `'switch-check-failed'` outcome, surfaced as a toast instead — it must
+  never reach the same removal dialog, since a transient read failure is
+  not evidence the database is gone (`specs.md` §11, 2026-08-24). The local/default
   profile's name is derived at render time (`profiles.localLabel`, "this
   device"), never the registry's own stored `label: 'Local'` — that string
   is internal bookkeeping, not user-facing copy (`specs.md` §12's

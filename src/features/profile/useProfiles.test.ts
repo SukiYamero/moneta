@@ -1,15 +1,23 @@
-import { afterEach, describe, expect, it } from 'vitest'
-import { renderHook, waitFor } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import {
   __clearRegistryForTests,
   DEFAULT_PROFILE_ID,
   getActiveProfile,
   registerProfile,
 } from '@/lib/profiles'
+import { switchToProfile } from '@/lib/profiles/switchProfile'
+import { toast } from '@/lib/toastStore'
 import { useProfiles } from '@/features/profile/useProfiles'
+
+// Mocked only for the `switch-check-failed` test below — every other test in
+// this file drives the real registry/switcher end to end.
+vi.mock('@/lib/profiles/switchProfile', () => ({ switchToProfile: vi.fn() }))
+const mSwitchToProfile = vi.mocked(switchToProfile)
 
 afterEach(async () => {
   await __clearRegistryForTests()
+  mSwitchToProfile.mockReset()
 })
 
 describe('useProfiles', () => {
@@ -41,5 +49,27 @@ describe('useProfiles', () => {
     // lazily-adopted default (profileRegistry.ts), so the just-registered
     // profile is the active one.
     expect(result.current.activeProfileId).toBe('p2')
+  })
+
+  // A storage read failure while verifying the target's owner marker
+  // (`switchToProfile`'s own `'switch-check-failed'` outcome) must not be
+  // treated as "this profile's database is gone" — that premise drives an
+  // irreversible registry removal via `goneProfile`/`removeGoneProfile`, and
+  // a transient read failure is not evidence the database is gone.
+  it('surfaces a check failure as a toast, never as the gone-profile removal dialog', async () => {
+    mSwitchToProfile.mockResolvedValue({ outcome: 'switch-check-failed' })
+    const toastSpy = vi.spyOn(toast, 'error').mockImplementation(() => {})
+
+    const { result } = renderHook(() => useProfiles())
+    await waitFor(() => expect(result.current.status).toBe('ready'))
+
+    const target = result.current.profiles[0]!
+    await act(() => result.current.switchTo(target))
+
+    expect(toastSpy).toHaveBeenCalledWith('profile:profiles.switchError')
+    expect(result.current.goneProfile).toBeNull()
+    expect(result.current.switchingId).toBeNull()
+
+    toastSpy.mockRestore()
   })
 })
