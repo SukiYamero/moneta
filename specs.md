@@ -4710,6 +4710,133 @@ not `` `min-h-dvh` ``: ...), matching `WelcomeScreen.tsx`/
 pre-fix shape and is clean after; `AppShell`/Home and `ReturningUserScreen`
 confirmed by direct reproduction; `bun run check` green.
 
+### 10.39.1 Review pass (Track review-aj-g, 2026-08-25)
+
+Reviewed against `AGENTS.md` § Review protocol's four categories, attacking
+the guard directly (constructed test files under `/tmp`, ran the guard's own
+grep pipeline against them, not just reasoned) and probing the one file with
+a rendering context AJ-G's own audit didn't individually drive:
+`RouteErrorFallback.tsx`. `bun run check`: 150 files, 1589 tests, same 2
+pre-existing warnings — unchanged from `main`.
+
+- **Guard false positive — CONFIRMED by construction, and the guard's own
+  documented "honest limit" had the failure direction backwards.** A `cn()`
+  call splitting `fixed` and `min-h-dvh` across separate string
+  arguments/lines (a completely normal way to write Tailwind classes in this
+  codebase — `FullScreenPanel.tsx` itself uses multi-line `cn()`) makes the
+  guard **fail a genuinely safe `fixed`-positioned element**, not "slip
+  past" it as the script's own comment and this file's original text
+  claimed. Zero real occurrences today (the one exemption already writes
+  both tokens on one line), so not worth a real parser for it — fixed by
+  correcting the documentation in `scripts/no-in-flow-min-h-dvh.sh` to state
+  the true failure direction and the two available remedies (keep both
+  tokens on one line, or use `min-h-full` — safe whenever the element's
+  containing block is already viewport-sized).
+- **Guard false negative — CONFIRMED and fixed.** `\bfixed\b`'s word
+  boundary matches at a hyphen, so Tailwind's real `bg-fixed`
+  (`background-attachment: fixed`, unrelated to `position`) would exempt an
+  in-flow `min-h-dvh` root carrying it, reproducing the exact original bug
+  undetected. `bg-fixed` isn't used anywhere in this codebase today (checked
+  — not an active bug), but the guard's own logic was wrong regardless.
+  Tightened the exemption regex from `\bfixed\b` to `(^|[^-])fixed\b`
+  (rejects a `fixed` token immediately preceded by a hyphen); re-verified
+  against six constructed cases (the split-`cn()` case above, `bg-fixed`,
+  `fixed` on a parent with `min-h-dvh` on a non-fixed nested child, a plain
+  unguarded bug, a `fixed`+`min-h-dvh`-same-element case behind a
+  transformed ancestor, and `absolute inset-0` nested in a `fixed` portal
+  root) and against the full real tree (`grep -rn min-h-dvh src` before and
+  after) — identical results on real code, only the two constructed
+  false-positive/negative cases change.
+- **"Is `fixed` the right criterion?" — yes, confirmed by construction, with
+  one honest, currently-inert gap.** `fixed` on a _parent_ with `min-h-dvh`
+  on a non-fixed nested _child_ (different element) is flagged, and an
+  `absolute inset-0` element nested inside a `fixed` portal root is also
+  flagged — both correctly, by the guard's own stated design (requiring
+  `fixed` on the same element it's judging, not merely trusting an
+  unverified ancestor), and the practical remedy is the same one already
+  used everywhere else in this fix (`min-h-full`), so this isn't a trap. The
+  one gap that IS real: a CSS `transform` on an ancestor makes that ancestor
+  the containing block for a `position: fixed` descendant, which can
+  undersize it exactly like the original bug — but relative to the
+  transformed box, not the viewport — and no grep can detect that. Checked
+  whether this is exploitable today: it isn't. This app's only
+  `fixed`+`min-h-dvh` element (`FullScreenPanel.tsx`) and its other overlays
+  (`BottomSheet.tsx`, `CenterModal.tsx`) all `createPortal` straight to
+  `document.body`, and nothing applies `transform` to `html`/`body`/`#root`
+  — so no `fixed` element in this app is currently nested inside a
+  transformed ancestor. Documented in the guard's own comment as a known,
+  currently-inert limitation rather than left silent.
+- **`RouteErrorFallback.tsx`'s nested rendering context — CONFIRMED by
+  reproduction, a real (if minor) gap AJ-G's audit didn't cover.** Of the
+  nine, only this file renders in two structurally different places
+  (`src/router.tsx`): replacing the whole top-level layout route
+  (`RequireAuth`/`BootGate`/`FirstSyncGate`/`AppShell` throwing) — a direct
+  descendant of the `html`/`body`/`#root` chain, same as the other eight —
+  or replacing just a leaf route (`Home`/`Search`/`History` throwing)
+  _inside_ `AppShell`'s own `flex-1 overflow-y-auto` pane. Reproduced both
+  with Playwright (guest mode, temporary throws, reverted before
+  committing): the root-level case fills correctly, 0px overflow under a
+  simulated 47/34px inset, matching `AppShell`/Home's own result. The nested
+  case does not fill: measured height 50px (content-only) instead of
+  filling the pane, because `AppShell`'s own root is `min-h-full` — a floor,
+  not a fixed value — so its one flex-1 child's height is content-driven,
+  not definite, and a percentage-based `min-height` on any descendant
+  nested there (not just this file — `Home.tsx`/`HistoryScreen.tsx` use
+  `min-h-full` on their own roots in that identical slot, unnoticed because
+  their real content is normally taller than the pane) resolves to `auto`
+  instead of filling. **Not a "collapse to zero/unreadable" outcome:** the
+  message still renders in full, just top-aligned instead of centered, on
+  the correct background color (`AppShell`'s own `bg-background` shows
+  through the rest of the pane) — no data loss, no clipped content.
+  Compared directly against the pre-fix alternative (temporarily reverted
+  just this file to `min-h-dvh`, same reproduction): it _does_ fill the
+  nested case (dvh is viewport-relative, immune to the ancestor's
+  indefinite height) but overflows the whole page by ~96px (`BottomNav`'s
+  own height, since the flex-1 pane grows to fit the forced 100dvh content)
+  — a different, milder failure than the original bug (no safe-area
+  double-count, and it doesn't happen at all for the far more common
+  top-level case) but still real, and it would fail this file's own guard.
+  Net: `min-h-full` (shipped) is strictly safer at both call sites and only
+  imperfect (mis-centered, not filled) at the rarer one; reverting to fix
+  that would reintroduce a worse, guard-covered defect at the common one.
+  The swap stands. **Applied:** corrected this file's own comment, which
+  previously implied its reasoning held universally, to describe both
+  contexts and why neither `min-h-full` nor `min-h-dvh` alone fully solves
+  the nested one. **Escalated, not fixed:** the real structural fix is
+  `AppShell.tsx` moving from `min-h-full` (a floor) to `h-full` (a fixed
+  value), which would give its one flex-1 child a definite own height and
+  make every percentage-height descendant nested inside it — this file's
+  nested case and any future short-content leaf screen alike — resolve
+  correctly instead of by coincidence of having tall content. Not applied
+  here: it changes the app's main persistent shell's scroll model (from "the
+  whole shell can theoretically grow with content" to "the shell is exactly
+  viewport height, only the middle pane scrolls," which is arguably already
+  the intended native-app model given `BottomNav` is `fixed` and not a flex
+  sibling — but this reviewer has not audited every existing consumer of
+  `AppShell`'s current height behavior for a hidden dependency on it, and
+  `AppShell.tsx` sits outside a narrow nested-error-fallback fix's blast
+  radius). Whoever next touches `AppShell.tsx` should decide, verified the
+  same way this whole track was (real browser, simulated inset, before/after
+  measurement).
+- **Redundancy — nine near-identical 4-line why-comments, shrunk to one line
+  each.** Compared against this codebase's own established precedent for an
+  identical situation (a shared, non-obvious rule applied at several call
+  sites): `--screen-inset-top` (§10.34) carries **zero** repeated comment at
+  any of its four consuming screens — the full reasoning lives once, at the
+  token's own definition in `index.css`. Nine repetitions of the same
+  4-line paragraph is exactly the "restating the same thing" `AGENTS.md`'s
+  comment policy warns against, and the guard added in this same track
+  already does the harder job (mechanically blocking a revert, with an
+  actionable message) that the verbose comment was partly trying to do by
+  itself. Shrunk all eight generic sites to one line each pointing at
+  `specs.md §10.39` and the guard script; left `RouteErrorFallback.tsx`'s
+  own comment long, because it alone has a genuinely unique two-context
+  story worth spelling out at its own site (above). Re-ran the guard after:
+  clean (the shortened comments needed the same backtick-quoting house
+  style as the original text — `` `min-h-dvh` ``, not bare — to keep
+  tripping the guard's own prose exemption; caught and fixed this against
+  myself before it shipped).
+
 ## 11. Decisions log
 
 - 2026-06-25 — Package manager: **bun**. Node: **24 LTS** (`.nvmrc`).
@@ -8557,6 +8684,24 @@ tell the same story as the confirm dialog.
 
 ## 12. Backlog (pending verification / deferred work)
 
+- **`AppShell.tsx`'s root: `min-h-full` (a floor) vs `h-full` (a fixed
+  value) — escalated by the review-aj-g pass, §10.39.1, 2026-08-25.**
+  `AppShell`'s only in-flow child (the `flex-1 overflow-y-auto` middle pane
+  — `BottomNav` is `fixed`, out of flow) currently gets a content-driven,
+  not definite, height, because the root only floors it at 100% rather than
+  fixing it there. Confirmed by reproduction: `RouteErrorFallback`, when it
+  renders as a leaf-route error nested in that pane (`Home`/`Search`/
+  `History` throwing), collapses to content size instead of filling it —
+  not dangerous (message stays fully visible, no overflow), but not
+  correct either, and the same characteristic silently affects any future
+  short-content screen relying on `min-h-full`/`h-full` in that slot.
+  Switching the root to `h-full` would very likely fix this generally, and
+  is arguably the already-intended native-app shell model (fixed shell,
+  independently scrolling middle pane) — but touches the app's main
+  persistent surface beyond one track's file ownership and hasn't been
+  checked against every existing consumer of the current behavior. Needs a
+  real-browser verification pass (same method as §10.34/§10.39) before
+  anyone applies it.
 - **Diff every remaining design-export artboard against its spec section.**
   Raised 2026-08-24 (§11 same date). Nineteen artboards in
   `docs/ui/Moneta_ Expense Manager UI.zip` have never been compared to the
