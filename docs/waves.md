@@ -685,6 +685,34 @@ etc.) stay in `specs.md` §12 — they don't need worktree-level tracking.
 
 ---
 
+## Ajustes 1 — the first manual pass on a phone (2026-08-24)
+
+**The wave plan is paused for this batch, at the user's request.** Wave 5 and
+everything queued behind Wave 4.1 stays exactly where it is; nothing here
+reorders it.
+
+Six defects, all found by one person holding the running app, none by any
+review pass. Five are shell/chrome consistency (zoom, a scrolling welcome
+screen, four different top margins, a grab handle that scrolls away, a
+duplicated button on the return screen). The sixth is not a UI defect at all:
+**`specs.md` §10.23's UI section diverged from the design export's Add-sheet
+artboard, and the code implemented the spec faithfully.** The artboard had
+never been read — it is the one introduced by a bare `<!-- add sheet -->`
+comment rather than the `<!-- ===== NAME ===== -->` banner the others use, so
+a marker-based search of the export skipped it.
+
+Execution view, file ownership and the resolved collisions:
+[`docs/ajustes-1-plan.md`](ajustes-1-plan.md). The extracted artboard:
+[`docs/ui/design-export-add-sheet.md`](ui/design-export-add-sheet.md).
+
+**The process finding, which outlives the batch:** a versioned design export
+nobody diffs against the spec sections describing the same screens is
+decoration. Sixteen artboards are in that position today. Filed to `specs.md`
+§12 rather than fixed here — the user asked for adjustments, and sixteen
+diffs is its own piece of work.
+
+---
+
 ## Worktree log
 
 Every agent that creates a `git worktree` logs a row here the moment it
@@ -693,9 +721,12 @@ Check this table against `git worktree list` at the start of any parallel
 session; prune anything stale (merged-but-not-removed, or on disk but
 missing/finished here).
 
-| Path                            | Branch      | Status                    |
-| ------------------------------- | ----------- | ------------------------- |
-| `../moneta-worktrees/review-ah` | `review-ah` | active (AH's review pass) |
+| Path                                      | Branch                | Status                    |
+| ----------------------------------------- | --------------------- | ------------------------- |
+| `../moneta-worktrees/review-ah`           | `review-ah`           | active (AH's review pass) |
+| `../moneta-worktrees/aj-a-shell-standard` | `aj-a-shell-standard` | active (Ajustes 1, AJ-A)  |
+| `../moneta-worktrees/aj-b-sheet-chrome`   | `aj-b-sheet-chrome`   | active (Ajustes 1, AJ-B)  |
+| `../moneta-worktrees/aj-d-return-action`  | `aj-d-return-action`  | active (Ajustes 1, AJ-D)  |
 
 Wave 4.1 stage 1 (2026-08-20): AD, AE and AF each merged with its own review
 pass applied, plus an operator cross-track pass — every worktree removed. AH
