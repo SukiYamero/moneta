@@ -721,9 +721,11 @@ Check this table against `git worktree list` at the start of any parallel
 session; prune anything stale (merged-but-not-removed, or on disk but
 missing/finished here).
 
-| Path                      | Branch | Status |
-| ------------------------- | ------ | ------ |
-| _(none — see note below)_ |        |        |
+| Path                        | Branch               | Status |
+| --------------------------- | -------------------- | ------ |
+| `../moneta-worktrees/aj3-a` | `aj3-a-add-feedback` | active |
+| `../moneta-worktrees/aj3-b` | `aj3-b-keyboard-vp`  | active |
+| `../moneta-worktrees/aj3-c` | `aj3-c-calendar`     | active |
 
 **Pruned 2026-08-25 (cross-track review, `review-ajustes-2`):** AJ2-A's row
 (`../moneta-worktrees/aj2-a`, `aj2-a-amount-display`) still claimed `active`
