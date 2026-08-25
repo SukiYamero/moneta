@@ -231,3 +231,32 @@ the split that leaves a twin unfixed, which `AGENTS.md` names as this project's
 most expensive lesson. Both review passes were told explicitly not to touch it.
 
 Queued behind AJ-F, which currently holds `src/features/lock/**`.
+
+## 10. AJ-H — the confirm button says danger for things that are not dangerous
+
+Escalated by AJ-E's review pass, which correctly declined to fix it: both
+changes reach outside a review's ownership.
+
+**`ConfirmDialog.tsx:53` hardcodes `variant="destructive"`.** Every confirm
+dialog in the app therefore renders a red danger action. Today that includes
+two flows this batch has just spent its effort proving destroy nothing:
+
+- the guest confirmation (§10.37) — reversible, rebinds a profile pointer;
+- **"Olvidé mi PIN" (§10.38)** — where the whole point of the rewrite was that
+  the old copy promised a deletion the code never performs. The words were
+  fixed and the button is still painted like a delete.
+
+That is the same defect one layer down, and it undercuts the fix the user
+actually asked for. Seven consumers today: `IdentitySection` (sign-out),
+`MovimientoSheet` (delete — genuinely destructive), `ProfilesSection`,
+`LockScreen`, `ReturningUserScreen`, `CategoriesSection` (archive), and the
+`/kit` demo. Some of those _are_ destructive; the point is that the component
+does not let the caller say which, so honesty is impossible by construction.
+
+**Second escalation: the guest button's classes are byte-identical** between
+`WelcomeScreen.tsx` and `ReturningUserScreen.tsx`. This directory already set
+the precedent by extracting `GoogleSignInButton.tsx` for the primary CTA. Two
+hand-maintained copies of one control is the shape this project's most
+valuable review findings have taken.
+
+Blocked until AJ-A's review pass releases `WelcomeScreen.tsx`.
