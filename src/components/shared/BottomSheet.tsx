@@ -6,6 +6,10 @@ import {
   useOverlay,
   type OverlayShellProps,
 } from '@/components/shared/useOverlay'
+import { useVisualViewportInset } from '@/components/shared/useVisualViewportInset'
+
+/** Matches the panel's own `max-h-[88dvh]` fallback — kept as one constant so the two never drift apart. */
+const OVERLAY_MAX_HEIGHT_FRACTION = 0.88
 
 /**
  * `className` merges onto the *outer* panel (matching `CenterModal`), not
@@ -37,6 +41,7 @@ export const BottomSheet = ({
   ref,
 }: BottomSheetProps) => {
   const panelRef = useOverlay<HTMLDivElement>({ open, onClose, initialFocus, ref })
+  const viewportInset = useVisualViewportInset(open)
   const [dragY, setDragY] = useState(0)
   const [dragging, setDragging] = useState(false)
   const dragStartY = useRef(0)
@@ -97,7 +102,17 @@ export const BottomSheet = ({
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-50">
+    // `top`/`height` here override the `inset-0` class's top/bottom only
+    // while `viewportInset` is non-null (iOS panning the page, or any
+    // browser whose visual viewport has shrunk for the keyboard) — pinning
+    // this wrapper to the space actually visible instead of the full layout
+    // viewport `dvh` resolves against (specs.md §10.49). `undefined` values
+    // leave the class's `inset-0` in full effect, so the no-keyboard case is
+    // pixel-identical to before.
+    <div
+      className="fixed inset-0 z-50"
+      style={viewportInset ? { top: viewportInset.top, height: viewportInset.height } : undefined}
+    >
       <div
         onClick={onClose}
         className="absolute inset-0 animate-fade-in bg-black/55"
@@ -113,6 +128,11 @@ export const BottomSheet = ({
         style={{
           transform: dragY ? `translateY(${dragY}px)` : undefined,
           transitionDuration: dragging ? '0ms' : undefined,
+          // Clamps the panel to the same corrected space its wrapper now
+          // occupies — `max-h-[88dvh]` alone would still allow the sheet to
+          // grow taller than the keyboard-safe area and push its own top
+          // content (the gasto/ingreso toggle) back out of view.
+          maxHeight: viewportInset ? viewportInset.height * OVERLAY_MAX_HEIGHT_FRACTION : undefined,
         }}
         className={cn(
           'absolute inset-x-0 bottom-0 flex max-h-[88dvh] flex-col rounded-t-5xl border-t border-border-subtle bg-card animate-sheet-up transition-transform duration-200 ease-out',
