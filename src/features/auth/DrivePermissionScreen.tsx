@@ -13,7 +13,11 @@ export const DrivePermissionScreen = () => {
   const dismissDrive = useAuthStore((s) => s.dismissDrive)
 
   return (
-    <main className="relative flex min-h-dvh flex-col bg-background text-foreground">
+    // `min-h-full`, not `min-h-dvh`: `body` pads unconditionally by
+    // `env(safe-area-inset-*)`, so an in-flow `min-h-dvh` root demands the raw
+    // viewport on top of that and overflows by exactly the inset on a real
+    // notch/home indicator (specs.md §10.34, §10.39).
+    <main className="relative flex min-h-full flex-col bg-background text-foreground">
       <div className="flex flex-1 flex-col overflow-y-auto px-7 pt-16">
         <div className="my-5 flex items-center justify-center gap-3.5">
           <div className="flex size-15 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,var(--primary),color-mix(in_oklch,var(--primary),black_18%))] text-primary-foreground">

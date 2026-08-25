@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 
 export interface ScreenLoadingProps {
-  /** Overrides the default `min-h-dvh` — used by the `/kit` gallery to preview this at a bounded height. */
+  /** Overrides the default `min-h-full` — used by the `/kit` gallery to preview this at a bounded height. */
   className?: string
 }
 
@@ -18,9 +18,13 @@ export const ScreenLoading = ({ className }: ScreenLoadingProps = {}) => {
   const { t } = useTranslation('common')
 
   return (
+    // `min-h-full`, not `min-h-dvh`: `body` pads unconditionally by
+    // `env(safe-area-inset-*)`, so an in-flow `min-h-dvh` root demands the raw
+    // viewport on top of that and overflows by exactly the inset on a real
+    // notch/home indicator (specs.md §10.34, §10.39).
     <div
       className={cn(
-        'flex min-h-dvh flex-col items-center justify-center gap-6 bg-background px-8 text-center text-foreground',
+        'flex min-h-full flex-col items-center justify-center gap-6 bg-background px-8 text-center text-foreground',
         className,
       )}
     >

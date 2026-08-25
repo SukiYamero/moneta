@@ -62,7 +62,11 @@ export const DriveDownloadScreen = ({ onDone }: DriveDownloadScreenProps) => {
       : null
 
   return (
-    <div className="flex min-h-dvh flex-col items-center justify-center gap-5 bg-background px-8 text-center text-foreground">
+    // `min-h-full`, not `min-h-dvh`: `body` pads unconditionally by
+    // `env(safe-area-inset-*)`, so an in-flow `min-h-dvh` root demands the raw
+    // viewport on top of that and overflows by exactly the inset on a real
+    // notch/home indicator (specs.md §10.34, §10.39).
+    <div className="flex min-h-full flex-col items-center justify-center gap-5 bg-background px-8 text-center text-foreground">
       <div
         aria-hidden="true"
         className="flex size-[5.25rem] items-center justify-center rounded-4xl bg-[linear-gradient(135deg,var(--primary),color-mix(in_oklch,var(--primary),black_18%))] text-3xl font-extrabold text-primary-foreground"
