@@ -724,7 +724,6 @@ missing/finished here).
 | Path                        | Branch                 | Status |
 | --------------------------- | ---------------------- | ------ |
 | `../moneta-worktrees/aj2-a` | `aj2-a-amount-display` | active |
-| `../moneta-worktrees/aj2-b` | `aj2-b-sheet-entry`    | active |
 
 **Pruned 2026-08-25 (cross-track review, `review-cross`):** AJ-A, AJ-E and
 AJ-F's rows (`aj-a-shell-standard`, `aj-e-return-guest`, `aj-f-pin-copy`) all
