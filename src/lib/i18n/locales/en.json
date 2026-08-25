@@ -475,8 +475,8 @@
     },
     "forgotConfirm": {
       "title": "Reset access?",
-      "description": "Without the PIN we can't open this device's data: it'll be deleted and you'll need to sign in again.",
-      "confirmCta": "Delete and sign out",
+      "description": "You'll sign out on this device and sign in with Google again — your data isn't touched.",
+      "confirmCta": "Sign out",
       "cancelCta": "Cancel"
     },
     "settings": {
@@ -487,7 +487,7 @@
       "pinRowSubcopy": "4 digits, only on this phone",
       "changePinCta": "Change PIN",
       "lockNowCta": "Lock now",
-      "footerPolicy": "Your PIN is stored only on this device. If you forget it you can disable it from the lock screen.",
+      "footerPolicy": "Your PIN is stored only on this device. If you forget it, you can disable it from the lock screen — you'll be signed out, but your data isn't touched.",
       "statusActive": "On",
       "statusInactive": "Off",
       "biometricRowLabel": "Also use biometrics",

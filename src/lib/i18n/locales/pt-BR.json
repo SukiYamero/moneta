@@ -475,8 +475,8 @@
     },
     "forgotConfirm": {
       "title": "Redefinir o acesso?",
-      "description": "Sem o PIN não conseguimos abrir os dados deste dispositivo: eles vão ser apagados e você vai precisar entrar de novo.",
-      "confirmCta": "Apagar e sair",
+      "description": "Você vai sair da conta neste dispositivo e entrar de novo com o Google — seus dados não são afetados.",
+      "confirmCta": "Sair",
       "cancelCta": "Cancelar"
     },
     "settings": {
@@ -487,7 +487,7 @@
       "pinRowSubcopy": "4 dígitos, só neste celular",
       "changePinCta": "Alterar PIN",
       "lockNowCta": "Bloquear agora",
-      "footerPolicy": "Seu PIN é guardado só neste dispositivo. Se você esquecer, pode desativá-lo na tela de bloqueio.",
+      "footerPolicy": "Seu PIN é guardado só neste dispositivo. Se você esquecer, pode desativá-lo na tela de bloqueio — você vai sair da conta, mas seus dados não são afetados.",
       "statusActive": "Ativado",
       "statusInactive": "Desativado",
       "biometricRowLabel": "Usar também biometria",
