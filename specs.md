@@ -4252,6 +4252,74 @@ at any size in the ~360–430px × ~640px+ range, including with an inline
 error showing; Home/Search/History/Settings/PreContentSkeleton share
 `--screen-inset-top`; `bun run check` green.
 
+### 10.38 "Olvidé mi PIN" copy — fixing two false claims, not just the tone (Ajustes 1, Track AJ-F, 2026-08-24)
+
+User complaint: the dialog's mention of deletion frightened them; they asked
+for shorter, less scary wording. Tracing the actual code first (per this
+track's brief) found the complaint pointed at something worse than tone: the
+old copy was **false**, not merely blunt.
+
+**Traced end to end, CONFIRMED against the real code (not the mocked
+`lockStore.test.ts`) with a new integration test,
+`src/features/lock/resetDataSurvival.test.ts`:**
+
+- `LockScreen.confirmForgot` → `lockStore.reset()` → `pinLock.resetVault()` +
+  `authStore.logout()`.
+- `resetVault()` deletes exactly one row (`db.vault`'s `VAULT_ID`) plus two
+  device-wide markers in the separate `kurobello-device` database
+  (`loggedInBefore`, the persisted Drive decision). `logout()` resets
+  in-memory auth state and re-invalidates the same vault (redundant, not a
+  bug — both call sites are independently defensive).
+- **The movements never touched.** `movimientos`/`activos`/`config`/`outbox`/
+  `profileOwner` are separate tables on that same per-profile Dexie
+  connection (`src/lib/db.ts`); nothing `reset()` calls references any of
+  them. Proven, not just read: the new test seeds a `Movimiento`, calls the
+  real `useLockStore.getState().reset()`, and asserts it's still there
+  afterward.
+- **The way back exists and was already built for this.** The profile
+  registry (`accountKey` → `ProfileRecord`, §10.20/§10.31) lives in
+  `kurobello-device` too, in a table `reset()` never touches. Signing in
+  again — the same "Sign in with Google" button `WelcomeScreen` always
+  offers, `login()` underneath — resolves via `resolveGoogleProfile`'s
+  `accountKey` match back to the exact same profile and `databaseName`,
+  proven by the test's second case (resolve → reset → resolve again → same
+  `id`). Clearing the `loggedInBefore` marker changes only which cold-start
+  screen renders first (`WelcomeScreen` instead of `ReturningUserScreen` —
+  `restore()`'s _silent_ re-auth is gated on that marker, `login()` is not);
+  it does not remove the path back to the data.
+- **The local financial cache is not encrypted at rest**, confirmed by
+  `schema.ts`'s `Movimiento` (plain fields, no cipher/DEK envelope) — §10.2
+  put that explicitly out of scope. Only the cached OAuth token, in
+  `LockVault`, is ever encrypted.
+
+Both false claims in the old `es` copy — "se van a borrar" (they'll be
+deleted) and "sin el PIN no podemos abrir los datos" (implying the data
+itself is encrypted) — are corrected in the new copy, in all four locales,
+along with the confirm button ("Borrar y salir" → "Cerrar sesión", matching
+the verb `profile.identity.signOutCta` already uses for the identical
+real-world outcome).
+
+**Reconciled with `lock.settings.footerPolicy`**, which had the opposite
+problem: true but incomplete — "podés desactivarlo desde la pantalla de
+bloqueo" undersold what actually happens, since turning the PIN off from
+`LockSettings` calls this exact same `reset()` (vault wipe + forced sign-out),
+not a quiet preference flip. Both strings now say the same thing: signing out
+is real, deletion is not.
+
+**Shape sweep of other `ConfirmDialog` consumers** (sign-out, delete-movement,
+delete-category, the profile-gone dialog, the guest-adoption prompt): all
+already honest. `profile.identity.signOutConfirm` already models the pattern
+this fix now copies ("cerrar sesión no lo borra"). The movement/category
+delete confirms are genuine, irreversible deletions — no false promise there.
+The adoption prompt and the profile-gone dialog both already describe exactly
+what they do. `settings.data.deleteStored` is a visibly inert stub that says
+so ("Todavía no disponible") — not a false claim. Nothing else found.
+
+**Verified.** `bun run check`: 147 test files (146 → 147, the new
+`resetDataSurvival.test.ts`), 1571 tests (1568 → 1571), typecheck/lint clean,
+same two pre-existing `react/only-export-components` warnings (`button.tsx`,
+`FirstSyncGate.tsx`).
+
 ## 11. Decisions log
 
 - 2026-06-25 — Package manager: **bun**. Node: **24 LTS** (`.nvmrc`).
@@ -8081,6 +8149,21 @@ both in-session (the profile switcher, already shipped per §10.31) and across
 a cold restart (the login marker never clears on its own, so the account path
 keeps re-offering itself). Nobody is stranded; the modal's copy states only
 what actually happens, never a deletion that doesn't occur.
+
+### 2026-08-24 — "Olvidé mi PIN" was scary because it was wrong, not just blunt
+
+Track AJ-F (§10.38). The user asked for shorter, less frightening wording; the
+trace showed the old copy claimed the movements would be deleted and that the
+PIN was what kept the local data unreadable — neither is true.
+`lockStore.reset()` deletes one vault row plus two device markers; the
+movements, the profile registry, and the account's `accountKey` binding are
+untouched, so signing back in with Google reaches the same profile. Proven
+with a new integration test against the real stores
+(`resetDataSurvival.test.ts`), not just re-read from the source. The honest
+fix turned out to satisfy the original ask for free: true is shorter than the
+hedge the false version needed. `lock.settings.footerPolicy` had the opposite
+defect (true but silent about the forced sign-out) and is now reconciled to
+tell the same story as the confirm dialog.
 
 ## 12. Backlog (pending verification / deferred work)
 

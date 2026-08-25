@@ -1,0 +1,100 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+// The lock store starts a real sync session on unlock; nothing here unlocks,
+// but `logout()` runs inside `reset()` and this keeps that path network-free
+// regardless, matching the mocking posture `switchProfile.test.ts` already
+// uses for the same reason.
+vi.mock('@/lib/sync/syncSession', () => ({
+  startSyncSession: vi.fn(),
+  stopSyncSession: vi.fn(),
+}))
+
+import { db } from '@/lib/db'
+import { useAuthStore } from '@/lib/authStore'
+import { useLockStore } from '@/lib/lockStore'
+import { enableLock, hasVault } from '@/lib/pinLock'
+import { __clearRegistryForTests, resolveGoogleProfile } from '@/lib/profiles'
+import type { AuthSession, GoogleUser } from '@/lib/auth'
+import type { Movimiento } from '@/lib/schema'
+
+const session: AuthSession = { accessToken: 'tok-abc', expiresAt: 9_999_999_999_000 }
+const user: GoogleUser = { email: 'ana@example.com', name: 'Ana', sub: 'sub-ana' }
+
+const movimiento: Movimiento = {
+  id: 'm1',
+  fecha: '2026-01-01',
+  seccion: 'sec_personal',
+  categoria: 'cat_sueldo',
+  tipo: 'ingreso',
+  monto: 50_000,
+  moneda: 'COP',
+  createdAt: '2026-01-01T00:00:00.000Z',
+}
+
+beforeEach(async () => {
+  useAuthStore.setState({
+    status: 'authenticated',
+    user,
+    session,
+    drive: null,
+    error: null,
+    driveOptIn: 'pending',
+    driveConnecting: false,
+    driveError: null,
+  })
+})
+
+afterEach(async () => {
+  await db.vault.clear()
+  await db.movimientos.clear()
+  await __clearRegistryForTests()
+})
+
+// specs.md §10.2.1: "Olvidé mi PIN" runs the same destructive action as the
+// 5-failed-attempts lockout — lockStore.reset() (resetVault() + logout()).
+// This proves, against the real stores (not the mocked ones
+// lockStore.test.ts uses), what that action actually destroys: the vault
+// and the device's login markers, never the profile's own financial data.
+describe('lockStore.reset() — what "Olvidé mi PIN" actually destroys', () => {
+  it("deletes the vault but leaves the profile's movements untouched", async () => {
+    await db.movimientos.put(movimiento)
+    await enableLock({ pin: '1234', session, user })
+    expect(await hasVault()).toBe(true)
+
+    await useLockStore.getState().reset()
+
+    expect(await hasVault()).toBe(false)
+    expect(await db.movimientos.get('m1')).toEqual(movimiento)
+  })
+
+  it("leaves the account's profile-registry entry in place, so signing back in resolves the same profile", async () => {
+    const original = await resolveGoogleProfile({ accountKey: 'sub-ana', label: 'Ana' })
+    await db.movimientos.put(movimiento)
+    await enableLock({ pin: '1234', session, user })
+
+    await useLockStore.getState().reset()
+
+    // This is the mechanism `login()`'s syncProfileForAccount() rides on
+    // (authStore.ts) — reset() never touches deviceDb's `profiles` table, so
+    // the same accountKey resolves back to the same profile id afterward.
+    const resolvedAgain = await resolveGoogleProfile({ accountKey: 'sub-ana', label: 'Ana' })
+    expect(resolvedAgain.id).toBe(original.id)
+    expect(resolvedAgain.databaseName).toBe(original.databaseName)
+    expect(await db.movimientos.get('m1')).toEqual(movimiento)
+  })
+
+  it('clears the device-wide "logged in before" marker, which only changes which cold-start screen renders, not whether the data is reachable', async () => {
+    const { markLoggedIn, hasLoggedInBefore } = await import('@/lib/deviceStore')
+    await markLoggedIn()
+    expect(await hasLoggedInBefore()).toBe(true)
+
+    await useLockStore.getState().reset()
+
+    // authStore.restore()'s *silent* re-auth is the only thing this marker
+    // gates (specs.md §11, 2026-08-19) — login()'s explicit "Sign in with
+    // Google" path (the one WelcomeScreen offers) never reads it, so
+    // clearing it changes which screen greets a returning user, not
+    // whether their data is still reachable through that button.
+    expect(await hasLoggedInBefore()).toBe(false)
+  })
+})
