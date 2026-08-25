@@ -10,14 +10,26 @@ export interface ConfirmDialogProps {
   description?: string
   confirmLabel: string
   cancelLabel: string
+  /**
+   * Whether confirming is an irreversible, data-losing action. Required,
+   * not defaulted: a silent default in either direction is unsafe — always
+   * `true` paints a harmless action (sign out, switch to guest) as a delete,
+   * always `false` lets a future real delete ship looking safe the moment a
+   * caller forgets to override it. Making the caller state it every time is
+   * the only shape where both mistakes are compile errors instead of a
+   * choice one direction quietly favors (`specs.md` §10.40).
+   */
+  destructive: boolean
   ref?: Ref<HTMLDivElement>
 }
 
 /**
- * Delete-style confirmation built on `CenterModal` — inherits its Escape/
- * focus-trap/scroll-lock/nesting behavior from `useOverlay` rather than
- * reimplementing any of it. Copy comes in as props: this component adds no
- * locale keys of its own (`specs.md` §10.14, `docs/wave-3-plan.md` §1.7).
+ * Generic confirm/cancel dialog built on `CenterModal` — inherits its
+ * Escape/focus-trap/scroll-lock/nesting behavior from `useOverlay` rather
+ * than reimplementing any of it. Copy comes in as props: this component
+ * adds no locale keys of its own (`specs.md` §10.14, `docs/wave-3-plan.md`
+ * §1.7). `destructive` picks the confirm button's paint — see that prop's
+ * own doc comment for why it has no default.
  */
 export const ConfirmDialog = ({
   open,
@@ -27,6 +39,7 @@ export const ConfirmDialog = ({
   description,
   confirmLabel,
   cancelLabel,
+  destructive,
   ref,
 }: ConfirmDialogProps) => {
   const titleId = useId()
@@ -50,7 +63,7 @@ export const ConfirmDialog = ({
           </Button>
           <Button
             type="button"
-            variant="destructive"
+            variant={destructive ? 'destructive' : 'default'}
             size="touch"
             className="flex-1"
             onClick={onConfirm}

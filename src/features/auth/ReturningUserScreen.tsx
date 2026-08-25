@@ -7,6 +7,7 @@ import { getInitials } from '@/lib/initials'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { loginErrorCopy } from '@/features/auth/errorCopy'
 import { GoogleSignInButton } from '@/features/auth/GoogleSignInButton'
+import { GuestSignInButton } from '@/features/auth/GuestSignInButton'
 
 const firstNameOf = (fullName: string): string => fullName.trim().split(/\s+/)[0] ?? ''
 
@@ -122,14 +123,9 @@ export const ReturningUserScreen = () => {
             ? t('return.continueCtaNamed', { name: firstName })
             : t('return.continueCtaGeneric')}
         </GoogleSignInButton>
-        <button
-          type="button"
-          onClick={() => setGuestConfirmOpen(true)}
-          disabled={busy}
-          className="flex h-14 items-center justify-center rounded-2xl border border-border-subtle bg-transparent text-base font-bold text-foreground transition-opacity disabled:opacity-60"
-        >
+        <GuestSignInButton onClick={() => setGuestConfirmOpen(true)} disabled={busy}>
           {t('return.guestCta')}
-        </button>
+        </GuestSignInButton>
       </div>
       <ConfirmDialog
         open={guestConfirmOpen}
@@ -142,6 +138,7 @@ export const ReturningUserScreen = () => {
         description={t('return.guestConfirm.description')}
         confirmLabel={t('return.guestConfirm.confirmCta')}
         cancelLabel={t('return.guestConfirm.cancelCta')}
+        destructive={false}
       />
     </main>
   )

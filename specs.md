@@ -4500,6 +4500,114 @@ pre-existing `react/only-export-components` warnings — unchanged from
   through `ScreenHeader` would need conditional slots for a component with
   exactly one other caller. Leaving it bespoke, as AJ-A argued, is correct.
 
+### 10.40 `ConfirmDialog`'s confirm button stops always saying "delete" (Ajustes 1, Track AJ-H, 2026-08-24)
+
+Escalated by §10.37.1/§10.38's review passes, both of which correctly
+declined to fix it themselves (outside their own file ownership):
+`ConfirmDialog.tsx` hardcoded `variant="destructive"` on its confirm
+button, so every one of the app's seven call sites rendered a red danger
+action — including two this batch had just rewritten specifically because
+their **copy** overstated what they do ("Olvidé mi PIN", §10.38; the guest
+confirmation, §10.37). The words were fixed and the button stayed painted
+like a delete: the same defect one layer down.
+
+**The real defect was the API, not the color** — the component gave the
+caller no way to say which kind of action this is, so honesty was
+impossible by construction.
+
+**Chosen: a required `destructive: boolean` prop, no default in either
+direction — rejected both defaulted alternatives on the same reasoning.**
+A default of `true` (today's de facto behavior) means every future harmless
+dialog stays wrong until someone remembers to override it — the exact bug
+this section exists to close, just moved from "always" to "unless
+remembered." A default of `false` is worse, not better: a future _genuine_
+delete whose author forgets the prop would silently ship looking safe,
+which is a strictly more dangerous failure than the reverse in a money app
+— overstating risk annoys, understating it loses data with no warning.
+Making the prop required turns "the caller forgot" into a compile error
+instead of a silent default either way — the same shape this codebase
+already uses for `MovimientoRow`/`formatMonto`'s required `locale` (no
+silent es-CO fallback, `src/components/shared/README.md`). `destructive`
+maps directly to `Button`'s own `variant` vocabulary (`destructive` when
+true, `default` — the ordinary filled CTA — when false); Cancel keeps
+`secondary` unconditionally, since "cancel" never carries the action's own
+stakes.
+
+**All seven call sites classified, each traced against the mutation it
+actually performs, not assumed from the label on the button:**
+
+- `MovimientoSheet.tsx` (delete a movement) — **destructive**. Traced
+  `dataStore.deleteMovimiento`: removes the row outright, no trash/undo.
+  CONFIRMED by reading the mutation.
+- `CategoriesSection.tsx` (delete an archived, unused category) —
+  **destructive**, correcting this track's own brief. The brief suggested
+  "archive a category" might not be destructive — but archiving itself
+  (the `Archive` button on an active row) renders no `ConfirmDialog` at
+  all, one-tap, always reversible via `ArchiveRestore`. The dialog here
+  gates a different, later action: **deleting** an already-archived
+  category, offered only once no movement still references it. Traced
+  `dataStore.deleteCategoria`: `categorias.filter((c) => c.id !== id)` —
+  the entry is permanently removed from `Config`, no undo. The existing
+  copy already says so ("Esta acción no se puede deshacer"). CONFIRMED by
+  reading the mutation, not by trusting the row's own "archive" framing.
+- `routes/Kit.tsx` (the `/kit` demo) — **destructive**, mirroring the real
+  `MovimientoSheet` delete flow it demonstrates.
+- `IdentitySection.tsx` (sign out) — **not destructive**. §10.38's own
+  sweep already traced this: signing out re-invalidates the vault and
+  clears in-memory auth state, but the profile registry entry and the
+  Google-side data are untouched; signing back in resolves to the same
+  profile.
+- `ReturningUserScreen.tsx` (continue as guest) — **not destructive**,
+  per §10.37/§10.37.1's own trace: rebinds `repoProvider` to a distinct,
+  empty local profile; the lapsed Google profile's database is never read
+  or written; the way back is the profile switcher.
+- `LockScreen.tsx` ("Olvidé mi PIN") — **not destructive**, per §10.38's
+  own trace: `lockStore.reset()` deletes the vault row and two device
+  markers, never `movimientos`/`config`/`categorias` — proven by
+  `resetDataSurvival.test.ts`.
+- `ProfilesSection.tsx` (the "gone profile" dialog) — **not destructive**.
+  Traced `useProfiles.ts`'s `removeGoneProfile()` → `removeProfile(id)`:
+  this dialog only ever opens after `switchToProfile` already reports
+  `'profile-database-gone'` — the underlying Dexie database was already
+  lost (e.g. evicted) before the dialog exists. Confirming removes a dead
+  pointer from the device's registry list; it destroys nothing that still
+  had data, unlike the other three. Classified as non-destructive on that
+  basis, distinct from a true delete even though, like a delete, the
+  action can't be undone.
+
+**Second escalation, applied: the guest button's classes were
+byte-identical** between `WelcomeScreen.tsx` and `ReturningUserScreen.tsx`
+(`specs.md` §10.37.1 flagged it, declined to fix outside its own
+ownership). Extracted `GuestSignInButton.tsx`
+(`onClick`/`disabled`/`children`), the same precedent `GoogleSignInButton`
+already set for the primary CTA — both screens still own their own
+`onClick` behavior (direct `continueAsGuest()` vs. opening the confirm
+dialog first) and label copy; only the shared markup/className moved.
+
+**Test added, watched fail first against the pre-fix component**
+(`ConfirmDialog.test.tsx`, "never paints the confirm button as destructive
+when the action is not"): with `ConfirmDialog.tsx` reverted to its
+hardcoded `variant="destructive"` (`git stash` of just that file, test file
+kept at its new state), the test failed exactly as expected — a
+non-destructive confirm still rendered `data-variant="destructive"`.
+Restoring the fix turned it green. Not merely written and trusted to fail;
+watched fail for the stated reason first.
+
+**Blast radius:** `src/components/shared/ConfirmDialog.tsx` + its test
+(all existing cases given an explicit `destructive`, one new case added);
+`src/features/auth/GuestSignInButton.tsx` (new) + its test;
+`src/features/auth/WelcomeScreen.tsx`/`ReturningUserScreen.tsx` (guest
+button swapped for the shared component; `ReturningUserScreen.tsx`'s own
+`min-h-dvh` root left untouched — Track AJ-G's file, not this one's); the
+six other `ConfirmDialog` call sites, each given only the one new prop, no
+other reshaping. `bun run check`: 150 test files (149 → 150), 1589 tests
+(1586 → 1589), typecheck/lint clean, same two pre-existing
+`react/only-export-components` warnings (`button.tsx`, `FirstSyncGate.tsx`)
+— unchanged from `main`.
+
+**Escalated, not built here:** none. Both items this track was dispatched
+to resolve were resolved within its own file ownership.
+
 ## 11. Decisions log
 
 - 2026-06-25 — Package manager: **bun**. Node: **24 LTS** (`.nvmrc`).

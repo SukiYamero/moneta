@@ -39,12 +39,19 @@ overscroll-y-contain` body that owns the horizontal/bottom padding —
   padded/scrollable body, so a future consumer wanting to override the
   body's padding needs a dedicated prop, not `className` (no current
   consumer does this, `specs.md` §10.35).
-- `ConfirmDialog.tsx` — delete-style confirmation built on `CenterModal`;
-  generates its own `labelledBy` from `title` via `useId()`, so callers
-  pass no aria props. Confirm/Cancel use `Button`'s `destructive`/
-  `secondary` variants at `size="touch"` (button.tsx's 44px-compliant size).
-  Takes all copy as props — adds no locale keys of its own. Replaces the
-  `/kit` gallery's former hand-rolled delete-confirm demo. Accepts `ref`.
+- `ConfirmDialog.tsx` — generic confirm/cancel dialog built on
+  `CenterModal`; generates its own `labelledBy` from `title` via `useId()`,
+  so callers pass no aria props. Takes a required `destructive: boolean` —
+  no default — that picks the confirm button's `Button` variant
+  (`destructive` vs `default`; Cancel always stays `secondary`) at
+  `size="touch"` (button.tsx's 44px-compliant size): a hardcoded
+  `variant="destructive"` used to paint every confirm action as a delete
+  regardless of what it did (sign-out, switch-to-guest included), and a
+  defaulted prop would only trade which direction quietly ships wrong —
+  making the caller state it every time is the only shape where forgetting
+  is a compile error either way (`specs.md` §10.40). Takes all copy as
+  props — adds no locale keys of its own. Replaces the `/kit` gallery's
+  former hand-rolled delete-confirm demo. Accepts `ref`.
 - `CenterModal.tsx` — centered popup shell (Delete confirm, Info tooltip,
   Custom tag modal, Group editor). `CenterModalProps` is
   `OverlayShellProps<HTMLDivElement>` too. Accepts `initialFocus`/`ref`.

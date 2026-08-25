@@ -158,6 +158,7 @@ const AccountLockScreen = () => {
         description={t('forgotConfirm.description')}
         confirmLabel={t('forgotConfirm.confirmCta')}
         cancelLabel={t('forgotConfirm.cancelCta')}
+        destructive={false}
       />
     </div>
   )
