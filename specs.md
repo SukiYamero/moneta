@@ -5023,6 +5023,7 @@ pre-existing warnings — unchanged from `main`.
   style as the original text — `` `min-h-dvh` ``, not bare — to keep
   tripping the guard's own prose exemption; caught and fixed this against
   myself before it shipped).
+
 ### 10.41 The Add/Edit sheet, rebuilt to the design export it had never been read against (Ajustes 1, Track AJ-C, 2026-08-25)
 
 **This supersedes §10.23's "UI" subsection only.** §10.23's Decisions 1–4 and
@@ -5216,6 +5217,101 @@ changed, not the component itself).
 
 **Escalated to §12, not resolved here:** the Add sheet's gear/settings
 control — see above.
+
+### 10.41.1 Review pass (Track review-aj-c, 2026-08-25)
+
+Reviewed against `docs/ui/design-export-add-sheet.md`, §10.41, §10.23
+Decisions 1–4/6, and §10.22, driven live at 390×844 in both themes.
+Decisions 1–4 and 6 all still hold, traced in code, not just reasoned:
+`useMovimientoForm` is still the only writer for both sheets; the sheet
+stores `viewId`, never a `Movimiento` snapshot; `createMovimiento`/
+`updateMovimiento` still return `Promise<boolean>` and a refused write is
+proven (by test) to keep the sheet open with the typed values intact;
+`parseAmountForInput` still distinguishes `empty`/`malformed`/
+`not_positive`, including `1e999` (pinned by test); `metodo` still has no
+writer anywhere in this track. Every §10.23 edge case (double-tap, vanished-
+underneath, `1e999`, unresolvable category on edit, `tipo` flip never
+storing a negative `monto`) has a passing test — traced directly in
+`useMovimientoForm.test.ts`/`AddMovimientoSheet.test.tsx`/
+`MovimientoSheet.test.tsx`, not inferred.
+
+**The primary button read "Save" in create mode — fixed.** The artboard
+binds `{{addLabel}}`, which the operator observed rendering as a generic
+"Save" rather than an action naming what gets created. Traced CONFIRMED:
+`AddMovimientoSheet.tsx` called the same `form.saveCta` key edit mode uses.
+Fixed: create mode now renders `movimientos:form.addCta.gasto`/`.ingreso`
+("Agregar gasto"/"Agregar ingreso", English "Add expense"/"Add income",
+Portuguese "Adicionar despesa"/"Adicionar receita" — identical across `es`/
+`es-AR`, matching this app's existing convention of an infinitive/neutral
+CTA form with no voseo distinction, same as `saveCta`/`cancelCta` already
+have none), following the type toggle exactly as the artboard's binding
+implies (verified live: toggling Expense/Income relabels the button
+immediately). **Edit mode deliberately keeps the generic "Guardar"/"Save"**
+— reasoned, not just left alone: only create's toggle determines what gets
+made: edit's toggle changes an existing movement's `tipo`, so "Agregar
+gasto" would be actively wrong there ("add" is not what editing does), and
+the artboard never modeled edit at all (§10.41 already notes this). New
+`movimientos:form.addCta.{gasto,ingreso}` key in all four locale files;
+`AddMovimientoSheet.test.tsx` gained a test pinning the label to the type
+toggle, plus its existing button-name assertions were updated off the
+now-wrong generic "Guardar" match.
+
+**No Cancel on the create sheet — judged correct, not changed.** The
+operator asked whether an invisible-gesture-only affordance is the same
+family of problem `AGENTS.md` warns about for hover-only controls. It is
+not, and the distinction matters: hover-only means no touch equivalent
+exists at all. Here, dismissal has three paths — drag-to-dismiss (the grab
+handle, a visible, universally-learned mobile-sheet affordance), a
+backdrop tap (the dimmed backdrop is itself a visible "tap here to leave"
+signal, read `BottomSheet.tsx`'s own `onClick={onClose}` on that div), and
+Escape for keyboard — none of which requires hover, and two of which carry
+their own visible cue rather than being silent. This matches how iOS/
+Android's own native bottom sheets behave, which is the affordance
+vocabulary this app is deliberately borrowing (`--ease-ios`,
+`animate-sheet-up`). The artboard itself draws no Cancel either. Left
+as-is.
+
+**Nested-overlay stacking (`TagPickerSheet` inside the Add sheet) — driven
+live and traced, not just reasoned; CONFIRMED correct, and a real coverage
+gap fixed.** Opened the count button while the Add sheet was open (a true
+two-`BottomSheet` nesting, both present in the DOM at once, verified via
+`document.querySelectorAll('[role="dialog"]')`): Escape closed only
+`TagPickerSheet`, left the Add sheet open with its typed amount and type
+toggle intact, and returned focus to the count button that opened it; a
+backdrop tap on the nested sheet's own backdrop did the same. The generic
+`useOverlay.test.tsx` "nested overlays" suite already covers the mechanism
+in the abstract, but **no test anywhere exercised this specific
+composition** — `CategoryPicker.test.tsx`/`TagPickerSheet.test.tsx` render
+the picker standalone, and `AddMovimientoSheet.test.tsx` never opened the
+count button. Given this was flagged as the most likely place for a real
+bug, that gap is now closed: `AddMovimientoSheet.test.tsx` gained a
+`describe` block opening both sheets and asserting Escape closes only the
+nested one (draft intact) and that a second Escape then dismisses the Add
+sheet itself.
+
+**Touch targets — measured, not just read.** The artboard's 34px gear and
+30px tag tiles are moot here (the gear isn't rendered; `TagChip`'s
+44px-floor split from §10.5.1 already applies). Confirmed via
+`getComputedStyle` in a live browser that the amount input is genuinely
+borderless (`border: 0px none`, `box-shadow: none`) when not focused — the
+visible ring in a first screenshot was only the standard focus-visible
+ring on the autofocused field, not a persistent border, so no divergence
+from the artboard there either.
+
+**`MovimientoAmountInput` vs `AmountField` — not a duplicated parsing rule,
+but a duplicated four-line derivation of it. Escalated, not fixed.** Both
+components call the same `parseAmountForInput` and independently
+re-derive `isMalformed`/`invalid` from its result — identical logic, not
+identical intent-by-coincidence, so it can drift if one changes without
+the other. Extracting it (e.g. an `isAmountInputInvalid(value, locale,
+error)` helper in `amountFormat.ts`) is the right fix, but `AmountField.tsx`
+and `amountFormat.ts` are both outside this track's edit scope (`src/
+components/shared/**` and `src/lib/**` respectively) — reported here
+rather than touched.
+
+`bun run check`: 152 files / 1611 tests passing (three added: the addCta
+test, and the two nested-overlay tests) after this pass's changes; typecheck
+and lint clean, the same two pre-existing `only-export-components` warnings.
 
 ## 11. Decisions log
 
@@ -9100,6 +9196,16 @@ tell the same story as the confirm dialog.
   that would work but do something surprising and undocumented is worse
   than its absence. Needs the operator/user to decide product intent before
   any track builds it.
+- **`MovimientoAmountInput` and `AmountField` each re-derive
+  `isMalformed`/`invalid` from `parseAmountForInput`'s result independently
+  — same four lines in two files (review-aj-c, §10.41.1, 2026-08-25).** Both
+  call the shared parser, so the parsing rule itself is not duplicated, but
+  the small "how do I read this result as invalid" logic is, and could
+  drift. Fix: extract e.g. `isAmountInputInvalid(value, locale, error)` into
+  `amountFormat.ts`, used by both. Out of review-aj-c's edit scope
+  (`AmountField.tsx`/`amountFormat.ts` are both outside `src/features/
+movimientos`/`tags`) — needs a track that owns `src/components/shared`/
+  `src/lib` to apply it.
 - **Diff every remaining design-export artboard against its spec section.**
   Raised 2026-08-24 (§11 same date). Nineteen artboards in
   `docs/ui/Moneta_ Expense Manager UI.zip` have never been compared to the

@@ -397,11 +397,13 @@
           "notPositive": "El monto debe ser mayor a cero"
         }
       },
-      "dateLabel": "Fecha",
-      "categoryLabel": "Categoría",
       "categoryError": "Elige una categoría",
       "noteLabel": "Descripción",
       "notePlaceholder": "Agrega una nota (opcional)",
+      "addCta": {
+        "gasto": "Agregar gasto",
+        "ingreso": "Agregar ingreso"
+      },
       "saveCta": "Guardar",
       "cancelCta": "Cancelar",
       "showMoreCta": "Más detalles",

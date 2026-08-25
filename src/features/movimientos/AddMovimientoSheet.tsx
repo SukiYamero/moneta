@@ -1,6 +1,6 @@
 import { useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { CONFIG_SEMILLA } from '@/lib/schema'
+import { CONFIG_SEMILLA, type TipoMovimiento } from '@/lib/schema'
 import { useDataStore } from '@/lib/dataStore'
 import { useLocaleFormatting } from '@/lib/i18n/localeFormatting'
 import { Button } from '@/components/ui/button'
@@ -8,6 +8,17 @@ import { BottomSheet } from '@/components/shared/BottomSheet'
 import { MovimientoFormFields } from '@/features/movimientos/MovimientoFormFields'
 import { useMovimientoForm } from '@/features/movimientos/useMovimientoForm'
 import { useMovimientoSheetStore } from '@/features/movimientos/movimientoSheetStore'
+
+// `as const satisfies Record<...>` (not a template-literal `t()` call) for
+// the same reason `MovimientoFormFields`' `AMOUNT_ERROR_KEY` is one: `t()`'s
+// typed keys only accept a real resource path, not a widened `string`.
+// The artboard's `{{addLabel}}` binding names the action being created and
+// changes with the type toggle ("Agregar gasto"/"Agregar ingreso") — a
+// generic "Save" is the old vertical-form's copy, not what this sheet draws.
+const ADD_CTA_KEY = {
+  gasto: 'form.addCta.gasto',
+  ingreso: 'form.addCta.ingreso',
+} as const satisfies Record<TipoMovimiento, string>
 
 /**
  * `BottomSheet` + `useMovimientoForm` in create mode (specs.md §10.23,
@@ -87,7 +98,7 @@ export const AddMovimientoSheet = () => {
           disabled={form.submitting}
           onClick={() => void form.submit()}
         >
-          {t('form.saveCta')}
+          {t(ADD_CTA_KEY[form.tipo])}
         </Button>
       </div>
     </BottomSheet>

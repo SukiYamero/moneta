@@ -59,7 +59,14 @@ fields (Decision 1):
   Dismissing without saving is the sheet's existing backdrop-tap/Escape/
   drag-to-dismiss, all routed through one `handleClose` that also resets
   the draft, so a cancelled create never resurfaces next time the sheet
-  opens.
+  opens. Judged correct on review (specs.md §10.41.1): drag-handle,
+  backdrop-tap and Escape each carry a visible cue and none needs hover, so
+  this isn't the hover-only problem `AGENTS.md` warns against. **The
+  primary button's label follows the type toggle** (`form.addCta.gasto`/
+  `.ingreso` — "Agregar gasto"/"Agregar ingreso"), not a generic "Guardar":
+  the artboard's `{{addLabel}}` names the action being created, and only
+  create's toggle picks what that is (edit's toggle changes an existing
+  movement instead, so it keeps the generic `form.saveCta`).
 - `MovimientoSheet.tsx` — `BottomSheet` hosting view ⇄ edit for an existing
   movement, driven by `movimientoSheetStore`'s `viewId`. View mode resolves
   category/section for display (never a raw id — specs.md §10.22), starts

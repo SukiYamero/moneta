@@ -58,7 +58,12 @@ folder imports both rather than owning either.
   `CategoryFormModal` — creating never auto-selects, matching the inline
   carousel's own "Custom" chip behavior. Stacks correctly above the
   Add/Edit sheet via `useOverlay`'s render-order stack (§10.5.1), the same
-  mechanism `MovimientoSheet`'s delete `ConfirmDialog` already relies on.
+  mechanism `MovimientoSheet`'s delete `ConfirmDialog` already relies on —
+  driven live with both sheets open (specs.md §10.41.1): Escape and a
+  backdrop tap each closed only this sheet, left the Add sheet's draft
+  intact, and returned focus to the count button; also pinned by an
+  `AddMovimientoSheet.test.tsx` case, since no test previously exercised
+  this exact two-sheet composition.
 - `CategoryFormModal.tsx` — a `CenterModal`, create and edit in one
   component. Name/section/icon grid/color grid + a live `TagChip` preview.
   The section control (`SegmentedControl`) is hidden when only one section

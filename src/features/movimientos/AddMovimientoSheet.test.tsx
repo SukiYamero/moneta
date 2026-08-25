@@ -54,7 +54,7 @@ describe('AddMovimientoSheet', () => {
     useMovimientoSheetStore.setState({ addOpen: true })
     render(<AddMovimientoSheet />)
 
-    await user.click(screen.getByRole('button', { name: /guardar/i }))
+    await user.click(screen.getByRole('button', { name: /agregar gasto/i }))
 
     // No category is selected either at this point, so both the amount
     // and the category error show — distinct messages, not one shared alert.
@@ -74,7 +74,7 @@ describe('AddMovimientoSheet', () => {
     // design-export-add-sheet.md §2, specs.md §10.41).
     await user.click(screen.getByRole('button', { name: /más detalles/i }))
     await user.type(screen.getByRole('textbox', { name: /descripción/i }), 'Internet')
-    await user.click(screen.getByRole('button', { name: /guardar/i }))
+    await user.click(screen.getByRole('button', { name: /agregar gasto/i }))
 
     await waitFor(() => expect(mCreateMovimiento).toHaveBeenCalledTimes(1))
     expect(mCreateMovimiento).toHaveBeenCalledWith(
@@ -110,7 +110,7 @@ describe('AddMovimientoSheet', () => {
     expect(screen.getByRole('textbox', { name: /monto/i })).toHaveValue('')
   })
 
-  it('disables Guardar while a submit is already in flight (double-tap guard)', async () => {
+  it('disables the primary action while a submit is already in flight (double-tap guard)', async () => {
     const user = userEvent.setup()
     let resolveCreate!: (value: boolean) => void
     mCreateMovimiento.mockImplementation(() => new Promise((resolve) => (resolveCreate = resolve)))
@@ -119,7 +119,7 @@ describe('AddMovimientoSheet', () => {
 
     await user.type(screen.getByRole('textbox', { name: /monto/i }), '5000')
     await user.click(screen.getByRole('button', { name: 'Servicios' }))
-    const saveButton = screen.getByRole('button', { name: /guardar/i })
+    const saveButton = screen.getByRole('button', { name: /agregar gasto/i })
     await user.click(saveButton)
 
     await waitFor(() => expect(saveButton).toBeDisabled())
@@ -128,5 +128,59 @@ describe('AddMovimientoSheet', () => {
 
     resolveCreate(true)
     await waitFor(() => expect(useMovimientoSheetStore.getState().addOpen).toBe(false))
+  })
+
+  // The artboard's action row binds `{{addLabel}}` to the sheet's own type
+  // toggle — a generic "Guardar" is the old vertical form's copy. Edit mode
+  // keeps the generic label (specs.md §10.41.1): only create names the
+  // action being taken, because only create's toggle picks what gets made.
+  it('the primary action names what it creates, following the type toggle', async () => {
+    const user = userEvent.setup()
+    useMovimientoSheetStore.setState({ addOpen: true })
+    render(<AddMovimientoSheet />)
+
+    expect(screen.getByRole('button', { name: /agregar gasto/i })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('radio', { name: /ingreso/i }))
+
+    expect(screen.getByRole('button', { name: /agregar ingreso/i })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /agregar gasto/i })).not.toBeInTheDocument()
+  })
+
+  // The count button opens `TagPickerSheet` as a second `BottomSheet`
+  // nested above this one — a real, reachable case `useOverlay`'s
+  // render-order stack (specs.md §10.5.1) must handle, not just the two
+  // sheets happening to both exist. Verified live in a real browser too
+  // (Escape and a backdrop tap both closed only the nested picker); this
+  // pins the same behavior at the component level.
+  describe('the nested TagPickerSheet (count button) stacks correctly above this sheet', () => {
+    const openBoth = async (user: ReturnType<typeof userEvent.setup>) => {
+      useMovimientoSheetStore.setState({ addOpen: true })
+      render(<AddMovimientoSheet />)
+      await user.type(screen.getByRole('textbox', { name: /monto/i }), '5000')
+      await user.click(screen.getByRole('button', { name: /ver todas/i }))
+      expect(screen.getAllByRole('dialog')).toHaveLength(2)
+    }
+
+    it('Escape closes only the nested picker, leaving the Add sheet open with its draft intact', async () => {
+      const user = userEvent.setup()
+      await openBoth(user)
+
+      await user.keyboard('{Escape}')
+
+      expect(screen.getAllByRole('dialog')).toHaveLength(1)
+      expect(useMovimientoSheetStore.getState().addOpen).toBe(true)
+      expect(screen.getByRole('textbox', { name: /monto/i })).toHaveValue('5000')
+    })
+
+    it('a second Escape, once the picker is gone, dismisses the Add sheet itself', async () => {
+      const user = userEvent.setup()
+      await openBoth(user)
+
+      await user.keyboard('{Escape}')
+      await user.keyboard('{Escape}')
+
+      expect(useMovimientoSheetStore.getState().addOpen).toBe(false)
+    })
   })
 })

@@ -397,11 +397,13 @@
           "notPositive": "O valor deve ser maior que zero"
         }
       },
-      "dateLabel": "Data",
-      "categoryLabel": "Categoria",
       "categoryError": "Escolha uma categoria",
       "noteLabel": "Descrição",
       "notePlaceholder": "Adicione uma nota (opcional)",
+      "addCta": {
+        "gasto": "Adicionar despesa",
+        "ingreso": "Adicionar receita"
+      },
       "saveCta": "Salvar",
       "cancelCta": "Cancelar",
       "showMoreCta": "Mais detalhes",
