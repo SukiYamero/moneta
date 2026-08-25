@@ -245,6 +245,29 @@ on; the answer has to come from the user.
 
 **Not a bug, and not urgent.** Filed so it does not die in a conversation.
 
+### 15. Does the Add sheet stay put with the keyboard up now? — `owner: user`
+
+Raised 2026-08-25, Ajustes 3 Track AJ3-B (`specs.md` §10.49), fixing item 2
+of `docs/ajustes-3-plan.md`: tapping `+` correctly raised the keyboard
+(item 13, confirmed), but the sheet then appeared scrolled down, hiding
+the gasto/ingreso toggle at its top. The fix pins the sheet (and the
+create-category modal) to the actual visible area using
+`window.visualViewport`, rather than the full layout viewport `dvh`
+resolves against — **CONFIRMED only by unit test against a mocked
+viewport API; no agent here can drive real iOS Safari or a real Android
+device**, so whether it actually holds on a phone is PLAUSIBLE, not
+proven.
+
+**The check:** on a real iPhone, tap `+` on the Add sheet. Once the
+keyboard rises and the amount field is focused, is the gasto/ingreso
+toggle at the top of the sheet still visible, with no need to dismiss the
+keyboard and scroll back up? Separately, worth a look while the sheet
+being opened: the create-category modal (opened from the Add sheet's
+dashed "Custom" chip) previously took the full screen height with no
+reachable way to close it — the same shell fix now bounds and scrolls it,
+which is reasoned to fix this too but was never confirmed on a device
+either.
+
 ---
 
 ## Closed

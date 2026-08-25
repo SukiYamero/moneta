@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { describe, it, expect, vi, afterEach } from 'vitest'
+import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { CenterModal } from '@/components/shared/CenterModal'
 
@@ -78,5 +78,54 @@ describe('CenterModal', () => {
 
     await user.tab()
     expect(screen.getByRole('button', { name: 'Cancelar' })).toHaveFocus()
+  })
+
+  describe('viewport-safe positioning', () => {
+    // A minimal, real `EventTarget` — close enough to `VisualViewport` for
+    // `addEventListener`/`dispatchEvent` to behave like the browser API
+    // `useVisualViewportInset` subscribes to.
+    class FakeVisualViewport extends EventTarget {
+      offsetTop = 0
+      height = document.documentElement.clientHeight
+    }
+
+    afterEach(() => {
+      vi.unstubAllGlobals()
+    })
+
+    it('leaves the wrapper/panel unstyled and unbounded-by-inline-style when the visual viewport matches the layout viewport', () => {
+      vi.stubGlobal('visualViewport', new FakeVisualViewport())
+      render(<Harness open onClose={() => {}} />)
+
+      const dialog = screen.getByRole('dialog')
+      const wrapper = dialog.parentElement as HTMLElement
+
+      expect(wrapper.style.top).toBe('')
+      expect(wrapper.style.height).toBe('')
+      expect(dialog.style.maxHeight).toBe('')
+      // Still bounded/scrollable by its own static class even with no
+      // keyboard involved — previously unbounded at any height
+      // (specs.md §10.49).
+      expect(dialog).toHaveClass('max-h-[88dvh]', 'overflow-y-auto')
+    })
+
+    it('pins the wrapper to the real visible area (re-centering the modal) and clamps the panel once the keyboard shrinks it', () => {
+      const viewport = new FakeVisualViewport()
+      vi.stubGlobal('visualViewport', viewport)
+      render(<Harness open onClose={() => {}} />)
+
+      const dialog = screen.getByRole('dialog')
+      const wrapper = dialog.parentElement as HTMLElement
+
+      act(() => {
+        viewport.offsetTop = 80
+        viewport.height = 350
+        viewport.dispatchEvent(new Event('resize'))
+      })
+
+      expect(wrapper.style.top).toBe('80px')
+      expect(wrapper.style.height).toBe('350px')
+      expect(dialog.style.maxHeight).toBe(`${350 * 0.88}px`)
+    })
   })
 })

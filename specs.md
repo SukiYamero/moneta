@@ -6323,6 +6323,200 @@ pre-existing warnings, `button.tsx`/`FirstSyncGate.tsx`, untouched);
 `lint:units` clean; `vitest run` — 152 files, 1652 tests, unchanged (this
 pass added no code, only `docs/waves.md`'s prune and this section).
 
+### 10.49 Overlays stay inside the visible area under the keyboard (Ajustes 3, Track AJ3-B, 2026-08-25)
+
+`docs/ajustes-3-plan.md` §2 item 2, §3's deferred create-category modal, §4
+Track AJ3-B.
+
+**Facts verified before changing anything, per the plan's own instruction —
+none taken on trust:**
+
+- `index.html`'s viewport meta has no `interactive-widget` descriptor —
+  CONFIRMED by reading the file directly.
+- `window.visualViewport` is unavailable in this repo's jsdom test
+  environment (`window.visualViewport` is `undefined`) — CONFIRMED by a
+  throwaway test run. This is also the reason the existing
+  `BottomSheet.test.tsx`/`CenterModal.test.tsx` suites, unmodified, already
+  exercise the fallback (no-inset) path of this fix and still pass: they
+  are proof the common case is unchanged, not proof of the keyboard case.
+- Neither `BottomSheet` nor `CenterModal` (nor `useOverlay.ts`) referenced
+  `visualViewport` anywhere before this track — grepped directly.
+- `CenterModal.tsx` had **no `max-height` and no scroll container at all**
+  before this fix — CONFIRMED by reading the file. This is a shell defect
+  independent of the keyboard: `CategoryFormModal.tsx` (§3's deferred bug)
+  renders a title, a preview chip, a name field, a wrapping ~34-icon grid,
+  a 9-swatch color grid, and the Cancel/Save row, all as one unscrollable
+  flex column inside that shell — content tall enough to exceed a phone
+  viewport with no keyboard involved at all, let alone with one raised (the
+  name field is this modal's `initialFocus`, so the keyboard is always up
+  when it opens).
+
+**Mechanism.** `iOS Safari shrinks the visual viewport for the keyboard but
+not the layout viewport, so `dvh` never reacts` and `the body is
+scroll-locked by useOverlay while an overlay is open, which is why iOS's
+scroll-focused-input-into-view drags the fixed sheet instead of scrolling
+content inside it` — both from the plan — are the mechanism as reasoned,
+not directly observable from this repo (no real iOS device here); see "not
+proven" below. New shared hook `useVisualViewportInset(enabled)`
+(`src/components/shared/useVisualViewportInset.ts`) subscribes to
+`window.visualViewport`'s `resize`/`scroll` events while `enabled` and
+returns `{ top, height }` — the visible area's real offset and height —
+or `null` whenever there is nothing to correct for (API unavailable,
+disabled, or visual viewport already matches the layout viewport). `null`
+is deliberate, not just "no correction available": it lets both consumers
+fall back to their existing static Tailwind classes with zero inline style
+in the common case, so the no-keyboard behavior is provably unchanged
+rather than merely reasoned to be.
+
+`BottomSheet.tsx` and `CenterModal.tsx` (same `useOverlay.ts`, same
+problem, per the plan's "fix the shape, not the instance") both call the
+hook and apply its result in two places:
+
+- The outer `fixed inset-0` wrapper gets an inline `top`/`height` that
+  overrides the class's `inset-0` only when the hook returns non-null —
+  pinning the wrapper (backdrop + panel's containing block) to the space
+  actually visible instead of the full layout viewport. This is what stops
+  the sheet from being dragged off-screen (§2 item 2) — the panel's
+  `bottom-0` now anchors to the bottom of the _visible_ area, keeping its
+  top (the gasto/ingreso toggle) inside view. For `CenterModal`, the same
+  correction re-centers the modal within the visible area for free, since
+  its `top-1/2 -translate-y-1/2` resolves against this same wrapper.
+- The panel itself gets an inline `maxHeight` (88% of the corrected
+  height, matching `BottomSheet`'s existing `max-h-[88dvh]` fraction) so a
+  sheet/modal cannot grow taller than the space above the keyboard even
+  when its own static `dvh` class would allow it to (`dvh` doesn't shrink
+  for the keyboard on iOS, per the verified fact above).
+
+**`CenterModal.tsx` additionally gained `max-h-[88dvh] overflow-y-auto
+overscroll-y-contain` on the panel itself** — previously entirely absent,
+independent of the viewport-inset work above. This is the direct answer to
+the plan's "check whether this fixes the deferred create-category modal":
+see below.
+
+**Deferred create-category modal (§3) — PLAUSIBLE fix, not CONFIRMED, and
+reasoned from two independent angles:** (1) the shell now bounds/scrolls
+regardless of the keyboard, so `CategoryFormModal`'s already-overflowing
+content (verified above) becomes reachable by scrolling inside the modal
+instead of extending off both edges of the screen with no way back; (2)
+the viewport-inset correction additionally keeps that bounded box anchored
+to the actual visible area once the name field's autofocus raises the
+keyboard. Neither `CategoryFormModal.tsx` nor any other file under
+`src/features/tags/**` was touched — this fix lives entirely in the shared
+shell, per the plan's "do not redesign that modal." Cannot be confirmed
+without a real device; flagged for the user to check specifically (see
+`docs/pendientes-usuario.md`).
+
+**Three-context product answer, asked for explicitly by the plan:**
+
+- **Mobile browser (Safari/Chrome, chrome bars, not installed).** Full
+  problem surface applies. This track's fix is the whole story here: no
+  part of "installed" is available to lean on. `visualViewport` is
+  supported in both engines, so the JS-based correction applies equally.
+- **Installed PWA (`display: 'standalone'`, `vite.config.ts` — verified
+  directly, already configured).** Installing **removes the browser chrome
+  bars** (address bar, tab strip) — that's the entire scope of what
+  `standalone` changes. It does **not** change how either engine handles
+  the software keyboard: iOS's WKWebView-based standalone mode still
+  shrinks only the visual viewport, not the layout viewport, and the body
+  scroll-lock/native-scroll-into-view interaction is unchanged — installing
+  removes a few dozen px of chrome, it does not touch the keyboard
+  mechanism at all. **This fix is exactly as necessary installed as in the
+  browser tab; "it'll be fine in the app" does not hold**, which is why it
+  was not treated as sufficient here.
+- **Play Store TWA wrapping the same PWA.** A TWA is Chrome (or the
+  device's WebView provider) under a native activity wrapper with the
+  chrome hidden — the rendering engine and its keyboard/viewport behavior
+  are the same Chrome/WebView engine as Android Chrome, not a different
+  one. Android's own default viewport resize mode
+  (`android:windowSoftInputMode`, set by the TWA-generating tool, typically
+  Bubblewrap/PWABuilder) determines whether the _layout_ viewport itself
+  resizes for the keyboard at the native level, independent of anything in
+  `index.html` — if the wrapper sets `adjustResize` (the common default for
+  a content-filling activity), Android already resizes the layout viewport
+  itself, and `visualViewport.offsetTop`/`height` would report no
+  correction needed (the layout and visual viewports already match) — this
+  fix's `null`-fallback path handles that case for free, doing nothing
+  extra. If the wrapper instead uses `adjustPan`/`adjustNothing`, the same
+  problem as bare Android Chrome applies and this fix is what corrects it.
+  **Not verified against a real generated TWA manifest — PLAUSIBLE,
+  reasoned from how `windowSoftInputMode` and TWAs are documented to work,
+  not traced against this project's actual Play Store packaging (no such
+  packaging exists in this repo to inspect).**
+
+**`index.html` — read, not changed, a deliberate call.** The plan lists
+`interactive-widget=resizes-content` as a fact to verify (confirmed absent,
+above), not a directive to add it. Decided **not** to add it: it would make
+Android Chrome's _layout_ viewport itself shrink for the keyboard
+app-wide — not just inside this track's two shells — which is a
+cross-cutting change to every screen's `dvh` math, untestable from this
+repo on a real Android device, and not needed for this fix, since
+`visualViewport` already corrects both shells on Android Chrome without it
+(the API has been supported there since Chrome 61, long before the
+`interactive-widget` descriptor existed). Revisit only if a future,
+separate report surfaces a `dvh` problem outside `BottomSheet`/
+`CenterModal` — this track's writable set is the shell, and changing
+global viewport behavior on a guess is exactly the "stop rather than
+guess" case `AGENTS.md` names.
+
+**`prefers-reduced-motion`/`--ease-ios` — unaffected, by construction.**
+Nothing here adds or changes an animation or transition; the inline
+styles only set `top`/`height`/`maxHeight`, which the existing
+`animate-sheet-up`/`animate-pop-in` keyframes and `transition-transform`
+(drag) are indifferent to. No new easing curve introduced.
+
+**Not proven, and cannot be from this repo:** whether real iOS Safari
+actually keeps the toggle visible after this fix, and whether a real Play
+Store TWA's `windowSoftInputMode` needs the correction at all — both
+PLAUSIBLE only, no agent here can drive real iOS Safari or a packaged TWA.
+Added to `docs/pendientes-usuario.md` for the user to check: **does
+opening the Add sheet now keep the gasto/ingreso toggle visible once the
+keyboard is up, on their real phone.**
+
+#### Data touched
+
+None. Shell positioning/sizing only.
+
+#### Done when
+
+- `useVisualViewportInset` returns `null` in the common case (verified:
+  jsdom has no `visualViewport`, so every pre-existing `BottomSheet`/
+  `CenterModal` test exercises this path unmodified) and the real
+  `{top, height}` shape once the visual viewport diverges from the layout
+  viewport — covered by `useVisualViewportInset.test.ts` (5 tests, a real
+  `EventTarget` subclass standing in for `VisualViewport`) and by new
+  `viewport-safe positioning` describe blocks in both `BottomSheet.test.tsx`
+  and `CenterModal.test.tsx` (2 tests each) asserting the wrapper's
+  `top`/`height` and panel's `maxHeight` inline styles.
+- `CenterModal` is bounded and scrollable at any content height, matching
+  `BottomSheet`'s existing contract — asserted in `CenterModal.test.tsx`.
+- `bun run check` green: 153 files (1 new), 1661 tests (9 new — 5 in
+  `useVisualViewportInset.test.ts`, 2 each in `BottomSheet.test.tsx`/
+  `CenterModal.test.tsx`), typecheck/lint/`lint:units` clean, the same two
+  pre-existing `react/only-export-components` warnings (`button.tsx`,
+  `FirstSyncGate.tsx`), unchanged.
+
+#### Blast radius
+
+**Owned by Track AJ3-B:** `src/components/shared/BottomSheet.tsx` + test,
+`src/components/shared/CenterModal.tsx` + test, new
+`src/components/shared/useVisualViewportInset.ts` + test.
+
+**Explicitly not touched:** `useOverlay.ts` (no change needed — the fix
+lives entirely in the two shells, which already build on it; its
+synchronous-focus rewrite from Ajustes 2, §10.46, was not churned),
+`index.html` (read, deliberately not changed — see above),
+`src/styles/index.css` (no token added — the inset is runtime-computed
+from the live keyboard state, not a static design value, so it was never a
+candidate for a token in the first place; nothing was escalated because
+nothing needed escalating), `src/features/tags/CategoryFormModal.tsx` and
+everything else under `src/features/**`/`src/routes/**` (read-only per the
+plan; the create-category modal question is answered by fixing the shell
+it renders inside, not by touching the modal's own contents).
+
+**Handed to the operator, not written here:** the
+`src/components/shared/README.md` line (Track AJ3-A owns that file this
+batch) — see this track's final report.
+
 ## 11. Decisions log
 
 - 2026-06-25 — Package manager: **bun**. Node: **24 LTS** (`.nvmrc`).
@@ -10274,6 +10468,21 @@ to revisit if it disagrees.
   the principle's own precondition. Named as a pattern worth a standing
   habit — try to break a definitive mechanical claim before recording it as
   fact — not acted on unilaterally here.
+- 2026-08-25 — **`interactive-widget=resizes-content` deliberately not
+  added to `index.html` (Ajustes 3, Track AJ3-B, §10.49).** It would make
+  Android Chrome's layout viewport itself shrink for the keyboard app-wide,
+  not just inside `BottomSheet`/`CenterModal` — a cross-cutting change to
+  every screen's `dvh` math this track cannot test on a real Android
+  device and does not need, since `window.visualViewport` already corrects
+  both overlay shells without it. Revisit only if a future report surfaces
+  a `dvh`/keyboard problem outside those two shells.
+- 2026-08-25 — **No token added to `src/styles/index.css` for the
+  keyboard/visual-viewport inset (Ajustes 3, Track AJ3-B, §10.49).** The
+  plan flagged this file as operator-owned and asked the track to escalate
+  before adding a token there — nothing was escalated because the value is
+  runtime-computed from the live `visualViewport` state (changes every
+  keyboard open/close, every device), not a static design constant, so it
+  was never a candidate for a token in the first place.
 
 ## 12. Backlog (pending verification / deferred work)
 
