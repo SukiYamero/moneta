@@ -144,6 +144,30 @@ describe('MovimientoSheet — edit mode', () => {
     expect(cancel).toHaveClass('h-13.5', 'rounded-2xl')
     expect(cancel).not.toHaveClass('font-extrabold')
   })
+
+  // Same shape as AddMovimientoSheet's item-3 fix (docs/ajustes-3-plan.md
+  // §2/§4) — `MovimientoFormFields` is the one shared field set, so a
+  // blocked Save here must get the same on-screen treatment, not just the
+  // create sheet's Add.
+  it('blurs focus and scrolls the amount section into view when Save is blocked by an invalid amount', async () => {
+    const user = userEvent.setup()
+    const scrollIntoView = vi.fn()
+    HTMLElement.prototype.scrollIntoView = scrollIntoView
+    state.movimientos = [movimiento()]
+    useMovimientoSheetStore.setState({ viewId: 'mov_1' })
+    render(<MovimientoSheet />)
+
+    await user.click(screen.getByRole('button', { name: /editar/i }))
+    const amountInput = screen.getByRole('textbox', { name: /monto/i })
+    await user.clear(amountInput)
+    expect(amountInput).toHaveFocus()
+
+    await user.click(screen.getByRole('button', { name: /guardar/i }))
+
+    expect(await screen.findByText(/ingresa un monto/i)).toBeInTheDocument()
+    expect(amountInput).not.toHaveFocus()
+    expect(scrollIntoView).toHaveBeenCalled()
+  })
 })
 
 describe('MovimientoSheet — delete', () => {

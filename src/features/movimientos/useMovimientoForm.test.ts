@@ -187,6 +187,30 @@ describe('useMovimientoForm — validation only appears after a submit attempt',
     expect(result.current.categoriaMissing).toBe(true)
     expect(repo.movimientos.add).not.toHaveBeenCalled()
   })
+
+  // A view driving "scroll/focus the field that blocked the save" (item 3,
+  // docs/ajustes-3-plan.md §4 AJ3-A) needs something that changes on every
+  // *attempt*, not just on the derived error flags themselves — those don't
+  // change on a second tap with the same invalid state, so a view keyed on
+  // them alone would never react to a repeated blocked tap.
+  it('counts every submit call, including blocked and repeated ones, so a view can react to a fresh attempt', async () => {
+    const { result } = renderHook(() =>
+      useMovimientoForm({
+        mode: 'create',
+        locale: LOCALE,
+        monedaPrincipal: 'COP',
+        categorias: CONFIG_SEMILLA.categorias,
+        onSaved: vi.fn(),
+      }),
+    )
+    expect(result.current.submitAttempts).toBe(0)
+
+    await act(() => result.current.submit())
+    expect(result.current.submitAttempts).toBe(1)
+
+    await act(() => result.current.submit())
+    expect(result.current.submitAttempts).toBe(2)
+  })
 })
 
 describe('useMovimientoForm — selectCategoria', () => {

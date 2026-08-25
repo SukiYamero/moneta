@@ -161,16 +161,6 @@ Categoria[]` prop (no default, same no-silent-fallback rule as
 - `Toggle.tsx` — on/off switch (`role="switch"`). Accepts `ref`.
 - `InfoButton.tsx` — small "?" affordance that opens an info tooltip
   (the caller owns the `CenterModal` it opens). Accepts `ref`.
-- `AmountField.tsx` — locale-aware amount input for `Movimiento.monto`
-  (always positive; sign comes from `tipo`). `type="text"` +
-  `inputMode="decimal"`, never `type="number"` (native spinners, and
-  `valueAsNumber` ignores locale entirely). A controlled **string** field,
-  not a controlled number — the parsing lives in `src/lib/i18n/amountFormat.ts`,
-  never a hand-rolled parser here. `aria-invalid` is true both for a
-  caller-supplied `error` and for text `parseAmount` can't parse under the
-  given `locale`, so malformed input is flagged even with no `error` copy
-  passed. Required `locale` (BCP-47 from `useLocaleFormatting()`), same
-  no-default convention as `MovimientoRow`/`formatMonto`. Accepts `ref`.
 - `BottomNav.tsx` — the five-slot persistent tab bar (Home / History /
   centre Add / Search / Profile), mounted once by `src/routes/AppShell.tsx`.
   Home, History and Search are real `NavLink`s, so `aria-current="page"`
