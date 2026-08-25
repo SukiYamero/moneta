@@ -90,6 +90,15 @@ fields (Decision 1):
   the artboard's `{{addLabel}}` names the action being created, and only
   create's toggle picks what that is (edit's toggle changes an existing
   movement instead, so it keeps the generic `form.saveCta`).
+- `movimientoPrimaryCta.ts` — the one class string
+  (`MOVIMIENTO_PRIMARY_CTA_CLASS`) sizing the commit action in both sheets
+  to the design export's 54px/18px-radius/15px/800 instead of `Button`'s
+  `size="touch"` typography, which is a touch-target minimum and nothing
+  more (specs.md §10.46). Its own module rather than an export off either
+  sheet, so neither becomes the other's dependency for a value they own
+  equally (§10.46.1). Edit's Cancel takes the height/radius half only — a
+  flex row of two explicit-height buttons has to match, but Cancel is not
+  the commit action the heavier type calls out.
 - `MovimientoSheet.tsx` — `BottomSheet` hosting view ⇄ edit for an existing
   movement, driven by `movimientoSheetStore`'s `viewId`. View mode resolves
   category/section for display (never a raw id — specs.md §10.22), starts
