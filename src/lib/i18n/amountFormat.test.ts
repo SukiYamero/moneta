@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { parseAmount, parseAmountForInput, formatAmountForInput } from '@/lib/i18n/amountFormat'
+import {
+  parseAmount,
+  parseAmountForInput,
+  formatAmountForInput,
+  isAmountInputInvalid,
+} from '@/lib/i18n/amountFormat'
 
 describe('parseAmount', () => {
   it('parses a dot-grouped, comma-decimal amount (es-CO)', () => {
@@ -105,5 +110,28 @@ describe('parseAmountForInput', () => {
     expect(parseAmount('18.000', 'es-CO')).toBe(parsed.ok ? parsed.value : undefined)
     expect(parseAmount('0', 'es-CO')).toBeUndefined()
     expect(parseAmount('abc', 'es-CO')).toBeUndefined()
+  })
+})
+
+describe('isAmountInputInvalid', () => {
+  it('is false for empty input with no caller error — nothing typed yet is not a typo', () => {
+    expect(isAmountInputInvalid('', 'es-CO', undefined)).toBe(false)
+  })
+
+  it('is false for a well-formed amount with no caller error', () => {
+    expect(isAmountInputInvalid('18.000', 'es-CO', undefined)).toBe(false)
+  })
+
+  it('is false for not_positive (e.g. a bare 0) with no caller error — a valid keystroke in progress, not a typo', () => {
+    expect(isAmountInputInvalid('0', 'es-CO', undefined)).toBe(false)
+  })
+
+  it('is true for malformed text even with no caller error', () => {
+    expect(isAmountInputInvalid('abc', 'es-CO', undefined)).toBe(true)
+  })
+
+  it('is true whenever the caller passes an error, regardless of what the text parses to', () => {
+    expect(isAmountInputInvalid('18.000', 'es-CO', 'monto requerido')).toBe(true)
+    expect(isAmountInputInvalid('', 'es-CO', 'monto requerido')).toBe(true)
   })
 })

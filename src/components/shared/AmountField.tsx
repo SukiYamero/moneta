@@ -1,7 +1,7 @@
 import { useId, type Ref } from 'react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { parseAmountForInput } from '@/lib/i18n/amountFormat'
+import { isAmountInputInvalid } from '@/lib/i18n/amountFormat'
 import { cn } from '@/lib/utils'
 
 export interface AmountFieldProps {
@@ -53,9 +53,7 @@ export const AmountField = ({
   const autoId = useId()
   const inputId = id ?? autoId
   const errorId = `${inputId}-error`
-  const parsed = parseAmountForInput(value, locale)
-  const isMalformed = !parsed.ok && parsed.reason === 'malformed'
-  const invalid = error !== undefined || isMalformed
+  const invalid = isAmountInputInvalid(value, locale, error)
 
   return (
     <div className={cn('flex flex-col gap-1.5', containerClassName)}>

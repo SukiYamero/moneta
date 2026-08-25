@@ -55,6 +55,16 @@ overscroll-y-contain` body that owns the horizontal/bottom padding —
 - `CenterModal.tsx` — centered popup shell (Delete confirm, Info tooltip,
   Custom tag modal, Group editor). `CenterModalProps` is
   `OverlayShellProps<HTMLDivElement>` too. Accepts `initialFocus`/`ref`.
+- `ScreenHeader.tsx` — the back-button + title row a screen with a
+  back-bar header renders as the first thing inside its shared
+  `--screen-inset-top` container (`specs.md` §10.34): the row owns its own
+  height, so "where does content start" stays the one token rather than a
+  second hand-typed inset per header. Optional `subtitle` renders a second
+  line under the title. Two consumers: `SettingsScreen.tsx` (no subtitle)
+  and `src/features/lock/LockSettings.tsx` (with one, passed through
+  `FullScreenPanel`'s `header` prop) — `HistoryScreen.tsx`'s own header
+  (chevrons + year menu, not a back button) stays bespoke, structurally
+  different from this row.
 - `tintClasses.ts` — single source of truth for tint name → Tailwind class
   strings, in the `icon`/`badge`/`pill` shapes `IconAvatar.tsx` and
   `TagChip.tsx` each need — not part of the public barrel

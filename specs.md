@@ -5419,6 +5419,167 @@ typecheck/lint clean, same two pre-existing `react/only-export-components`
 warnings (`button.tsx`, `FirstSyncGate.tsx`), `no-in-flow-min-h-dvh.sh`
 unaffected (neither file uses `min-h-dvh`).
 
+### 10.44 Cross-track review of the whole Ajustes 1 batch (`review-cross`, 2026-08-25)
+
+`AGENTS.md` § Review protocol item 6 — the general pass looking for what
+every per-track reviewer above was structurally blind to: drift between
+tracks, one concept solved twice, a rule applied to one file and not its
+twin, dead seams. Ten tracks landed; this pass re-reviewed none of them —
+only what spans two or more. Full method: read every doc/spec section this
+batch touched first, then drove each escalated seam to CONFIRMED/dismissed/
+fixed, then swept past the given list.
+
+**Fixed, all CONFIRMED by direct reading of the current code (not the
+per-track reports):**
+
+- **`ScreenHeader` (§10.34) vs `LockSettings`'s hand-rolled twin (escalated
+  twice, §10.34.1 and never picked up — `LockSettings.tsx` wasn't in AJ-F's
+  blast radius either).** Gave `ScreenHeader` an optional `subtitle` prop
+  and migrated `LockSettings.tsx` to it, byte-identical markup to what it
+  replaced (verified: same classes, same wrapping `div`, same `aria-label`
+  wiring) — one back+title row implementation, not two.
+- **Two unnamed "1.5rem clear of the notch" expressions (§10.34.1's own
+  escalation).** Named `FullScreenPanel.tsx`'s bare `max(1.5rem, env(...))`
+  as `--overlay-inset-top`/`--overlay-inset-bottom` in `src/styles/
+index.css`, distinct from the in-flow `--screen-inset-top` (which tops up
+  `body`'s own padding instead of adding a second inset) — same values,
+  same behavior, now one relationship instead of two files that happened
+  to agree on a number.
+- **`MovimientoAmountInput`/`AmountField` re-deriving the same
+  invalid-check from `parseAmountForInput` (flagged, not fixed, in
+  §10.41.1 and §12 — both files were outside that review's ownership).**
+  Extracted `isAmountInputInvalid(value, locale, error)` into
+  `src/lib/i18n/amountFormat.ts`; both components now call it instead of
+  re-deriving `isMalformed`/`invalid` independently. New unit tests for the
+  helper's four cases (empty, well-formed, `not_positive`, malformed,
+  caller-error).
+- **`PreContentSkeleton.tsx` still had the pre-AJ-J `min-h-full`-floor
+  shape `AppShell.tsx` was just fixed out of (§10.43), unfixed because
+  AJ-J's blast radius was scoped to `AppShell.tsx` alone and this file
+  isn't it — even though its own doc comment says it deliberately mirrors
+  `AppShell`'s geometry.** Confirmed by direct structural comparison
+  (its root: `min-h-full` + a `flex-1 overflow-y-auto` pane + a sibling
+  `BottomNav`, which is `fixed` — the identical three-part shape §10.43
+  proved lets real long content scroll the whole document instead of the
+  pane, masked only by the nav's own fixed positioning). Practical impact
+  is low (the skeleton's own content essentially never overflows one
+  screen), but the shape is the same one just fixed one file over, so it
+  got the same fix: `h-full` + `overscroll-y-contain` on the pane, stale
+  doc comment corrected.
+- **`es.json`'s `lock` namespace was internally inconsistent — voseo in
+  `screen`/`settings`/`setup`, tuteo in `forgotConfirm`/`errors` — and a
+  same-batch commit (`ac7ba1f`, fixing `footerPolicy`'s voseo) claimed
+  "the single exception in the whole file," which a full-file grep for
+  voseo verb endings disproves: nine more instances survived in the same
+  namespace, evidently copy-pasted from `es-AR` at Wave 4.1 and never
+  fully converted.** Corrected `screen.title/subtitlePin/subtitleBiometric/
+guestTitle/guestSubtitle`, `settings.panelSubtitle/biometricRowSubcopy`,
+  and `setup.titleCreate/titleConfirm/hintConfirm` to tuteo, matching the
+  rest of the file. `es-AR` was swept for the reverse drift (tuteo forms
+  in a voseo file) and found clean. No test hardcoded the old copy;
+  `resources.test.ts` (parity) stays green.
+- **`docs/waves.md`'s worktree log carried three stale `active` rows**
+  (`aj-a-shell-standard`, `aj-e-return-guest`, `aj-f-pin-copy`) for tracks
+  that had merged days earlier (`31411ff`/`67ce17a`/`ffd3118`) with neither
+  the worktree directories nor the branches still present — the same
+  failure the table's own comment already named once for `review-ah`
+  (pruned 2026-08-24), recurring three more times in the very next batch.
+  Pruned, with the finding named in the file rather than silently deleted
+  (matching the existing convention there).
+- **`src/components/shared/README.md` never documented `ScreenHeader.tsx`
+  at all** (added by AJ-A, escalated on twice by review-aj-a for its API
+  shape, but its README entry was simply never written). Added.
+
+**Investigated and dismissed as already correct — no fix, findings only:**
+
+- **`BottomSheet` vs `FullScreenPanel`'s fixed-chrome/scrolling-body split**
+  (item 1 in the brief). Both use `min-h-0 flex-1 overflow-y-auto
+overscroll-y-contain` on the body; the padding split (`BottomSheet` puts
+  `px-5.5 pb-7` on the body with no top padding since the handle+margin
+  already spaces it; `FullScreenPanel` puts the safe-area insets on
+  `header`/body depending on which exists) is a deliberate consequence of
+  who owns the chrome (shell-owned grabber vs. caller-supplied header),
+  already reasoned through in §10.35.1. Still correct.
+- **`AppShell.tsx`'s `overscroll-y-contain` coverage.** Two other
+  `overflow-y-auto` containers exist without it: `DrivePermissionScreen.tsx`
+  and (before this pass) `PreContentSkeleton.tsx`. Neither is a scroll-
+  locked overlay context, and neither (until this pass fixed the second
+  one) was actually its page's sole scroll container the way `AppShell`'s
+  pane now is — `overscroll-y-contain` prevents a locked/definite
+  container's boundary drag from chaining into what's behind it, which
+  doesn't apply to a plain top-level screen where page-level scroll is
+  normal and expected (the same as `Home`/`Search`/`History`, which have no
+  `overflow-y-auto` wrapper at all). `DrivePermissionScreen.tsx`'s own
+  `overflow-y-auto` div sits under a `min-h-full` (floor) root with a
+  non-`fixed` footer sibling, so — PLAUSIBLE, not driven live — it likely
+  never engages as a real internal scroll container either (same mechanism
+  as the `PreContentSkeleton`/pre-fix-`AppShell` shape), but with no
+  `fixed` element depending on a stable frame there, the practical effect
+  is at most dead styling, not a defect; left alone as out of this pass's
+  confirmed-fix bar.
+- **The `scripts/` guard family (three scripts).** Same shape (shebang,
+  header comment naming the rule and its tradeoffs, a `hits=$(grep ... ||
+true)` + conditional `exit 1`), same output convention (a leading `✖`
+  line, a pointer to the rule, the offending lines). One inconsistency
+  found: `no-raw-px.sh` doesn't exempt `.test.` files the way the other two
+  do; currently inert (no test file has a raw-px arbitrary value today) and
+  pre-existing, not introduced by this batch — noted, not changed.
+  `scripts/README.md` checked line by line against all three scripts:
+  accurate.
+- **Copy honesty past the two already-rewritten dialogs.** Swept every
+  `ConfirmDialog` call site's `destructive` value against the mutation it
+  actually performs (already exhaustively re-derived twice this batch,
+  §10.40/§10.40.1 — re-checked here, still correct, all seven pass it as an
+  explicit literal) and every locale string mentioning deletion/
+  irreversibility (`grep` across `es.json`) against what its screen
+  actually does — all traced already-honest in this batch's own sweeps
+  (§10.38, §10.40) or pre-existing and accurate (`categoryInUse`, the
+  inert `deleteStored` stub). Nothing else found.
+- **`docs/error-handling.md` §4.1 applied fresh to every `catch` this batch
+  added.** Only one new `catch` exists in the whole batch's diff:
+  `switchProfile.ts`'s decision-site catch around `readOwnerMarker` (AJ-I,
+  §10.42). Traced its consumer (`useProfiles.ts`): `'switch-check-failed'`
+  routes to the ordinary `switchError` toast, never to `removeGoneProfile`
+  — correctly distinct from the read's genuine-absence branch. No other
+  catch in the batch changed whose consumer reads its degraded value.
+- **Locale key parity/register/orphans across all four files, all
+  namespaces this batch touched (`auth`, `lock`, `movimientos`, `tags`,
+  `profile`, `settings`).** `resources.test.ts` (parity) green throughout.
+  A scripted sweep for keys never referenced by any `t()` call in `src`
+  found zero orphans in `movimientos`/`tags`/`settings` (the namespaces
+  this batch actually redesigned) and a handful of likely false positives
+  elsewhere resolved as template-literal key construction
+  (`profile:profiles.kind.${kind}`, `profile:preferences.theme.${tema}`) or
+  i18next `_one`/`_other` plural suffixes. Three genuine, pre-existing
+  orphans found outside this batch's own changes — `lock.settings.
+biometricRowSubcopy` (translated in all four locales, never rendered by
+  `PinSetup.tsx`'s biometric-enroll row, unlike its two sibling rows which
+  both render label+subcopy), `profile.preferences.readOnlyNote`, and
+  `tags.form.nameRequiredError` (`CategoryFormModal.tsx` only ever disables
+  its save button on an empty name, never shows this string) — all three
+  predate Ajustes 1 and sit in files this batch didn't touch; left alone
+  as out of this pass's scope, named here so they aren't rediscovered from
+  scratch.
+
+**Process finding, not a code fix — reported, not applied.** `specs.md`'s
+§10 is no longer easily navigable: 49 `### 10.x` subsections spanning
+~5200 lines, this batch's own ten additions landing in numeric order
+10.36, 10.37, 10.37.1, 10.35, 10.35.1, 10.34, 10.38, 10.34.1, 10.40,
+10.40.1, 10.39, 10.42, 10.39.1, 10.41, 10.41.1, 10.43 — completely
+scrambled relative to reading order, because each parallel track's
+append landed wherever "the end of §10" physically was at that track's
+own merge time. There is no table of contents anywhere in the file, so
+finding a given `§10.x` means either already knowing roughly where it
+landed or scrolling/searching blind. **Not reordering it** — instructed
+not to, and it would rewrite the surrounding context of other tracks'
+sections regardless of intent. **Proposal, for the operator to decide,
+filed to §12**, not decided here.
+
+**Verified.** `bun run check`: 152 test files, 1618 tests (five new:
+`isAmountInputInvalid`'s unit tests), typecheck/lint clean, same two
+pre-existing `react/only-export-components` warnings (`button.tsx`,
+`FirstSyncGate.tsx`) — unchanged from the batch's own final state.
+
 ## 11. Decisions log
 
 - 2026-06-25 — Package manager: **bun**. Node: **24 LTS** (`.nvmrc`).
@@ -9266,6 +9427,25 @@ tell the same story as the confirm dialog.
 
 ## 12. Backlog (pending verification / deferred work)
 
+- **`specs.md` §10 has no table of contents and its subsections no longer
+  land in numeric order — flagged by the cross-track review, §10.44,
+  2026-08-25.** 49 `### 10.x` subsections span ~5200 lines; this one batch's
+  ten additions alone landed as 10.36, 10.37, 10.37.1, 10.35, 10.35.1,
+  10.34, 10.38, 10.34.1, 10.40, 10.40.1, 10.39, 10.42, 10.39.1, 10.41,
+  10.41.1, 10.43 — each parallel track's append-only addition landing
+  wherever "the end of §10" physically was at that track's own merge time,
+  not in reading order. **Not reordering it** — that would rewrite the
+  surrounding context of other tracks' sections, which the append-only rule
+  exists to prevent, and no one track's cross-cutting pass should make that
+  call unilaterally regardless of intent. **Proposal for the operator:** add
+  a single, append-only index block (a `### 10.x — <title>` line per
+  subsection, in true numeric order, no reordering of the sections
+  themselves) either right after the "## 10. Feature specs" heading or as
+  its own file (`docs/specs-index.md`) regenerated periodically — the
+  second avoids the index itself needing constant append-only edits as more
+  subsections land, at the cost of one more file that can go stale if
+  nobody regenerates it. Either way, this is a product/process call, not a
+  clearly-correct mechanical fix, so it's filed rather than built here.
 - **`AppShell.tsx`'s root: `min-h-full` (a floor) vs `h-full` (a fixed
   value) — escalated by the review-aj-g pass, §10.39.1, 2026-08-25.**
   `AppShell`'s only in-flow child (the `flex-1 overflow-y-auto` middle pane

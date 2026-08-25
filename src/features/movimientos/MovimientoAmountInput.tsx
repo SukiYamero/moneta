@@ -1,7 +1,7 @@
 import { useId, useMemo, type Ref } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { Moneda, TipoMovimiento } from '@/lib/schema'
-import { parseAmountForInput } from '@/lib/i18n/amountFormat'
+import { isAmountInputInvalid } from '@/lib/i18n/amountFormat'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 
@@ -64,9 +64,7 @@ export const MovimientoAmountInput = ({
   const { t } = useTranslation('movimientos')
   const errorId = useId()
   const symbol = useMemo(() => currencySymbolFor(moneda, locale), [moneda, locale])
-  const parsed = parseAmountForInput(value, locale)
-  const isMalformed = !parsed.ok && parsed.reason === 'malformed'
-  const invalid = error !== undefined || isMalformed
+  const invalid = isAmountInputInvalid(value, locale, error)
 
   return (
     <div className="flex flex-col items-center gap-2">

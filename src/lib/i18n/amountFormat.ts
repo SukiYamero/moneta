@@ -73,3 +73,24 @@ export const parseAmount = (raw: string, locale: string): number | undefined => 
 /** The inverse of `parseAmount` — formats a stored amount for the input under `locale`, e.g. to prefill an edit form. */
 export const formatAmountForInput = (value: number, locale: string): string =>
   new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(value)
+
+/**
+ * Whether an amount input should render `aria-invalid` — true for a
+ * caller-supplied business-rule `error` (e.g. "amount required") or for
+ * malformed typed text under `locale`. Deliberately **not** true for
+ * `not_positive` (e.g. a bare `0`): that's a valid keystroke on the way to
+ * `0,50`, not a typo (`docs/error-handling.md`'s malformed/not_positive
+ * split, specs.md §10.23 Decision 4). Both `AmountField` and
+ * `MovimientoAmountInput` read this off the same `parseAmountForInput`
+ * result — extracted so the "how do I read this result as invalid" logic
+ * can't drift between the two independently of the parsing rule itself.
+ */
+export const isAmountInputInvalid = (
+  value: string,
+  locale: string,
+  error: string | undefined,
+): boolean => {
+  const parsed = parseAmountForInput(value, locale)
+  const isMalformed = !parsed.ok && parsed.reason === 'malformed'
+  return error !== undefined || isMalformed
+}

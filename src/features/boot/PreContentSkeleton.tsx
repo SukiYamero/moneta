@@ -27,22 +27,22 @@ const noop = () => {}
  * their sheets need feature state this span doesn't have. `inert` keeps
  * both non-interactive without a different visual treatment.
  *
- * `min-h-full`, not `min-h-dvh` (specs.md §10.34): `body` already pads by
- * `env(safe-area-inset-top/bottom)`, so a `min-h-dvh` root here would be
- * forced to at least the full viewport height while sitting inside a
- * `body` content box already shrunk by that same inset — overflowing it
- * by exactly the inset amount on any real notched/home-indicator device
- * (invisible in browser chrome, where the inset is `0`, which is why nobody
- * had seen it). `min-h-full` resolves against the real ancestor chain
- * (`html`/`body`/`#root` are all `height: 100%`) instead of the raw
- * viewport, so it can never demand more room than `body`'s own padded
- * content box actually has. `AppShell.tsx` has the identical `min-h-dvh`
- * root and is very likely subject to the same bug — flagged for the
- * operator, not fixed here (outside this track's file ownership).
+ * `h-full`, not `min-h-dvh` (specs.md §10.34) and not `min-h-full` (specs.md
+ * §10.43): a `min-h-dvh` root would demand the full raw viewport from
+ * inside `body`'s safe-area padding and overflow the page by the inset
+ * amount (§10.34's bug, already fixed here). A `min-h-full` root is only a
+ * floor, which leaves the `flex-1 overflow-y-auto` pane below with a
+ * content-driven, not definite, height — so real long content grows the
+ * whole document instead of scrolling inside the pane, masked only by
+ * `BottomNav`'s own `fixed` positioning. `AppShell.tsx` had exactly this
+ * shape and was moved to `h-full` for exactly this reason (§10.43); this
+ * file mirrors `AppShell`'s geometry deliberately (see above) and shares
+ * the same fix, `overscroll-y-contain` included, even though its skeleton
+ * content is short enough that the floor rarely engages in practice.
  */
 export const PreContentSkeleton = () => (
-  <div className="relative flex min-h-full flex-col bg-background text-foreground">
-    <div className="flex-1 overflow-y-auto pb-(--bottom-nav-clearance)">
+  <div className="relative flex h-full flex-col bg-background text-foreground">
+    <div className="flex-1 overflow-y-auto overscroll-y-contain pb-(--bottom-nav-clearance)">
       <main className="min-h-full px-5 pt-(--screen-inset-top) pb-1">
         <HomeLoadingState />
       </main>

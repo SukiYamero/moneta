@@ -160,6 +160,17 @@ html {
      here). A screen opts in with `pt-(--screen-inset-top)`. */
   --screen-inset-top: max(calc(1.5rem - env(safe-area-inset-top)), 0rem);
 
+  /* The same 1.5rem safe-top floor, but for a `fixed` overlay
+     (`FullScreenPanel`) instead of an in-flow screen: a `fixed` element
+     gets none of `body`'s ambient safe-area padding for free, so it must
+     add the full inset itself rather than topping one up like
+     `--screen-inset-top` does — using that token here would silently
+     undercount on a real notch. Named so the two "1.5rem clear of the
+     notch" expressions aren't just a coincidence of value between two
+     files (specs.md §10.34.1). */
+  --overlay-inset-top: max(1.5rem, env(safe-area-inset-top));
+  --overlay-inset-bottom: max(1.5rem, env(safe-area-inset-bottom));
+
   /* Easing — the "native sheet" curve used for every sheet/push/pop
      transition in the design. This is what makes it feel native, not web. */
   --ease-ios: cubic-bezier(0.32, 0.72, 0, 1);

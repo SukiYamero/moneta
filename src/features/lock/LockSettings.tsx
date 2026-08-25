@@ -1,8 +1,9 @@
 import { useId, useState } from 'react'
-import { ChevronLeft, LockKeyhole } from 'lucide-react'
+import { LockKeyhole } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useLockStore } from '@/lib/lockStore'
 import { Button } from '@/components/ui/button'
+import { ScreenHeader } from '@/components/shared/ScreenHeader'
 import { Toggle } from '@/components/shared/Toggle'
 import { FullScreenPanel } from '@/features/lock/FullScreenPanel'
 import { PinSetup } from '@/features/lock/PinSetup'
@@ -49,24 +50,13 @@ export const LockSettings = ({ open, onClose }: LockSettingsProps) => {
       onClose={onClose}
       labelledBy={titleId}
       header={
-        <div className="flex items-center gap-2.5 px-5 pb-3.5">
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label={t('settings.back')}
-            className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg bg-secondary text-foreground"
-          >
-            <ChevronLeft className="size-4" />
-          </button>
-          <div className="min-w-0 flex-1">
-            <h1 id={titleId} className="truncate text-xl font-extrabold tracking-tight">
-              {t('settings.panelTitle')}
-            </h1>
-            <p className="text-sm font-medium text-muted-foreground">
-              {t('settings.panelSubtitle')}
-            </p>
-          </div>
-        </div>
+        <ScreenHeader
+          titleId={titleId}
+          title={t('settings.panelTitle')}
+          subtitle={t('settings.panelSubtitle')}
+          onBack={onClose}
+          backLabel={t('settings.back')}
+        />
       }
     >
       <div className="flex flex-1 flex-col gap-4 px-5 pb-8">
