@@ -6696,6 +6696,73 @@ reason, not because it wasn't attempted.
 `src/components/shared/CenterModal.tsx`. No other file in this track's
 scope changed.
 
+### 10.49.2 Two operator corrections to this batch's record (2026-08-25)
+
+**1. The worktree violation was the operator's, not Track AJ3-A's.**
+`c43bda7`'s commit message says review-aj3-b's source fixes were "absorbed
+into two of Track AJ3-A's commits (`07f6c16`, `924d7a1`) by a
+working-directory race — both agents were committing from the same main
+checkout." The commits are real and the race is real; **the attribution is
+wrong.** Track AJ3-A had already merged and its worktree had already been
+removed when those two commits were made — they are the **operator's** own
+follow-up commits, made with `git add -A` on the `main` checkout while a
+review agent had uncommitted work in it. No track was involved.
+
+The commit message is left as written (rewriting shared history to fix a
+misattribution is worse than the misattribution); this entry is the
+correction, and it matters because the wrong cause implies the wrong fix.
+"A track ignored the one-branch-one-worktree rule" invites telling tracks to
+be more careful. What actually happened is that **the operator ran three
+review passes directly on the `main` checkout while also committing to it**
+— structurally the same two-writers-on-one-checkout mistake this project
+already learned not to make with tracks, reintroduced by the role that
+enforces the rule, in the very batch where it was enforcing it.
+
+The reviews noticed. `review-aj3-c` declined to write its `specs.md`
+findings at all ("another track had an uncommitted 145-line diff in it
+throughout my session") and put them in its report instead; `review-aj3-a`
+and `review-aj3-c` both scoped their `git add` calls to named files
+specifically to avoid the collision. Two of three review agents worked
+around an operator error rather than being protected from it.
+
+**Process change, effective now: review passes get worktrees too.** The rule
+was never "tracks use worktrees" — it is "one writer per checkout", and a
+reviewer that applies fixes is a writer.
+
+**2. `review-aj3-c`'s unwritten findings, recorded here since the operator's
+error is why they had nowhere to go.**
+
+- **`I18N_NAMESPACES` had drifted for three namespaces, not one.** The
+  review found `dateChipPicker` missing and fixed it (`9690bc4`). Asking
+  `AGENTS.md`'s own question — is the twin broken too — found `movimientos`
+  missing from the array as well, and `src/lib/i18n/README.md`'s copy of the
+  list missing all three of `sync`, `movimientos` and `dateChipPicker`.
+  Nothing was broken by any of it: resources load inline, so an
+  unregistered namespace resolves at runtime anyway, which is exactly why it
+  drifted invisibly across at least three separate tracks. Fixed with a
+  guard rather than an entry — `resources.test.ts` now asserts
+  `I18N_NAMESPACES` and `es.json`'s top-level keys are the same set, watched
+  failing against the real gap before being kept. **This is the second time
+  in one session that the answer to a recurring lapse was a mechanical check
+  rather than a reminder** (the first: the worktree log's prune, §10.49.2
+  above and `docs/waves.md`).
+- **The "always 42 cells" invariant in §10.50 is true for every month a user
+  will meet, and is not an absolute.** The review reproduced the grid across
+  US, Brazilian, Chilean and Samoan timezones hunting for duplicate React
+  keys and found none — but **December 2011 in `Pacific/Apia` renders 41
+  cells**, because Samoa crossed the international date line and 30 December
+  2011 did not exist locally; `eachDayOfInterval` drops the missing day
+  rather than colliding. One historical month, one timezone, no crash, no
+  key collision. Deliberately not fixed. Recorded so the invariant is never
+  cited as absolute.
+- **The design export's repeater counts are placeholders, now verified
+  rather than argued.** Track AJ3-C read `hint-placeholder-count="35"` on the
+  calendar as the design tool's own seed, not a spec. The review checked
+  every `sc-for` in the export: `calDowNames`→7, `newCalCells`→35,
+  `categories`→8, `pickerTags`→8. Two unrelated unbounded lists both seeded
+  at 8 is independent evidence the attribute is a tool artifact. The track's
+  reading was right.
+
 ### 10.50 `DateChipPicker`'s grid stops changing height, and its aria-labels stop being hardcoded Spanish (Ajustes 3, Track AJ3-C, 2026-08-25)
 
 `docs/ajustes-3-plan.md` §4 Track AJ3-C, over `src/components/shared/DateChipPicker.tsx`
