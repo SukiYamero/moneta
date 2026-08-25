@@ -6285,12 +6285,22 @@ still carried `../moneta-worktrees/aj2-a` / `aj2-a-amount-display` /
 `active` against `git worktree list` and `git branch -vv` showing neither —
 the directory (`../moneta-worktrees/`) is empty and the branch doesn't
 exist. AJ2-A merged (`7336c34`) and was reviewed (`11273f2`) without the
-row being removed, even though its sibling AJ2-B correctly dropped its own
-row at merge (`fa55828`) — one track in the same batch followed the "prune
-the moment you merge" rule and the other didn't. Restored the table to
-`(none)` and added a prune note in the same style as the table's existing
-ones, naming this as a fourth recurrence of the exact failure the table's
-own comment already tracks.
+row being removed. Restored the table to `(none)` and added a prune note in
+the same style as the table's existing ones, naming this as a fourth
+recurrence of the exact failure the table's own comment already tracks.
+
+**Attribution corrected by the operator, 2026-08-25, because the wrong
+cause makes the process finding wrong too.** The review read this as "one
+track followed the rule and its sibling didn't". Neither track touched
+`docs/waves.md` in this batch at all — the operator created both worktrees,
+logged both rows, removed both worktrees, and dropped only AJ2-B's row
+(`fa55828`), forgetting AJ2-A's ten minutes later. So this is not evidence
+that the rule is unevenly followed by tracks; it is evidence that **the
+role that owns the prune is irrelevant to whether it gets forgotten** — the
+operator forgot it in the same batch where it had just performed the same
+prune correctly. That strengthens rather than weakens the review's actual
+conclusion: the trigger has to be mechanical, not remembered, by whoever
+holds it.
 
 **Shared surface — checked, consistent, nothing else to fix.** Both
 sheets' primary-CTA class (`MOVIMIENTO_PRIMARY_CTA_CLASS` from

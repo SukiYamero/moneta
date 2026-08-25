@@ -729,12 +729,16 @@ missing/finished here).
 (`../moneta-worktrees/aj2-a`, `aj2-a-amount-display`) still claimed `active`
 against `git worktree list`/`git branch -vv` showing neither — the track
 merged (`7336c34`) and was reviewed (`11273f2`) without the row being
-removed, even though its sibling AJ2-B correctly dropped its own row at
-merge (`fa55828`). Same failure this table already names below, a fourth
-time: one track in the same batch followed the rule and the other did not,
-which is more evidence the rule needs an enforced trigger (a merge-commit
-checklist item, a lint, something other than a track remembering) rather
-than another manual prune.
+removed. Same failure this table already names below, a fourth time.
+
+**Operator correction, same day:** the review attributed this to AJ2-A not
+following the rule its sibling AJ2-B did. Neither track edited this file —
+the operator owned both worktrees end to end, dropped AJ2-B's row at merge
+(`fa55828`), and forgot AJ2-A's minutes later. The lesson is therefore
+stronger, not weaker: the same person forgot the prune in the same batch
+where they had just done it correctly. An enforced trigger (a merge-commit
+checklist item, a lint, anything mechanical) is the fix; "whoever merges
+remembers" has now failed four times across two roles.
 
 **Pruned 2026-08-25 (cross-track review, `review-cross`):** AJ-A, AJ-E and
 AJ-F's rows (`aj-a-shell-standard`, `aj-e-return-guest`, `aj-f-pin-copy`) all
