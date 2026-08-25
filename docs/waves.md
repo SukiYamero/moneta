@@ -724,7 +724,6 @@ missing/finished here).
 | Path                        | Branch               | Status |
 | --------------------------- | -------------------- | ------ |
 | `../moneta-worktrees/aj3-a` | `aj3-a-add-feedback` | active |
-| `../moneta-worktrees/aj3-c` | `aj3-c-calendar`     | active |
 
 **Pruned 2026-08-25 (cross-track review, `review-ajustes-2`):** AJ2-A's row
 (`../moneta-worktrees/aj2-a`, `aj2-a-amount-display`) still claimed `active`

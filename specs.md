@@ -6516,6 +6516,7 @@ it renders inside, not by touching the modal's own contents).
 **Handed to the operator, not written here:** the
 `src/components/shared/README.md` line (Track AJ3-A owns that file this
 batch) — see this track's final report.
+
 ### 10.50 `DateChipPicker`'s grid stops changing height, and its aria-labels stop being hardcoded Spanish (Ajustes 3, Track AJ3-C, 2026-08-25)
 
 `docs/ajustes-3-plan.md` §4 Track AJ3-C, over `src/components/shared/DateChipPicker.tsx`
@@ -11027,14 +11028,15 @@ undefined })` → a fresh `repo.ready()` read, and `idioma` came back
   fix — deliberately left for a design decision rather than changed
   unilaterally.
 
-- **`DateChipPicker`'s aria-labels are still hardcoded Spanish**
-  ("Mes anterior", "Mes siguiente", "Selector de fecha") — the component has
-  no assigned locale namespace, so Track M (a formatter-wiring track)
-  deliberately left them. A non-Spanish screen-reader user hears Spanish
-  button names in the Search filter sheet's custom date range, while the
-  day-cell labels around them are localized. Whoever next touches this
-  component for copy should pick a namespace and retrofit them the way
-  Track I did for the Wave 1 screens.
+- ~~**`DateChipPicker`'s aria-labels are still hardcoded Spanish**~~
+  **CLOSED 2026-08-25, Ajustes 3 Track AJ3-C (§10.50).** The three labels
+  ("Mes anterior", "Mes siguiente", "Selector de fecha") now resolve through
+  a `dateChipPicker` namespace present in all four locale files. Worth
+  keeping the shape of how this closed: the entry said "whoever next touches
+  this component for copy should pick a namespace", and the track that next
+  touched it **checked for a recorded reason before assuming the hardcoding
+  was an oversight**, found this deferral, and executed it. A deferral that
+  names its own trigger is the only kind that reliably gets picked up.
 
 - **"Doc lines to add" in a track report is a checklist to execute, not a
   section to read.** `docs/wave-2-plan.md` §1.2 makes an existing folder's
