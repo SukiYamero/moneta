@@ -4,6 +4,7 @@ import { useAuthStore } from '@/lib/authStore'
 import { APP_NAME } from '@/lib/branding'
 import { loginErrorCopy } from '@/features/auth/errorCopy'
 import { GoogleSignInButton } from '@/features/auth/GoogleSignInButton'
+import { GuestSignInButton } from '@/features/auth/GuestSignInButton'
 
 export const WelcomeScreen = () => {
   const { t } = useTranslation('auth')
@@ -61,14 +62,9 @@ export const WelcomeScreen = () => {
           <span className="h-px flex-1 bg-border-subtle" />
         </div>
         <div className="flex flex-col gap-2.5">
-          <button
-            type="button"
-            onClick={() => continueAsGuest()}
-            disabled={busy}
-            className="flex h-14 items-center justify-center rounded-2xl border border-border-subtle bg-transparent text-base font-bold text-foreground transition-opacity disabled:opacity-60"
-          >
+          <GuestSignInButton onClick={() => continueAsGuest()} disabled={busy}>
             {t('welcome.guestCta')}
-          </button>
+          </GuestSignInButton>
           <p className="text-center text-xs leading-relaxed font-medium text-fg-disabled">
             {t('welcome.guestReassurance')}
           </p>

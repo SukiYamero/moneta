@@ -253,6 +253,7 @@ export const MovimientoSheet = () => {
         description={t('deleteConfirm.description')}
         confirmLabel={t('deleteConfirm.confirmCta')}
         cancelLabel={t('deleteConfirm.cancelCta')}
+        destructive
       />
     </>
   )

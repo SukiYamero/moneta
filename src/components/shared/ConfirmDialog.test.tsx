@@ -15,6 +15,7 @@ describe('ConfirmDialog', () => {
         title="¿Eliminar este movimiento?"
         confirmLabel="Eliminar"
         cancelLabel="Cancelar"
+        destructive
       />,
     )
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
@@ -29,6 +30,7 @@ describe('ConfirmDialog', () => {
         title="¿Eliminar este movimiento?"
         confirmLabel="Eliminar"
         cancelLabel="Cancelar"
+        destructive
       />,
     )
     expect(screen.getByRole('dialog', { name: '¿Eliminar este movimiento?' })).toBeInTheDocument()
@@ -44,6 +46,7 @@ describe('ConfirmDialog', () => {
         description="Esta acción no se puede deshacer."
         confirmLabel="Eliminar"
         cancelLabel="Cancelar"
+        destructive
       />,
     )
     expect(screen.getByText('Esta acción no se puede deshacer.')).toBeInTheDocument()
@@ -61,6 +64,7 @@ describe('ConfirmDialog', () => {
         title="¿Eliminar?"
         confirmLabel="Eliminar"
         cancelLabel="Cancelar"
+        destructive
       />,
     )
 
@@ -81,6 +85,7 @@ describe('ConfirmDialog', () => {
         title="¿Eliminar?"
         confirmLabel="Eliminar"
         cancelLabel="Cancelar"
+        destructive
       />,
     )
 
@@ -100,6 +105,7 @@ describe('ConfirmDialog', () => {
         title="¿Eliminar?"
         confirmLabel="Eliminar"
         cancelLabel="Cancelar"
+        destructive
       />,
     )
 
@@ -108,7 +114,7 @@ describe('ConfirmDialog', () => {
     expect(onClose).toHaveBeenCalledOnce()
   })
 
-  it('uses the destructive/secondary Button variants, not raw buttons', () => {
+  it('uses the destructive/secondary Button variants when the action is destructive', () => {
     render(
       <ConfirmDialog
         open
@@ -117,6 +123,7 @@ describe('ConfirmDialog', () => {
         title="¿Eliminar?"
         confirmLabel="Eliminar"
         cancelLabel="Cancelar"
+        destructive
       />,
     )
     expect(screen.getByRole('button', { name: 'Eliminar' })).toHaveAttribute(
@@ -126,6 +133,30 @@ describe('ConfirmDialog', () => {
     expect(screen.getByRole('button', { name: 'Cancelar' })).toHaveAttribute(
       'data-variant',
       'secondary',
+    )
+  })
+
+  // This is the exact defect specs.md §10.40 exists to close: on `main`,
+  // `ConfirmDialog` hardcodes `variant="destructive"` on its confirm button
+  // regardless of what the action actually does, so a harmless confirmation
+  // (sign out, switch to guest) is painted identically to a real delete.
+  // `destructive` is a required prop precisely so this can never regress
+  // silently — there is no default for a caller to have forgotten.
+  it('never paints the confirm button as destructive when the action is not', () => {
+    render(
+      <ConfirmDialog
+        open
+        onClose={noop}
+        onConfirm={noop}
+        title="¿Cerrar sesión?"
+        confirmLabel="Cerrar sesión"
+        cancelLabel="Cancelar"
+        destructive={false}
+      />,
+    )
+    expect(screen.getByRole('button', { name: 'Cerrar sesión' })).toHaveAttribute(
+      'data-variant',
+      'default',
     )
   })
 })

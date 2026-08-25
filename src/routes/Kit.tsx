@@ -468,6 +468,7 @@ export const Kit = () => {
             description="Esta acción no se puede deshacer."
             confirmLabel="Eliminar"
             cancelLabel="Cancelar"
+            destructive
           />
         </div>
       </BottomSheet>

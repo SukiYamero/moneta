@@ -121,6 +121,14 @@ Onboarding screens and the route guard that sits in front of the app.
   `WelcomeScreen` and `ReturningUserScreen` render for their primary CTA
   (busy label swap included), so the one Google-branded control in the app
   has one definition instead of two independently hand-rolled copies.
+- `GuestSignInButton.tsx` — the shared secondary "continue as guest" CTA,
+  extracted for the same reason and by the same precedent as
+  `GoogleSignInButton` above once its `className` turned up byte-identical
+  between the two screens (`specs.md` §10.40). Takes `onClick`/`disabled`/
+  `children` only — the two callers still differ in what a click does
+  (`WelcomeScreen` enters guest mode directly, `ReturningUserScreen` opens
+  a `ConfirmDialog` first) and in label copy, both of which stay the
+  caller's job.
 - `errorCopy.ts` — maps a raw `AuthError`/`DriveError` message to a
   translation key in the `auth` namespace's `errors` group
   (`loginErrorCopy`, `driveErrorCopy`) — never the raw message

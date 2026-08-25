@@ -220,6 +220,7 @@ export const CategoriesSection = () => {
         description={t('settings:categories.deleteConfirm.description')}
         cancelLabel={t('settings:categories.deleteConfirm.cancelCta')}
         confirmLabel={t('settings:categories.deleteConfirm.confirmCta')}
+        destructive
       />
     </section>
   )

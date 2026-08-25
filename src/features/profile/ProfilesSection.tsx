@@ -95,6 +95,7 @@ export const ProfilesSection = () => {
         description={t('profiles.goneDialog.description')}
         confirmLabel={t('profiles.goneDialog.removeCta')}
         cancelLabel={t('profiles.goneDialog.cancelCta')}
+        destructive={false}
       />
     </section>
   )

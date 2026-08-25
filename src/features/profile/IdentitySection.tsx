@@ -71,6 +71,7 @@ export const IdentitySection = () => {
             description={t('identity.signOutConfirm.description', { count: pendingCount })}
             confirmLabel={t('identity.signOutCta')}
             cancelLabel={t('identity.signOutConfirm.cancelCta')}
+            destructive={false}
           />
         </div>
       ) : (
