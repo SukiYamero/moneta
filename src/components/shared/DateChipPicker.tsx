@@ -200,10 +200,10 @@ export const DateChipPicker = ({
                     isSelected
                       ? 'bg-primary text-primary-foreground'
                       : inMonth
-                        ? cn(
+                        ? [
                             'text-foreground hover:bg-muted',
                             isToday(day) && 'ring-1 ring-inset ring-primary',
-                          )
+                          ]
                         : 'text-fg-disabled',
                   )}
                 >
