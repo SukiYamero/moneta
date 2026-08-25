@@ -153,6 +153,32 @@ describe('BottomSheet', () => {
       expect(wrapper.style.height).toBe('400px')
       expect(dialog.style.maxHeight).toBe(`${400 * 0.88}px`)
     })
+
+    it('never shrinks the backdrop along with the keyboard-safe wrapper', () => {
+      // A real iPhone showed BottomNav (also `fixed`, same z-50) through the
+      // strip a shrunk visual viewport leaves outside the wrapper — because
+      // the backdrop used to be nested *inside* that wrapper and shrank
+      // right along with it (cross-track review, specs.md §10.49). The
+      // backdrop must stay outside the wrapper's subtree so it keeps
+      // dimming the full screen regardless of what the wrapper clamps to.
+      const viewport = new FakeVisualViewport()
+      vi.stubGlobal('visualViewport', viewport)
+      render(<Harness open onClose={() => {}} />)
+
+      const dialog = screen.getByRole('dialog')
+      const wrapper = dialog.parentElement as HTMLElement
+      const backdrop = document.querySelector('[aria-hidden="true"]') as HTMLElement
+
+      act(() => {
+        viewport.offsetTop = 120
+        viewport.height = 400
+        viewport.dispatchEvent(new Event('resize'))
+      })
+
+      expect(wrapper.contains(backdrop)).toBe(false)
+      expect(backdrop.style.top).toBe('')
+      expect(backdrop.style.height).toBe('')
+    })
   })
 
   describe('drag-to-dismiss', () => {

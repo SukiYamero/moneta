@@ -8,7 +8,12 @@ doesn't belong to any one `src/features/**` folder. See `specs.md` §10.5.
   Escape to close, Tab-trapped focus, body-scroll lock, focus restore on
   close, plus an `initialFocus` escape hatch and `ref` forwarding to the
   panel. Also exports `useEscapeToClose` (used by `DateChipPicker`'s inline
-  popover) and the `OVERLAY_PANEL_CLASS` constant. **Nesting-aware**: a
+  popover), the `OVERLAY_PANEL_CLASS` constant, and `FOCUSABLE_SELECTOR` —
+  what counts as focusable for a panel's default initial focus and its
+  Tab-trap, reused by `src/features/movimientos/MovimientoFormFields.tsx`
+  to find the first focusable control in whichever section blocked a
+  submit (`specs.md` §10.51), so the two no longer keep separately-typed
+  copies of the same selector string. **Nesting-aware**: a
   module-level stack tracks every currently-open overlay ordered by render
   depth (not open/close timing), so when overlays nest — the delete-confirm
   `CenterModal` opening from inside the Movement `BottomSheet` is the real
@@ -34,7 +39,19 @@ overscroll-y-contain` body that owns the horizontal/bottom padding —
   the handle away with it (`specs.md` §10.35), and `overscroll-y-contain`
   keeps a drag past the body's own scroll boundary from rubber-banding the
   scroll-locked page behind it on iOS (`specs.md` §10.35.1). `max-h-[88dvh]`
-  stays on the outer panel; `className` still merges onto that outer panel,
+  stays on the outer panel as the static fallback; while
+  `useVisualViewportInset` (below) reports a correction — the keyboard is
+  up, or the page is pinch-zoomed — the panel's own wrapper additionally
+  gets an inline `top`/`height`/`maxHeight` pinning it to the space actually
+  visible instead of the full layout viewport (`specs.md` §10.49). That
+  wrapper is `pointer-events-none` (with `auto` restored on the panel) and
+  is a sibling of the backdrop, never its ancestor — the backdrop is a
+  separate, always-full-screen `fixed inset-0` div, so it keeps dimming the
+  whole layout viewport (and hiding whatever sits behind it, `BottomNav`
+  included) even while the wrapper itself is clamped to a smaller keyboard-
+  safe area; nesting the backdrop inside the clamped wrapper let `BottomNav`
+  show through the strip the wrapper stopped covering (cross-track review,
+  `specs.md` §10.49). `className` still merges onto that outer panel,
   matching `CenterModal`'s contract — it targets the _outer_ panel, not the
   padded/scrollable body, so a future consumer wanting to override the
   body's padding needs a dedicated prop, not `className` (no current
@@ -55,6 +72,24 @@ overscroll-y-contain` body that owns the horizontal/bottom padding —
 - `CenterModal.tsx` — centered popup shell (Delete confirm, Info tooltip,
   Custom tag modal, Group editor). `CenterModalProps` is
   `OverlayShellProps<HTMLDivElement>` too. Accepts `initialFocus`/`ref`.
+  Bounded and scrollable at any content height (`max-h-[88dvh]
+overflow-y-auto overscroll-y-contain`) — it had neither before
+  `specs.md` §10.49, which is also what the same `useVisualViewportInset`
+  correction `BottomSheet` uses (above) re-centers for free here: the
+  wrapper's corrected height is what `top-1/2 -translate-y-1/2` resolves
+  against.
+- `useVisualViewportInset.ts` — tracks `window.visualViewport` so
+  `BottomSheet`/`CenterModal` can size and position themselves against the
+  space actually visible (keyboard up, or the page pinch-zoomed) instead of
+  the full layout viewport `dvh` resolves against, which doesn't shrink for
+  the keyboard on iOS Safari. Returns `null` in the common case (API
+  unavailable, disabled, or the visual viewport already matches the layout
+  viewport) so both shells fall back to their static `dvh` classes with no
+  inline style at all. Also exports `OVERLAY_MAX_HEIGHT_FRACTION` (`0.88`)
+  — the one JS-side source of truth for the panel's clamp fraction; the
+  `max-h-[88dvh]` Tailwind class each shell keeps as its static fallback is
+  a separate, hand-kept-in-sync duplicate, because Tailwind's arbitrary-
+  value syntax can't reference a JS constant (`specs.md` §10.49.1).
 - `ScreenHeader.tsx` — the back-button + title row a screen with a
   back-bar header renders as the first thing inside its shared
   `--screen-inset-top` container (`specs.md` §10.34): the row owns its own

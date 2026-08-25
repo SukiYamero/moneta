@@ -7069,6 +7069,275 @@ pre-existing warnings, `button.tsx`/`FirstSyncGate.tsx`, untouched);
 `lint:units` clean; `vitest run` — 152 files, 1659 tests (no new/removed
 test files; two existing tests strengthened in place).
 
+### 10.52 Cross-track review of the whole Ajustes 3 batch (`review-ajustes-3`, 2026-08-25)
+
+`AGENTS.md` § Review protocol item 6, over `docs/ajustes-3-plan.md`'s three
+tracks (AJ3-A §10.48, AJ3-B §10.49/§10.49.1/§10.49.2, AJ3-C §10.50) plus the
+operator-dispatched AJ3-D (§10.51) after all four merged. Not a re-review of
+any one track — each per-track pass already applied real fixes — only what a
+track-scoped reviewer is structurally blind to: drift between tracks, one
+concept solved twice, a rule kept in one place and dropped in its twin, and
+the shared surface (`useOverlay.ts`, the two overlay shells) all of them
+touched.
+
+**Fixed — `FOCUSABLE_SELECTOR` duplication (the seam named at dispatch).**
+`useOverlay.ts` had its own module-private copy of the focusable-elements
+selector; AJ3-D (§10.51) needed the identical string in
+`MovimientoFormFields.tsx` to find a blocked section's first focusable
+control, and copied it verbatim rather than importing it, because
+`useOverlay.ts` didn't export it and was outside that track's writable set —
+exactly the AJ3-B/AJ3-C boundary the plan drew, just one track later.
+Exported `FOCUSABLE_SELECTOR` from `useOverlay.ts` (it was already the right
+owner — both the Tab-trap and the initial-focus fallback already used it)
+and pointed `MovimientoFormFields.tsx` at the import, deleting its copy.
+`bun run typecheck`/`vitest run` unaffected (pure de-duplication, no
+behavior change) — verified directly, not assumed.
+
+**Fixed — a live user report on a real iPhone: the Add sheet's keyboard-safe
+correction let `BottomNav` show through above the keyboard.** Traced by the
+operator before this pass started, verified by reading rather than
+re-deriving independently: `BottomSheet`/`CenterModal`'s backdrop
+(`absolute inset-0`, the dimming layer) was nested _inside_ the same wrapper
+`§10.49`'s `useVisualViewportInset` correction shrinks to the visible area —
+so once that wrapper's `top`/`height` stopped short of the true screen
+bottom (keyboard up), the backdrop shrank with it and stopped covering the
+strip it vacated. `BottomNav` (`fixed inset-x-0 bottom-0 z-50`,
+`src/components/shared/BottomNav.tsx`) sits exactly there, at the same
+`z-50` as both shells — with the backdrop no longer dimming that strip, its
+canvas-gradient background and the `+`/tab icons showed through, matching
+the user's report ("nuestro fondo", "el + y nuestros iconos"). Confirmed by
+reading the render tree, not by a device: `BottomNav` renders inside
+`AppShell`'s own subtree (a descendant of `#root`), while both overlay
+shells `createPortal` their content directly onto `document.body` — a later
+sibling of `#root` in document order — so at equal `z-50`, the portal's
+content already painted above `BottomNav` before this fix and continues to;
+sharing `z-50` was never the defect, only the backdrop's shrunk bounds were.
+
+**Fix.** Split each shell's single wrapper into two siblings: a backdrop
+that is _always_ `fixed inset-0` (never touched by `viewportInset`, so it
+keeps dimming — and hiding whatever sits behind, `BottomNav` included — the
+full layout viewport regardless of what the keyboard-safe correction clamps
+the panel to), and a second `fixed inset-0` wrapper, `pointer-events-none`,
+that carries the `viewportInset` `top`/`height` override and contains only
+the panel (`pointer-events-auto`, restoring normal interaction for it and
+its descendants). `pointer-events-none` on the second wrapper is what keeps
+a tap that lands inside its (possibly shrunk) box but outside the panel
+falling through to the backdrop's own `onClick` instead of being silently
+swallowed by an otherwise-invisible div sitting on top of it in paint order.
+`CenterModal`'s re-centering is unaffected — `top-1/2 -translate-y-1/2`
+still resolves against the same (possibly shrunk) wrapper, which still
+contains only the panel, unchanged from `§10.49`'s own design.
+
+**TDD, watched failing for the right reason first.** Added
+`'never shrinks the backdrop along with the keyboard-safe wrapper'` to both
+`BottomSheet.test.tsx` and `CenterModal.test.tsx`'s `viewport-safe
+positioning` blocks: asserts the backdrop is not a DOM descendant of the
+wrapper once the (faked) visual viewport shrinks, and that the backdrop's
+own inline `top`/`height` stay empty. Stashed this pass's component changes
+and re-ran — both new tests failed (`wrapper.contains(backdrop)` was `true`)
+against the pre-fix nested structure, confirming they exercise the actual
+regression; restored the fix and both pass.
+
+**`docs/pendientes-usuario.md` — not reopening item 15.** Item 15 already
+asks the user to check "is the toggle visible, keyboard up" on a real
+phone; this fix doesn't need a new device-check item of its own — it's a
+structural DOM-nesting bug this pass could verify by reading and by test,
+not a claim about how a real engine behaves that only a device can settle.
+
+**Checked, not changed — `BottomNav`/overlay `z-50` sharing.** The operator
+asked whether the shared `z-50` itself is correct. Reasoned through above:
+it is, and always was — the portal's document-order position is what keeps
+it painting above `BottomNav` at equal `z-index`, independent of this fix.
+No change made; flagging a different `z-index` for either would be solving
+a problem that traces to the backdrop's bounds, not to the stacking value.
+
+**Checked, escalated rather than fixed — the `88%` overlay-height fraction
+is still duplicated as a literal Tailwind class, and a token _would_ close
+that half of it.** `review-aj3-b` (§10.49.1) reasoned "Tailwind's
+arbitrary-value syntax can't reference a JS constant" and left
+`max-h-[88dvh]` hand-duplicated in `BottomSheet.tsx` and `CenterModal.tsx`
+alongside the one JS export, `OVERLAY_MAX_HEIGHT_FRACTION`. That claim is
+true as far as it goes — a bracketed arbitrary value is a static string, it
+can't interpolate a JS number — but it answers a narrower question than "can
+a token close this," and this codebase already has the answer sitting in
+`src/features/lock/FullScreenPanel.tsx`: `pt-(--overlay-inset-top)`,
+Tailwind v4's parenthesised syntax for consuming a plain CSS custom property
+declared under `@theme` (here, `--overlay-inset-top`,
+`src/styles/index.css`). **Verified directly, not just reasoned:** built a
+throwaway Tailwind CLI bundle against this project's own `@theme` block (the
+same technique `review-aj3-c`, §10.50, already used for `ease-ios`) with a
+probe `--overlay-max-h: 88dvh` token and a `max-h-(--overlay-max-h)` class —
+the generator emitted `.max-h-\(--overlay-max-h\) { max-height:
+var(--overlay-max-h); }`, exactly the existing `pt-(--overlay-inset-top)`
+pattern. A `--overlay-max-h: 88dvh` token in `src/styles/index.css`, with
+both shells' Tailwind classes reading `max-h-(--overlay-max-h)` instead of
+the literal `max-h-[88dvh]`, would leave exactly one place holding the `88`
+for the CSS-side fallback (down from two identical literals kept in sync by
+hand and a comment). **What it would not do:** unify that CSS token with the
+JS `OVERLAY_MAX_HEIGHT_FRACTION = 0.88` used for the runtime
+`viewportInset.height * 0.88` pixel math — those stay two representations
+in two unit systems (a CSS length percentage vs. a unitless multiplier)
+unless a future change reads the custom property back via
+`getComputedStyle` at runtime, which is more machinery than one float
+constant justifies. **Not applied here** — `src/styles/index.css` is
+operator-owned and both AJ3-B and this pass's brief say escalate rather than
+add: the token itself, and repointing both shells' static class, are one
+line each and left for the operator's call.
+
+**Traced, not proposed as a bug — the three keyboard/blocked-submit
+mechanisms compose correctly in the amount-invalid case and only
+theoretically race in the category-missing case; PLAUSIBLE, not
+CONFIRMED.** Walked the exact sequence: tap `+` → `useOverlay`'s synchronous
+`useLayoutEffect` focuses the amount input in the same task as the tap
+(raising the keyboard) → `useVisualViewportInset`'s `visualViewport`
+`resize` fires once the keyboard finishes rising, correcting the shell
+(§10.49) → user leaves the amount blank and taps Add → `submit()` fails,
+`submitAttempts` increments → `MovimientoFormFields`'s effect (§10.48/§10.51)
+picks a target. **Amount-invalid case:** the target is the amount input,
+already focused — `.focus()` on it is a no-op, no new viewport event fires,
+and `scrollIntoView` runs against an already-settled, already-corrected
+layout. No composition problem. **Category-missing case:** the target is
+the category section's first focusable control, a `<button>` — `.focus()`
+on it blurs the amount input, which is standard, documented WebKit behavior
+for dismissing the software keyboard (the same claim §10.51 already
+reasoned through, not reproduced on-device); the keyboard's dismiss
+animation and the `visualViewport` `resize` event it eventually fires are
+asynchronous (iOS animates this over roughly 200–300ms), while
+`scrollIntoView` in the same effect runs synchronously, immediately, against
+the _pre-dismiss_ geometry. Once the keyboard finishes closing and
+`useVisualViewportInset` corrects again (wrapper `top`/`height` reverting
+toward the uncorrected static case), nothing re-issues `scrollIntoView` —
+the category section that was just centered could end up off-center again
+as the sheet's own layout settles a beat later. **Not reproducible in this
+environment**: `jsdom` has no `visualViewport` (`§10.49`'s own established
+fact), so no test here can exercise the real timing gap between a
+synchronous scroll and an async keyboard-dismiss-driven resize — this is
+reasoned from each mechanism's own documented/observed behavior, not
+watched happen together. Filed as `docs/pendientes-usuario.md` item 16
+(below) rather than "fixed" with an unverifiable guess at the right
+re-synchronization (e.g., re-running `scrollIntoView` on the next
+`useVisualViewportInset` change would itself need real-device tuning to
+confirm it doesn't introduce a _second_ visible jump).
+
+**`docs/pendientes-usuario.md` — item 16 added.** AJ3-D (§10.51)'s own
+iOS-keyboard-dismiss claim ("moving focus off the amount input dismisses the
+keyboard on its own") was reasoned through with the same honesty limit
+items 13/15 already carry (standard WebKit behavior, not watched on a real
+phone) but, unlike those two, was never added to this file as a check —
+the same class of gap the general review is supposed to catch across
+tracks. Added as item 16, covering both this and the category-missing
+scroll-timing question traced above in the same real-device check.
+
+**Fixed — `docs/waves.md`'s worktree log was missing this review's own
+row.** The table's rows were all already pruned to empty by the time this
+pass started, and this session's own worktree
+(`../moneta-worktrees/rev-x`, `review-ajustes-3`) had never been logged —
+checked against `git worktree list` (`main` plus this one; nothing else) as
+the brief asked. Added the row per `AGENTS.md`'s own rule ("every agent that
+creates a worktree logs a row the moment it does") — this review pass
+didn't create the worktree itself (the operator did, ahead of dispatch),
+but the row was still owed and missing, the same shape of lapse
+`docs/waves.md`'s own comment already tracks four times over. The operator
+removes the row when this branch merges.
+
+**Checked — the shared-surface docs (`src/components/shared/README.md`,
+`src/features/movimientos/README.md`, `src/lib/i18n/README.md`) and
+`I18N_NAMESPACES`/locale-file key parity.** `useVisualViewportInset.ts` (new
+this batch) had no `README.md` entry at all — `§10.49`'s own text says the
+line was "handed to the operator," and it was never applied. Added one,
+plus corrections to the existing `BottomSheet.tsx`/`CenterModal.tsx` entries
+(neither mentioned the viewport-inset positioning or, until this pass's own
+fix above, the backdrop/panel split) and to `useOverlay.ts`'s entry
+(`FOCUSABLE_SELECTOR`). `src/features/movimientos/README.md` was already
+accurate against current code — no change needed. `I18N_NAMESPACES` and all
+four locale files' top-level keys still match exactly (`resources.test.ts`'s
+guard, added by `review-aj3-b`'s §10.49.2 findings, passes); `dateChipPicker`
+keys are key-identical across all four locales. Nothing else stale found.
+
+**Checked — `docs/waves.md`/`docs/ajustes-3-plan.md`'s own status table.**
+`docs/ajustes-3-plan.md` §7 still shows all three tracks' `Status` column as
+`—`, never updated to reflect that all three (plus AJ3-D) merged. Checked
+against `docs/ajustes-1-plan.md`/`docs/ajustes-2-plan.md`'s own status
+tables, which are equally stale (one still reads "dispatched"/"blocked on
+stage 1" from Ajustes 1's own launch) — this is a standing, apparently
+accepted convention across all three plan docs, not something this batch
+introduced or drifted on relative to its predecessors, and `docs/waves.md`
+plus this file's own numbered sections are what's actually kept current.
+Not changed.
+
+**Process question, asked directly by the operator: is `specs.md` §11's
+named pattern's cause right, and is there a mechanical check for it, or is
+it irreducibly a discipline problem?** The pattern (§11, 2026-08-25,
+Ajustes 2) is right as stated — a true general principle cited as the
+reason a specific instance is safe, without checking the instance actually
+meets the principle's precondition — but this batch's four cited instances
+split into two different kinds, with two different answers:
+
+- **Repo-internal-consistency claims** (does array `A` list the same
+  members as artifact `B`, both already present at check time) **are
+  mechanically closeable, and this project has now done it twice.**
+  `I18N_NAMESPACES` vs. `es.json`'s keys got `resources.test.ts`'s guard
+  (`review-aj3-b`, §10.49.2); `docs/waves.md`'s worktree log vs.
+  `git worktree list` got a standing prune-and-check habit (repeated in this
+  very pass, above). Once written, a check like this structurally cannot
+  recur silently — the next drift fails a test or gets caught at the start
+  of the next session, not years later.
+- **External-runtime-behavior claims** (how a real browser engine, a real
+  layout algorithm, or a testing library's synthetic event timing actually
+  behaves) **have no mechanical substitute available in this environment,
+  and didn't get one.** The Ajustes 2 `user-event`-timing claim and the flex-
+  percentage-`max-width` claim were each disproven by a review pass
+  _reproducing_ the mechanism (a real Chromium render, a stashed-and-rerun
+  test), not by a lint rule or an assertion that could catch a future
+  instance of the same shape — nothing stops a later track from writing
+  another "X resolves against Y because CSS says so" claim without checking
+  it. The iOS-`user-scalable` claim (§10.34/§10.34.1) is the sharpest
+  version of this: it was corrected by citing a primary source (WebKit's own
+  2016 announcement), which is the ceiling of what's checkable _from this
+  repo_ — no amount of static analysis substitutes for a real device, which
+  is exactly why `docs/pendientes-usuario.md` exists as a standing category
+  of item, not a backlog to clear.
+
+So: the repo-internal half of the pattern is a discipline problem this
+project has already started converting into a mechanical one, two-for-two
+this batch. The external-runtime half is not currently mechanizable here and
+isn't a process failure to fix with more rigor from the same set of tools —
+it's a structural limit of not having a real device/browser in this
+environment, which is already the honest, named reason
+`docs/pendientes-usuario.md` keeps growing rather than shrinking. The
+standing habit worth keeping from `§11` ("try to falsify a claim before
+recording it as fact") is real and worth restating, but it's a mitigation
+for the second kind, not a fix — only reproduction against the real thing
+(a device, a primary source, a real browser) closes it, and this batch's own
+`§10.49.1` review pass is itself an example of that habit working when
+applied.
+
+**`bun run check`: real output, run directly, in this worktree
+(`../moneta-worktrees/rev-x`, `review-ajustes-3`) after `bun install`.**
+152 files, 1661 tests (+2: the backdrop-independence regression test in
+each of `BottomSheet.test.tsx`/`CenterModal.test.tsx`), typecheck/lint/
+`lint:units` clean, the same two pre-existing
+`react/only-export-components` warnings (`button.tsx`, `FirstSyncGate.tsx`).
+
+#### Blast radius
+
+**Applied by this review:** `src/components/shared/useOverlay.ts` (export
+`FOCUSABLE_SELECTOR`), `src/features/movimientos/MovimientoFormFields.tsx`
+(import it, delete the duplicate), `src/components/shared/BottomSheet.tsx` +
+test, `src/components/shared/CenterModal.tsx` + test (backdrop/panel split),
+`src/components/shared/README.md` (the four corrections above),
+`docs/waves.md` (this review's own worktree row),
+`docs/pendientes-usuario.md` (item 16).
+
+**Escalated, not applied:** a `--overlay-max-h` token in
+`src/styles/index.css` plus repointing both shells' static Tailwind class —
+operator-owned file, one-line change each, left for the operator.
+
+**Nothing else found** past what's recorded above — the rest of the batch's
+shared surface (the i18n namespace list/locale files, the two other
+tracks' READMEs, `docs/ajustes-3-plan.md`'s own status table) was checked
+and is either already consistent or a pre-existing, non-drifting convention.
+
 ## 11. Decisions log
 
 - 2026-06-25 — Package manager: **bun**. Node: **24 LTS** (`.nvmrc`).
@@ -11068,6 +11337,29 @@ to revisit if it disagrees.
   relied on, in the same shape §11's own recurring pattern names — flagged
   for the operator against §10.34, not corrected there by this review
   (out of Track AJ3-B's writable set).
+- 2026-08-25 — **`FOCUSABLE_SELECTOR` lives in one place: exported from
+  `useOverlay.ts`, imported by `MovimientoFormFields.tsx`** (cross-track
+  review, §10.52). AJ3-D had duplicated it verbatim because the file wasn't
+  exported and was outside that track's writable set at the time — the same
+  boundary is gone once tracks stop being in flight simultaneously.
+- 2026-08-25 — **The overlay backdrop must never share a wrapper with
+  anything `viewportInset` can shrink (cross-track review, §10.52,
+  fixing a real iPhone report).** `BottomSheet`/`CenterModal`'s backdrop is
+  now a standalone, always-`fixed inset-0` sibling; only the panel's own
+  wrapper (`pointer-events-none`, panel itself `pointer-events-auto`) gets
+  the keyboard-safe `top`/`height` clamp. Nesting the backdrop inside the
+  clamped wrapper let `BottomNav` (same `z-50`) show through the strip the
+  wrapper stopped covering once the keyboard was up.
+- 2026-08-25 — **A `--overlay-max-h` CSS custom property, read via
+  Tailwind v4's `max-h-(--overlay-max-h)` syntax, would close the
+  `max-h-[88dvh]` duplication `review-aj3-b` (§10.49.1) left in
+  `BottomSheet.tsx`/`CenterModal.tsx`** (cross-track review, §10.52) — the
+  same pattern already used by `--overlay-inset-top`/
+  `pt-(--overlay-inset-top)` in `FullScreenPanel.tsx`. Verified by building
+  a throwaway Tailwind CLI bundle against this project's own `@theme`
+  block, not just reasoned. It would not unify that CSS token with the
+  separate JS `OVERLAY_MAX_HEIGHT_FRACTION` runtime constant. Not applied —
+  `src/styles/index.css` is operator-owned; escalated instead.
 
 ## 12. Backlog (pending verification / deferred work)
 

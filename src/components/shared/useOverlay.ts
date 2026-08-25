@@ -28,7 +28,8 @@ export type OverlayShellProps<T extends HTMLElement = HTMLDivElement> = UseOverl
   className?: string
 } & OverlayLabelProps
 
-const FOCUSABLE_SELECTOR =
+/** What counts as focusable for a panel's default initial focus and its Tab-trap — also the selector a form section uses to find its own first focusable control (`MovimientoFormFields`'s blocked-submit focus). */
+export const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])'
 
 /**

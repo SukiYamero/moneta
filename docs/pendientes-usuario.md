@@ -268,6 +268,27 @@ reachable way to close it — the same shell fix now bounds and scrolls it,
 which is reasoned to fix this too but was never confirmed on a device
 either.
 
+### 16. Does a blocked Add tap bring you to the field that blocked it? — `owner: user`
+
+Raised 2026-08-25, cross-track review of the Ajustes 3 batch, for Track
+AJ3-D (`specs.md` §10.51): tapping Add with the amount empty or no category
+picked now moves focus to whichever one blocked the save (and scrolls it
+into view), instead of the earlier fix's unconditional `blur()`. Same honesty
+limit as items 13/15, never applied to this fix specifically: **CONFIRMED**
+that focus lands on the right control (a unit test proves it, both for the
+category-missing and the invalid-amount case), but whether that focus
+change actually **dismisses the iOS software keyboard** when the category
+is what's missing is standard, documented WebKit behavior reasoned about,
+not watched happen — no iOS device is available in this environment.
+
+**The check:** on a real iPhone, open the Add sheet, leave the amount blank,
+tap the category "ver todas" chip's Add-adjacent flow so no category ends up
+picked, then tap Add. Does the keyboard actually go away and land you on the
+category picker? Then, separately: leave the amount as something invalid
+(e.g. just a decimal separator) with a category already picked, and tap Add
+— does the keyboard stay up with the amount field still focused and visible
+(not covered), rather than flickering or losing your place?
+
 ---
 
 ## Closed

@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils'
 import { DateChipPicker } from '@/components/shared/DateChipPicker'
 import { SegmentedControl, type SegmentedControlOption } from '@/components/shared/SegmentedControl'
 import { TextField } from '@/components/shared/TextField'
+import { FOCUSABLE_SELECTOR } from '@/components/shared/useOverlay'
 import { CategoryPicker, CategoryFormModal } from '@/features/tags'
 import { MovimientoAmountInput } from '@/features/movimientos/MovimientoAmountInput'
 import type { AmountErrorReason } from '@/features/movimientos/useMovimientoForm'
@@ -19,12 +20,6 @@ const AMOUNT_ERROR_KEY = {
   malformed: 'form.amount.errors.malformed',
   not_positive: 'form.amount.errors.notPositive',
 } as const satisfies Record<AmountErrorReason, string>
-
-// Same selector `useOverlay.ts` uses to find a panel's first focusable
-// descendant — duplicated rather than imported because that file's copy
-// isn't exported and is outside this track's writable set (AGENTS.md).
-const SECTION_FOCUSABLE_SELECTOR =
-  'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])'
 
 export interface MovimientoFormFieldsProps {
   tipo: TipoMovimiento
@@ -128,7 +123,7 @@ export const MovimientoFormFields = ({
         ? categorySectionRef.current
         : null
     if (!target) return
-    target.querySelector<HTMLElement>(SECTION_FOCUSABLE_SELECTOR)?.focus()
+    target.querySelector<HTMLElement>(FOCUSABLE_SELECTOR)?.focus()
     target.scrollIntoView?.({ block: 'center' })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [submitAttempts])
