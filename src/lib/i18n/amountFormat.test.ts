@@ -1,9 +1,12 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import {
   parseAmount,
   parseAmountForInput,
   formatAmountForInput,
   isAmountInputInvalid,
+  formatAmountLive,
+  digitsBeforeIndex,
+  indexAfterDigitCount,
 } from '@/lib/i18n/amountFormat'
 
 describe('parseAmount', () => {
@@ -133,5 +136,141 @@ describe('isAmountInputInvalid', () => {
   it('is true whenever the caller passes an error, regardless of what the text parses to', () => {
     expect(isAmountInputInvalid('18.000', 'es-CO', 'monto requerido')).toBe(true)
     expect(isAmountInputInvalid('', 'es-CO', 'monto requerido')).toBe(true)
+  })
+})
+
+describe('formatAmountLive', () => {
+  it('groups a plain digit string as the locale would, with no fraction typed yet', () => {
+    expect(formatAmountLive('1234567', 'es-CO')).toBe('1.234.567')
+    expect(formatAmountLive('1234567', 'en-US')).toBe('1,234,567')
+  })
+
+  it('groups with a space for a locale that groups that way', () => {
+    // The exact space character (plain vs. narrow-no-break) is an ICU/runtime
+    // detail, not something this test should hard-code — assert it matches
+    // whatever Intl itself produces for the same locale/number.
+    const expected = new Intl.NumberFormat('fr-FR').format(1234567)
+    expect(formatAmountLive('1234567', 'fr-FR')).toBe(expected)
+    expect(formatAmountLive('1234567', 'fr-FR')).not.toBe('1234567')
+  })
+
+  it('does not insert any grouping when the locale reports no group separator', () => {
+    // No real BCP-47 locale in this ICU build skips grouping by default, so
+    // this simulates one: a locale whose formatToParts/format never emit a
+    // 'group' part, the same shape separatorsFor's '' fallback exists for.
+    const RealNumberFormat = Intl.NumberFormat
+    class NoGroupFormat {
+      format = String
+      formatToParts(value: number) {
+        const [integer, fraction] = String(value).split('.')
+        return fraction === undefined
+          ? [{ type: 'integer', value: integer }]
+          : [
+              { type: 'integer', value: integer },
+              { type: 'decimal', value: '.' },
+              { type: 'fraction', value: fraction },
+            ]
+      }
+    }
+    vi.stubGlobal('Intl', { ...Intl, NumberFormat: NoGroupFormat })
+    try {
+      expect(formatAmountLive('1234567', 'no-group-test')).toBe('1234567')
+    } finally {
+      vi.stubGlobal('Intl', { ...Intl, NumberFormat: RealNumberFormat })
+    }
+  })
+
+  it('keeps a trailing decimal separator mid-entry, on the way to a fraction', () => {
+    expect(formatAmountLive('1,', 'es-CO')).toBe('1,')
+    expect(formatAmountLive('1234567,', 'es-CO')).toBe('1.234.567,')
+  })
+
+  it('does not collapse a trailing fraction zero', () => {
+    expect(formatAmountLive('1,50', 'es-CO')).toBe('1,50')
+    expect(formatAmountLive('1.50', 'en-US')).toBe('1.50')
+  })
+
+  it('regroups the integer part as more digits are typed, ignoring stale separators already in the string', () => {
+    expect(formatAmountLive('1.2345', 'es-CO')).toBe('12.345')
+  })
+
+  it('is a no-op when a grouping separator is deleted — it reappears since it is derived, not literal', () => {
+    expect(formatAmountLive('12345', 'es-CO')).toBe('12.345')
+  })
+
+  it('preserves a leading minus sign', () => {
+    expect(formatAmountLive('-1234567', 'es-CO')).toBe('-1.234.567')
+    expect(formatAmountLive('-1234567,5', 'es-CO')).toBe('-1.234.567,5')
+  })
+
+  it('passes malformed text through unchanged rather than mangling it — the parser still flags it', () => {
+    expect(formatAmountLive('abc', 'es-CO')).toBe('abc')
+    expect(formatAmountLive('$100', 'es-CO')).toBe('$100')
+    expect(formatAmountLive('12.34.56', 'en-US')).toBe('12.34.56')
+  })
+
+  it('passes a lone group separator through unchanged — separator noise with no digits at all, not a number in progress', () => {
+    expect(formatAmountLive('.', 'es-CO')).toBe('.')
+    expect(formatAmountLive('..', 'es-CO')).toBe('..')
+  })
+
+  it('keeps a leading decimal separator with digits after it (no integer part typed yet)', () => {
+    expect(formatAmountLive(',50', 'es-CO')).toBe(',50')
+  })
+
+  it('produces the same string as formatAmountForInput for the same number, up to 2 typed fraction digits', () => {
+    const cases: [number, string][] = [
+      [1234567, 'es-CO'],
+      [1234567.89, 'es-CO'],
+      [1234567.89, 'en-US'],
+      [50, 'pt-BR'],
+      [0.5, 'es-AR'],
+    ]
+    for (const [amount, locale] of cases) {
+      const prefilled = formatAmountForInput(amount, locale)
+      expect(formatAmountLive(prefilled, locale)).toBe(prefilled)
+    }
+  })
+
+  it('returns empty string for empty input', () => {
+    expect(formatAmountLive('', 'es-CO')).toBe('')
+  })
+})
+
+describe('digitsBeforeIndex', () => {
+  it('counts only digit characters before the given index', () => {
+    expect(digitsBeforeIndex('1.234.567', 0)).toBe(0)
+    expect(digitsBeforeIndex('1.234.567', 1)).toBe(1)
+    expect(digitsBeforeIndex('1.234.567', 2)).toBe(1)
+    expect(digitsBeforeIndex('1.234.567', 9)).toBe(7)
+  })
+
+  it('clamps to the string length for an out-of-range index', () => {
+    expect(digitsBeforeIndex('123', 99)).toBe(3)
+  })
+})
+
+describe('indexAfterDigitCount', () => {
+  it('finds the index right after the nth digit when the next character is itself a digit', () => {
+    // "1.234.567": digit #2 is the "2" at index 2, immediately followed by
+    // the digit "3" — no separator run to extend through.
+    expect(indexAfterDigitCount('1.234.567', 2)).toBe(3)
+  })
+
+  it('extends through a separator run right after the nth digit, landing before the next digit', () => {
+    // "1." — digit #1 is at index 0; index 1 (right after it) is the
+    // separator itself. The only sensible caret spot for "1 digit typed" is
+    // past the separator too (index 2, the end), not wedged before it —
+    // wedging it there is the exact bug that made "1,50" type as "150,".
+    expect(indexAfterDigitCount('1.234.567', 1)).toBe(2)
+    expect(indexAfterDigitCount('1.234.567', 7)).toBe(9)
+  })
+
+  it('returns 0 for a digit count of 0 or less', () => {
+    expect(indexAfterDigitCount('1.234.567', 0)).toBe(0)
+  })
+
+  it('returns the string length when the digit count exceeds the digits available', () => {
+    expect(indexAfterDigitCount('123', 10)).toBe(3)
   })
 })

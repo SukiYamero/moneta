@@ -62,7 +62,21 @@ JSON resources — no `i18next-http-backend`, no CDN.
   `''` into `0` and accepts hex, so a lone separator once parsed as $0 and
   `0x1a` as 26. Moved here from `src/components/shared/` (`specs.md` §12,
   2026-08-19) — pure locale logic with no React in it, a sibling of this
-  file rather than a component helper.
+  file rather than a component helper. **`formatAmountLive(raw, locale)`**
+  (specs.md §10.45) reformats a raw amount string live, as it's typed,
+  grouping the integer part via `Intl.NumberFormat(locale)
+.format(BigInt(...))` while leaving the fraction exactly as typed (so a
+  trailing decimal separator or fraction zero survive mid-entry) — bails
+  out and returns the input unchanged for anything that isn't yet the
+  shape of a number in progress, which is what keeps `parseAmountForInput`'s
+  `malformed` reason reachable via a paste even though live typing can no
+  longer produce it (specs.md §10.45's judgement call). Paired with
+  `digitsBeforeIndex`/`indexAfterDigitCount`, the digit-count-based caret
+  math behind `MovimientoAmountInput.tsx`'s "reformat without the caret
+  jumping" behavior — counts digits (not raw string offset, since a
+  separator's insertion/removal shifts the offset without the user having
+  moved past a digit) to describe a caret position independent of how the
+  string gets regrouped.
 - `i18next.d.ts` — module augmentation typing `t()`'s key space off `es`
   (base and fallback), so `t('does.not.exist')` is a compile error.
 - `locales/*.json` — one file per locale (`es`, `en`, `es-AR`, `pt-BR`), each
