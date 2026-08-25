@@ -6987,6 +6987,88 @@ pre-existing warnings, `button.tsx`/`FirstSyncGate.tsx`, untouched);
 tests from deleting `AmountField.test.tsx`, +3 new tests for this track's
 fix).
 
+### 10.51 A blocked submit moves focus to what blocked it, instead of blurring unconditionally (Ajustes 3, Track AJ3-D, 2026-08-25)
+
+**The defect, escalated by `review-aj3-a` and confirmed by the operator.**
+§10.48's fix called `document.activeElement.blur()` unconditionally before
+scrolling the offending section into view. The intent was iOS-specific —
+dismiss the software keyboard so the newly-scrolled error is visible — but
+in every browser that focuses a button on click or on Enter after Tab
+(Chrome; keyboard-driven Safari), `document.activeElement` at effect time
+is the **submit button**, not the field the user was editing. **CONFIRMED
+by reproduction**: this track wrote a failing test first (`user.click` the
+submit button in jsdom, which — like real Chrome — leaves the button
+focused) and watched it fail against the pre-fix code with focus landing on
+`<body>`, exactly the reported shape: a keyboard user tabs to the submit
+button, presses it, validation fails, and focus is dropped to the top of
+the document with no way back short of tabbing from scratch.
+
+**Fix.** The effect in `MovimientoFormFields.tsx` no longer blurs. It calls
+`.focus()` on the first focusable descendant (`SECTION_FOCUSABLE_SELECTOR`,
+the same selector `useOverlay.ts` uses for a panel's default focus target,
+duplicated rather than imported since that file's copy isn't exported and
+is outside this track's writable set) of whichever section blocked the
+save — the amount input itself, or the category section's "ver todas"
+count button — then still scrolls that section into view exactly as
+before.
+
+**The operator's three claims, each checked rather than assumed:**
+
+- **Desktop/keyboard: focus lands exactly where the user must act.**
+  CONFIRMED by the same reproduction above — the new tests assert
+  `toHaveFocus()` on the real target (`AddMovimientoSheet.test.tsx`'s
+  category-missing case, `MovimientoSheet.test.tsx`'s invalid-amount case)
+  and both pass against the fix, having failed against the old code with
+  focus on `<body>`.
+- **iOS, category missing: moving focus off the amount input dismisses the
+  keyboard on its own.** PLAUSIBLE, not CONFIRMED — no iOS device is
+  available in this environment. The DOM half of the claim (calling
+  `.focus()` on a different element implicitly blurs whatever was
+  previously focused; only one element holds focus at a time) is a plain
+  fact, not a hypothesis. Whether that blur closes the on-screen keyboard
+  is standard, widely-documented WebKit behavior (focus moving off a text
+  input dismisses the software keyboard unless the new target is itself
+  text-editable) but is not verified on a physical device here.
+- **iOS, amount invalid: focus stays in the amount field with the keyboard
+  up, correctly, because AJ3-B's viewport fix keeps it visible.** PLAUSIBLE
+  and, on inspection, likely _stronger_ than the operator's framing: iOS
+  Safari's well-known quirk is that tapping a `<button>` does not move
+  focus to it by default (unlike Chrome/Firefox) — so on a real iPhone, a
+  tap on the submit button while the amount input holds focus most likely
+  leaves the amount input as `document.activeElement` _before this effect
+  even runs_, meaning the keyboard was never at risk of closing here at
+  all. This track's `.focus()` call on the amount input in that case is
+  therefore very likely a no-op re-affirmation rather than a real refocus
+  — harmless either way, but the operator's framing ("focus stays") slightly
+  overstates what changes; nothing here contradicts §10.49's viewport fix
+  being what actually keeps the field visible.
+
+All three claims held up; no case argued for keeping a conditional
+`document.activeElement.blur()`.
+
+**TDD, watched failing for the right reason first.** Strengthened (not
+weakened) the existing `scrollIntoView`-target assertions `review-aj3-a`
+had already fixed (commit `8c71e8d` — that review has no dedicated numbered
+`specs.md` subsection of its own, despite this track's brief naming one;
+noted here rather than left unresolved): both `AddMovimientoSheet.test.tsx`'s
+category-missing test
+and `MovimientoSheet.test.tsx`'s invalid-amount test were edited to assert
+`toHaveFocus()` on the real target control before any implementation
+change, run against the pre-fix code, and observed failing with focus on
+`<body>` — then the fix was applied and both passed.
+
+**Sweep for the same defect shape.** Grepped the whole `src` tree for
+`.blur(` outside test files: exactly one call site existed, the one fixed
+here. `document.activeElement` also appears in `useOverlay.ts` (Tab-trap
+bookkeeping and restoring focus to the element that opened an overlay on
+close) — unrelated shape, read-only file, not touched. **Nothing else
+found.**
+
+**Verified.** `bun run check`: typecheck clean; lint clean (same two
+pre-existing warnings, `button.tsx`/`FirstSyncGate.tsx`, untouched);
+`lint:units` clean; `vitest run` — 152 files, 1659 tests (no new/removed
+test files; two existing tests strengthened in place).
+
 ## 11. Decisions log
 
 - 2026-06-25 — Package manager: **bun**. Node: **24 LTS** (`.nvmrc`).

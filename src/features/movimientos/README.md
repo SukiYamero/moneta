@@ -42,13 +42,15 @@ fields (Decision 1):
   `TextField`, `CategoryPicker`/`CategoryFormModal` from `@/features/tags`)
   plus this track's own `MovimientoAmountInput` — see below for why it
   isn't a bordered/labelled `TextField`-style field. On a submit blocked by
-  an invalid amount or a missing category, blurs whatever currently holds
-  focus (dismissing the software keyboard, which is what was hiding the
-  category error below the fold — Ajustes 3, `docs/ajustes-3-plan.md`
-  item 3, specs.md §10.48) and scrolls the offending field's section into
-  view, keyed on `useMovimientoForm`'s `submitAttempts` counter rather than
-  the error flags themselves (a repeated tap in the same invalid state
-  doesn't change those flags, but must still re-trigger the scroll).
+  an invalid amount or a missing category, moves focus to the control that
+  blocked the save (the amount input, or the category section's first
+  focusable control) and scrolls that section into view — Ajustes 3,
+  `docs/ajustes-3-plan.md` item 3, specs.md §10.48, corrected in §10.51
+  after an earlier version unconditionally blurred whatever held focus and
+  dropped keyboard-driven focus to nowhere. Keyed on `useMovimientoForm`'s
+  `submitAttempts` counter rather than the error flags themselves (a
+  repeated tap in the same invalid state doesn't change those flags, but
+  must still re-trigger the focus/scroll).
 - `MovimientoAmountInput.tsx` — the centered, borderless, auto-sizing
   amount display (specs.md §10.41/§10.45): a bordered/labelled `TextField`
   has no adornment slot for an external currency-symbol sibling, which this
