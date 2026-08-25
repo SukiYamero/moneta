@@ -90,12 +90,11 @@ describe('ReturningUserScreen', () => {
     expect(login).toHaveBeenCalledOnce()
   })
 
-  // Regression test for the defect the user found: this screen used to render
-  // a second, differently-labeled button ("Usar otra cuenta") that called the
-  // exact same login() as the primary CTA — a control promising a different
-  // outcome and delivering the identical one. specs.md §10.36 removed it
-  // rather than reproduce the guest cliff (§10.25/§10.31/§10.32/§10.33) by
-  // routing it into guest mode instead. This would have failed on `main`.
+  // A second, differently-labeled control calling the same login() promises a
+  // different outcome and delivers the identical one. §10.21 allows a
+  // secondary action here but forbids the guest option outright, so there is
+  // no honest destination for one until auth can force an account chooser
+  // (specs.md §10.36).
   it('renders exactly one action — no second control duplicating the primary CTA', async () => {
     render(<ReturningUserScreen />)
     await waitFor(() => expect(screen.getByRole('heading')).toBeInTheDocument())
