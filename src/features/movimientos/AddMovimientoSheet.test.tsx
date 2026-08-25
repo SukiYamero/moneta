@@ -69,11 +69,14 @@ describe('AddMovimientoSheet', () => {
   // `initialFocus` just opened, so a tap that fails validation reads as
   // "nothing happened". jsdom can't reproduce keyboard occlusion, but it
   // can verify the two things that fix it: the field that blocked the save
-  // is brought on screen, and whatever still holds focus (which is holding
-  // the keyboard up) is blurred first, regardless of whether jsdom's
+  // is brought on screen, and focus actually moves onto its first
+  // focusable control (moving focus off the amount input is what dismisses
+  // the software keyboard on a real phone — an explicit `blur()` isn't
+  // needed for that, and it left keyboard-driven desktop focus nowhere,
+  // specs.md §10.51) — asserted regardless of whether jsdom's
   // `scrollIntoView` (unimplemented — stubbed here, same as
   // `PeriodPickerRow.tsx`) is even present.
-  it('blurs focus and scrolls the category section into view when a submit is blocked by a missing category', async () => {
+  it('moves focus to the category picker and scrolls its section into view when a submit is blocked by a missing category', async () => {
     const user = userEvent.setup()
     const scrollIntoView = vi.fn()
     HTMLElement.prototype.scrollIntoView = scrollIntoView
@@ -87,6 +90,9 @@ describe('AddMovimientoSheet', () => {
     await user.click(screen.getByRole('button', { name: /agregar gasto/i }))
 
     const categoryError = await screen.findByText(/elige una categoría/i)
+    // The category section's first focusable control — not the amount
+    // input, not the submit button the click left focused, not nowhere.
+    expect(screen.getByRole('button', { name: /ver todas las categorías/i })).toHaveFocus()
     expect(amountInput).not.toHaveFocus()
     // `toHaveBeenCalled()` alone would pass even if the effect scrolled the
     // wrong section — assert on `this` (the element `scrollIntoView` was

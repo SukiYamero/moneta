@@ -20,6 +20,12 @@ const AMOUNT_ERROR_KEY = {
   not_positive: 'form.amount.errors.notPositive',
 } as const satisfies Record<AmountErrorReason, string>
 
+// Same selector `useOverlay.ts` uses to find a panel's first focusable
+// descendant — duplicated rather than imported because that file's copy
+// isn't exported and is outside this track's writable set (AGENTS.md).
+const SECTION_FOCUSABLE_SELECTOR =
+  'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])'
+
 export interface MovimientoFormFieldsProps {
   tipo: TipoMovimiento
   onTipoChange: (tipo: TipoMovimiento) => void
@@ -97,10 +103,23 @@ export const MovimientoFormFields = ({
   // focused amount field's software keyboard covers everything below it.
   // Keyed on `submitAttempts` (not `amountErrorReason`/`categoriaMissing`
   // themselves), which changes on every tap including a repeated one that
-  // hits the same already-invalid state — those two flags wouldn't. Blurs
-  // whatever's currently focused first (dismissing the keyboard hands the
-  // full viewport back, independent of any one layout), then brings the
-  // first thing that blocked the save on screen.
+  // hits the same already-invalid state — those two flags wouldn't.
+  //
+  // Moves focus to the control that actually blocked the save (the amount
+  // input, or the category section's first focusable control), rather than
+  // an earlier version that blurred whatever held focus unconditionally
+  // (specs.md §10.51): tapping/Tab-and-Enter-ing the submit button leaves
+  // *it* as `document.activeElement` in every browser that focuses a
+  // clicked/activated button (Chrome, keyboard-driven Safari) — blurring
+  // that dropped a keyboard user's focus to `<body>` with no way back short
+  // of tabbing from the top of the document. Focusing the real target
+  // fixes that directly, and still dismisses an iOS software keyboard as a
+  // side effect whenever the target isn't the already-focused amount input
+  // (moving focus off a text input closes the keyboard on its own — no
+  // explicit `blur()` needed for that). When the amount itself is invalid,
+  // this refocuses the amount input, which is exactly where an iOS user
+  // still needs to type — AJ3-B's viewport fix (specs.md §10.49) keeps it
+  // visible above the keyboard rather than fighting to dismiss it.
   useEffect(() => {
     if (submitAttempts === 0) return
     const target = amountErrorReason
@@ -109,7 +128,7 @@ export const MovimientoFormFields = ({
         ? categorySectionRef.current
         : null
     if (!target) return
-    if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
+    target.querySelector<HTMLElement>(SECTION_FOCUSABLE_SELECTOR)?.focus()
     target.scrollIntoView?.({ block: 'center' })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [submitAttempts])

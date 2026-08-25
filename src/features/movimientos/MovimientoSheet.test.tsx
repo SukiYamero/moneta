@@ -149,7 +149,7 @@ describe('MovimientoSheet — edit mode', () => {
   // §2/§4) — `MovimientoFormFields` is the one shared field set, so a
   // blocked Save here must get the same on-screen treatment, not just the
   // create sheet's Add.
-  it('blurs focus and scrolls the amount section into view when Save is blocked by an invalid amount', async () => {
+  it('moves focus back to the amount input and scrolls its section into view when Save is blocked by an invalid amount', async () => {
     const user = userEvent.setup()
     const scrollIntoView = vi.fn()
     HTMLElement.prototype.scrollIntoView = scrollIntoView
@@ -165,7 +165,13 @@ describe('MovimientoSheet — edit mode', () => {
     await user.click(screen.getByRole('button', { name: /guardar/i }))
 
     expect(await screen.findByText(/ingresa un monto/i)).toBeInTheDocument()
-    expect(amountInput).not.toHaveFocus()
+    // Clicking Guardar left the button itself focused (specs.md §10.51's
+    // escalated bug: a plain `blur()` here would leave focus nowhere for a
+    // keyboard user) — the fix moves focus back to the field that actually
+    // blocked the save, which is also what keeps the field visible above
+    // the keyboard on iOS instead of dismissing it (AJ3-B's viewport fix
+    // keeps a focused field on-screen; there is nothing left to dismiss).
+    expect(amountInput).toHaveFocus()
     // `toHaveBeenCalled()` alone would pass even if the effect scrolled the
     // wrong section — assert on `this` (the element `scrollIntoView` was
     // actually called on) to prove it targeted the amount section.
