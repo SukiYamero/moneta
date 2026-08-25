@@ -40,6 +40,21 @@ describe('useVisualViewportInset', () => {
     expect(result.current).toBeNull()
   })
 
+  it('returns null for a sub-pixel mismatch (browser/page zoom rounding, no keyboard, no pan)', () => {
+    // `clientHeight` is always an integer; `visualViewport.height`/`offsetTop`
+    // come out fractional at ordinary non-100% zoom levels even with no
+    // keyboard and no pan — a strict `===` would misread that as a shrunk
+    // viewport and needlessly leave the static `dvh` fallback behind.
+    const viewport = new FakeVisualViewport()
+    viewport.height = document.documentElement.clientHeight - 0.4
+    viewport.offsetTop = 0.4
+    vi.stubGlobal('visualViewport', viewport)
+
+    const { result } = renderHook(() => useVisualViewportInset(true))
+
+    expect(result.current).toBeNull()
+  })
+
   it('reports the real inset once the visual viewport shrinks or pans, and updates live on resize/scroll', () => {
     const viewport = new FakeVisualViewport()
     vi.stubGlobal('visualViewport', viewport)

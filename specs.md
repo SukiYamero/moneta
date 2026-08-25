@@ -6517,6 +6517,143 @@ it renders inside, not by touching the modal's own contents).
 `src/components/shared/README.md` line (Track AJ3-A owns that file this
 batch) — see this track's final report.
 
+### 10.49.1 Review pass (Track review-aj3-b, 2026-08-25)
+
+Reviewed against `docs/ajustes-3-plan.md` §4 Track AJ3-B and §10.49's own
+claims, per `AGENTS.md` § Review protocol (bugs, redundancy, optimization,
+better approaches).
+
+**Applied — redundancy.** `OVERLAY_MAX_HEIGHT_FRACTION = 0.88` was declared
+twice, once in `BottomSheet.tsx` and once in `CenterModal.tsx`, each with a
+doc comment admitting the two must be kept in sync by hand. Moved to one
+export from `useVisualViewportInset.ts` (the module both shells already
+import), so the value lives in one place instead of two. The
+`max-h-[88dvh]` Tailwind class stays duplicated in both files' static
+fallback — Tailwind's arbitrary-value syntax can't reference a JS
+constant, so that half of the duplication is a build-time constraint, not
+a design choice; the doc comment on the new export says so.
+
+**Applied — correctness bug (CONFIRMED by reasoning + external
+verification, not by a real device).** `useVisualViewportInset`'s
+`matchesLayoutViewport` check used strict equality:
+`viewport.offsetTop === 0 && viewport.height === document.documentElement.clientHeight`.
+`document.documentElement.clientHeight` is spec'd to return an integer;
+`visualViewport.height`/`offsetTop` are `double`s that come out fractional
+at ordinary non-100% browser/page zoom levels with no keyboard and no pan
+at all — a documented, cross-browser rounding quirk (browsers agree
+dimensions can differ from integer CSS-pixel APIs by a fraction of a
+pixel under zoom; see QuirksMode's write-up on the same class of
+media-query rounding bug). Strict equality would misread that as "keyboard
+shrunk it," defeating the fix's own stated invariant — "falls back to
+static CSS with zero inline style… so the no-keyboard behavior is provably
+unchanged" — at any zoom level other than exactly 100%. Replaced with a
+1px tolerance (`VIEWPORT_MATCH_TOLERANCE_PX`) on both comparisons. Covered
+by a new test in `useVisualViewportInset.test.ts` (sub-pixel mismatch
+still returns `null`); the other two review scenarios in the plan's ask —
+pinch-zoom and keyboard dismissal — are addressed below without a code
+change, either because the code already handles them or because the
+premise needed checking rather than the code.
+
+**Checked, not changed — desktop scrollbar.** Reasoned through rather than
+device-tested: on desktop, `clientHeight` and `visualViewport.height` both
+already exclude the scrollbar's thickness by spec (neither counts it), so
+a horizontal scrollbar does not by itself create the mismatch the
+tolerance above guards against — that guard exists for zoom rounding, not
+scrollbars. PLAUSIBLE, not CONFIRMED against a real desktop browser render
+(no working Playwright session this session — see below).
+
+**Checked, not changed — pinch-zoom precondition is FALSE on iOS, escalated
+below (not this track's code, but load-bearing for this review's ask).**
+The plan asked whether pinch-zoom is actually suppressed by `index.html`'s
+`user-scalable=no`/`maximum-scale=1.0`. It is not, on iOS: Safari has
+deliberately ignored `user-scalable`/`min-scale`/`max-scale` since iOS 10,
+specifically so a page cannot block pinch-zoom (CONFIRMED via WebKit's own
+2016 blog post announcing the change, "New Interaction Behaviors in iOS
+10," and corroborated by a Mozilla/W3C bug tracking the same behavior).
+Android Chrome, by contrast, does honor the meta tag. This means a real
+iOS user _can_ pinch-zoom while a `BottomSheet`/`CenterModal` is open,
+contrary to what `index.html`'s own pre-existing comment
+(`specs.md` §10.34) and this track's review brief both assumed. Tracing
+the consequence rather than stopping at the premise: while pinch-zoomed,
+`visualViewport.width/height` shrink and `offsetTop`/`offsetLeft` can go
+nonzero, so this hook's correction engages — which is very likely the
+_right_ behavior (a `position: fixed` overlay that didn't correct for
+pinch-zoom would float outside the zoomed-in view, a known mobile-web
+annoyance the correction happens to also fix), not a defect. Flagged for
+the operator rather than fixed here: (1) it's a correctness question about
+a different track's decision (`§10.34`, Ajustes 1), not this track's diff;
+(2) "the accessibility trade-off actually doesn't hold on iOS" is worth
+recording against §10.34 itself, since that decision's own reasoning rests
+on the premise this review just disproved.
+
+**Checked — keyboard dismissal.** Traced rather than device-tested:
+`visualViewport`'s `resize`/`scroll` events fire as the keyboard's
+dismissal animation completes, `update()` re-evaluates on each, and the
+final state (`offsetTop` back to 0, `height` back to matching
+`clientHeight`, both now within the 1px tolerance) correctly returns
+`null` — no stale clamp survives a dismissal in the traced code path.
+PLAUSIBLE, not CONFIRMED on a real device.
+
+**Checked — drag-to-dismiss / `useOverlay` interaction (CONFIRMED by
+tracing).** `dragY`/`dragging` are independent React state, driven only by
+pointer events; a `visualViewport` resize mid-drag re-renders with a new
+`maxHeight` but cannot touch `dragY`/`dragging`, so no drag-state
+corruption is possible. The wrapper's inline `top`/`height` apply to a
+`position: fixed` element and don't interact with `useOverlay`'s
+`document.body.style.overflow` scroll lock (different elements, unrelated
+properties). `useVisualViewportInset` runs in a plain `useEffect` (after
+paint), while `useOverlay`'s synchronous focus runs in a `useLayoutEffect`
+(before paint) — this ordering doesn't matter here, because the real
+correction can only ever arrive later anyway, via the OS's own keyboard
+resize event; no `useLayoutEffect` could see a keyboard inset that has not
+yet actually appeared. One theoretical edge case (keyboard dismissing
+mid-drag) is not practically reachable — dragging the handle and having a
+focused input simultaneously requires two independent inputs, which a
+single-finger touch gesture cannot do.
+
+**Escalated to the operator, per the plan's own instruction — the
+`index.html` decision.** §10.49's reasoning against adding
+`interactive-widget=resizes-content` holds up under verification: Chrome's
+own developer blog confirms Chrome 108 changed Android Chrome's _default_
+to `resizes-visual` (layout viewport left alone, matching iOS) — the exact
+fact §10.49 asserted from Android Chrome's usage share rather than from
+this source. Given that, the shell-local fix is correct and sufficient for
+both platforms without a global change. Independent judgment, offered for
+the operator to weigh rather than acted on (cross-cutting, per the plan):
+app-wide `dvh` reacting to the keyboard is not obviously undesirable for a
+"native app feel" — it is closer to what a native app's own layout
+typically does when a keyboard is up (adjacent chrome moves out of the
+way) — and Chrome's own guidance nudges toward opting in deliberately with
+`interactive-widget` rather than leaving it to the new default. That is a
+product question about every screen's `dvh` math, not just these two
+shells, so §10.49's call to leave it alone for now and revisit only if a
+separate `dvh` report surfaces is the right scope discipline either way.
+
+**`bun run check`: real output, run directly.** 152 files, 1658 tests (1
+new — the sub-pixel-tolerance case), typecheck/lint/`lint:units` clean,
+the same two pre-existing `react/only-export-components` warnings
+(`button.tsx`, `FirstSyncGate.tsx`). File/test counts differ from §10.49's
+own recorded 153/1661 only because AJ3-A and AJ3-C merged to `main` after
+this track, each moving the counts independently (confirmed by `git log`:
+AJ3-A deleted `AmountField.tsx` + its test, AJ3-C added one calendar
+test) — not a discrepancy in either track's own claim at its own merge
+time.
+
+**Not verified this pass — no working browser.** A live Playwright Chrome
+instance was already in use by a concurrent session
+(`Browser is already in use for .../mcp-chrome-5f26035`) for this entire
+review; every finding above that would otherwise call for a real render
+(desktop scrollbar, actual pinch-zoom, real keyboard dismissal animation)
+is marked PLAUSIBLE/traced rather than CONFIRMED-by-device for that
+reason, not because it wasn't attempted.
+
+#### Blast radius
+
+**Applied by this review:** `src/components/shared/useVisualViewportInset.ts`
+(+ test), `src/components/shared/BottomSheet.tsx`,
+`src/components/shared/CenterModal.tsx`. No other file in this track's
+scope changed.
+
 ### 10.50 `DateChipPicker`'s grid stops changing height, and its aria-labels stop being hardcoded Spanish (Ajustes 3, Track AJ3-C, 2026-08-25)
 
 `docs/ajustes-3-plan.md` §4 Track AJ3-C, over `src/components/shared/DateChipPicker.tsx`
@@ -6629,6 +6766,7 @@ this on a real phone").
 pre-existing warnings, `button.tsx`/`FirstSyncGate.tsx`, untouched, no new
 ones); `lint:units` clean (no arbitrary px introduced); `vitest run` — 152
 files, 1653 tests (+1: the new fixed-grid regression test).
+
 ### 10.48 Item 3 (the Add button doing nothing) reproduced, not assumed, and fixed; `AmountField.tsx` deleted (Ajustes 3, Track AJ3-A, 2026-08-25)
 
 **Reproduction, before any fix.** The plan's hypothesis (`docs/ajustes-3-plan.md`
@@ -10731,6 +10869,14 @@ to revisit if it disagrees.
   `submit()` call regardless of outcome) is the general shape for this —
   worth reusing if a future form needs the same "did the user just attempt
   this again" signal rather than re-deriving one per form.
+- 2026-08-25 — **iOS Safari has ignored `user-scalable=no`/`maximum-scale`
+  since iOS 10 (review-aj3-b, §10.49.1).** `index.html`'s existing comment
+  and `specs.md` §10.34 both describe the meta tag as disabling pinch-zoom;
+  on iOS it does not (WebKit deliberately overrides it for accessibility).
+  Recorded here because it's a false precondition another decision already
+  relied on, in the same shape §11's own recurring pattern names — flagged
+  for the operator against §10.34, not corrected there by this review
+  (out of Track AJ3-B's writable set).
 
 ## 12. Backlog (pending verification / deferred work)
 
