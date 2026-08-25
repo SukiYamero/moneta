@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { enUS, es } from 'date-fns/locale'
 import { DateChipPicker } from '@/components/shared/DateChipPicker'
@@ -80,6 +80,36 @@ describe('DateChipPicker', () => {
     const prevMonth = screen.getByRole('button', { name: 'Mes anterior' })
     expect(prevMonth).toHaveClass('min-h-11', 'min-w-11')
     expect(prevMonth.firstElementChild).toHaveClass('size-7')
+  })
+
+  // Before this fix, the grid rendered exactly what
+  // `eachDayOfInterval(startOfWeek(startOfMonth) → endOfWeek(endOfMonth))`
+  // produced — 28/35/42 cells depending on the month — so the popover was a
+  // full row taller in March 2026 (6 real weeks) than in February 2027 (4
+  // real weeks). Both real months, both weekStartsOn:1 (the default): this
+  // assertion fails against that code and passes only once every month
+  // renders the same fixed 6-week (42-cell) grid.
+  it('renders the same 42-cell grid for two real months with different week counts', async () => {
+    const user = userEvent.setup()
+
+    const march = render(
+      <DateChipPicker value="2026-03-10" onChange={() => {}} locale="es-CO" dateFnsLocale={es} />,
+    )
+    await user.click(within(march.container).getByRole('button', { name: /10 de marzo/ }))
+    const marchCells = within(march.container)
+      .getByRole('group', { name: 'Selector de fecha' })
+      .querySelectorAll('[aria-pressed]')
+    expect(marchCells).toHaveLength(42)
+    march.unmount()
+
+    const february = render(
+      <DateChipPicker value="2027-02-10" onChange={() => {}} locale="es-CO" dateFnsLocale={es} />,
+    )
+    await user.click(within(february.container).getByRole('button', { name: /10 de febrero/ }))
+    const februaryCells = within(february.container)
+      .getByRole('group', { name: 'Selector de fecha' })
+      .querySelectorAll('[aria-pressed]')
+    expect(februaryCells).toHaveLength(42)
   })
 
   // `"d 'de' MMMM"` under date-fns would bake the Spanish connector "de"
