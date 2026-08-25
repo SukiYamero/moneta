@@ -32,8 +32,7 @@
       "reassurance": "Signing back in won't touch anything already on this device.",
       "expiredChip": "Expired",
       "continueCtaNamed": "Continue as {{name}}",
-      "continueCtaGeneric": "Continue with Google",
-      "useAnotherAccount": "Use another account"
+      "continueCtaGeneric": "Continue with Google"
     },
     "errors": {
       "missingClientId": "Configuration error. Please try again later.",

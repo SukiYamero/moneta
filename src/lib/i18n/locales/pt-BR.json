@@ -32,8 +32,7 @@
       "reassurance": "Fazer login de novo não afeta o que já está salvo neste dispositivo.",
       "expiredChip": "Expirada",
       "continueCtaNamed": "Continuar como {{name}}",
-      "continueCtaGeneric": "Continuar com o Google",
-      "useAnotherAccount": "Usar outra conta"
+      "continueCtaGeneric": "Continuar com o Google"
     },
     "errors": {
       "missingClientId": "Erro de configuração. Tente novamente mais tarde.",

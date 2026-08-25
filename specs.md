@@ -3738,6 +3738,61 @@ in the cold-start decision AD just rebuilt), `src/lib/lockStore.ts` +
 `src/features/lock/**` (the cold-start guest gate), and the `lock` i18n
 namespace. **No `schema.ts` change** — nothing here is user data.
 
+### 10.36 The returning-user screen's second action — removed, not replaced with guest
+
+Ajustes 1, Track AJ-D. User report, 2026-08-24: "Usar otra cuenta" on
+`ReturningUserScreen` (§10.21) reads as redundant next to the Google button,
+and suggested "continue as guest" instead. Traced (CONFIRMED, reproduced):
+both buttons called the identical `authStore.login()` with the same
+arguments — the same button rendered twice under two labels, not merely
+duplicated copy.
+
+**The user's own suggested replacement is rejected.** This screen renders
+only for a device that resolves a most-recently-used `'google'`-kind profile
+with a lapsed session (§10.21's own gating) — i.e. a device that already
+holds this person's real data under an account. Guest mode is a distinct
+profile with its own, separate, empty database (§10.10, §10.15). Routing
+"Usar otra cuenta" into `continueAsGuest()` would drop this exact person into
+an empty profile while their real data sits one profile over, invisible to
+them — the guest cliff (§10.25's `repoProvider` flip, §10.31's switcher,
+§10.32's adoption prompt, §10.33's guest persistence all exist to close this
+same failure from the guest side) reproduced from the account side. §10.21's
+own UI section is explicit that the guest option does not belong on this
+screen at all, for the same reason.
+
+**What was considered and why it didn't ship this round:** the honest way to
+make "Usar otra cuenta" true to its label is to force Google's account
+chooser — GIS's `requestAccessToken({ prompt })` accepts `'select_account'`
+alongside the `''`/`'consent'` this app already uses (`src/lib/auth.ts`), so
+a second action that actually chooses a different Google account is
+technically real, not aspirational. Building it means widening
+`requestAccessToken`'s `prompt` union and adding a call site for it in
+`src/lib/authStore.ts` (e.g. a `loginWithAccountChooser()` alongside `login()`)
+— both outside this track's ownership (`AGENTS.md` §4 collision table:
+Track AJ-D owns `ReturningUserScreen.tsx` + its test, the `auth` i18n
+namespace, and this file/README only). **Escalated to the operator** rather
+than widened into unowned files.
+
+**What shipped instead:** the redundant button is removed. §10.21's own
+"Done when" line already describes the target state as "sees their own name
+and **one button**" — the secondary action was only ever "acceptable," never
+required — so a screen with a single, honest primary action satisfies the
+existing spec without inventing a new destination that isn't actually
+distinct. The `useAnotherAccount` i18n key is removed from all four locales
+(parity preserved, `resources.test.ts` green). The test that asserted
+`login()` fires "from 'use another account' too" was itself encoding the bug
+as intended behavior — 1563 passing tests never caught the redundancy because
+one of them expected it. Removed and replaced with a regression test
+asserting exactly one action button renders and none is named "otra cuenta"
+— confirmed to fail against the pre-fix two-button markup before this change,
+and to pass after it.
+
+**Recommendation for the operator:** if a genuinely distinct second action is
+wanted later, `select_account` (above) is the correct one — it is real,
+requires no new UI surface beyond a label, and does not touch guest/profile
+state at all. It is a small, well-scoped change to `src/lib/auth.ts` +
+`src/lib/authStore.ts`, better suited to a track that owns those files.
+
 ### Wave 3 — staging and dependencies
 
 Not everything runs in parallel. A track in a later stage is **blocked** until
@@ -8703,6 +8758,25 @@ string` on `ProfileRecord`/`deviceStore.ts`'s `ProfileRow` (a Dexie version
     by name ("The record must name which profile was the target") and a
     per-profile consent table is a real design change, not a bug fix.
   - `bun run check` green: 145 files, 1,563 tests (17 new).
+
+- 2026-08-24 — **§10.36 implemented (Track AJ-D): the returning-user
+  screen's fake second action removed, guest rejected as its replacement.**
+  Both of `ReturningUserScreen`'s buttons called the identical `login()` —
+  CONFIRMED, reproduced. The user's own suggestion ("continue as guest")
+  was rejected rather than built: this screen only renders for a device
+  with a lapsed **Google** profile holding real local data, and guest is a
+  separate, empty profile — routing here into guest reproduces the guest
+  cliff (§10.25/§10.31/§10.32/§10.33) from the account side, and §10.21
+  already forbids the guest option on this screen outright. The redundant
+  button is removed instead — §10.21's "Done when" already describes "one
+  button" as the target, and the secondary action was only ever
+  "acceptable," never required. A genuinely honest second action (GIS's
+  `select_account` prompt, forcing Google's real account chooser) is
+  possible but needs `src/lib/auth.ts` + `src/lib/authStore.ts` changes
+  outside this track's file ownership — escalated to the operator, not
+  built here. `bun run check` green: 145 files, 1,563 tests (same count —
+  one bug-encoding test removed, one regression test added, confirmed to
+  fail against the pre-fix markup and pass after it).
 
 ### Development waves (parallel tracks, sequencing, worktree log)
 

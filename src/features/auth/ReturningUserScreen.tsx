@@ -111,14 +111,6 @@ export const ReturningUserScreen = () => {
             ? t('return.continueCtaNamed', { name: firstName })
             : t('return.continueCtaGeneric')}
         </GoogleSignInButton>
-        <button
-          type="button"
-          onClick={() => void login()}
-          disabled={busy}
-          className="h-12 rounded-2xl bg-transparent text-sm font-bold text-fg-secondary transition-opacity disabled:opacity-60"
-        >
-          {t('return.useAnotherAccount')}
-        </button>
       </div>
     </main>
   )

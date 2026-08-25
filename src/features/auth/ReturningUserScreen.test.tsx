@@ -90,12 +90,17 @@ describe('ReturningUserScreen', () => {
     expect(login).toHaveBeenCalledOnce()
   })
 
-  it('calls login() from "use another account" too', async () => {
-    const login = vi.fn()
-    useAuthStore.setState({ login })
+  // Regression test for the defect the user found: this screen used to render
+  // a second, differently-labeled button ("Usar otra cuenta") that called the
+  // exact same login() as the primary CTA — a control promising a different
+  // outcome and delivering the identical one. specs.md §10.36 removed it
+  // rather than reproduce the guest cliff (§10.25/§10.31/§10.32/§10.33) by
+  // routing it into guest mode instead. This would have failed on `main`.
+  it('renders exactly one action — no second control duplicating the primary CTA', async () => {
     render(<ReturningUserScreen />)
-    await userEvent.click(await screen.findByRole('button', { name: /usar otra cuenta/i }))
-    expect(login).toHaveBeenCalledOnce()
+    await waitFor(() => expect(screen.getByRole('heading')).toBeInTheDocument())
+    expect(screen.getAllByRole('button')).toHaveLength(1)
+    expect(screen.queryByRole('button', { name: /otra cuenta/i })).not.toBeInTheDocument()
   })
 
   it('shows a busy state on the primary button while authenticating', async () => {
