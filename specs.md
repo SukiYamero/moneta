@@ -4072,6 +4072,45 @@ offline**, which closes a claim `specs.md` §3 has made since the beginning;
 Wave 4 tracks share it" move that already paid off with the Toast; and
 **§10.15 / §10.18**, which make local data correct and reachable.
 
+### 10.34.1 The zoom decision rested on a premise that was never true on iOS (correction, 2026-08-25)
+
+Found by `review-aj3-b` while checking whether `useVisualViewportInset`'s
+correction could be triggered by pinch-zoom rather than the keyboard. It can
+— because **pinch-zoom was never disabled on iOS.**
+
+`maximum-scale` and `user-scalable` are honored by Android Chrome. **iOS
+Safari has deliberately ignored them since iOS 10** (WebKit announced it in
+2016 as an accessibility override authors cannot opt out of). §10.34's
+"Zoom is off, everywhere" and `index.html`'s matching comment both asserted
+otherwise, and the user's 2026-08-24 decision — accepting the loss of zoom
+as an accessibility fallback because the type scale is `rem`-based — was
+taken against that assertion.
+
+**What is actually true, on each platform:**
+
+| Gesture            | Android Chrome                     | iOS Safari                               |
+| ------------------ | ---------------------------------- | ---------------------------------------- |
+| pinch-zoom         | off (`user-scalable=no` honored)   | **on** — the attribute is ignored        |
+| double-tap-to-zoom | off (`touch-action: manipulation`) | off (same rule, and this one is honored) |
+
+So the app has behaved differently on the two platforms since the decision
+landed, and nobody knew. **No behavior was changed here** — only the record
+and the comment, because the underlying question ("should zoom be off?") is
+the user's, and they answered it once already against wrong information.
+The attributes are kept: they still do something on Android.
+
+**Not treated as a bug to fix.** iOS keeping zoom available is the
+accessible outcome; if anything, the platform disagreeing with the decision
+is a reason to revisit the decision, not to hunt for a way to defeat iOS.
+Raised to the user rather than resolved here.
+
+**The shape worth naming, since this is the third instance this batch:** a
+claim was written into `specs.md` as settled, was never verified against the
+platform it described, and was then cited as the reason a _further_ decision
+was safe. The same shape as the two disproved claims in Ajustes 2 (§11,
+2026-08-25). What makes this one worse is that a **user decision** was built
+on top of it.
+
 ### 10.35 BottomSheet grab handle — fixed chrome, not scrolling content (Ajustes 1, Track AJ-B, 2026-08-24)
 
 Found on the first real manual pass on a phone (`docs/ajustes-1-plan.md` item
@@ -4229,7 +4268,10 @@ the third item's defect (four screens, four different top margins, no shared
 source of truth) cannot silently come back.
 
 - **Zoom is off, everywhere** (user decision, 2026-08-24; trade-off named
-  explicitly). `index.html`'s viewport now carries `maximum-scale=1.0,
+  explicitly). **The heading is false on iOS and was corrected 2026-08-25 —
+  see §10.34.1 below; the paragraph is left as written so the correction is
+  legible rather than invisible.** `index.html`'s viewport now carries
+  `maximum-scale=1.0,
 user-scalable=no` (kills pinch-zoom) and `index.css`'s `html` carries
   `touch-action: manipulation` (kills double-tap-to-zoom — the one gesture
   the viewport meta alone doesn't reach). **Accepted trade-off:** this also

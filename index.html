@@ -37,11 +37,15 @@
       })()
     </script>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <!-- maximum-scale/user-scalable disable pinch-zoom; touch-action:
-         manipulation in index.css disables double-tap-to-zoom — a
-         deliberate accessibility trade-off for a native-feel app whose
-         type scale is already rem-based and honors the system font size
-         (user decision, 2026-08-24; specs.md §10.34, §11). -->
+    <!-- touch-action: manipulation in index.css disables
+         double-tap-to-zoom everywhere. maximum-scale/user-scalable are
+         honored by Android Chrome but **ignored by iOS Safari**, which has
+         deliberately overridden them since iOS 10 — so pinch-zoom is off on
+         Android and still available on iOS. The comment here claimed it was
+         off everywhere until 2026-08-25 (specs.md §10.34.1); the attributes
+         are kept because they still do something on Android, not because
+         they achieve the uniform result originally recorded.
+         (User decision, 2026-08-24; specs.md §10.34, §10.34.1, §11.) -->
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
