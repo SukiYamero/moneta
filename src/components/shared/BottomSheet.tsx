@@ -76,6 +76,8 @@ export const BottomSheet = ({
     setDragY(0)
   }
 
+  // The only event guaranteed to fire when a drag ends outside the window —
+  // the OS delivers no pointerup/pointercancel back to the page in that case.
   const handleLostPointerCapture = () => {
     pointerIdRef.current = null
     if (!dragging) return
