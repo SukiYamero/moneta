@@ -724,6 +724,7 @@ missing/finished here).
 | Path                                        | Branch                             | Status                                                                      |
 | ------------------------------------------- | ---------------------------------- | --------------------------------------------------------------------------- |
 | `.claude/worktrees/agent-ad512be09375d9b2e` | `worktree-agent-ad512be09375d9b2e` | active (Track KP-A, amount keypad dismissal + drag-handle, specs.md §10.54) |
+| `.claude/worktrees/agent-a2b1c1c235d44a91f` | `worktree-agent-a2b1c1c235d44a91f` | active (Track KP-C, PIN hidden-input keyboard sweep, LockScreen/PinSetup)   |
 
 **Pruned 2026-08-25 (cross-track review, `review-ajustes-2`):** AJ2-A's row
 (`../moneta-worktrees/aj2-a`, `aj2-a-amount-display`) still claimed `active`

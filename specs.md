@@ -220,6 +220,7 @@ in §11.
 - No WebAuthn/PRF on the device → PIN-only, biometric option is not offered.
 - A guest's biometric lock (§10.2.1) is a separate `guestLock` row, not this `LockVault` — no DEK, no envelope, no session to protect.
 - Logout keeps the vault; offline unlock must not force a silent re-auth (see §10.11).
+- Both `LockScreen` and `PinSetup` back their PIN dots with an `sr-only` `<input>` — `sr-only` clips it but leaves it real and focusable, so it still raises the OS keyboard on top of `PinPad`. That input carries `inputMode="none"`, same fix shape as `MovimientoAmountInput` (§10.54): the software keyboard is suppressed, `PinPad`'s own labelled buttons are the only on-screen entry surface, and a physical keyboard or screen reader still reaches the input.
 
 **Implementation.** `src/lib/pinLock.ts`, `src/lib/lockStore.ts`; UI in `src/features/lock/` (`LockScreen`, `LockSettings`, `PinSetup`), reached from `SecuritySection` in the profile sheet (§10.18).
 
