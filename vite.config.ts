@@ -1,6 +1,6 @@
-/// <reference types="vitest/config" />
 import { fileURLToPath, URL } from 'node:url'
 import { defineConfig } from 'vite'
+import { configDefaults } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
@@ -58,6 +58,13 @@ export default defineConfig({
   ],
   test: {
     environment: 'jsdom',
+    // Agent worktrees live at `.claude/worktrees/<name>` — inside the repo,
+    // so their `src/**/*.test.tsx` files match the default include glob and
+    // a plain `bun run test` on `main` runs every in-flight branch's suite
+    // against `main`'s own node_modules. Measured: one active worktree took
+    // the run from 158 test files to 472, with 657 failures that had nothing
+    // to do with the working tree being checked.
+    exclude: [...configDefaults.exclude, '.claude/worktrees/**'],
     globals: false,
     setupFiles: ['./src/test/setup.ts'],
     // `false` would mock every `.css` import to an empty string — including

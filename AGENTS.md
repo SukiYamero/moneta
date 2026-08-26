@@ -429,6 +429,14 @@ session, and the operator/orchestrator owns running it.
   At the start of any parallel session, check the log against
   `git worktree list` and prune anything stale (merged-but-not-removed, or
   present on disk but missing/finished in the log).
+- **A worktree under `.claude/worktrees/` is inside the repo, so it is inside
+  every default glob.** Neither `bun run test` nor `bun run lint` excluded it
+  until this bit: one active worktree turned the suite from 158 test
+  files into 472, running each in-flight branch's tests against `main`'s own
+  `node_modules` and failing 657 of them. `vite.config.ts`'s `test.exclude`
+  and the `lint` script's `--ignore-pattern` are what keep the done-gate
+  honest — a new tool that walks the tree needs the same exclusion, or
+  `bun run check` starts reporting another branch's state as this one's.
 - **When drafting a wave's file-ownership table, hunt for the _unowned_ file
   two tracks will both want.** Assigning every file a track will edit is not
   enough: the expensive case is a shared file assigned to nobody, which each
