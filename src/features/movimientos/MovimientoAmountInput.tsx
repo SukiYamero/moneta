@@ -1,14 +1,26 @@
-import { useId, useMemo, type ChangeEvent, type Ref } from 'react'
+import { useId, useMemo, useRef, type ChangeEvent, type Ref } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { Moneda, TipoMovimiento } from '@/lib/schema'
 import {
+  decimalSeparatorFor,
   digitsBeforeIndex,
   formatAmountLive,
   indexAfterDigitCount,
   isAmountInputInvalid,
 } from '@/lib/i18n/amountFormat'
 import { Input } from '@/components/ui/input'
+import { NumericKeypad } from '@/components/shared/NumericKeypad'
 import { cn } from '@/lib/utils'
+
+/**
+ * The one switch for the WebKit AutoFill-accessory clipping bug this field
+ * used to hit (`docs/pendientes-usuario.md`): flip to `false` to bring back
+ * the OS software keyboard (`inputMode="decimal"`, no on-screen pad) exactly
+ * as it worked before. Kept local to this file rather than scattered across
+ * the input's `inputMode`, the keypad's render guard and the ref wiring
+ * separately.
+ */
+const SUPPRESS_NATIVE_KEYBOARD_FOR_AMOUNT = true
 
 export interface MovimientoAmountInputProps {
   value: string
@@ -99,7 +111,19 @@ export const MovimientoAmountInput = ({
   const { t } = useTranslation('movimientos')
   const errorId = useId()
   const symbol = useMemo(() => currencySymbolFor(moneda, locale), [moneda, locale])
+  const decimal = useMemo(() => decimalSeparatorFor(locale), [locale])
   const invalid = isAmountInputInvalid(value, locale, error)
+
+  // Kept alongside the forwarded consumer `ref` (`AddMovimientoSheet`'s
+  // `initialFocus`) so the keypad handlers below can read/write the same
+  // DOM node's `.value`/selection that `handleChange` already does — same
+  // merge-callback-ref shape as `useOverlay.ts`/`DateChipPicker.tsx`.
+  const inputElRef = useRef<HTMLInputElement | null>(null)
+  const setRef = (node: HTMLInputElement | null) => {
+    inputElRef.current = node
+    if (typeof ref === 'function') ref(node)
+    else if (ref) (ref as { current: HTMLInputElement | null }).current = node
+  }
 
   /**
    * Reformats synchronously and moves the caret **on the DOM node itself**,
@@ -114,19 +138,62 @@ export const MovimientoAmountInput = ({
    * its own to speak of. Setting both `.value` and the selection here,
    * synchronously, works regardless of whether React ends up re-rendering
    * at all.
+   *
+   * Shared with the on-screen keypad below: `handleChange` feeds it a
+   * `nextRaw`/`caretIndex` a native `input` event already spliced;
+   * `handleKeypadDigit`/`handleKeypadDecimal`/`handleKeypadDelete` splice
+   * one manually first, but land on this exact same reformat/caret path —
+   * a pad tap must never bypass it (AGENTS.md).
    */
+  const applyEdit = (nextRaw: string, caretIndex: number) => {
+    const digitsBefore = digitsBeforeIndex(nextRaw, caretIndex)
+    const formatted = formatAmountLive(nextRaw, locale)
+
+    const el = inputElRef.current
+    if (el) {
+      el.value = formatted
+      const caret = indexAfterDigitCount(formatted, digitsBefore)
+      el.setSelectionRange(caret, caret)
+    }
+
+    onChange(formatted)
+  }
+
   const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
     const el = event.target
     const rawFromDom = el.value
     const caretInDom = el.selectionStart ?? rawFromDom.length
-    const digitsBefore = digitsBeforeIndex(rawFromDom, caretInDom)
-    const formatted = formatAmountLive(rawFromDom, locale)
+    applyEdit(rawFromDom, caretInDom)
+  }
 
-    el.value = formatted
-    const caret = indexAfterDigitCount(formatted, digitsBefore)
-    el.setSelectionRange(caret, caret)
+  // The DOM node's own selection survives it losing focus to a tapped pad
+  // button (blur doesn't reset `selectionStart`/`selectionEnd`), so reading
+  // it here — rather than refocusing the input on every tap — lets a
+  // screen-reader user stay on the button they just pressed instead of
+  // being bounced back to the field each time.
+  const currentSelection = (): [start: number, end: number] => {
+    const el = inputElRef.current
+    if (!el) return [value.length, value.length]
+    return [el.selectionStart ?? value.length, el.selectionEnd ?? value.length]
+  }
 
-    onChange(formatted)
+  const handleKeypadDigit = (digit: number) => {
+    const [start, end] = currentSelection()
+    applyEdit(value.slice(0, start) + digit + value.slice(end), start + 1)
+  }
+
+  const handleKeypadDecimal = () => {
+    const [start, end] = currentSelection()
+    applyEdit(value.slice(0, start) + decimal + value.slice(end), start + decimal.length)
+  }
+
+  const handleKeypadDelete = () => {
+    const [start, end] = currentSelection()
+    if (start !== end) {
+      applyEdit(value.slice(0, start) + value.slice(end), start)
+    } else if (start > 0) {
+      applyEdit(value.slice(0, start - 1) + value.slice(start), start - 1)
+    }
   }
 
   return (
@@ -137,9 +204,9 @@ export const MovimientoAmountInput = ({
           {symbol}
         </span>
         <Input
-          ref={ref}
+          ref={setRef}
           type="text"
-          inputMode="decimal"
+          inputMode={SUPPRESS_NATIVE_KEYBOARD_FOR_AMOUNT ? 'none' : 'decimal'}
           value={value}
           onChange={handleChange}
           disabled={disabled}
@@ -170,6 +237,20 @@ export const MovimientoAmountInput = ({
         <p id={errorId} role="alert" className="text-sm text-destructive">
           {error}
         </p>
+      )}
+      {SUPPRESS_NATIVE_KEYBOARD_FOR_AMOUNT && (
+        <NumericKeypad
+          className="mt-2"
+          disabled={disabled}
+          onDigit={handleKeypadDigit}
+          onDelete={handleKeypadDelete}
+          onDecimal={handleKeypadDecimal}
+          decimalLabel={decimal}
+          decimalDisabled={value.includes(decimal)}
+          deleteDisabled={value === ''}
+          deleteAriaLabel={t('form.amount.keypad.deleteCta')}
+          decimalAriaLabel={t('form.amount.keypad.decimalCta')}
+        />
       )}
     </div>
   )

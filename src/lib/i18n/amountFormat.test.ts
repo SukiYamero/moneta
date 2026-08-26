@@ -7,7 +7,15 @@ import {
   formatAmountLive,
   digitsBeforeIndex,
   indexAfterDigitCount,
+  decimalSeparatorFor,
 } from '@/lib/i18n/amountFormat'
+
+describe('decimalSeparatorFor', () => {
+  it("returns the locale's own decimal separator — comma for es-CO, dot for en-US", () => {
+    expect(decimalSeparatorFor('es-CO')).toBe(',')
+    expect(decimalSeparatorFor('en-US')).toBe('.')
+  })
+})
 
 describe('parseAmount', () => {
   it('parses a dot-grouped, comma-decimal amount (es-CO)', () => {

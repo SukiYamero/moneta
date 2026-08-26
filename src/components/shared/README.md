@@ -203,6 +203,10 @@ Categoria[]` prop (no default, same no-silent-fallback rule as
   out of `SegmentedControl.tsx` so `OptionList.tsx` shares it instead of
   reimplementing it. Takes an `orientation` (`'horizontal'` | `'vertical'`)
   to pick the arrow-key pair per the APG spec (Left/Right vs. Up/Down).
+- `NumericKeypad.tsx` — shared 3x4 on-screen numeric keypad, extracted from
+  `src/features/lock/PinPad.tsx` so it and `MovimientoAmountInput.tsx`'s
+  amount keypad reuse one implementation; renders a decimal key only when
+  a caller passes `decimalLabel`/`onDecimal`, otherwise a blank PIN-shaped cell.
 - `TextField.tsx` — labelled text input: `Label`/`Input` association via
   `useId()` (or a caller-supplied `id`), `aria-invalid`/`aria-describedby`
   wired to an optional `error` rendered as `role="alert"`, 44px touch

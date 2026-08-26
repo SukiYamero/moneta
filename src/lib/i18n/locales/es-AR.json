@@ -400,6 +400,10 @@
           "empty": "Ingresá un monto",
           "malformed": "Ese monto no se entiende",
           "notPositive": "El monto tiene que ser mayor a cero"
+        },
+        "keypad": {
+          "deleteCta": "Borrar",
+          "decimalCta": "Separador decimal"
         }
       },
       "categoryError": "Elegí una categoría",
