@@ -414,6 +414,52 @@ describe('MovimientoAmountInput', () => {
     })
   })
 
+  describe('the dismiss bar reuses the same close-and-blur mechanism as an outside tap', () => {
+    it('tapping the bar hides the pad and blurs the input, and a subsequent tap on the field reopens it', async () => {
+      const user = userEvent.setup()
+      render(<ControlledHarness locale="es-CO" moneda="COP" tipo="gasto" />)
+      const input = screen.getByLabelText('Monto')
+      await user.click(input)
+      expect(screen.getByRole('button', { name: '1' })).toBeInTheDocument()
+
+      await user.click(screen.getByRole('button', { name: 'Cerrar teclado' }))
+
+      expect(screen.queryByRole('button', { name: '1' })).not.toBeInTheDocument()
+      expect(input).not.toHaveFocus()
+
+      await user.click(input)
+      expect(screen.getByRole('button', { name: '1' })).toBeInTheDocument()
+    })
+  })
+
+  describe("the keypad bleeds past the sheet's own side padding to the true screen edges", () => {
+    // `BottomSheet`'s scrollable body applies `px-5.5` — the pad's wrapper
+    // stops at that padded content edge, so without this, the ~22px strip
+    // down each side of the phone sits genuinely outside `wrapperRef` and a
+    // tap there dismissed the pad (reproduced live: a tap well inside that
+    // strip closed it). A user perceives that strip as part of the
+    // full-width pad, not "outside" it (it is not "the note field" or
+    // "the category picker" — nothing else lives there), so the fix moves
+    // the pad's own DOM box to match what is visually there, via the
+    // standard viewport-relative full-bleed technique, rather than
+    // widening the "outside" check with hand-measured geometry: jsdom has
+    // no layout engine to prove the resulting box reaches the true edges,
+    // so this only asserts the classes that produce that box are present.
+    it('renders with the full-bleed width/margin classes once open', async () => {
+      const user = userEvent.setup()
+      render(<ControlledHarness locale="es-CO" moneda="COP" tipo="gasto" />)
+      await user.click(screen.getByLabelText('Monto'))
+
+      // The bleed classes land on the outer container the dismiss bar and
+      // the grid share (`NumericKeypad`'s `onDismiss`-gated wrapper), one
+      // level up from the grid itself — not the grid's own `className`.
+      const grid = screen.getByRole('button', { name: '1' }).parentElement
+      const outer = grid?.parentElement
+      expect(outer?.className).toContain('w-[100dvw]')
+      expect(outer?.className).toContain('mx-[calc(50%-50dvw)]')
+    })
+  })
+
   describe('keypad shows only while the amount field is focused', () => {
     it('renders no keypad at all before the input is focused', () => {
       render(<ControlledHarness locale="es-CO" moneda="COP" tipo="gasto" />)
@@ -497,7 +543,7 @@ describe('MovimientoAmountInput', () => {
       </div>
     )
 
-    it('closes the pad on an outside pointerdown even when the target never lets native focus move', async () => {
+    it('closes the pad on an outside tap even when the target never lets native focus move', async () => {
       const user = userEvent.setup()
       render(
         <div>
@@ -543,6 +589,76 @@ describe('MovimientoAmountInput', () => {
 
       expect(screen.getByRole('button', { name: '7' })).toBeInTheDocument()
       expect(input).toHaveValue('7')
+    })
+
+    // A discrete-event state update inside a document-level `pointerdown`
+    // listener collapses the pad — and the whole layout shifts up to fill
+    // the space it occupied — before the finger lifts. The browser
+    // hit-tests `pointerup`/`click` against whatever now sits at those raw
+    // coordinates, which is a different element than the one `pointerdown`
+    // hit (reproduced live in Chromium: a tap on a category chip behind the
+    // pad landed its `click` on an unrelated ancestor once the pad's
+    // collapse ran on `pointerdown`, and the category was never selected —
+    // `aria-pressed` stayed `false`). Gating the collapse on `pointerup`
+    // instead means the browser has already resolved that event's own
+    // hit-test before our handler runs, so a mutation inside it can no
+    // longer retarget the gesture already in flight.
+    it('does not close the pad on pointerdown alone — only once the pointer lifts, so an in-flight tap on a control behind the pad cannot be retargeted by an early collapse', async () => {
+      // A real, natively-focusable outside target (a plain `<button>`) would
+      // blur the input via the browser's own mousedown-driven focus-shift —
+      // the existing `handleWrapperBlur` path, unrelated to the pointerup
+      // listener this test isolates. `OutsideNonFocusableTarget` blocks that
+      // native focus-shift (as the sibling describe block above does), so
+      // the *only* thing that can close the pad here is this handler.
+      const user = userEvent.setup()
+      render(
+        <div>
+          <ControlledHarness locale="es-CO" moneda="COP" tipo="gasto" />
+          <OutsideNonFocusableTarget />
+        </div>,
+      )
+      const input = screen.getByLabelText('Monto')
+      await user.click(input)
+      expect(screen.getByRole('button', { name: '1' })).toBeInTheDocument()
+
+      const outside = screen.getByTestId('outside')
+      await user.pointer({ keys: '[MouseLeft>]', target: outside })
+      expect(screen.getByRole('button', { name: '1' })).toBeInTheDocument()
+      expect(input).toHaveFocus()
+
+      await user.pointer('[/MouseLeft]')
+      expect(screen.queryByRole('button', { name: '1' })).not.toBeInTheDocument()
+      expect(input).not.toHaveFocus()
+    })
+
+    // A genuinely focusable outside control (a category chip, in the real
+    // sheet) never reaches the handler above at all: the browser's own
+    // mousedown default action focuses it directly, firing a real native
+    // `blur` on the amount input during the same down-phase — well before
+    // `pointerup`. `handleWrapperBlur` predates this fix and reacted to
+    // that blur immediately, so it collapsed the pad on `pointerdown` too,
+    // just via a different path than the listener above (reproduced live:
+    // tapping a category chip while the pad was open left `aria-pressed`
+    // `false` on it — the tap never registered). It must defer the same
+    // way.
+    it('a native blur from tapping a genuinely focusable outside control is deferred the same way, so the pad does not collapse before the pointer lifts', async () => {
+      const user = userEvent.setup()
+      render(
+        <div>
+          <ControlledHarness locale="es-CO" moneda="COP" tipo="gasto" />
+          <button type="button">Elsewhere</button>
+        </div>,
+      )
+      const input = screen.getByLabelText('Monto')
+      await user.click(input)
+      expect(screen.getByRole('button', { name: '1' })).toBeInTheDocument()
+
+      const outside = screen.getByRole('button', { name: 'Elsewhere' })
+      await user.pointer({ keys: '[MouseLeft>]', target: outside })
+      expect(screen.getByRole('button', { name: '1' })).toBeInTheDocument()
+
+      await user.pointer('[/MouseLeft]')
+      expect(screen.queryByRole('button', { name: '1' })).not.toBeInTheDocument()
     })
   })
 })
