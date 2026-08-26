@@ -14,9 +14,9 @@ const movimiento = (overrides: Partial<Movimiento> = {}): Movimiento => ({
   ...overrides,
 })
 
-// `seccion`/`categoria` are ids (specs.md §10.22) — most tests below only
-// care about separator/quoting/injection behavior, so these resolve the
-// default fixtures' ids to real names, matching real usage.
+// `seccion`/`categoria` are ids — most tests below only care about
+// separator/quoting/injection behavior, so these resolve the default
+// fixtures' ids to real names, matching real usage.
 const DEFAULT_SECCIONES: CsvExportOptions['secciones'] = [
   { id: 'sec_personal', nombre: 'Personal' },
 ]
@@ -105,7 +105,7 @@ describe('buildMovimientoCsvParts()', () => {
     expect(csv).not.toContain('secret-key-material')
   })
 
-  describe('decimal separator follows the active locale (specs.md §10.12 hazard 3)', () => {
+  describe('decimal separator follows the active locale', () => {
     it('uses a comma for es-CO', () => {
       const csv = buildCsv([movimiento({ monto: 12000.5 })], 'es-CO')
       const row = lines(csv)[2]
@@ -131,7 +131,7 @@ describe('buildMovimientoCsvParts()', () => {
     })
   })
 
-  describe('CSV injection escaping (specs.md §10.12 hazard 4 — a security issue, not a formatting one)', () => {
+  describe('CSV injection escaping — a security issue, not a formatting one', () => {
     it.each(['=cmd', '+1+1', '-1+1', '@SUM(A1:A9)'])(
       'prefixes a nota starting with "%s" so Excel/Sheets treats it as text, not a formula',
       (dangerous) => {
@@ -147,8 +147,8 @@ describe('buildMovimientoCsvParts()', () => {
     )
 
     it("escapes a category/section's resolved *name* the same way, since both are user-editable free text", () => {
-      // `categoria`/`seccion` are ids (specs.md §10.22) — the injection risk
-      // lives in the free-text `nombre` they resolve to, not the id itself.
+      // `categoria`/`seccion` are ids — the injection risk lives in the
+      // free-text `nombre` they resolve to, not the id itself.
       const csv = buildCsv([movimiento({ categoria: 'cat_x', seccion: 'sec_x' })], 'es-CO', {
         secciones: [{ id: 'sec_x', nombre: '@import' }],
         categorias: [{ id: 'cat_x', nombre: '=HYPERLINK("evil")' }],

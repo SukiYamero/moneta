@@ -85,9 +85,7 @@ describe('useNetworkStore.canWrite', () => {
     }
   })
 
-  // Deleting is allowed offline too (specs.md §11, 2026-08-19 — a delete is
-  // terminal, so it commutes the same way an append does), superseding half
-  // of §10.11's original "no delete offline" restriction.
+  // A delete is terminal, so it commutes across devices the same way an append does.
   it('allows delete while offline, within the window', () => {
     useNetworkStore.setState({ online: false, lastOnlineAt: 1_000 })
 
@@ -96,9 +94,6 @@ describe('useNetworkStore.canWrite', () => {
     ).toEqual({ allowed: true })
   })
 
-  // appends/deletes commute, edits don't (specs.md §10.11, §11 2026-08-19) —
-  // pinned down explicitly since it's the whole reason these two get a
-  // different answer than edit/settings.
   it.each(['create', 'delete'] as const)(
     'never refuses %s with the mutation-restricted reason',
     (kind) => {
@@ -118,14 +113,6 @@ describe('useNetworkStore.canWrite', () => {
     })
   })
 
-  it('reads still have no gate of their own — canWrite is only ever consulted for a write', () => {
-    // canWrite has no 'read' kind in MutationKind at all: reads are simply
-    // never routed through it (specs.md §10.11 "Done when" — reads stay
-    // available past the window). Nothing to assert beyond the type itself
-    // not admitting a 'read' argument; documented here as the invariant.
-    expect(Object.keys({ create: 0, edit: 0, delete: 0, settings: 0 })).toHaveLength(4)
-  })
-
   it('fails open when the anchor is unknown (never validated, or not yet hydrated)', () => {
     useNetworkStore.setState({ online: false, lastOnlineAt: null })
 
@@ -136,17 +123,10 @@ describe('useNetworkStore.canWrite', () => {
 })
 
 describe('offline-window anchor persistence', () => {
-  // The in-memory store alone can't prove persistence — reset in-memory
-  // state and re-derive it from storage the same way a cold boot would
-  // (docs/wave-3-plan.md §2.2(2): an in-memory-only anchor resets on every
-  // reopen and the window never fires). vi.resetModules() forces this
-  // module's top-level hydration code to run again, against the same
-  // fake-indexeddb backing store, standing in for the real cold boot.
+  // vi.resetModules() forces this module's top-level hydration to run again
+  // against the same fake-indexeddb store, standing in for a real cold boot.
   it('a fresh module instance hydrates the anchor persisted by a previous one', async () => {
     useNetworkStore.getState().reportOnlineSuccess(42_000)
-    // reportOnlineSuccess's persistence is fire-and-forget from the store's
-    // own perspective — give the microtask queue a turn so the write lands
-    // before the next module instance reads it back.
     await Promise.resolve()
     await Promise.resolve()
 
@@ -157,18 +137,12 @@ describe('offline-window anchor persistence', () => {
   })
 })
 
-// docs/error-handling.md §8: every swallow needs a test proving the failure
-// path, not just the happy path. Same posture as deviceStore.ts/
-// profiles/profileRegistry.ts's own storage-failure tests, now that the
-// anchor lives on the same shared `kurobello-device` connection.
 describe('offline-window anchor storage failures', () => {
   it('a read failure at module-load hydration leaves the anchor at its fail-open null default', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
-    // vi.resetModules() means the next '@/lib/networkStore' import gets a
-    // fresh '@/lib/deviceStore' too (a new deviceDb instance) — the spy has
-    // to land on *that* instance, imported first so it's in place before
-    // networkStore's own top-level hydration call runs against it.
+    // vi.resetModules() gives the next networkStore import a fresh deviceStore
+    // instance too — the spy must land on that instance before it's imported.
     vi.resetModules()
     const freshDeviceStore = await import('@/lib/deviceStore')
     const spy = vi

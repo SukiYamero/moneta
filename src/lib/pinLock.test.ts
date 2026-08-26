@@ -50,12 +50,10 @@ test('enable caches the profile alongside the session, and unlock returns both',
   expect(unlocked).toEqual({ session, user })
 })
 
-// specs.md §10.11 / docs/wave-3-plan.md §2.1(1): a vault written before the
-// cached-profile envelope existed stored the bare AuthSession as its *whole*
-// plaintext, no { v: 2, session, user } wrapper at all. Built here with the
-// real WebCrypto primitives directly (not through enableLock, which only
-// ever writes the new v2 shape now) so this is a genuine legacy fixture, not
-// a restatement of the current encoder.
+// A v1 vault stores the bare AuthSession as its whole plaintext, no
+// { v: 2, session, user } wrapper. Built here with the real WebCrypto
+// primitives directly (not via enableLock, which only ever writes v2 now)
+// so this is a genuine legacy fixture, not a restatement of the encoder.
 test('unlockWithPin decodes a legacy v1 vault (bare AuthSession, no envelope) backward-compatibly', async () => {
   await resetVault()
   const enc = new TextEncoder()
@@ -127,12 +125,10 @@ test('a correct PIN resets the failed-attempt counter', async () => {
 })
 
 test('concurrent wrong PINs each count exactly once — no lost updates', async () => {
-  // Reproduces the operator-verified race: unlockWithPin used to read
-  // failedAttempts once at the top and write "read value + 1" back in its
-  // catch, so three concurrent wrong PINs — each reading the same stale 0 —
-  // all wrote 1, losing two attempts. Firing genuinely concurrent guesses is
-  // trivial from a devtools console, so this is the whole brute-force
-  // throttle (specs.md §5) failing silently, not a tidiness issue.
+  // Three concurrent wrong guesses must each land as a distinct increment,
+  // not all read-and-write the same stale failedAttempts — the PIN throttle
+  // is this app's whole brute-force defense, and a lost update would let an
+  // attacker fire concurrent guesses to bypass it silently.
   await enableLock({ pin: '1234', session })
   await Promise.allSettled([unlockWithPin('0000'), unlockWithPin('0001'), unlockWithPin('0002')])
   const after = await db.vault.get(1)
@@ -208,8 +204,7 @@ test("resetVault also clears this device's login marker, forcing a real re-login
 
 // A lockout-forced or manual vault reset must not hand whoever unlocks next
 // (possibly a different Google account, same device) the previous account's
-// Drive decision (specs.md §11, 2026-08-19 — same finding as the marker
-// above, applied to the Drive opt-in's own persisted twin).
+// Drive decision.
 test("resetVault also clears this device's persisted Drive decision", async () => {
   const { getDriveDecision, setDriveDecision } = await import('@/lib/deviceStore')
   await setDriveDecision('connected')
@@ -346,11 +341,10 @@ test('no vault is never background-expired', async () => {
   expect(await isBackgroundExpired(Date.now())).toBe(false)
 })
 
-// specs.md §10.2.1 (Track AF, Wave 4.1 half 2): a guest's biometric lock is
-// session-less — no AuthSession, no DEK, no envelope. WebAuthn mints a
-// device-scoped credential whose *assertion succeeding* is the whole
-// signal; nothing here wraps or decrypts anything.
-describe('guest biometric lock (session-less, specs.md §10.2.1)', () => {
+// A guest's biometric lock is session-less — no AuthSession, no DEK, no
+// envelope. WebAuthn mints a device-scoped credential whose *assertion
+// succeeding* is the whole signal; nothing here wraps or decrypts anything.
+describe('guest biometric lock (session-less)', () => {
   afterEach(async () => {
     await disableGuestLock()
   })
@@ -379,12 +373,10 @@ describe('guest biometric lock (session-less, specs.md §10.2.1)', () => {
     expect(await hasGuestLock()).toBe(false)
   })
 
-  // deviceStore.ts's setGuestLock() self-catches a storage failure — without
-  // this check, enableGuestLock() would resolve successfully even though the
-  // row never landed, leaving lockStore.guestLockEnabled `true` while
-  // isGuestLockBackgroundExpired() reads "no row" as "never expired" and
-  // never re-locks: a guest believing background re-lock is on when it
-  // silently isn't, the unsafe direction.
+  // deviceStore.ts's setGuestLock() self-catches a storage failure, so a
+  // silently-failed persist must still surface as a throw here — otherwise
+  // guestLockEnabled reads `true` while isGuestLockBackgroundExpired() reads
+  // "no row" as "never expired" and never re-locks.
   test('a credential that registers but silently fails to persist throws, not a false success', async () => {
     mockWebAuthn(undefined)
     const putSpy = vi.spyOn(deviceDb.guestLock, 'put').mockRejectedValue(new Error('IDB blocked'))

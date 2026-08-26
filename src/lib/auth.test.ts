@@ -93,8 +93,6 @@ describe('fetchGoogleUser', () => {
     expect((init as RequestInit).headers).toMatchObject({ Authorization: 'Bearer tok' })
   })
 
-  // specs.md §11, 2026-08-19: `sub` — not `email` — is what the profile
-  // registry keys a Google account on, since it never changes.
   it('carries the OIDC subject id through, distinct from the mutable email', async () => {
     vi.stubGlobal(
       'fetch',

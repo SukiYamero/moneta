@@ -41,63 +41,40 @@ describe('parseAmount', () => {
     }
   })
 
-  it('returns undefined for an empty or whitespace-only string', () => {
-    expect(parseAmount('', 'es-CO')).toBeUndefined()
-    expect(parseAmount('   ', 'es-CO')).toBeUndefined()
-  })
-
-  it('returns undefined for a negative amount', () => {
-    expect(parseAmount('-5', 'es-CO')).toBeUndefined()
-  })
-
-  it('returns undefined for malformed text', () => {
-    expect(parseAmount('abc', 'es-CO')).toBeUndefined()
-  })
-
   it('parses a plain integer with no separators the same in every locale', () => {
     expect(parseAmount('5000', 'es-CO')).toBe(5000)
     expect(parseAmount('5000', 'en-US')).toBe(5000)
   })
 
-  it('returns undefined for a lone group separator, not 0', () => {
-    // `Number('')` is `0` once grouping is stripped from a string that was
-    // nothing but group separators — this must not read as "$0".
-    expect(parseAmount('.', 'es-CO')).toBeUndefined()
-    expect(parseAmount(',', 'en-US')).toBeUndefined()
-    expect(parseAmount('..', 'es-CO')).toBeUndefined()
-  })
-
-  it('returns undefined for a lone decimal separator', () => {
-    expect(parseAmount(',', 'es-CO')).toBeUndefined()
-    expect(parseAmount('.', 'en-US')).toBeUndefined()
-  })
-
-  it('returns undefined for multiple decimal separators', () => {
-    expect(parseAmount('12.34.56', 'en-US')).toBeUndefined()
-    expect(parseAmount('12,34,56', 'es-CO')).toBeUndefined()
-  })
-
-  it('returns undefined for a pasted currency symbol', () => {
-    expect(parseAmount('$100', 'es-CO')).toBeUndefined()
-    expect(parseAmount('COP 100', 'es-CO')).toBeUndefined()
-  })
-
-  it('returns undefined for a hex-looking string instead of coercing it via Number()', () => {
-    expect(parseAmount('0x1a', 'en-US')).toBeUndefined()
+  it.each([
+    ['empty string', '', 'es-CO'],
+    ['whitespace only', '   ', 'es-CO'],
+    ['negative amount', '-5', 'es-CO'],
+    ['non-numeric text', 'abc', 'es-CO'],
+    ['a lone group separator', '.', 'es-CO'],
+    ['a lone group separator', ',', 'en-US'],
+    ['two lone group separators', '..', 'es-CO'],
+    ['a lone decimal separator', ',', 'es-CO'],
+    ['a lone decimal separator', '.', 'en-US'],
+    ['multiple decimal separators', '12.34.56', 'en-US'],
+    ['multiple decimal separators', '12,34,56', 'es-CO'],
+    ['a pasted currency symbol', '$100', 'es-CO'],
+    ['a pasted currency code', 'COP 100', 'es-CO'],
+    ['a hex-looking string', '0x1a', 'en-US'],
+  ] as const)('returns undefined for %s (%p, %s)', (_label, input, locale) => {
+    expect(parseAmount(input, locale)).toBeUndefined()
   })
 })
 
 describe('parseAmountForInput', () => {
-  it('distinguishes empty from malformed from non-positive (docs/error-handling.md, the seam Track F picks up)', () => {
+  it('distinguishes empty from malformed from non-positive, so a caller can react differently to each', () => {
     expect(parseAmountForInput('', 'es-CO')).toEqual({ ok: false, reason: 'empty' })
     expect(parseAmountForInput('   ', 'es-CO')).toEqual({ ok: false, reason: 'empty' })
     expect(parseAmountForInput('abc', 'es-CO')).toEqual({ ok: false, reason: 'malformed' })
     expect(parseAmountForInput('0', 'es-CO')).toEqual({ ok: false, reason: 'not_positive' })
   })
 
-  // schema.ts: `monto` is always positive — parseAmount today wrongly lets
-  // 0 through (`value >= 0`), which is the real defect this parser closes.
-  it('rejects 0 as not_positive, not as a valid amount', () => {
+  it('rejects 0 as not_positive, not as a valid amount — monto is always positive (schema.ts)', () => {
     expect(parseAmountForInput('0', 'en-US')).toEqual({ ok: false, reason: 'not_positive' })
     expect(parseAmountForInput('0,00', 'es-CO')).toEqual({ ok: false, reason: 'not_positive' })
   })
@@ -113,8 +90,8 @@ describe('parseAmountForInput', () => {
   })
 
   it('rejects a pasted 1e999 as malformed rather than letting it reach Infinity', () => {
-    // Number('1e999') is Infinity — the regex must reject the exponent
-    // notation outright, this must not depend on an Infinity check downstream.
+    // Number('1e999') is Infinity — the regex must reject exponent notation
+    // outright rather than relying on an Infinity check downstream.
     expect(parseAmountForInput('1e999', 'en-US')).toEqual({ ok: false, reason: 'malformed' })
   })
 
@@ -133,25 +110,20 @@ describe('parseAmountForInput', () => {
 })
 
 describe('isAmountInputInvalid', () => {
-  it('is false for empty input with no caller error — nothing typed yet is not a typo', () => {
-    expect(isAmountInputInvalid('', 'es-CO', undefined)).toBe(false)
-  })
-
-  it('is false for a well-formed amount with no caller error', () => {
-    expect(isAmountInputInvalid('18.000', 'es-CO', undefined)).toBe(false)
-  })
-
-  it('is false for not_positive (e.g. a bare 0) with no caller error — a valid keystroke in progress, not a typo', () => {
-    expect(isAmountInputInvalid('0', 'es-CO', undefined)).toBe(false)
-  })
-
-  it('is true for malformed text even with no caller error', () => {
-    expect(isAmountInputInvalid('abc', 'es-CO', undefined)).toBe(true)
-  })
-
-  it('is true whenever the caller passes an error, regardless of what the text parses to', () => {
-    expect(isAmountInputInvalid('18.000', 'es-CO', 'monto requerido')).toBe(true)
-    expect(isAmountInputInvalid('', 'es-CO', 'monto requerido')).toBe(true)
+  it.each([
+    ['empty input, no caller error — nothing typed yet is not a typo', '', undefined, false],
+    ['a well-formed amount, no caller error', '18.000', undefined, false],
+    [
+      'not_positive input (a bare 0), no caller error — a valid keystroke in progress',
+      '0',
+      undefined,
+      false,
+    ],
+    ['malformed text, no caller error', 'abc', undefined, true],
+    ['a well-formed amount with a caller error', '18.000', 'monto requerido', true],
+    ['empty input with a caller error', '', 'monto requerido', true],
+  ] as const)('%s', (_label, text, error, expected) => {
+    expect(isAmountInputInvalid(text, 'es-CO', error)).toBe(expected)
   })
 })
 
@@ -163,17 +135,15 @@ describe('formatAmountLive', () => {
 
   it('groups with a space for a locale that groups that way', () => {
     // The exact space character (plain vs. narrow-no-break) is an ICU/runtime
-    // detail, not something this test should hard-code — assert it matches
-    // whatever Intl itself produces for the same locale/number.
+    // detail — assert it matches whatever Intl itself produces, don't hard-code it.
     const expected = new Intl.NumberFormat('fr-FR').format(1234567)
     expect(formatAmountLive('1234567', 'fr-FR')).toBe(expected)
     expect(formatAmountLive('1234567', 'fr-FR')).not.toBe('1234567')
   })
 
   it('does not insert any grouping when the locale reports no group separator', () => {
-    // No real BCP-47 locale in this ICU build skips grouping by default, so
-    // this simulates one: a locale whose formatToParts/format never emit a
-    // 'group' part, the same shape separatorsFor's '' fallback exists for.
+    // Simulates a locale whose formatToParts/format never emits a 'group'
+    // part — the same shape separatorsFor's '' fallback exists to handle.
     const RealNumberFormat = Intl.NumberFormat
     class NoGroupFormat {
       format = String
@@ -219,16 +189,18 @@ describe('formatAmountLive', () => {
     expect(formatAmountLive('-1234567,5', 'es-CO')).toBe('-1.234.567,5')
   })
 
-  it('passes malformed text through unchanged rather than mangling it — the parser still flags it', () => {
-    expect(formatAmountLive('abc', 'es-CO')).toBe('abc')
-    expect(formatAmountLive('$100', 'es-CO')).toBe('$100')
-    expect(formatAmountLive('12.34.56', 'en-US')).toBe('12.34.56')
-  })
-
-  it('passes a lone group separator through unchanged — separator noise with no digits at all, not a number in progress', () => {
-    expect(formatAmountLive('.', 'es-CO')).toBe('.')
-    expect(formatAmountLive('..', 'es-CO')).toBe('..')
-  })
+  it.each([
+    ['non-numeric text', 'abc', 'es-CO'],
+    ['a pasted currency symbol', '$100', 'es-CO'],
+    ['multiple decimal separators', '12.34.56', 'en-US'],
+    ['a lone group separator', '.', 'es-CO'],
+    ['two lone group separators', '..', 'es-CO'],
+  ] as const)(
+    'passes %s through unchanged rather than mangling it — the parser still flags it (%p)',
+    (_label, input, locale) => {
+      expect(formatAmountLive(input, locale)).toBe(input)
+    },
+  )
 
   it('keeps a leading decimal separator with digits after it (no integer part typed yet)', () => {
     expect(formatAmountLive(',50', 'es-CO')).toBe(',50')
@@ -268,16 +240,12 @@ describe('digitsBeforeIndex', () => {
 
 describe('indexAfterDigitCount', () => {
   it('finds the index right after the nth digit when the next character is itself a digit', () => {
-    // "1.234.567": digit #2 is the "2" at index 2, immediately followed by
-    // the digit "3" — no separator run to extend through.
     expect(indexAfterDigitCount('1.234.567', 2)).toBe(3)
   })
 
   it('extends through a separator run right after the nth digit, landing before the next digit', () => {
-    // "1." — digit #1 is at index 0; index 1 (right after it) is the
-    // separator itself. The only sensible caret spot for "1 digit typed" is
-    // past the separator too (index 2, the end), not wedged before it —
-    // wedging it there is the exact bug that made "1,50" type as "150,".
+    // Wedging the caret before the separator instead is the exact bug that
+    // made "1,50" type as "150,".
     expect(indexAfterDigitCount('1.234.567', 1)).toBe(2)
     expect(indexAfterDigitCount('1.234.567', 7)).toBe(9)
   })

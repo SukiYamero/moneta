@@ -4,13 +4,8 @@ import { afterEach, beforeEach, expect, test } from 'vitest'
 // Deliberately does NOT statically import '@/lib/deviceStore' — same reason
 // as deviceStore.upgrade.v3.test.ts: importing it opens the real
 // `kurobello-device` connection and upgrades it to v4 immediately, which
-// would make it impossible to seed a v3-only database first.
-//
-// v4 added the `deviceId` table (specs.md §10.13/§10.19). A v3 device
-// (marker + driveDecision + anchor + profiles, no deviceId yet) must upgrade
-// to v4 without losing any of the four, and `getDeviceId()` must mint a
-// fresh id for a device that never had one rather than treating the missing
-// table as an error.
+// would make it impossible to seed a v3-only database first. A v3 device
+// must upgrade to v4 without losing any of its four tables, and getDeviceId() must mint a fresh id rather than treat the missing table as an error.
 type MarkerRow = { id: number; loggedInBefore: boolean }
 type DriveDecisionRow = { id: number; decision: 'connected' | 'dismissed' }
 type AnchorRow = { id: number; lastOnlineAt: number }

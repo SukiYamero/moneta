@@ -82,13 +82,13 @@ describe('useBootStore.run()', () => {
     await useBootStore.getState().run()
 
     expect(mBindActiveProfile).toHaveBeenCalledWith(binding)
-    // specs.md §10.25 addendum: the outbox must move with the repo, or a
-    // guest's pending operations queue into a signed-in account's outbox.
+    // The outbox must move with the repo, or a guest's pending operations
+    // queue into a signed-in account's outbox.
     expect(mSetOutboxDatabase).toHaveBeenCalledWith(binding.database)
     expect(useBootStore.getState().status).toBe('ready')
     expect(useDataStore.getState().status).toBe('ready')
-    // specs.md §10.32/§11 (2026-08-21): every genuine (re)bind gives a
-    // consented-but-unfinished adoption another chance to finish, silently.
+    // Every genuine (re)bind gives a consented-but-unfinished adoption
+    // another chance to finish, silently.
     expect(mResumePendingAdoption).toHaveBeenCalledWith(binding.profile)
   })
 
@@ -116,9 +116,6 @@ describe('useBootStore.run()', () => {
     expect(mResumePendingAdoption).not.toHaveBeenCalled()
   })
 
-  // specs.md §10.28's highest-risk edge case: signing out and into a
-  // different account must rebuild the binding, never serve stale data
-  // bound to the previous profile.
   it('rebinds and reloads when a later run resolves a different profile', async () => {
     const repoA = makeRepo()
     const bindingA = makeBinding('profile-a', repoA)
@@ -193,10 +190,8 @@ describe('useBootStore.run()', () => {
 })
 
 describe('invalidateBootForSignOut', () => {
-  // authStore.ts's logout() calls this so the next BootGate mount can't
-  // inherit this session's 'ready' and skip verifying the profile that
-  // resolves for whoever signs in next (BootGate.test.tsx has the
-  // regression this prevents).
+  // Called by authStore.ts's logout() so the next BootGate mount can't
+  // inherit this session's 'ready' and skip re-verifying the profile.
   it('resets status back to idle, so a later mount does not assume it is already ready', () => {
     useBootStore.setState({ status: 'ready', error: null })
 

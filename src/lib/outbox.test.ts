@@ -67,9 +67,9 @@ describe('enqueueOperation', () => {
   })
 
   it("chains basedOn to a tip learned from a pull, not just this device's own outbox history", async () => {
-    // The bug this closes (specs.md §11, 2026-08-19): a device that pulled a
-    // newer version it never queued locally must still base its next op on
-    // it, or a later delete looks falsely concurrent with an edit it saw.
+    // A device that pulled a newer version it never queued locally must
+    // still base its next op on it, or a later delete looks falsely
+    // concurrent with an edit it saw.
     const m = movimiento()
     await recordKnownTip('movimiento', m.id, '000000005-0000-remotedev')
 
@@ -147,7 +147,7 @@ describe('enqueueOperation', () => {
 })
 
 describe('listPendingOperations', () => {
-  it('returns entries in hlc order (the total order §10.19 replay needs)', async () => {
+  it('returns entries in hlc order (the total order replay needs)', async () => {
     await enqueueOperation({ entity: 'movimiento', op: 'put', payload: movimiento() })
     await enqueueOperation({ entity: 'movimiento', op: 'put', payload: movimiento() })
     await enqueueOperation({ entity: 'movimiento', op: 'put', payload: movimiento() })
@@ -227,11 +227,8 @@ describe('observeRemoteHlc / clampOutboxClockToServer', () => {
   })
 })
 
-// specs.md §10.25 addendum / §12 (2026-08-19): the outbox targeted the
-// default `kurobello` database, matching getRepo()'s old single-profile
-// posture. The flip makes this a real data-crossing bug unless the outbox
-// moves with it — a guest's pending operations must never queue into a
-// signed-in account's outbox, or vice versa.
+// A guest's pending operations must never queue into a signed-in account's
+// outbox, or vice versa — the outbox must move with the active profile.
 describe('setOutboxDatabase', () => {
   const otherDbName = 'kurobello-outbox-redirect-test'
 

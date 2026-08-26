@@ -3,7 +3,6 @@ import { renderHook } from '@testing-library/react'
 import { enUS, es, ptBR } from 'date-fns/locale'
 import { i18next } from '@/lib/i18n'
 import { localeFormatting, useLocaleFormatting } from '@/lib/i18n/localeFormatting'
-import { formatMonto } from '@/components/shared/movimientoView'
 
 describe('localeFormatting', () => {
   afterEach(async () => {
@@ -18,10 +17,10 @@ describe('localeFormatting', () => {
     expect(localeFormatting('pt-BR', 'BR')).toEqual({ locale: 'pt-BR', dateFnsLocale: ptBR })
   })
 
-  // specs.md §10.7: region is the device's, independent of which region the
-  // copy locale would default to on its own — a neutral `es` copy locale on
-  // a device in Mexico must format as es-MX, not the old es-CO default.
   it("prefers the given region over the copy locale's own default region", () => {
+    // Region is the device's, independent of what the copy locale would
+    // default to on its own — a neutral `es` copy locale on a device in
+    // Mexico must format as es-MX, not es-CO.
     expect(localeFormatting('es', 'MX')).toEqual({ locale: 'es-MX', dateFnsLocale: es })
     expect(localeFormatting('es', 'AR')).toEqual({ locale: 'es-AR', dateFnsLocale: es })
   })
@@ -31,22 +30,15 @@ describe('localeFormatting', () => {
     expect(localeFormatting(undefined, 'CO')).toEqual(localeFormatting('es', 'CO'))
   })
 
-  it('keeps the es/CO tag formatting amounts exactly as before any locale was wired', () => {
-    expect(formatMonto(3200, 'COP', localeFormatting('es', 'CO').locale)).toBe(
-      formatMonto(3200, 'COP', 'es-CO'),
-    )
-  })
-
-  // src/test/setup.ts stubs the device region to es-CO as the deterministic
-  // test baseline (jsdom's real default is en-US).
   it('reads the active i18next copy locale and the device region, and follows a language change', async () => {
+    // Device region is stubbed to CO by src/test/setup.ts (jsdom defaults to en-US).
     const { result, rerender } = renderHook(() => useLocaleFormatting())
     expect(result.current).toEqual({ locale: 'es-CO', dateFnsLocale: es })
 
     await i18next.changeLanguage('en')
     rerender()
-    // Copy language changed; the device region (CO) did not — the whole
-    // point of this being a second, independent axis (specs.md §10.7).
+    // Copy language changed; the device region (CO) did not — they are
+    // independent axes.
     expect(result.current).toEqual({ locale: 'en-CO', dateFnsLocale: enUS })
   })
 

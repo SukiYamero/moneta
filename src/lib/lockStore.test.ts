@@ -35,19 +35,18 @@ vi.mock('@/lib/pinLock', () => pinLock)
 vi.mock('@/lib/authStore', () => ({
   useAuthStore: {
     getState: () => ({ hydrate, logout, session: authSession, user: authUser, status: authStatus }),
-    // lockStore.ts subscribes at module scope (the logout-relock fix,
-    // specs.md §12) — a bare vi.fn() here just needs to exist so that call
-    // doesn't throw; the subscription tests below capture the registered
-    // listener directly instead of exercising a real zustand store.
+    // lockStore.ts subscribes to this at module scope — a bare vi.fn() here
+    // just needs to exist so that call doesn't throw; the subscription
+    // tests below capture the registered listener directly instead of
+    // exercising a real zustand store.
     subscribe: authStoreSubscribe,
   },
 }))
 const stopSyncSession = vi.fn()
 const startSyncSession = vi.fn()
 // Isolates this suite from the real sync engine/repoProvider/i18n chain
-// `syncSession.ts` otherwise pulls in — lockStore.ts's only use of it is
-// the calls under test below (specs.md §10.26 §2's "stop on lock" / "start
-// on unlock").
+// syncSession.ts otherwise pulls in — lockStore.ts's only use of it is the
+// stop-on-lock/start-on-unlock calls under test below.
 vi.mock('@/lib/sync/syncSession', () => ({ stopSyncSession, startSyncSession }))
 
 const session = { accessToken: 'tok', expiresAt: 9_999_999_999_000 }
@@ -118,12 +117,10 @@ describe('useLockStore', () => {
     expect(useLockStore.getState().enabled).toBe(true)
   })
 
-  // Finding 1 (CRITICAL): hasVault() is a raw IndexedDB read with no guard
-  // of its own. Before this fix, its rejection propagated out of init()
-  // entirely, `set()` never ran, phase stayed 'unknown' forever, and
-  // AppLock — which wraps the whole RouterProvider — rendered null forever:
-  // an unrecoverable white screen with no error boundary able to catch it
-  // (it's an unhandled rejection in a useEffect, not a render throw).
+  // hasVault() is a raw IndexedDB read with no guard of its own: a rejection
+  // must still land on a renderable phase — an unhandled rejection here
+  // would leave phase 'unknown' forever, and AppLock (wrapping the whole
+  // RouterProvider) renders null forever with no error boundary to catch it.
   test('init still lands on a renderable phase when hasVault() rejects', async () => {
     pinLock.hasVault.mockRejectedValueOnce(new Error('IDB blocked in private mode'))
     pinLock.isBiometricAvailable.mockResolvedValue(false)
@@ -150,10 +147,10 @@ describe('useLockStore', () => {
     error.mockRestore()
   })
 
-  // Finding 9 (LOW): the biometric button was gated on platform capability
-  // (`isBiometricAvailable`) instead of whether *this vault* enrolled
-  // biometrics (`pinLock.biometricEnabled`) — a user who declined biometrics
-  // still saw a button that always fails.
+  // The biometric button must reflect whether *this vault* enrolled
+  // biometrics (`pinLock.biometricEnabled`), not just platform capability
+  // (`isBiometricAvailable`) — otherwise a user who declined biometrics
+  // still sees a button that always fails.
   test('init reports biometricEnrolled from the vault, independent of platform capability', async () => {
     pinLock.hasVault.mockResolvedValue(true)
     pinLock.isBiometricAvailable.mockResolvedValue(true)
@@ -188,12 +185,11 @@ describe('useLockStore', () => {
     expect(useLockStore.getState().biometricEnrolled).toBe(false)
   })
 
-  // specs.md §10.33: with guest status now restorable, the guest lock can
-  // stand in front of a cold start — but only when there's no account
-  // marker (the account wins on restore) and the platform credential can
-  // actually still succeed (there's no PIN fallback for a guest, so a dead
-  // credential must never gate anything).
-  describe('the cold-start guest gate (specs.md §10.33)', () => {
+  // The guest lock can stand in front of a cold start — but only when
+  // there's no account marker (the account wins on restore) and the
+  // platform credential can actually still succeed (there's no PIN fallback
+  // for a guest, so a dead credential must never gate anything).
+  describe('the cold-start guest gate', () => {
     test('gates the cold start on the guest lock when there is no account marker and the platform capability is live', async () => {
       pinLock.hasVault.mockResolvedValue(false)
       pinLock.isBiometricAvailable.mockResolvedValue(true)
@@ -240,10 +236,9 @@ describe('useLockStore', () => {
       expect(pinLock.hasGuestLock).not.toHaveBeenCalled()
     })
 
-    // The named edge case (specs.md §10.33): a revoked credential or a
-    // disabled sensor must never lock a guest out of their own local data —
-    // there is no PIN fallback to recover with (specs.md §10.2.1). Live
-    // capability, not the stored enrollment alone, decides.
+    // A revoked credential or a disabled sensor must never lock a guest out
+    // of their own local data — there is no PIN fallback to recover with.
+    // Live capability, not the stored enrollment alone, decides.
     test('degrades to unlocked and clears the stale enrollment when the platform capability is gone', async () => {
       pinLock.hasVault.mockResolvedValue(false)
       pinLock.isBiometricAvailable.mockResolvedValue(false)
@@ -297,7 +292,10 @@ describe('useLockStore', () => {
     expect(pinLock.forgetDek).toHaveBeenCalledOnce()
   })
 
-  test("lock() stops the sync session (specs.md §10.26 §2) — the one transition syncSession.ts's own authStore subscription structurally cannot see, since locking never touches authStore", async () => {
+  // Locking never touches authStore, so syncSession.ts's own authStore
+  // subscription structurally cannot see this transition — lock() must
+  // stop the sync session itself.
+  test('lock() stops the sync session', async () => {
     const { useLockStore } = await import('@/lib/lockStore')
     useLockStore.setState({ phase: 'unlocked', enabled: false })
     useLockStore.getState().lock() // disabled — no-op, must not stop anything
@@ -333,11 +331,10 @@ describe('useLockStore', () => {
     expect(useLockStore.getState().phase).toBe('unlocked')
   })
 
-  // Finding 3 (HIGH): resume() used to infer success from "hydrate() didn't
-  // throw" — but hydrate() owns its own errors and resolves into
-  // `status: 'error'` instead (docs/error-handling.md's documented pattern).
-  // A correct PIN unlocking a vault whose cached token has since expired
-  // must not be reported as a clean success.
+  // unlockPin() must check hydrate()'s actual outcome, not assume success
+  // from "didn't throw" — hydrate() owns its own errors and resolves into
+  // `status: 'error'` instead. A correct PIN unlocking a vault whose cached
+  // token has since expired must not be reported as a clean success.
   test('resume checks hydrate’s actual outcome instead of assuming success', async () => {
     pinLock.unlockWithPin.mockResolvedValue({ session, user })
     hydrate.mockImplementation(async () => {
@@ -368,7 +365,10 @@ describe('useLockStore', () => {
     expect(useLockStore.getState().error).toBeNull()
   })
 
-  test("a successful unlock restarts the sync session (specs.md §10.26 §2) — lock()'s stopSyncSession() has no authStore-subscription counterpart to undo it, since hydrate() re-sets status/drive to the exact values a lock never touched (Track AB review)", async () => {
+  // lock()'s stopSyncSession() has no authStore-subscription counterpart to
+  // undo it, since hydrate() re-sets status/drive to the exact values a
+  // lock never touched — a successful unlock must restart it explicitly.
+  test('a successful unlock restarts the sync session', async () => {
     pinLock.unlockWithPin.mockResolvedValue({ session, user })
     hydrate.mockImplementation(async () => {
       authStatus = 'authenticated'
@@ -394,11 +394,8 @@ describe('useLockStore', () => {
     expect(startSyncSession).not.toHaveBeenCalled()
   })
 
-  // specs.md §10.11: a correct PIN with no network must reach 'authenticated'
-  // via hydrate()'s own redesign — resume() no longer manufactures
-  // SESSION_RESTORE_ERROR for that case since hydrate() (real implementation)
-  // doesn't fail for it anymore. This mock still proves resume() passes the
-  // cached profile through, which is what makes that redesign possible.
+  // A correct PIN with no network must reach 'authenticated' through
+  // hydrate() — which requires the vault-cached profile to reach it too.
   test('unlockPin passes the vault-cached profile through to hydrate, even when null', async () => {
     pinLock.unlockWithPin.mockResolvedValue({ session, user: null })
     const { useLockStore } = await import('@/lib/lockStore')
@@ -426,10 +423,9 @@ describe('useLockStore', () => {
     expect(useLockStore.getState().phase).toBe('unlocked')
   })
 
-  // Sweep (category 1): resume()'s LockedOutError branch does more async
-  // work (resetVault()) inside a catch block that itself wasn't guarded —
-  // its rejection would have escaped resume() entirely as an unhandled
-  // rejection from a `void unlockPin(pin)` call site in LockScreen.
+  // resetVault() runs inside unlockPin()'s LockedOutError branch and must
+  // itself be guarded — an unguarded rejection here would escape as an
+  // unhandled rejection from LockScreen's `void unlockPin(pin)` call site.
   test('lockout still lands on a renderable, logged-out state even if resetVault() itself fails', async () => {
     pinLock.unlockWithPin.mockRejectedValue(new pinLock.LockedOutError())
     pinLock.resetVault.mockRejectedValueOnce(new Error('IDB blocked'))
@@ -483,13 +479,9 @@ describe('useLockStore', () => {
     expect(pinLock.forgetDek).not.toHaveBeenCalled()
   })
 
-  // Sweep (category 1): an unguarded await feeding a state transition.
-  // isBackgroundExpired() is a raw IndexedDB read; if it rejects mid-session
-  // (same storage failures as finding 1), the old code let the rejection
-  // escape from a `void onVisible()` call site in AppLock's visibilitychange
-  // listener and silently skipped the re-lock `set()`. Fail closed instead —
-  // the 5-attempt PIN throttle is this app's whole brute-force defense
-  // (specs.md §5), so an ambiguous read must not default to "stay unlocked."
+  // isBackgroundExpired() is a raw IndexedDB read; a rejection must fail
+  // closed (re-lock), never default to "stay unlocked" — the PIN throttle
+  // is this app's whole brute-force defense.
   test('onVisible re-locks (fails closed) when isBackgroundExpired() itself rejects', async () => {
     pinLock.isBackgroundExpired.mockRejectedValueOnce(new Error('IDB blocked'))
     const error = vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -504,10 +496,10 @@ describe('useLockStore', () => {
     error.mockRestore()
   })
 
-  // specs.md §10.2.1: a guest's biometric lock is session-less — no vault,
-  // no DEK, no lockout. These tests exercise the same onHidden/onVisible
-  // entry points as the account path above, just identity-branched.
-  describe('guest biometric lock (specs.md §10.2.1)', () => {
+  // A guest's biometric lock is session-less — no vault, no DEK, no
+  // lockout. These tests exercise the same onHidden/onVisible entry points
+  // as the account path above, just identity-branched.
+  describe('guest biometric lock', () => {
     test('initGuestLock reads hasGuestLock into state', async () => {
       pinLock.hasGuestLock.mockResolvedValue(true)
       const { useLockStore } = await import('@/lib/lockStore')
@@ -576,12 +568,11 @@ describe('useLockStore', () => {
       expect(useLockStore.getState().lockKind).toBeNull()
     })
 
-    // No lockout: a failed guest assertion is retriable, never a wipe — it
-    // gates the UI only, never a cryptographic boundary (specs.md §11,
-    // 2026-08-20), so there's nothing to throttle. isBiometricAvailable()
-    // still reports true here (the platform capability is fine) — this is
-    // a genuine wrong/cancelled attempt, not the "capability gone" case
-    // below, so it must stay retriable rather than degrading.
+    // No lockout: a failed guest assertion is retriable, never a wipe — the
+    // guest lock gates the UI only, never a cryptographic boundary, so
+    // there's nothing to throttle. isBiometricAvailable() still reports
+    // true here (platform capability is fine) — a genuine wrong/cancelled
+    // attempt, not the "capability gone" case below, so it stays retriable.
     test('unlockGuest sets an error and stays locked on a failed assertion, never wiping anything', async () => {
       pinLock.verifyGuestLock.mockRejectedValue(new Error('lock: guest biometric unavailable'))
       pinLock.isBiometricAvailable.mockResolvedValue(true)
@@ -597,15 +588,10 @@ describe('useLockStore', () => {
       expect(pinLock.disableGuestLock).not.toHaveBeenCalled()
     })
 
-    // The same edge case as the cold-start gate above, but for the
-    // background-relock path (specs.md §10.33 sweep: AF's original guest
-    // lock had no way out of a genuinely broken credential either — this
-    // closes that shape everywhere the guest lock can fire, not just at
-    // boot). WebAuthn deliberately can't distinguish "no matching
-    // credential" from "user cancelled" (privacy — an attacker must not be
-    // able to tell which), so the platform capability check is the only
-    // signal safe to act on automatically; a plain wrong/cancelled attempt
-    // above must stay retriable.
+    // The same edge case as the cold-start gate above, for the
+    // background-relock path. WebAuthn deliberately can't distinguish "no
+    // matching credential" from "user cancelled" (privacy), so the platform
+    // capability check is the only signal safe to act on automatically.
     test('unlockGuest degrades to unlocked and clears the stale enrollment when the platform capability is gone', async () => {
       pinLock.verifyGuestLock.mockRejectedValue(new Error('AbortError'))
       pinLock.isBiometricAvailable.mockResolvedValue(false)
@@ -698,24 +684,20 @@ describe('useLockStore', () => {
     expect(useLockStore.getState().phase).toBe('unlocked')
   })
 
-  // specs.md §12 backlog: a same-tab logout() must re-lock the vault, or the
-  // DEK stays resident in memory. lockStore.ts can't import authStore.ts's
-  // logout() to call lock() (that would be a real circular import, since
-  // authStore.ts is already imported by this module) — it listens for the
-  // one transition an explicit logout() produces via useAuthStore.subscribe
-  // instead. vi.resetModules() forces the module body (and its one-time
-  // subscribe() registration) to run again, since a later test's dynamic
-  // import would otherwise hit the ESM cache and register nothing new.
-  describe('logout-relock subscription (specs.md §12, superseded by §10.20)', () => {
-    // specs.md §10.20: authStore.logout() now invalidates the vault itself
-    // (resetVault(), fire-and-forget from authStore.ts), so re-locking
-    // behind it — the old behavior — would strand this tab on a PIN screen
-    // that can never succeed (the vault it guards is being deleted). The
-    // listener now reflects "no account, no vault" directly: phase back to
-    // 'unlocked', enabled false, same end state reset() reaches after
-    // wiping the vault directly. forgetDek() still runs synchronously here,
-    // defensively, since the vault's own invalidation is fire-and-forget and
-    // hasn't necessarily landed yet.
+  // A same-tab logout() must re-lock the vault, or the DEK stays resident
+  // in memory. lockStore.ts can't import authStore.ts's logout() to call
+  // lock() (a real circular import, since authStore.ts already imports this
+  // module) — it listens for the one transition an explicit logout()
+  // produces via useAuthStore.subscribe instead. vi.resetModules() forces
+  // the module body (and its one-time subscribe() registration) to run
+  // again, since a later test's dynamic import would otherwise hit the ESM
+  // cache and register nothing new.
+  describe('logout-relock subscription', () => {
+    // authStore.logout() invalidates the vault itself (fire-and-forget
+    // resetVault()), so this listener must land on "no account, no vault" —
+    // phase unlocked, enabled false — never re-lock behind a vault that's
+    // being deleted. forgetDek() runs synchronously here too, defensively,
+    // since the vault's own invalidation may not have landed yet.
     test('resets to unlocked/disabled when status settles on idle with a newly-cleared session', async () => {
       vi.resetModules()
       const { useLockStore } = await import('@/lib/lockStore')
@@ -735,10 +717,9 @@ describe('useLockStore', () => {
       expect(pinLock.forgetDek).toHaveBeenCalled()
     })
 
-    // No longer gated on "was the lock enabled" — a logout() invalidates
-    // whatever vault might exist unconditionally, so the listener resets
-    // unconditionally too. Calling forgetDek()/resetting state when there
-    // was never anything to reset is a harmless no-op.
+    // logout() invalidates whatever vault might exist unconditionally, so
+    // this listener resets unconditionally too — calling forgetDek() /
+    // resetting state when there was nothing to reset is a harmless no-op.
     test('forgets the DEK and stays unlocked/disabled even when the lock was never enabled', async () => {
       vi.resetModules()
       const { useLockStore } = await import('@/lib/lockStore')

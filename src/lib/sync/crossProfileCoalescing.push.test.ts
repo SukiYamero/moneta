@@ -68,8 +68,8 @@ afterEach(async () => {
   setOutboxDatabase(db)
 })
 
-describe('cross-profile push coalescing (lead 1 — Track AB review)', () => {
-  it("a push for profile B started while profile A push is in flight must not be silently swallowed by A's promise (reproduced against the unkeyed guard before this fix — boot.ts's rebind path never waits for an in-flight push before redirecting the outbox)", async () => {
+describe('cross-profile push coalescing', () => {
+  it("a push for profile B started while profile A's push is in flight is not silently swallowed by A's promise, even though boot.ts's rebind path never waits for an in-flight push before redirecting the outbox", async () => {
     const dbA = getProfileDatabase('kurobello-crosstest-pusha')
     const dbB = getProfileDatabase('kurobello-crosstest-pushb')
 

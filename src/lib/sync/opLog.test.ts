@@ -21,13 +21,9 @@ import {
   type MovOpFile,
 } from '@/lib/sync/opLog'
 
-// Real LogicalClock instances (hlc.ts's own encoding is what makes
-// ascending hlc == ascending string) sharing one synthetic `now()` that
-// steps forward on every call, from either clock — deterministic ordering
-// matching call sequence, modeling two devices whose physical clocks happen
-// to agree (clock skew and hlc.ts's own `observe`/`clampToServer` merge
-// logic are hlc.test.ts's job, not this file's). A fresh pair per test
-// keeps the shared counter from leaking state across tests.
+// Two clocks share one synthetic, ever-incrementing now() so their hlc
+// values sort in call order, modeling two devices whose physical clocks
+// agree — clock skew/merge logic is hlc.test.ts's job, not this file's.
 const makeClocks = (): {
   a: ReturnType<typeof createLogicalClock>
   b: ReturnType<typeof createLogicalClock>
@@ -105,7 +101,7 @@ describe('replayMovimientos', () => {
       },
     ])
     // The correcting op lives in August's file even though the movement's
-    // own `fecha` is January — specs.md §10.19's whole point.
+    // own `fecha` is January.
     const currentShard = movFile('devicea', '2026-08', [
       {
         op: 'put',
@@ -118,7 +114,7 @@ describe('replayMovimientos', () => {
     expect(items).toEqual([movimiento({ fecha: '2026-01-05', monto: 150 })])
   })
 
-  it('a concurrent delete-vs-edit revives the record with the edit content (decided, specs.md §10.19)', () => {
+  it('a concurrent delete-vs-edit revives the record with the edit content', () => {
     const { a: clockA, b: clockB } = makeClocks()
     const created = clockA.tick()
     // Device B edits, based on the create — never having seen a delete.
@@ -235,7 +231,7 @@ describe('replayActivos', () => {
 })
 
 describe('replayConfig', () => {
-  it('last-write-wins across device files (specs.md §12: the known whole-object-put gap, not fixed here)', () => {
+  it('last-write-wins across device files (a whole-object-put gap, known and not fixed here)', () => {
     const { a: clockA, b: clockB } = makeClocks()
     const t1 = clockA.tick()
     const t2 = clockB.tick()
@@ -288,7 +284,7 @@ describe('filenames', () => {
   it('an unrecognized name is "unknown", never thrown — edge case: ignored, never deleted', () => {
     expect(parseDriveFilename('some-users-random-file.txt').kind).toBe('unknown')
     expect(parseDriveFilename('mov-pj7k.json').kind).toBe('unknown')
-    expect(parseDriveFilename('config.json').kind).toBe('unknown') // the pre-§10.19 layout's own file
+    expect(parseDriveFilename('config.json').kind).toBe('unknown') // the old fixed-file layout's own name
   })
 })
 

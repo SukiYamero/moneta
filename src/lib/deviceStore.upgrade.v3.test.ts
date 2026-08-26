@@ -4,17 +4,12 @@ import { afterEach, beforeEach, expect, test } from 'vitest'
 // Deliberately does NOT statically import '@/lib/deviceStore', for the same
 // reason deviceStore.upgrade.test.ts doesn't: importing it opens the real
 // `kurobello-device` connection and upgrades it to v3 as a side effect,
-// which would make it impossible to seed a v2-only database first. Kept in
-// its own file so this is the only test touching this specific version
-// transition (docs/error-handling.md §8: test the upgrade path).
+// which would make it impossible to seed a v2-only database first.
 //
-// v3 folded networkStore.ts's `kurobello-network` and
-// profiles/profileRegistry.ts's `kurobello-profiles` databases into two new
-// tables here — `anchor` and `profiles` — because neither track owned
-// `deviceStore.ts` in Wave 3 stage 1 (`specs.md` §11, 2026-08-19). Neither
-// database had ever shipped, so there is no data to carry over from them,
-// but a v2 `kurobello-device` device (marker + driveDecision only) must
-// still upgrade to v3 without losing either.
+// v3 folds `anchor` and `profiles` into this database. Neither table had
+// ever shipped elsewhere, so there is no data to carry over, but a v2
+// device (marker + driveDecision only) must still upgrade to v3 without
+// losing either of its own two tables.
 type MarkerRow = { id: number; loggedInBefore: boolean }
 type DriveDecisionRow = { id: number; decision: 'connected' | 'dismissed' }
 

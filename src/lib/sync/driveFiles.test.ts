@@ -60,7 +60,7 @@ describe('ensureFolder', () => {
     expect(mCreateFolder).toHaveBeenCalledWith('tok', FOLDER_NAME)
   })
 
-  it("coalesces two concurrent first-ever calls into one folder, not two (specs.md §10.26 §1 sweep: pull() and push() both call ensureFolder() on the same profile's very first sync — onOnline fires runPull() and runPush() without awaiting each other — and an unguarded check-then-create races itself the same way push() used to)", async () => {
+  it("coalesces two concurrent first-ever calls into one folder, not two — pull() and push() can both call ensureFolder() on the same profile's first sync without awaiting each other", async () => {
     let resolveFind!: (id: string | null) => void
     mFindFile.mockImplementation(
       () =>
@@ -156,7 +156,7 @@ describe('downloads degrade to null, never throw', () => {
     expect(warn).toHaveBeenCalled()
   })
 
-  it('logs and carries the count when a malformed entry inside an otherwise-good file is dropped (specs.md §12, 2026-08-20)', async () => {
+  it('logs and carries the count when a malformed entry inside an otherwise-good file is dropped', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     mReadJsonFile.mockResolvedValue({
       v: 1,

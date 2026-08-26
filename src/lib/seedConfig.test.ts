@@ -34,11 +34,9 @@ describe('buildSeedConfig', () => {
   })
 })
 
-// specs.md §10.22 Decision 6 / §10.25 addendum, §11 2026-08-20: the seed
-// taxonomy's names are chosen once, at seed time, off the active i18next
-// language — not the device region, which stays monedaPrincipal's own axis
-// (§10.7). Ids never change across locales; a Movimiento references a
-// category by id, never by name.
+// Seed taxonomy names are chosen once, at seed time, off the active i18next
+// language — not the device region, which stays monedaPrincipal's own axis.
+// Ids never change across locales; a Movimiento references a category by id.
 describe('buildSeedConfig — seed taxonomy localization', () => {
   it('keeps ids stable and only localizes nombre, regardless of locale', () => {
     const seed = buildSeedConfig('CO', 'pt-BR')
@@ -56,46 +54,31 @@ describe('buildSeedConfig — seed taxonomy localization', () => {
     expect(seed).toEqual(CONFIG_SEMILLA)
   })
 
-  it('translates section and category names to English for the en locale', () => {
-    const seed = buildSeedConfig('US', 'en')
-    expect(seed.secciones.map((s) => s.nombre)).toEqual(['Personal', 'Work', 'Business'])
-    expect(seed.categorias.map((c) => c.nombre)).toEqual([
-      'Salary',
-      'Bills',
-      'Sales',
-      'Taxes',
-      'Petty cash',
-    ])
-  })
-
-  it('translates section and category names to Portuguese for the pt-BR locale', () => {
-    const seed = buildSeedConfig('BR', 'pt-BR')
-    expect(seed.secciones.map((s) => s.nombre)).toEqual(['Pessoal', 'Trabalho', 'Negócio'])
-    expect(seed.categorias.map((c) => c.nombre)).toEqual([
-      'Salário',
-      'Contas',
-      'Vendas',
-      'Impostos',
-      'Fundo de caixa',
-    ])
-  })
-
-  it('uses Argentine regionalisms for es-AR, distinct from neutral es', () => {
-    const seed = buildSeedConfig('AR', 'es-AR')
-    expect(seed.secciones.map((s) => s.nombre)).toEqual(['Personal', 'Trabajo', 'Emprendimiento'])
-    expect(seed.categorias.map((c) => c.nombre)).toEqual([
-      'Sueldo',
-      'Servicios',
-      'Ventas',
-      'Impuestos',
-      'Caja chica',
-    ])
-  })
+  it.each([
+    ['US', 'en', ['Personal', 'Work', 'Business'], ['Salary', 'Bills', 'Sales', 'Taxes', 'Petty cash']],
+    [
+      'BR',
+      'pt-BR',
+      ['Pessoal', 'Trabalho', 'Negócio'],
+      ['Salário', 'Contas', 'Vendas', 'Impostos', 'Fundo de caixa'],
+    ],
+    [
+      'AR',
+      'es-AR',
+      ['Personal', 'Trabajo', 'Emprendimiento'],
+      ['Sueldo', 'Servicios', 'Ventas', 'Impuestos', 'Caja chica'],
+    ],
+  ] as const)(
+    'translates section/category names for region %s, locale %s',
+    (region, locale, sectionNames, categoryNames) => {
+      const seed = buildSeedConfig(region, locale)
+      expect(seed.secciones.map((s) => s.nombre)).toEqual(sectionNames)
+      expect(seed.categorias.map((c) => c.nombre)).toEqual(categoryNames)
+    },
+  )
 
   it('the currency (region) and taxonomy (locale) axes vary independently', () => {
-    // A pt-BR reader in Mexico: taxonomy follows the language, currency
-    // follows the region — specs.md §10.7's independence, not coupled by
-    // default the way monedaForRegion's own wiring is.
+    // A pt-BR reader in Mexico: taxonomy follows the language, currency follows the region.
     const seed = buildSeedConfig('MX', 'pt-BR')
     expect(seed.preferencias.monedaPrincipal).toBe('MXN')
     expect(seed.secciones.map((s) => s.nombre)).toEqual(['Pessoal', 'Trabalho', 'Negócio'])

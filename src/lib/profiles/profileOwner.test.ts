@@ -38,13 +38,8 @@ test('ensureOwnerMarker degrades to a warning, never throws, on a storage failur
   warn.mockRestore()
 })
 
-// A storage failure must never look the same as "no marker exists" — the
-// switcher (`switchProfile.ts`) treats a genuinely absent marker as "this
-// profile's database was cleared" and offers an irreversible registry
-// removal. Degrading a transient IndexedDB failure to `undefined` here would
-// make that removal reachable from an unverified premise
-// (docs/error-handling.md §4: never a success/absence-shaped value for a
-// failure) — so this propagates instead of swallowing.
+// A genuinely absent marker lets the switcher offer an irreversible registry
+// removal, so a transient read failure must never be degraded to `undefined`.
 test('readOwnerMarker propagates a storage failure instead of degrading it to "absent"', async () => {
   const spy = vi.spyOn(db.profileOwner, 'get').mockRejectedValue(new Error('IDB blocked'))
 

@@ -4,13 +4,8 @@ import { afterEach, beforeEach, expect, test } from 'vitest'
 // Deliberately does NOT statically import '@/lib/deviceStore' — same reason
 // as the v3/v4 upgrade tests: importing it opens the real
 // `kurobello-device` connection and upgrades it immediately, which would
-// make it impossible to seed a v4-only database first.
-//
-// v5 added the `syncTips` table (`sync/tip.ts`, specs.md §11 2026-08-19). A
-// v4 device (marker + driveDecision + anchor + profiles + deviceId, no
-// syncTips yet) must upgrade to v5 without losing any of the five, and
-// `getKnownTip` must answer `null` for a device that never recorded one
-// rather than treating the missing table as an error.
+// make it impossible to seed a v4-only database first. A v4 device must
+// upgrade to v5 (adds `syncTips`) without losing any of its five tables, and getKnownTip must answer null rather than treat the missing table as an error.
 type MarkerRow = { id: number; loggedInBefore: boolean }
 type DriveDecisionRow = { id: number; decision: 'connected' | 'dismissed' }
 type AnchorRow = { id: number; lastOnlineAt: number }

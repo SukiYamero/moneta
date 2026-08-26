@@ -10,12 +10,8 @@ import {
 
 const items = () => useToastStore.getState().items
 
-// Resolved from the real resource at call time, not restated as a literal —
-// a copy edit to toast.demo.* can't silently desync these tests from what
-// actually renders (docs/error-handling.md §7's drift-guard principle).
-// Must stay lazy (a function, not a module-scope const): i18next.language
-// isn't forced to 'es' until src/test/setup.ts's `beforeAll` runs, which is
-// after this module's top-level code already evaluated.
+// Must stay a function, not a module-scope const: i18next.language isn't
+// forced to 'es' until setup.ts's beforeAll runs, after this module evaluates.
 const T = (key: ToastMessageKey, values?: Record<string, unknown>): string => i18next.t(key, values)
 
 beforeEach(() => {

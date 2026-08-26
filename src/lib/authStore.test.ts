@@ -130,8 +130,7 @@ beforeEach(() => {
   mGetDriveDecision.mockResolvedValue(undefined)
   // Default: no local guest data and no prior decline — most login() tests
   // exercise something other than adoption, so `pendingAdoption` stays null
-  // (§10.32's "nothing local to bring → no prompt at all") unless a test
-  // overrides this explicitly.
+  // unless a test overrides this explicitly.
   mCountGuestMovements.mockResolvedValue(0)
   mHasDeclinedAdoption.mockResolvedValue(false)
   mGetProfile.mockResolvedValue(undefined)
@@ -226,9 +225,8 @@ describe('useAuthStore.login', () => {
     warn.mockRestore()
   })
 
-  // specs.md §7: the access token must never reach a log. syncLockedSession's
-  // catch only ever logs the caught error, never the session it was given —
-  // this pins that down explicitly instead of leaving it an assumption.
+  // The access token must never reach a log — syncLockedSession's catch
+  // logs only the caught error, never the session it was given.
   it('never logs the access token when the vault sync fails', async () => {
     const secretToken = 'ya29.super-secret-access-token'
     mToken.mockResolvedValue({ accessToken: secretToken, expiresAt: 1 })
@@ -248,9 +246,8 @@ describe('useAuthStore.login', () => {
     warn.mockRestore()
   })
 
-  // Finding 4/6 mechanism (specs.md §11, 2026-08-19): an explicit,
-  // successful login() is the only thing that should ever let a later cold
-  // start attempt a silent restore.
+  // An explicit, successful login() is the only thing that should ever let
+  // a later cold start attempt a silent restore.
   it('marks this device as having logged in before, on success', async () => {
     mToken.mockResolvedValue({ accessToken: 'tok', expiresAt: 1 })
     mUser.mockResolvedValue({ email: 'a@b.com', name: 'Ana' })
@@ -260,11 +257,9 @@ describe('useAuthStore.login', () => {
     expect(mMarkLoggedIn).toHaveBeenCalled()
   })
 
-  // specs.md §10.20/§11 2026-08-19: keyed by the OIDC `sub` claim, not the
-  // Workspace-mutable `email` — a Workspace admin can rename a primary
-  // address, and an email-keyed registry would resolve a renamed account to
-  // a brand-new profile with none of its data. `userinfo` already returns
-  // `sub` for every request (IDENTITY_SCOPES always includes `openid`).
+  // Keyed by the OIDC `sub` claim, not the Workspace-mutable `email` — a
+  // renamed primary address would otherwise resolve to a brand-new profile
+  // with none of its data.
   it('resolves this account in the profile registry, keyed by the stable subject id', async () => {
     mToken.mockResolvedValue({ accessToken: 'tok', expiresAt: 1 })
     mUser.mockResolvedValue({ sub: 'google-sub-1', email: 'a@b.com', name: 'Ana' })
@@ -286,13 +281,9 @@ describe('useAuthStore.login', () => {
     expect(mResolveGoogleProfile).toHaveBeenCalledWith({ accountKey: 'a@b.com', label: 'Ana' })
   })
 
-  // specs.md §10.28's highest-risk edge case, closed at the source: a boot
-  // sequence that reads the active-profile registry the instant `status`
+  // A boot sequence reading the active-profile registry the instant `status`
   // flips to 'authenticated' must never race `resolveGoogleProfile`'s own
-  // write to that same registry — otherwise a fresh sign-in can render
-  // against whatever profile was *previously* most-recently-used, not the
-  // one that just signed in. Pinned down here rather than only in
-  // integration: the profile resolves and lands in the registry *before*
+  // write to that registry — the profile must land in the registry before
   // `status` commits, not concurrently with it.
   it('resolves the account in the profile registry before status flips to authenticated', async () => {
     mToken.mockResolvedValue({ accessToken: 'tok', expiresAt: 1 })
@@ -336,13 +327,10 @@ describe('useAuthStore.login', () => {
     expect(mMarkLoggedIn).not.toHaveBeenCalled()
   })
 
-  // specs.md §10.33 decision 2: signing in with Google is one of the two
-  // ways a guest marker is cleared — a stale marker surviving this would
-  // send a signed-in user back into guest mode on the next cold start. Not
-  // conditioned on having actually been a guest this session: clearing an
-  // absent marker is a no-op (clearGuestUsed self-catches), so always
-  // clearing on a successful login is simpler than tracking "was this
-  // session ever a guest" and just as correct.
+  // A stale guest marker surviving login would send a signed-in user back
+  // into guest mode on the next cold start. Not conditioned on having
+  // actually been a guest this session: clearing an absent marker is a
+  // no-op, so always clearing is simpler and just as correct.
   it('clears the guest marker on a successful login', async () => {
     mToken.mockResolvedValue({ accessToken: 'tok', expiresAt: 1 })
     mUser.mockResolvedValue({ email: 'a@b.com', name: 'Ana' })
@@ -372,9 +360,7 @@ describe('useAuthStore.login', () => {
 
   // access_denied/popup_closed are real, non-network outcomes — the user
   // declined or dismissed the Google popup while genuinely online, so this
-  // must not downgrade the network hint (docs/wave-3-audit-runtime.md
-  // finding 1's "let a failed request downgrade the state" is about real
-  // connectivity failures, not every possible auth outcome).
+  // must not downgrade the network hint.
   it('does not report a network failure for a real, non-network auth error', async () => {
     mToken.mockRejectedValue(new AuthError('access_denied'))
 
@@ -391,11 +377,9 @@ describe('useAuthStore.login', () => {
     expect(mReportOnlineFailure).toHaveBeenCalled()
   })
 
-  // authGeneration backlog item (specs.md §12): login/restore/hydrate were
-  // the three paths that didn't check it, unlike connectDrive. A logout()
-  // firing while a login() is still in flight must not have the late
-  // resolve land status/session for an account the user already signed out
-  // of — same shape as connectDrive's own guard, now closed here too.
+  // A logout() firing while a login() is still in flight must not have the
+  // late resolve land status/session for an account already signed out of —
+  // same guard shape as connectDrive's own.
   it('does not resurrect state when a logout() fires during an in-flight login()', async () => {
     let resolveToken!: (v: { accessToken: string; expiresAt: number }) => void
     mToken.mockImplementation(
@@ -418,11 +402,9 @@ describe('useAuthStore.login', () => {
     expect(s.session).toBeNull()
   })
 
-  // A narrower window than the one above: the same guard must hold across
-  // *every* await before the state-committing set(), not just the first
-  // one. authenticate() resolving is not the only await left before
-  // login() commits — resolveDriveOptIn()'s own storage read is a second
-  // one, and a logout() landing there must be caught too.
+  // The same guard must hold across *every* await before the state-
+  // committing set(), not just the first: resolveDriveOptIn()'s own storage
+  // read is a second await, and a logout() landing there must be caught too.
   it('does not resurrect state when a logout() fires during the drive-decision lookup after authenticate() resolves', async () => {
     mToken.mockResolvedValue({ accessToken: 'tok', expiresAt: 1 })
     mUser.mockResolvedValue({ email: 'a@b.com', name: 'Ana' })
@@ -448,10 +430,9 @@ describe('useAuthStore.login', () => {
     expect(s.driveOptIn).toBe('pending')
   })
 
-  // specs.md §11, 2026-08-19 (supersedes the 2026-08-18 in-memory-only
-  // decision): a device that already answered must not be asked again, even
-  // on a fresh explicit login() — e.g. after restore() fell back to idle
-  // without a logout() in between.
+  // A device that already answered must not be asked again, even on a fresh
+  // explicit login() — e.g. after restore() fell back to idle without a
+  // logout() in between.
   it('resolves a previously persisted "connected" decision and silently re-acquires Drive access', async () => {
     mToken
       .mockResolvedValueOnce({ accessToken: 'identity-tok', expiresAt: 1 })
@@ -463,9 +444,9 @@ describe('useAuthStore.login', () => {
     })
 
     await useAuthStore.getState().login()
-    // The re-acquire is fire-and-forget (never awaited by login() itself,
-    // docs/error-handling.md §2 — it must not delay the auth flow it rides
-    // on), so its own completion has to be waited for separately here.
+    // The re-acquire is fire-and-forget (never awaited by login() itself —
+    // it must not delay the auth flow it rides on), so its own completion
+    // has to be waited for separately here.
     await vi.waitFor(() => expect(useAuthStore.getState().drive).not.toBeNull())
 
     const s = useAuthStore.getState()
@@ -478,11 +459,9 @@ describe('useAuthStore.login', () => {
     expect(mToken).toHaveBeenNthCalledWith(2, '', 'drive-scopes')
   })
 
-  // CONFIRMED gap caught in review: without this, a device that persisted
-  // 'connected' yesterday would land authenticated today holding an
-  // identity-only token and drive === null, with no UI left to fix it once
-  // DrivePermissionScreen stops reappearing (specs.md §12 "no Drive-backed
-  // Repo yet" means nothing notices until Wave 3 wires one).
+  // Without this, a device that persisted 'connected' yesterday would land
+  // authenticated today holding an identity-only token and drive === null,
+  // with no UI left to fix it since DrivePermissionScreen never reappears.
   it('does not fail login or surface driveError when the silent re-acquire fails', async () => {
     mToken
       .mockResolvedValueOnce({ accessToken: 'identity-tok', expiresAt: 1 })
@@ -514,7 +493,6 @@ describe('useAuthStore.login', () => {
     expect(useAuthStore.getState().driveOptIn).toBe('dismissed')
   })
 
-  // specs.md §10.32: "at first sign-in with local data present, asked once."
   describe('guest-data adoption prompt', () => {
     it('offers adoption when the local profile has movements and the device has never declined', async () => {
       mToken.mockResolvedValue({ accessToken: 'tok', expiresAt: 1 })
@@ -561,9 +539,8 @@ describe('useAuthStore.login', () => {
     })
 
     it('reads local guest data directly, not the guest-used device marker clearGuestUsed() is about to clear', async () => {
-      // Regression guard for the exact seam specs.md names: the adoption
-      // check and clearGuestUsed() both fire inside the same login(), and
-      // neither may depend on the other's signal.
+      // The adoption check and clearGuestUsed() both fire inside the same
+      // login(), and neither may depend on the other's signal.
       mToken.mockResolvedValue({ accessToken: 'tok', expiresAt: 1 })
       mUser.mockResolvedValue({ sub: 'sub-1', email: 'a@b.com', name: 'Ana' })
       mCountGuestMovements.mockResolvedValue(1)
@@ -609,11 +586,10 @@ describe('useAuthStore.acceptGuestAdoption / declineGuestAdoption', () => {
     expect(s.adoptionError).toBeNull()
   })
 
-  // specs.md §11 (2026-08-21): the "yes" tap is what makes an interrupted
-  // move resumable across a reload, so it must be persisted durably —
-  // deviceStore.ts, not just zustand — and it must be persisted *before*
-  // the move starts, or an interruption in that gap would have nothing to
-  // resume from.
+  // The "yes" tap is what makes an interrupted move resumable across a
+  // reload, so it must be persisted durably (deviceStore.ts, not just
+  // zustand) and *before* the move starts, or an interruption in that gap
+  // would have nothing to resume from.
   it('persists the consent for the target profile before attempting the move', async () => {
     mGetProfile.mockResolvedValue({
       id: 'p1',
@@ -696,11 +672,9 @@ describe('useAuthStore.restore', () => {
     expect(mToken).not.toHaveBeenCalled()
   })
 
-  // Finding 6 (MEDIUM): prompt: '' is only silent when this client already
-  // holds a grant — on a genuine first-ever visit it can surface real Google
-  // UI before the user has clicked anything, contradicting specs.md §10.1's
-  // "I log in with Google" (an act, not something sprung on load). Gate the
-  // whole attempt on the login marker instead of firing it unconditionally.
+  // prompt: '' is only silent when this client already holds a grant — on a
+  // genuine first-ever visit it can surface real Google UI unprompted. Gate
+  // the whole attempt on the login marker instead of firing unconditionally.
   it('does not attempt a silent restore before any login has ever succeeded on this device', async () => {
     mHasLoggedInBefore.mockResolvedValue(false)
 
@@ -721,9 +695,9 @@ describe('useAuthStore.restore', () => {
     expect(useAuthStore.getState().status).toBe('authenticated')
   })
 
-  // specs.md §10.20: a silent restore re-establishes a real Google session
-  // too — it must keep the registry's recency pointed at this account the
-  // same way an explicit login() does.
+  // A silent restore re-establishes a real Google session too — it must
+  // keep the registry's recency pointed at this account the same way an
+  // explicit login() does.
   it('resolves this account in the profile registry on a successful silent restore', async () => {
     mHasLoggedInBefore.mockResolvedValue(true)
     mToken.mockResolvedValue({ accessToken: 'tok', expiresAt: 1 })
@@ -801,12 +775,10 @@ describe('useAuthStore.restore', () => {
     warn.mockRestore()
   })
 
-  // specs.md §10.33: restore() now answers a second question — "has this
-  // device used guest mode before" — for a device that has never logged in
-  // with Google. A returning guest must land directly on `status: 'guest'`,
-  // never WelcomeScreen, exactly as a returning account holder lands on
-  // 'authenticated' or the returning-user screen.
-  describe('the guest marker (specs.md §10.33)', () => {
+  // restore() answers a second question — "has this device used guest mode
+  // before" — for a device that never logged in with Google. A returning
+  // guest must land directly on `status: 'guest'`, never WelcomeScreen.
+  describe('the guest marker', () => {
     it('enters guest status when no account marker exists but the guest marker does', async () => {
       mHasLoggedInBefore.mockResolvedValue(false)
       mHasUsedGuestBefore.mockResolvedValue(true)
@@ -830,10 +802,9 @@ describe('useAuthStore.restore', () => {
       expect(mToken).not.toHaveBeenCalled()
     })
 
-    // specs.md §10.33 edge case: "both markers set" — the account wins.
-    // The account marker alone must be enough to take the existing
-    // account-restore branch; the guest marker being *also* true must not
-    // short-circuit it into guest status instead.
+    // With both markers set, the account wins: the account marker alone
+    // must be enough to take the existing account-restore branch; the guest
+    // marker being *also* true must not short-circuit into guest status.
     it('attempts the account restore when both markers are set, never guest status', async () => {
       mHasLoggedInBefore.mockResolvedValue(true)
       mHasUsedGuestBefore.mockResolvedValue(true)
@@ -857,10 +828,9 @@ describe('useAuthStore.restore', () => {
     })
   })
 
-  // docs/wave-3-audit-runtime.md finding 1 / specs.md §10.11: the actual
-  // defect being fixed — a returning user, offline, with no PIN lock
-  // enabled (so no vault to decrypt) must not be stranded on WelcomeScreen.
-  describe('offline (docs/wave-3-audit-runtime.md finding 1)', () => {
+  // A returning user, offline, with no PIN lock enabled (so no vault to
+  // decrypt) must not be stranded on WelcomeScreen.
+  describe('offline', () => {
     it('skips the network call entirely and authenticates from the login marker alone', async () => {
       networkOnline = false
 
@@ -921,8 +891,7 @@ describe('useAuthStore.logout', () => {
   })
 
   // A different Google account can sign in on this same device next — the
-  // previous account's persisted Drive decision must not carry over to it
-  // (specs.md §11, 2026-08-19).
+  // previous account's persisted Drive decision must not carry over to it.
   it('clears the persisted Drive decision so a different account on this device is asked again', () => {
     useAuthStore.setState({ driveOptIn: 'connected' })
 
@@ -931,28 +900,20 @@ describe('useAuthStore.logout', () => {
     expect(mClearDriveDecision).toHaveBeenCalledOnce()
   })
 
-  // CONFIRMED (traced + reproduced in BootGate.test.tsx): without this, a
-  // stale 'ready' left in useBootStore from this session survives into the
-  // next BootGate mount (a different account, or guest, logging in next),
-  // which renders children instantly off that stale status instead of
-  // waiting for the new boot to actually verify the resolved profile —
-  // exactly the "even transiently" case the rebind path exists to prevent.
+  // Without this, a stale 'ready' left in useBootStore from this session
+  // survives into the next BootGate mount (a different account, or guest,
+  // logging in next), rendering children instantly off that stale status
+  // instead of waiting for the new boot to verify the resolved profile.
   it('invalidates the boot store so the next sign-in cannot reuse a stale "ready" from this session', () => {
     useAuthStore.getState().logout()
 
     expect(mInvalidateBootForSignOut).toHaveBeenCalledOnce()
   })
 
-  // specs.md §10.20 (CONFIRMED, traced): logout() cleared only in-memory
-  // state — the encrypted session cached inside the PIN-lock vault was never
-  // invalidated, so a correct PIN after "signing out" ran unlockWithPin() →
-  // resume() → hydrate() with that same cached session and landed the user
-  // right back in the account they just left. The vault exists to cache
-  // *this account's* token (specs.md §10.2's "PIN reset = re-login with
-  // Google" precedent) — with no account left, resetVault() is what removes
-  // it (and, as a consequence, this device's login marker and Drive
-  // decision too, so a returning visit needs a real re-login rather than
-  // restore()'s silent path picking the same account back up).
+  // Clearing only in-memory state leaves the encrypted session cached
+  // inside the PIN-lock vault intact, so a correct PIN after "signing out"
+  // would resume that same cached session and land the user right back in
+  // the account they just left — resetVault() is what actually removes it.
   it('invalidates the PIN-lock vault so a correct PIN cannot resurrect this account', () => {
     useAuthStore.setState({
       status: 'authenticated',
@@ -965,12 +926,10 @@ describe('useAuthStore.logout', () => {
     expect(mResetVault).toHaveBeenCalledOnce()
   })
 
-  // The edge case specs.md §10.20 names explicitly: a vault whose
-  // invalidation fails must never trap the user inside the account they are
-  // trying to leave. logout()'s own state reset is synchronous and does not
-  // wait on resetVault() at all, so this is true by construction — this
-  // test pins it down instead of leaving it an assumption, and checks the
-  // failure is logged rather than silently lost (docs/error-handling.md §2).
+  // A vault whose invalidation fails must never trap the user inside the
+  // account they are trying to leave — logout()'s own state reset is
+  // synchronous and does not wait on resetVault() at all; the failure must
+  // still be logged, not silently lost.
   it('still completes sign-out even when vault invalidation itself fails', async () => {
     mResetVault.mockRejectedValueOnce(new Error('IDB blocked'))
     const error = vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -1037,9 +996,8 @@ describe('useAuthStore.connectDrive', () => {
   })
 
   // The recorded state must reflect what actually happened, not what was
-  // attempted (this track's brief, edge cases): the popup can succeed while
-  // Drive provisioning itself fails, and that must not be recorded as
-  // 'connected'.
+  // attempted: the popup can succeed while Drive provisioning itself fails,
+  // and that must not be recorded as 'connected'.
   it('does not persist a decision when bootstrap fails after a successful popup', async () => {
     mToken.mockResolvedValue({ accessToken: 'drive-tok', expiresAt: 2 })
     mBootstrap.mockRejectedValue(new Error('drive: bootstrap failed'))
@@ -1159,8 +1117,8 @@ describe('useAuthStore.hydrate', () => {
   const cachedUser = { email: 'a@b.com', name: 'Ana' }
 
   // The vault decrypt that produced session/cachedUser already proved
-  // identity locally (specs.md §10.11) — hydrate() must land on
-  // 'authenticated' from that alone, with no network call awaited at all.
+  // identity locally — hydrate() must land on 'authenticated' from that
+  // alone, with no network call awaited at all.
   it('authenticates synchronously from the cached session and profile, without touching Drive or the network', async () => {
     const session = { accessToken: 'tok', expiresAt: Date.now() + 3_600_000 }
     // A hung fetchGoogleUser would prove hydrate() is still gating on it if
@@ -1177,9 +1135,9 @@ describe('useAuthStore.hydrate', () => {
     expect(mBootstrap).not.toHaveBeenCalled()
   })
 
-  // specs.md §10.20: a PIN unlock re-establishes this account's session —
-  // touching its profile here is what keeps getActiveProfile()'s recency
-  // resolution pointed at the right account across a lock/unlock cycle.
+  // A PIN unlock re-establishes this account's session — touching its
+  // profile here is what keeps getActiveProfile()'s recency resolution
+  // pointed at the right account across a lock/unlock cycle.
   it('resolves the cached profile in the registry, keyed by email', async () => {
     const session = { accessToken: 'tok', expiresAt: Date.now() + 3_600_000 }
     mUser.mockImplementation(() => new Promise(() => {}))
@@ -1189,8 +1147,8 @@ describe('useAuthStore.hydrate', () => {
     expect(mResolveGoogleProfile).toHaveBeenCalledWith({ accountKey: 'a@b.com', label: 'Ana' })
   })
 
-  // No cached profile is possible with no vault (specs.md §10.11's
-  // no-lock boot path) — nothing to key a registry lookup on.
+  // No cached profile is possible with no vault (the no-lock boot path) —
+  // nothing to key a registry lookup on.
   it('does not resolve a profile when there is no cached user to key it on', async () => {
     const session = { accessToken: 'tok', expiresAt: Date.now() + 3_600_000 }
     mUser.mockImplementation(() => new Promise(() => {}))
@@ -1200,8 +1158,7 @@ describe('useAuthStore.hydrate', () => {
     expect(mResolveGoogleProfile).not.toHaveBeenCalled()
   })
 
-  // The whole point of the fix (docs/wave-3-audit-runtime.md finding 1):
-  // a correct PIN with no network must reach 'authenticated', not 'error'.
+  // A correct PIN with no network must reach 'authenticated', not 'error'.
   it('stays authenticated on the cached profile when the network refresh fails (offline)', async () => {
     const session = { accessToken: 'tok', expiresAt: Date.now() + 3_600_000 }
     mUser.mockRejectedValue(new AuthError('GIS failed to load'))
@@ -1224,9 +1181,9 @@ describe('useAuthStore.hydrate', () => {
     await useAuthStore.getState().hydrate(session, cachedUser)
     await vi.waitFor(() => expect(mReportOnlineFailure).toHaveBeenCalled())
 
-    // Silent, same reasoning as restore()'s own catch (docs/error-handling.md
-    // §2): failing to refresh while offline is the routine outcome for every
-    // biometric/PIN unlock in airplane mode, not a symptom of something broken.
+    // Silent, same reasoning as restore()'s own catch: failing to refresh
+    // while offline is the routine outcome for every biometric/PIN unlock
+    // in airplane mode, not a symptom of something broken.
     expect(warn).not.toHaveBeenCalled()
     warn.mockRestore()
   })
@@ -1295,11 +1252,10 @@ describe('useAuthStore.hydrate', () => {
     expect(useAuthStore.getState().driveOptIn).toBe('dismissed')
   })
 
-  // CONFIRMED gap caught in review: the vault's cached session is
-  // identity-only (specs.md §5) — a PIN-lock cold start for a device that
-  // connected Drive in a previous session must re-fetch `drive` itself, or
-  // driveOptIn === 'connected' would be a memory of a past connection, not
-  // an honest signal Drive is usable.
+  // The vault's cached session is identity-only — a PIN-lock cold start for
+  // a device that connected Drive in a previous session must re-fetch
+  // `drive` itself, or driveOptIn === 'connected' would be a memory of a
+  // past connection, not an honest signal Drive is usable.
   it('resolves a previously persisted "connected" decision and silently re-acquires Drive access', async () => {
     const session = { accessToken: 'identity-tok', expiresAt: Date.now() + 3_600_000 }
     mGetDriveDecision.mockResolvedValue('connected')
@@ -1338,14 +1294,10 @@ describe('useAuthStore.hydrate', () => {
     warn.mockRestore()
   })
 
-  // Operator-requested (code review, Track J): the re-acquire must never be
-  // on hydrate()'s critical path — lockStore.resume() awaits hydrate()'s
-  // whole promise before leaving `phase: 'locked'`, so if hydrate() waited
-  // on this too, a correct PIN would hang on a Drive network round trip with
-  // no busy state to explain it (LockScreen has none). Proven directly at
-  // the authStore level, since lockStore.test.ts mocks hydrate() entirely
-  // and so cannot exercise the real interaction — the lock-level path stays
-  // untested; this is the closest exercisable proxy for it.
+  // The re-acquire must never be on hydrate()'s critical path — lockStore.
+  // resume() awaits hydrate()'s whole promise before leaving `phase:
+  // 'locked'`, so if hydrate() waited on this too, a correct PIN would hang
+  // on a Drive network round trip with no busy state to explain it.
   it('settles without waiting on the silent re-acquire, even if it never resolves', async () => {
     const session = { accessToken: 'identity-tok', expiresAt: Date.now() + 3_600_000 }
     mGetDriveDecision.mockResolvedValue('connected')
@@ -1375,11 +1327,10 @@ describe('useAuthStore.hydrate', () => {
     expect(mUpdateSession).toHaveBeenCalledWith(session, cachedUser)
   })
 
-  // Same shape as connectDrive()'s own authGeneration guard below: a logout()
-  // firing while the silent re-acquire's network round trip is still pending
-  // (a real window — status already flipped to 'authenticated' before this
-  // runs, so the UI is interactive) must not have the reacquire's late result
-  // resurrect session/drive for an account the user already signed out of.
+  // Same guard shape as connectDrive()'s own: a logout() firing while the
+  // silent re-acquire's network round trip is still pending must not have
+  // the reacquire's late result resurrect session/drive for an account
+  // already signed out of.
   it('a logout() during an in-flight silent re-acquire does not resurrect session/drive', async () => {
     const session = { accessToken: 'identity-tok', expiresAt: Date.now() + 3_600_000 }
     mGetDriveDecision.mockResolvedValue('connected')
@@ -1411,10 +1362,8 @@ describe('useAuthStore.hydrate', () => {
     expect(s.drive).toBeNull()
   })
 
-  // The redesigned refreshProfile() is one of the paths the authGeneration
-  // backlog item (specs.md §12) names — a logout() firing while the
-  // fire-and-forget profile refresh is still in flight must not resurrect
-  // `user` for an account the user already signed out of.
+  // A logout() firing while the fire-and-forget profile refresh is still in
+  // flight must not resurrect `user` for an account already signed out of.
   it('a logout() during an in-flight profile refresh does not resurrect user', async () => {
     const session = { accessToken: 'tok', expiresAt: Date.now() + 3_600_000 }
     let resolveUser!: (v: { email: string; name: string }) => void
@@ -1453,10 +1402,9 @@ describe('useAuthStore.continueAsGuest', () => {
     expect(s.error).toBeNull()
   })
 
-  // driveOptIn must not sit 'pending' for a guest (specs.md §10.10) — pinned
-  // down here even though RequireAuth's status === 'guest' branch already
-  // never reads driveOptIn, since a future caller reading driveOptIn alone
-  // (without checking status first) must not be misled into re-prompting.
+  // driveOptIn must not sit 'pending' for a guest — a future caller reading
+  // driveOptIn alone, without checking status first, must not be misled
+  // into re-prompting.
   it('resets driveOptIn away from a stale connected/dismissed value from a prior session', async () => {
     useAuthStore.setState({ driveOptIn: 'connected' })
 
@@ -1465,35 +1413,27 @@ describe('useAuthStore.continueAsGuest', () => {
     expect(useAuthStore.getState().driveOptIn).toBe('pending')
   })
 
-  // specs.md §10.31 §1: the explicit active-profile pointer. Without this,
-  // a device that signed out of a Google account and then chose "continue
-  // as guest" would resolve that account's profile on the next boot — it
-  // was touched more recently than the default local one — and read/write
-  // a guest's movements into the signed-out account's local database.
-  // Mirrors `syncProfileForAccount`'s own pointer write for the Google
-  // path, applied to the one profile guest ever uses.
+  // Without the explicit active-profile pointer, a device that signed out
+  // of a Google account and chose "continue as guest" would resolve that
+  // account's profile on the next boot (touched more recently than the
+  // local one) and read/write guest movements into the wrong database.
   it('sets the active-profile pointer to the default local profile so a stale Google profile cannot win', async () => {
     await useAuthStore.getState().continueAsGuest()
 
     expect(mSetActiveProfileId).toHaveBeenCalledWith('kurobello')
   })
 
-  // specs.md §10.33: the device-local signal a returning guest is
-  // recognised by (RequireAuth's own read, and restore()'s guest branch
-  // above) — without this, choosing "continue as guest" would never
-  // persist past a reload.
+  // The device-local signal a returning guest is recognised by — without
+  // this, choosing "continue as guest" would never persist past a reload.
   it('marks this device as having used guest mode', async () => {
     await useAuthStore.getState().continueAsGuest()
 
     expect(mMarkGuestUsed).toHaveBeenCalled()
   })
 
-  // CONFIRMED by src/features/boot/guestBootRace.test.tsx (a real-registry,
-  // real-BootGate integration test, against what used to be a recency
-  // touch instead of the explicit pointer write): a build that flipped
-  // `status` to 'guest' before this write landed lost the race against
-  // BootGate's effect-driven registry read on every run, not
-  // intermittently — status must not flip until the write has resolved.
+  // A build that flipped `status` to 'guest' before this write landed lost
+  // the race against BootGate's effect-driven registry read on every run —
+  // status must not flip until the write has resolved.
   it('awaits the pointer write before flipping status, so a reader of status cannot observe "guest" before the registry reflects it', async () => {
     let resolveWrite: () => void = () => {}
     mSetActiveProfileId.mockReturnValue(
