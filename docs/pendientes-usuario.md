@@ -68,3 +68,7 @@ Same symptom as item 17, reported a third time, traced to a real WebKit clipping
 ### 21. Do the PIN screens still summon the iOS keyboard? — `owner: user`
 
 `LockScreen` and `PinSetup` back their PIN dots with a screen-reader-only `<input>` that's clipped visually but stays real and focusable, so WebKit could raise the OS numeric keyboard over the app's own on-screen keypad. Both now carry `inputMode="none"`, the same fix used on the amount field, but whether iOS was actually raising the keyboard there in the first place is unconfirmed on-device. The check: on a real iPhone, open "Configurar PIN" from the profile sheet, and separately reach the unlock screen and tap the PIN dots — in both, does only the app's own keypad appear, with no second system keyboard sliding up over it?
+
+### 24. Can the create-category modal be closed on iOS? — `owner: user` (deferred by the user)
+
+On a real iPhone, the create-category modal took the full screen height and could not be closed. The user deferred fixing it directly, on the suspicion it's the same root cause as the keyboard/viewport clipping items above (17/20) rather than a separate bug, and asked to check whether those fixes resolve it for free without a redesign of that modal. The check: on a real iPhone, open the category picker and tap to create a new category — does the modal now close (backdrop tap, an explicit close control, or however it's meant to dismiss)?
