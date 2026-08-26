@@ -97,6 +97,9 @@ items-center` parent) is shrink-to-fit, and the input's
   deliberately not the same percentage on a CSS Grid `auto`-track item,
   which was considered and rejected (specs.md §10.45) since that track's
   contribution to grid sizing ignores an indefinite percentage max-width.
+- `keypadDebugLog.ts` — the `?debugKeypad=1` probe `MovimientoAmountInput`
+  arms while its pad is open: a read-only mirror of pointer/touch/focus
+  activity, never a decision path (specs.md §10.54).
 - `AddMovimientoSheet.tsx` — `BottomSheet` + the form in create mode,
   opened by the `BottomNav` FAB via `movimientoSheetStore`. **No visible
   heading** (the grab handle is the header the design draws; `ariaLabel`

@@ -1048,22 +1048,23 @@ Its original "UI" subsection is superseded by §10.41 below (which also folds in
 
 **Watch out.** iOS has no documented equivalent to the manifest orientation lock even when installed to the home screen — the portrait guarantee on iOS rests entirely on `LandscapeGuard`, not a platform-level lock.
 
-### 10.54 The amount keypad's dismissal: what counts as "outside", and when it may act
+### 10.54 The amount keypad: what "outside" means, when it may act, and what delete deletes
 
-**Goal.** `MovimientoAmountInput`'s on-screen `NumericKeypad` (§10.41, `SUPPRESS_NATIVE_KEYBOARD_FOR_AMOUNT`) shows exactly while focus is inside its own wrapper and dismisses reliably on a tap anywhere truly outside it — on every platform, without swallowing a tap on whatever the collapse uncovers, and without an in-between focus change the pad didn't ask for reading as a dismissal.
+**Goal.** `MovimientoAmountInput`'s on-screen `NumericKeypad` (§10.41, `SUPPRESS_NATIVE_KEYBOARD_FOR_AMOUNT`) shows while the field is in use and dismisses reliably on a genuine outside tap, on every platform — without ever deriving that decision from focus, and without swallowing a tap on whatever the collapse uncovers.
 
 **Rules.**
 
-- `keypadOpen` is driven by native `focus`/`blur` on the field's wrapper (`handleWrapperFocus`/`handleWrapperBlur`); Tab-ing onto a pad key keeps it open, and Tab-ing past the pad's last key closes it — the only way a keyboard user leaves, since there is no on-pad dismiss control.
-- A tap outside the wrapper must not rely on `blur` firing on its own — WebKit never shifts focus for a tap on a non-focusable target, so a document-level pointer listener explicitly blurs the input whenever the tap lands outside the wrapper, independent of platform focus-shift behavior.
-- **A gesture is judged by where its own `pointerdown` began, never by wherever focus happens to sit at `pointerup`.** A gesture that starts inside the wrapper — a key, a gap between keys, the full-bleed side gutters — never dismisses, even if focus drifts to some other focusable ancestor mid-gesture (any element carrying a `tabIndex`, e.g. a dialog panel this field is nested inside); focus is put back on the input in that case. The origin is captured once per gesture and reset to "inside" at the start of each listening session, so it can never carry a stale value from an earlier, unrelated gesture.
-- The collapse never applies before `pointerup` — the pad is in-flow, so collapsing it on `pointerdown` shifts the layout under a gesture still in flight, and the browser hit-tests that gesture's own `pointerup`/`click` against whatever slid into its place instead.
-- "Outside" is DOM containment (`wrapperRef.contains`), not raw coordinates. **The pad's own box spans the sheet's own true edges, including the gutters its own `px-5.5` side padding creates** — the pad bleeds past that padding so the gutter belongs to the pad, not "outside" it — **while the grid still carries that same `px-5.5` itself, so the keys keep the sheet's own inset and render exactly where every other control in it does.** This must hold whatever the sheet's available width happens to be — a reserved-space scrollbar narrows it — so the bleed is computed against this element's own parent alone, never a raw viewport unit, which would drift out of sync with a narrowed parent and reopen the same "gutter is outside the pad" gap in a different spot.
-- Whatever value the sheet's own side padding is, the pad's bleed must match it exactly, or the two silently drift back into the bug above — a test in `MovimientoAmountInput.test.tsx` renders `BottomSheet` and the pad side by side and fails if their numbers disagree.
-- `NumericKeypad`'s keys render at `size="compact"` for this caller only, ~15% shorter than the PIN-shaped default — `PinPad`/`LockScreen` pass no `size` and keep the original height.
+- Visibility is never derived from `focus`/`blur`. A real iOS device log shows WebKit walking focus from a tapped pad key to `BottomSheet`'s own `tabIndex={-1}` panel _after_ `pointerup` already resolved the gesture — a blur on that timeline is not evidence of an outside tap.
+- The sole dismissal signal is a pointer gesture whose own `pointerdown` landed outside `wrapperRef` (the input plus the whole pad), decided on `pointerup` (never `pointerdown`, so an in-flight tap on whatever the collapse uncovers still hits its own target). A gesture that starts inside never dismisses, whatever focus does mid-gesture; a `pointercancel` never dismisses either.
+- The one keyboard-driven close — Tab off the pad's last key — is gated behind an explicit forward `Tab` keydown, never a bare `focusout`, so a touch-driven focus walk can never trigger it; the close itself runs on the following `focusout`, so Tab's own default action still has a live element to move focus from.
+- "Outside" is DOM containment, and the pad's own box spans the sheet's true edges including its `px-5.5` gutters — bled and re-inset, computed against this element's own parent, never a viewport unit, so a reserved-space scrollbar narrowing that parent narrows the bleed with it.
+- The delete key removes the digit (or the decimal separator) immediately before the caret, skipping back over an auto-inserted grouping separator first — a caret a real tap can leave sitting right after one, where deleting "the character before it" would silently remove formatting rather than content.
+- `NumericKeypad`'s keys are `aria-disabled`, never natively `disabled`: a native `disabled` control dispatches no pointer events at all, which defeated the container-level `pointerdown` bookkeeping above for exactly the disabled key. The key stays in the tab order; its `onClick` is a no-op while disabled.
+- `NumericKeypad` renders at `size="compact"` for this caller only; `PinPad`/`LockScreen` pass no `size`, keep the default height, and are unaffected by any rule above.
 - Escape still closes the whole sheet (`useOverlay`'s cross-cutting keydown handler), not just the pad.
+- `?debugKeypad=1` arms `keypadDebugLog.ts`, a read-only mirror of pointer/touch/focus activity that never feeds a decision — the tool that produced the device log above.
 
-**Implementation.** `src/features/movimientos/MovimientoAmountInput.tsx`; `src/components/shared/NumericKeypad.tsx`'s `size` prop (`'default'` | `'compact'`) is the only per-caller variance it exposes.
+**Implementation.** `src/features/movimientos/MovimientoAmountInput.tsx`, `keypadDebugLog.ts`; `src/components/shared/NumericKeypad.tsx`'s `size` prop (`'default'` | `'compact'`) is the only per-caller variance it exposes.
 
 ## 11. Decisions
 

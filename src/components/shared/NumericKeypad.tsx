@@ -33,7 +33,7 @@ export type NumericKeypadSize = 'default' | 'compact'
 // 62px-tall keys, 20px radius, a visible press state — ported to this app's
 // own overlay-tint tokens rather than the export's raw `--mn-f*` values.
 const KEY_SHAPE_CLASS =
-  'flex items-center justify-center rounded-3xl transition-colors active:bg-border-hover disabled:opacity-40'
+  'flex items-center justify-center rounded-3xl transition-colors active:bg-border-hover aria-disabled:opacity-40'
 // The amount field's own usage runs ~15% shorter than the PIN-shaped
 // default (62px -> 53px, still well above the 44px touch-target floor) so
 // the full 3x4 grid fits on a small phone without its bottom row clipping
@@ -109,12 +109,15 @@ export const NumericKeypad = ({
         if (key.kind === 'blank') return <div key={`blank-${i}`} aria-hidden="true" />
 
         if (key.kind === 'delete') {
+          const isDisabled = disabled || deleteDisabled
           return (
             <button
               key="delete"
               type="button"
-              disabled={disabled || deleteDisabled}
-              onClick={onDelete}
+              aria-disabled={isDisabled}
+              onClick={() => {
+                if (!isDisabled) onDelete()
+              }}
               aria-label={deleteAriaLabel}
               className={cn(keyShapeClass, 'bg-border-subtle text-foreground')}
             >
@@ -124,12 +127,15 @@ export const NumericKeypad = ({
         }
 
         if (key.kind === 'decimal') {
+          const isDisabled = disabled || decimalDisabled
           return (
             <button
               key="decimal"
               type="button"
-              disabled={disabled || decimalDisabled}
-              onClick={onDecimal}
+              aria-disabled={isDisabled}
+              onClick={() => {
+                if (!isDisabled) onDecimal?.()
+              }}
               aria-label={decimalAriaLabel}
               className={cn(keyShapeClass, NUMERAL_KEY_CLASS)}
             >
@@ -138,12 +144,15 @@ export const NumericKeypad = ({
           )
         }
 
+        const isDisabled = disabled || digitsDisabled
         return (
           <button
             key={key.digit}
             type="button"
-            disabled={disabled || digitsDisabled}
-            onClick={() => onDigit(key.digit)}
+            aria-disabled={isDisabled}
+            onClick={() => {
+              if (!isDisabled) onDigit(key.digit)
+            }}
             className={cn(keyShapeClass, NUMERAL_KEY_CLASS)}
           >
             {key.digit}

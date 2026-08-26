@@ -367,7 +367,10 @@ describe('MovimientoAmountInput', () => {
       render(<ControlledHarness initialValue="12,5" locale="es-CO" moneda="COP" tipo="gasto" />)
       await user.click(screen.getByLabelText('Monto'))
 
-      expect(screen.getByRole('button', { name: 'Separador decimal' })).toBeDisabled()
+      expect(screen.getByRole('button', { name: 'Separador decimal' })).toHaveAttribute(
+        'aria-disabled',
+        'true',
+      )
     })
 
     it('disables delete when the value is empty', async () => {
@@ -375,7 +378,10 @@ describe('MovimientoAmountInput', () => {
       render(<ControlledHarness locale="es-CO" moneda="COP" tipo="gasto" />)
       await user.click(screen.getByLabelText('Monto'))
 
-      expect(screen.getByRole('button', { name: 'Borrar' })).toBeDisabled()
+      expect(screen.getByRole('button', { name: 'Borrar' })).toHaveAttribute(
+        'aria-disabled',
+        'true',
+      )
     })
 
     it('tapping delete removes the last digit through the same reformat pipeline as backspace', async () => {
@@ -412,6 +418,33 @@ describe('MovimientoAmountInput', () => {
       await user.click(screen.getByRole('button', { name: '9' }))
 
       expect(input.value).toBe('12.934')
+    })
+
+    it('deletes the digit before an auto-inserted grouping separator, not the separator itself', async () => {
+      const user = userEvent.setup()
+      render(<ControlledHarness initialValue="1.000" locale="es-CO" moneda="COP" tipo="gasto" />)
+      const input = screen.getByLabelText('Monto') as HTMLInputElement
+
+      // caret right after the "." grouping separator, before "000" — a
+      // position a real tap can land on, not one the reformat itself ever
+      // produces (specs.md §10.54).
+      await user.click(input)
+      input.setSelectionRange(2, 2)
+      await user.click(screen.getByRole('button', { name: 'Borrar' }))
+
+      expect(input.value).toBe('0')
+    })
+
+    it('deletes the decimal separator itself when the caret sits right after it, unlike a grouping separator', async () => {
+      const user = userEvent.setup()
+      render(<ControlledHarness initialValue="12,5" locale="es-CO" moneda="COP" tipo="gasto" />)
+      const input = screen.getByLabelText('Monto') as HTMLInputElement
+
+      await user.click(input)
+      input.setSelectionRange(3, 3)
+      await user.click(screen.getByRole('button', { name: 'Borrar' }))
+
+      expect(input.value).toBe('125')
     })
   })
 
@@ -730,6 +763,39 @@ describe('MovimientoAmountInput', () => {
       expect(screen.getByRole('button', { name: '1' })).toBeInTheDocument()
       expect(input).toHaveFocus()
     })
+
+    // The exact ordering from a real iOS device log (specs.md §10.54):
+    // `pointerdown`/`pointerup` both resolve, inside, with no focus change
+    // in between — then, only *after* `pointerup` has already finished,
+    // WebKit walks focus from the tapped grid to the dialog panel. A
+    // blur/focusout listener has no "gesture in progress" window left to
+    // protect this by the time it fires; only reading nothing from focus
+    // at all survives it.
+    it('stays open when the ancestor focus-walk happens only after pointerup has already resolved the gesture as inside', async () => {
+      const user = userEvent.setup()
+      render(
+        <div tabIndex={-1} data-testid="dialog-panel">
+          <ControlledHarness locale="es-CO" moneda="COP" tipo="gasto" />
+        </div>,
+      )
+      const input = screen.getByLabelText('Monto')
+      await user.click(input)
+      expect(screen.getByRole('button', { name: '1' })).toBeInTheDocument()
+
+      const gridContainer = screen.getByRole('button', { name: '1' }).parentElement as HTMLElement
+      const dialogPanel = screen.getByTestId('dialog-panel')
+
+      gridContainer.dispatchEvent(
+        new PointerEvent('pointerdown', { bubbles: true, cancelable: true, pointerId: 1 }),
+      )
+      gridContainer.dispatchEvent(
+        new PointerEvent('pointerup', { bubbles: true, cancelable: true, pointerId: 1 }),
+      )
+      // The late, platform-driven focus walk — after the gesture is over.
+      dialogPanel.focus()
+
+      expect(screen.getByRole('button', { name: '1' })).toBeInTheDocument()
+    })
   })
 
   describe('a keyboard user can still leave the pad', () => {
@@ -745,9 +811,10 @@ describe('MovimientoAmountInput', () => {
       await user.click(input)
       expect(screen.getByRole('button', { name: '1' })).toBeInTheDocument()
 
-      // 9 digits + decimal + 0 = 11 tabbable keys (delete starts disabled,
-      // the value is empty) between the input and "After".
-      for (let i = 0; i < 12; i += 1) await user.tab()
+      // 9 digits + decimal + 0 + delete = 12 tabbable keys — `aria-disabled`
+      // keeps delete in the tab order even while it's a no-op — between the
+      // input and "After".
+      for (let i = 0; i < 13; i += 1) await user.tab()
 
       expect(screen.getByRole('button', { name: 'After' })).toHaveFocus()
       expect(screen.queryByRole('button', { name: '1' })).not.toBeInTheDocument()

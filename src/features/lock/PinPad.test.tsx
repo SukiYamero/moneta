@@ -27,16 +27,26 @@ describe('PinPad', () => {
     expect(onChange).toHaveBeenCalledWith('12')
   })
 
-  it('disables every digit once maxLength is reached', () => {
-    render(<PinPad value="1234" onChange={() => {}} maxLength={PIN_LENGTH} />)
+  it('marks every digit aria-disabled once maxLength is reached, and ignores a tap on one', async () => {
+    const user = userEvent.setup()
+    const onChange = vi.fn()
+    render(<PinPad value="1234" onChange={onChange} maxLength={PIN_LENGTH} />)
 
-    expect(screen.getByRole('button', { name: '5' })).toBeDisabled()
+    const digit = screen.getByRole('button', { name: '5' })
+    expect(digit).toHaveAttribute('aria-disabled', 'true')
+    await user.click(digit)
+    expect(onChange).not.toHaveBeenCalled()
   })
 
-  it('disables delete when the value is empty', () => {
-    render(<PinPad value="" onChange={() => {}} />)
+  it('marks delete aria-disabled when the value is empty, and ignores a tap on it', async () => {
+    const user = userEvent.setup()
+    const onChange = vi.fn()
+    render(<PinPad value="" onChange={onChange} />)
 
-    expect(screen.getByRole('button', { name: deleteLabel() })).toBeDisabled()
+    const deleteButton = screen.getByRole('button', { name: deleteLabel() })
+    expect(deleteButton).toHaveAttribute('aria-disabled', 'true')
+    await user.click(deleteButton)
+    expect(onChange).not.toHaveBeenCalled()
   })
 
   it('renders no decimal key — the PIN pad never groups by locale', () => {
@@ -46,10 +56,17 @@ describe('PinPad', () => {
     expect(screen.getAllByRole('button')).toHaveLength(11)
   })
 
-  it('disables every key when disabled is true', () => {
-    render(<PinPad value="12" onChange={() => {}} disabled />)
+  it('marks every key aria-disabled when disabled is true, and ignores taps on them', async () => {
+    const user = userEvent.setup()
+    const onChange = vi.fn()
+    render(<PinPad value="12" onChange={onChange} disabled />)
 
-    expect(screen.getByRole('button', { name: '3' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: deleteLabel() })).toBeDisabled()
+    const digit = screen.getByRole('button', { name: '3' })
+    const deleteButton = screen.getByRole('button', { name: deleteLabel() })
+    expect(digit).toHaveAttribute('aria-disabled', 'true')
+    expect(deleteButton).toHaveAttribute('aria-disabled', 'true')
+    await user.click(digit)
+    await user.click(deleteButton)
+    expect(onChange).not.toHaveBeenCalled()
   })
 })

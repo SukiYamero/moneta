@@ -1,17 +1,9 @@
-import {
-  useEffect,
-  useId,
-  useMemo,
-  useRef,
-  useState,
-  type ChangeEvent,
-  type FocusEvent,
-  type Ref,
-} from 'react'
+import { useEffect, useId, useMemo, useRef, useState, type ChangeEvent, type Ref } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { Moneda, TipoMovimiento } from '@/lib/schema'
 import {
   decimalSeparatorFor,
+  groupSeparatorFor,
   digitsBeforeIndex,
   formatAmountLive,
   indexAfterDigitCount,
@@ -19,6 +11,7 @@ import {
 } from '@/lib/i18n/amountFormat'
 import { Input } from '@/components/ui/input'
 import { NumericKeypad } from '@/components/shared/NumericKeypad'
+import { armKeypadDebugLog, logKeypadState } from '@/features/movimientos/keypadDebugLog'
 import { cn } from '@/lib/utils'
 
 /**
@@ -121,6 +114,7 @@ export const MovimientoAmountInput = ({
   const errorId = useId()
   const symbol = useMemo(() => currencySymbolFor(moneda, locale), [moneda, locale])
   const decimal = useMemo(() => decimalSeparatorFor(locale), [locale])
+  const groupSeparator = useMemo(() => groupSeparatorFor(locale), [locale])
   const invalid = isAmountInputInvalid(value, locale, error)
 
   // Kept alongside the forwarded consumer `ref` (`AddMovimientoSheet`'s
@@ -134,126 +128,93 @@ export const MovimientoAmountInput = ({
     else if (ref) (ref as { current: HTMLInputElement | null }).current = node
   }
 
-  // The pad shows exactly while focus is somewhere inside this field's own
-  // wrapper (the input itself, or one of the pad's own keys) — never
-  // hardcoded to "always on". `initialFocus` (`AddMovimientoSheet`) focusing
-  // the input on sheet-open is what makes the pad appear on open, with no
-  // extra wiring here.
+  // The pad shows while focus is inside this field's own wrapper.
+  // `initialFocus` (`AddMovimientoSheet`) focusing the input on sheet-open
+  // is what makes the pad appear on open, with no extra wiring here.
   const [keypadOpen, setKeypadOpen] = useState(false)
   const wrapperRef = useRef<HTMLDivElement>(null)
 
   const handleWrapperFocus = () => setKeypadOpen(true)
 
-  // The one way the pad ever closes from user intent (as opposed to the
-  // sheet itself closing): an outside tap. Kept as one function so every
-  // dismissal path clears focus the same way.
+  // The one way the pad closes from a pointer gesture (as opposed to Tab or
+  // the sheet itself closing): blurring the input keeps it from looking
+  // focused once the pad backing it is gone.
   const dismissKeypad = () => {
     setKeypadOpen(false)
     inputElRef.current?.blur()
   }
 
-  // True from the moment a pointer gesture starts (`pointerdown`) until it
-  // ends (`pointerup`/`pointercancel`) — see the effect below for why the
-  // actual dismiss decision waits for `pointerup`.
-  const pointerGestureActiveRef = useRef(false)
-  // Whether the gesture's own `pointerdown` landed inside this field's
-  // wrapper (the input, or anywhere on the pad) — captured once, at the
-  // start of the gesture, and used as the sole source of truth for whether
-  // `pointerup` may dismiss. A native `blur` can still fire mid-gesture with
-  // a `relatedTarget` outside the wrapper — e.g. focus landing on some
-  // other focusable ancestor this field happens to be nested inside, such
-  // as `BottomSheet`'s own `tabIndex={-1}` dialog panel — without that
-  // meaning the user tapped outside; deciding from where the gesture
-  // *began* rather than from that in-between focus state is what keeps a
-  // tap anywhere on the pad's own surface (a key, a gap between keys, the
-  // full-bleed side gutters) from ever reading as "outside". Defaults to
-  // `true` (safe/non-dismissing) — the effect below resets it to the same
-  // default at the start of every listening session, for why.
+  // Whether the gesture's own `pointerdown` landed inside this wrapper —
+  // the sole source of truth for whether `pointerup` may dismiss. No
+  // focus/blur decides this: a real iOS log showed focus walking to an
+  // outside ancestor only *after* `pointerup` already resolved the gesture.
   const gestureStartedInsidePadRef = useRef(true)
 
-  // Checking `relatedTarget` (the element about to receive focus) against
-  // the wrapper, rather than closing on every blur unconditionally, is what
-  // keeps the pad open across Tab-ing from the input onto one of its own
-  // keys — a bare "close on blur" would unmount the very key that just
-  // received focus. `NumericKeypad`'s own `pointerdown` preventDefault
-  // handles a tap on one of the pad's own keys (focus never leaves the
-  // input there, so this handler never even runs); a tap on a genuinely
-  // focusable *outside* control (a category chip) does reach this handler,
-  // via the browser's own mousedown-driven focus-shift onto that control.
-  const handleWrapperBlur = (event: FocusEvent<HTMLDivElement>) => {
-    const next = event.relatedTarget as Node | null
-    if (next && wrapperRef.current?.contains(next)) return
-    // Mid-gesture, the pointerup listener below is the one that decides —
-    // from the gesture's own origin, not from this blur.
-    if (pointerGestureActiveRef.current) return
-    setKeypadOpen(false)
-  }
-
-  // iOS Safari never fires the blur above for a tap outside this field: it
-  // only shifts focus away from a focused input when the tap target is
-  // itself focusable, so tapping dead space (a label, a gap between fields)
-  // leaves the input focused and the pad stuck open forever. A document-level
-  // pointer listener fires on every platform regardless of what the tap
-  // target is, so it doesn't depend on that platform-specific focus-shift
-  // behavior at all.
-  //
-  // The actual collapse must not apply before the pointer lifts. This
-  // component is in-flow, so collapsing it moves everything below it up by
-  // the pad's full height; doing that synchronously on the down-phase
-  // (either by gating this listener on `pointerdown`, or by letting a
-  // mousedown-driven native blur collapse it immediately) shifts the layout
-  // out from under a gesture still in flight, and the browser hit-tests
-  // `pointerup`/`click` against whatever slid into that spot instead —
-  // reproduced live: a tap on a category chip behind the pad never selected
-  // it (`aria-pressed` stayed `false`), because the collapse ran on its
-  // `pointerdown`. Committing the decision only on `pointerup` means the
-  // browser has already resolved that event's own hit-test before this
-  // runs, so the mutation can no longer retarget the gesture already in
-  // flight.
+  // The collapse waits for `pointerup`, not `pointerdown`: this component
+  // is in-flow, so collapsing it earlier shifts the layout under a gesture
+  // still in flight, and the browser hit-tests that gesture's own
+  // `pointerup`/`click` against whatever slid into its place instead.
   useEffect(() => {
     if (!keypadOpen) return
-    // Reset to the safe default for this fresh listening session: the very
-    // gesture that reopens the pad after a prior close can reach this
-    // effect's own `pointerup` before its `pointerdown` was ever captured
-    // (this effect only mounts once `keypadOpen` flips true, mid-gesture),
-    // which would otherwise leave a stale value from whatever gesture last
-    // updated the ref.
+    logKeypadState('probe armed; pad is', wrapperRef.current)
+    const stopDebugLog = armKeypadDebugLog(wrapperRef)
+    // Reset to the safe default each time this effect (re)starts: the
+    // gesture that reopens the pad can reach this effect's own `pointerup`
+    // before its `pointerdown` was ever captured (mounted mid-gesture),
+    // which would otherwise leave a stale value from an earlier gesture.
     gestureStartedInsidePadRef.current = true
     const handlePointerDown = (event: PointerEvent) => {
-      pointerGestureActiveRef.current = true
       const target = event.target as Node | null
       gestureStartedInsidePadRef.current = !!(target && wrapperRef.current?.contains(target))
     }
     const handlePointerUpOutside = () => {
-      pointerGestureActiveRef.current = false
       if (gestureStartedInsidePadRef.current) {
         // The gesture began on the pad's own surface — never a dismissal,
         // regardless of any focus change in between. Restore focus if it
-        // drifted away mid-gesture, so the field ends up exactly as it was
-        // before the tap.
+        // drifted away mid-gesture, so the field ends up as it was before
+        // the tap (best-effort — see specs.md §10.54 on its limits).
         if (document.activeElement !== inputElRef.current) {
           inputElRef.current?.focus()
         }
         return
       }
+      logKeypadState('>>> PAD CLOSED', wrapperRef.current)
       dismissKeypad()
     }
     // A gesture that ends in `pointercancel` (the sheet body being
     // scrolled, a system gesture) never counts as an outside tap — same
     // "cancelled gesture is not user intent to dismiss" rule
-    // `BottomSheet.tsx`'s own drag-to-dismiss already follows — so this
-    // only clears the flags, deliberately not closing the pad.
+    // `BottomSheet.tsx`'s own drag-to-dismiss already follows.
     const handlePointerCancel = () => {
-      pointerGestureActiveRef.current = false
       gestureStartedInsidePadRef.current = false
+    }
+    // Gated behind an explicit Tab so a touch-driven ambiguous blur (no Tab
+    // key) can never trigger this — reacting on `focusout` rather than
+    // synchronously in `keydown` matters too: closing here first would
+    // unmount Tab's own reference element before its default action runs.
+    let forwardTabPressed = false
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Tab' && !event.shiftKey) forwardTabPressed = true
+    }
+    const handleFocusOut = (event: FocusEvent) => {
+      if (!forwardTabPressed) return
+      forwardTabPressed = false
+      const next = event.relatedTarget as Node | null
+      if (next && wrapperRef.current?.contains(next)) return
+      dismissKeypad()
     }
     document.addEventListener('pointerdown', handlePointerDown)
     document.addEventListener('pointerup', handlePointerUpOutside)
     document.addEventListener('pointercancel', handlePointerCancel)
+    document.addEventListener('keydown', handleKeyDown)
+    document.addEventListener('focusout', handleFocusOut)
     return () => {
+      stopDebugLog()
       document.removeEventListener('pointerdown', handlePointerDown)
       document.removeEventListener('pointerup', handlePointerUpOutside)
       document.removeEventListener('pointercancel', handlePointerCancel)
+      document.removeEventListener('keydown', handleKeyDown)
+      document.removeEventListener('focusout', handleFocusOut)
     }
   }, [keypadOpen])
 
@@ -319,22 +280,24 @@ export const MovimientoAmountInput = ({
     applyEdit(value.slice(0, start) + decimal + value.slice(end), start + decimal.length)
   }
 
+  // A collapsed caret can sit right after an auto-inserted grouping
+  // separator — deleting "the character before it" there would remove
+  // formatting the user never typed. Skipping back past grouping
+  // separators only (never the decimal separator) finds real content.
   const handleKeypadDelete = () => {
     const [start, end] = currentSelection()
     if (start !== end) {
       applyEdit(value.slice(0, start) + value.slice(end), start)
-    } else if (start > 0) {
-      applyEdit(value.slice(0, start - 1) + value.slice(start), start - 1)
+      return
     }
+    let removeAt = start - 1
+    while (removeAt >= 0 && value[removeAt] === groupSeparator) removeAt--
+    if (removeAt < 0) return
+    applyEdit(value.slice(0, removeAt) + value.slice(removeAt + 1), removeAt)
   }
 
   return (
-    <div
-      ref={wrapperRef}
-      onFocus={handleWrapperFocus}
-      onBlur={handleWrapperBlur}
-      className="flex flex-col items-center gap-2"
-    >
+    <div ref={wrapperRef} onFocus={handleWrapperFocus} className="flex flex-col items-center gap-2">
       <span className="text-xs font-semibold text-fg-tertiary">{t('form.amountLabel')}</span>
       <div className="flex w-full items-center justify-center gap-2">
         <span aria-hidden="true" className="shrink-0 text-6xl font-extrabold text-fg-faint">
