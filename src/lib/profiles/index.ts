@@ -31,8 +31,3 @@ export {
   resumePendingAdoption,
   type AdoptionResult,
 } from '@/lib/profiles/adoption'
-// `switchToProfile` (profiles/switchProfile.ts) is deliberately NOT
-// re-exported here: it imports `authStore.ts`, which itself imports this
-// barrel (`resolveGoogleProfile`/`setActiveProfileId`) — re-exporting it
-// from here would close that into a real circular import. Callers import
-// it directly from `@/lib/profiles/switchProfile`.

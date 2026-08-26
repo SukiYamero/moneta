@@ -11,18 +11,10 @@ import {
   type Repo,
 } from '@/lib/repo'
 
-// --- schemaVersion migration registry -------------------------------------
-//
-// A migration transforms stored data from `version - 1` to `version`. There
-// are none yet at SCHEMA_VERSION 1; the registry exists so a future bump is
-// a data-only addition (one entry), never a new branch in `ready()`.
 export type Migration = () => Promise<void>
 
 const MIGRATIONS: Record<number, Migration> = {}
 
-// Exported (not part of the frozen `Repo` port) so the dispatch/error
-// behaviour is unit-testable independently of the real, currently-empty
-// registry above.
 export const migrateSchema = async (
   fromVersion: number,
   toVersion: number,
@@ -39,8 +31,6 @@ export const migrateSchema = async (
     await migration()
   }
 }
-
-// --- validation (money) -----------------------------------------------------
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 
@@ -83,8 +73,6 @@ const validateActivo = (item: Activo): void => {
   }
 }
 
-// --- generic sort/cursor helpers -------------------------------------------
-
 const compareValues = (a: unknown, b: unknown): number => {
   if (a === b) return 0
   if (a === undefined || a === null) return -1
@@ -97,14 +85,6 @@ const compareValues = (a: unknown, b: unknown): number => {
   return 0
 }
 
-// `sortDir` applies uniformly across the whole key tuple (primary field,
-// tiebreak field, final id fallback) — a full reversal, not just the primary
-// field. This is what lets the fast path express the order as a single
-// lexicographic range scan over a compound index with `.reverse()`: a
-// compound key's tie order flips *entirely* when the traversal direction
-// flips, so the comparator has to agree with that or the two disagree on
-// which side of a cursor a tied row falls (a real bug this fixed — see
-// specs.md §11, 2026-08-18).
 const makeComparator = <T extends { id: EntityId }>(
   sortBy: keyof T,
   sortDir: 'asc' | 'desc',
@@ -123,9 +103,6 @@ const makeComparator = <T extends { id: EntityId }>(
 }
 
 interface CursorPayload {
-  // Which query minted this cursor — replaying it under a different
-  // sortBy/sortDir would reinterpret `sortValue`/`tiebreakValue` against the
-  // wrong field/order and silently misfilter (see specs.md §11, 2026-08-18).
   sortBy: string
   sortDir: 'asc' | 'desc'
   sortValue: unknown
@@ -162,9 +139,6 @@ const decodeCursor = (cursor: string, sortBy: string, sortDir: 'asc' | 'desc'): 
       throw new Error('malformed cursor payload')
     }
     if (parsed.sortBy !== sortBy || parsed.sortDir !== sortDir) {
-      // A cursor minted under a different sortBy/sortDir would have its
-      // sortValue/tiebreakValue reinterpreted against the wrong field/order —
-      // silently wrong results are worse than a loud, honest error.
       throw new Error(
         `cursor was minted for sortBy="${parsed.sortBy}"/sortDir="${parsed.sortDir}", ` +
           `not the current sortBy="${sortBy}"/sortDir="${sortDir}"`,
@@ -182,10 +156,6 @@ const decodeCursor = (cursor: string, sortBy: string, sortDir: 'asc' | 'desc'): 
   }
 }
 
-// `limit` drives pagination's "more data" signal (`nextCursor`); 0 rows is
-// not a meaningful page request and would silently drop that signal (an
-// empty `page` makes `lastItem` undefined — see specs.md §11, 2026-08-18).
-// Erroring is more honest than returning an ambiguous `{ items: [] }`.
 const validateLimit = (limit: number | undefined): void => {
   if (limit === undefined) return
   if (!Number.isInteger(limit) || limit < 1) {
@@ -193,41 +163,18 @@ const validateLimit = (limit: number | undefined): void => {
   }
 }
 
-// --- generic CrudRepo<T> factory --------------------------------------------
-
 interface EntityConfig<T extends { id: EntityId }> {
-  // Plain `Table` (not `EntityTable`) so the primary-key type is `EntityId`
-  // directly instead of dexie's `IDType<T, 'id'>`, which doesn't resolve
-  // cleanly against a generic `T` — the two concrete tables are cast in at
-  // `createLocalRepo()` below.
   table: Table<T, EntityId, T>
   dateField: keyof T & string
   seccionField: (keyof T & string) | undefined
   tiebreakField: (keyof T & string) | undefined
-  // Narrowing index for the in-memory fallback path (`seccion` + date range together).
   compoundIndex: string | undefined
-  // Ordering indexes for the fast path: `[dateField+tiebreakField]` (or
-  // `[dateField+id]` when there's no separate tiebreak field, since `id` IS
-  // the final tiebreak there) and its `seccion`-prefixed counterpart.
-  // Compounding the tiebreak into the index means the index's own order
-  // already IS the full deterministic sort order `list()` needs — a page
-  // reads directly off a bounded cursor instead of sorting the whole
-  // matching set in memory.
   fastIndex: string
   fastSeccionIndex: string
   validate: (item: T) => void
-  // Human-readable noun for not_found error messages, e.g. "movimiento" —
-  // kept distinct from `dateField` so the message never leaks an internal
-  // field name (a real bug: it used to render "no fecha entity...").
   entityLabel: string
 }
 
-// A cluster of rows tied on the full (date, tiebreak) key bigger than this
-// makes the fast path's bounded read unable to prove it has seen enough
-// rows — see the bail-out in `tryFastPath`. Sized generously above any
-// realistic same-instant write cluster (e.g. a bulk import sharing one
-// `createdAt`); a real table scales in the thousands, so 32 stays a small,
-// bounded read even when it fires.
 const TIE_SAFETY_MARGIN = 32
 
 const wrapUnknown = (error: unknown): never => {
@@ -237,17 +184,6 @@ const wrapUnknown = (error: unknown): never => {
   })
 }
 
-// A duplicate `id` on write is bad caller input (id must be unique), not a
-// storage-layer failure — must map to 'invalid_input', not the generic
-// 'unknown' catch-all. Matched purely by `.name`, deliberately not
-// `instanceof Error`/`instanceof Dexie.ConstraintError` or the message text:
-// a single `table.add()` rejects with a proper `DexieError` (which *is* an
-// `Error`), but the individual entries in a `Dexie.BulkError.failures` map
-// are raw `DOMException`s that are NOT `instanceof Error` in this project's
-// test environment (jsdom + fake-indexeddb) — an `instanceof Error` guard
-// would silently exclude exactly the batch case this exists for. `.name` is
-// the one property both shapes reliably carry, and message text is
-// locale-/version-fragile on top of that.
 const hasErrorName = (error: unknown, name: string): boolean => {
   return typeof error === 'object' && error !== null && (error as { name?: unknown }).name === name
 }
@@ -263,12 +199,6 @@ const hasConstraintFailure = (error: unknown): boolean => {
   return Object.values(failures).some((failure) => isConstraintError(failure))
 }
 
-// Dexie's `BulkError.failures` is keyed by an internal operation index that
-// does not reliably map back to the input array's position (observed
-// empirically: a duplicate at input index 2 surfaced under failures key
-// "0"), so the offending id is determined independently instead of trusting
-// that index: first a duplicate within the batch itself, then — the
-// remaining case — one of the batch's ids already present in the table.
 const findDuplicateId = async <T extends { id: EntityId }>(
   table: Table<T, EntityId, T>,
   items: T[],
@@ -349,10 +279,6 @@ const createCrudRepo = <T extends { id: EntityId }>(
     return table.toArray()
   }
 
-  // In-memory fallback: materializes every row matching the (index-narrowed)
-  // filters, sorts the full set, then slices. Correct for any `sortBy`, but
-  // its cost scales with the size of the matching set — the documented
-  // exception, used whenever the fast path below doesn't apply.
   const listSlow = async (
     dateFrom: string | undefined,
     dateTo: string | undefined,
@@ -389,14 +315,6 @@ const createCrudRepo = <T extends { id: EntityId }>(
     }
   }
 
-  // Fast path: only reachable when `sortBy` is the entity's own indexed
-  // date field (the default), so `[dateField+tiebreak]` already encodes the
-  // exact order `list()` needs. Reads a bounded window straight off that
-  // index via `.limit()` instead of materializing the whole matching set —
-  // this is what makes `list({ limit: 20 })` on a years-old table cheap.
-  //
-  // Returns `null` when it can't safely answer (see `TIE_SAFETY_MARGIN`) —
-  // the caller falls back to `listSlow`, which is always correct.
   const tryFastPath = async (
     dateFrom: string | undefined,
     dateTo: string | undefined,
@@ -417,9 +335,6 @@ const createCrudRepo = <T extends { id: EntityId }>(
     if (cursor !== undefined) {
       const payload = decodeCursor(cursor, String(dateField), sortDir)
       cursorItem = buildCursorItem<T>(payload, dateField, tiebreakField)
-      // Start the range at the cursor's own position, inclusive — narrows
-      // the query to exactly what hasn't been returned yet instead of
-      // re-walking from the original dateFrom/dateTo edge on every page.
       const tieValue = String(tiebreakField ? payload.tiebreakValue : payload.id)
       if (sortDir === 'desc') {
         dateUpper = String(payload.sortValue)
@@ -435,8 +350,7 @@ const createCrudRepo = <T extends { id: EntityId }>(
 
     const fetchSize = limit + 1 + TIE_SAFETY_MARGIN
     let collection = table.where(indexName).between(lower, upper, true, true)
-    // Dexie's Collection#reverse() flips index iteration direction — not
-    // Array#reverse(); toSorted()'s array-only replacement doesn't apply.
+    // Dexie's Collection#reverse() flips index iteration direction, not Array#reverse().
     // oxlint-disable-next-line unicorn/no-array-reverse
     if (sortDir === 'desc') collection = collection.reverse()
     const window = await collection.limit(fetchSize).toArray()
@@ -447,16 +361,9 @@ const createCrudRepo = <T extends { id: EntityId }>(
       : window
 
     if (usable.length < limit + 1 && window.length === fetchSize) {
-      // The window was entirely consumed by rows tied with (or before) the
-      // cursor and we still can't tell whether more data exists beyond it —
-      // an adversarial cluster of same-instant writes bigger than our
-      // margin. Bail to the always-correct slow path rather than guess.
       return null
     }
 
-    // Defense in depth, same as `listSlow`: the index bound already
-    // enforces this exactly, but re-checking a (small, bounded) window is
-    // cheap and keeps the guarantee independent of the bound construction.
     const filtered = usable.filter((item) =>
       matchesFilters(item, dateField, seccionField, dateFrom, dateTo, seccion),
     )
@@ -519,20 +426,12 @@ const createCrudRepo = <T extends { id: EntityId }>(
     items.forEach((item) => validate(item))
     try {
       const fresh = items.map((item) => ({ ...item }))
-      // All-or-nothing: a dexie transaction throwing inside aborts every
-      // write in it, so a bad row in a bulk import never leaves a partial
-      // batch committed with no record of which half landed.
       await database.transaction('rw', table, async () => {
         await table.bulkAdd(fresh)
       })
       return fresh
     } catch (error) {
       if (hasConstraintFailure(error)) {
-        // findDuplicateId() is itself a second storage call (table.bulkGet) —
-        // a failure in *it* must funnel through the same wrapUnknown()
-        // normalization as the bulkAdd failure that triggered this branch,
-        // or a second, unrelated storage fault racing the first would escape
-        // addMany() as a bare Error instead of a RepoError.
         try {
           const duplicateId = await findDuplicateId(table, items)
           throw new RepoError(
@@ -553,10 +452,6 @@ const createCrudRepo = <T extends { id: EntityId }>(
   const update = async (id: EntityId, patch: Partial<Omit<T, 'id'>>): Promise<T> => {
     await ensureReady()
     try {
-      // Read-merge-write must be one atomic unit: two concurrent updates on
-      // the same id that each run get-then-put as separate dexie calls both
-      // read the same stale row and the later `put` silently overwrites the
-      // earlier one's patch (see specs.md §11, 2026-08-18).
       return await database.transaction('rw', table, async () => {
         const existing = await table.get(id)
         if (!existing) {
@@ -575,9 +470,6 @@ const createCrudRepo = <T extends { id: EntityId }>(
   const remove = async (id: EntityId): Promise<void> => {
     await ensureReady()
     try {
-      // Same atomicity treatment as `update()` — today's worst case without
-      // it is a harmless double-delete, but the unsynchronized get-then-delete
-      // shape is the same latent bug.
       await database.transaction('rw', table, async () => {
         const existing = await table.get(id)
         if (!existing) {
@@ -593,9 +485,6 @@ const createCrudRepo = <T extends { id: EntityId }>(
   const removeMany = async (ids: EntityId[]): Promise<void> => {
     await ensureReady()
     try {
-      // Symmetric with `remove`'s not_found guarantee: any missing id aborts
-      // the whole batch (transaction throw ⇒ full rollback), never a
-      // partial delete.
       await database.transaction('rw', table, async () => {
         for (const id of ids) {
           const existing = await table.get(id)
@@ -613,17 +502,10 @@ const createCrudRepo = <T extends { id: EntityId }>(
   return { list, get, add, addMany, update, remove, removeMany }
 }
 
-// --- ready() / schemaVersion gate -------------------------------------------
-
 const performReady = async (database: ProfileDb): Promise<void> => {
   const stored = await database.config.get(CONFIG_ID)
 
   if (!stored) {
-    // First-run only: monedaPrincipal derives from the device region, the
-    // section/category names from the active copy locale (specs.md §10.7,
-    // §10.22 Decision 6). A schemaVersion mismatch below never re-enters
-    // this branch, so a currency or a name the user already has is never
-    // reassigned.
     const seeded: ConfigRow = { ...buildSeedConfig(), id: CONFIG_ID }
     await database.config.put(seeded)
     return
@@ -642,21 +524,6 @@ const performReady = async (database: ProfileDb): Promise<void> => {
   await database.config.update(CONFIG_ID, { schemaVersion: SCHEMA_VERSION })
 }
 
-// --- ready() in-flight memo, scoped to the database ------------------------
-//
-// Keyed by the `ProfileDb` connection itself (a `WeakMap`, not a plain
-// module variable) rather than by `createLocalRepo()` instance: two repo
-// instances wrapping the same underlying database (same profile) must share
-// one in-flight `ready()` call, or two concurrent instances could each run a
-// migration against the same IndexedDB store. Two repos built against
-// *different* databases (different profiles, specs.md §10.15) get
-// independent entries here for the same reason — this WeakMap is what makes
-// "per-profile ready()" fall out of the existing memo design rather than
-// needing new plumbing. A *resolved* promise stays cached — performReady()
-// must run once per database connection, matching §10.3's "before first
-// use", not once per call (every CrudRepo method awaits ensureReady()). Only
-// a *rejected* attempt clears the entry, so a later call can retry instead
-// of being stuck replaying the same failure forever.
 const readyPromises = new WeakMap<ProfileDb, Promise<void>>()
 
 const makeReady = (database: ProfileDb): (() => Promise<void>) => {
@@ -677,23 +544,10 @@ const makeReady = (database: ProfileDb): (() => Promise<void>) => {
   }
 }
 
-// Test-only escape hatch: production code never calls this. `database`
-// (default: the frozen module-level `db`) is a singleton reused across a
-// whole test file (only its tables are cleared between tests), so a
-// resolved run-once memo would otherwise leak across unrelated tests
-// instead of resetting the way a real fresh database connection would. Not
-// exported from the `Repo` port.
 export const __resetReadyMemoForTests = (database: ProfileDb = db): void => {
   readyPromises.delete(database)
 }
 
-// --- factory -----------------------------------------------------------------
-
-// Defaults to the frozen `kurobello` instance so every existing caller/test
-// is unchanged; a profile's own database is passed explicitly once
-// `src/lib/profiles/` resolves the active one (specs.md §10.15). Each call
-// gets its own `ready` closure, but two calls sharing the same `database`
-// share the same in-flight/resolved memo via the WeakMap above.
 export const createLocalRepo = (database: ProfileDb = db): Repo => {
   const ready = makeReady(database)
 
@@ -745,21 +599,10 @@ export const createLocalRepo = (database: ProfileDb = db): Repo => {
 
   const updateConfig = async (patch: Partial<Config>): Promise<Config> => {
     await ready()
-    // schemaVersion is owned by ready()/migrations, never by callers — the
-    // `Partial<Config>` patch type structurally allows it, but honoring it
-    // (even silently dropping it) would let a caller believe a schema-version
-    // write succeeded. Reject it explicitly instead. Kept outside the
-    // try/catch below, same as `add()`'s pre-storage `validate(item)` call —
-    // this is a caller-input rejection, not a storage failure to normalize.
     if (patch.schemaVersion !== undefined) {
       throw new RepoError('schemaVersion is not caller-writable via updateConfig', 'invalid_input')
     }
     try {
-      // Read-merge-write must be one atomic unit, same reasoning as
-      // `update()`/`remove()` above (specs.md §11, 2026-08-18): two
-      // concurrent updateConfig() calls that each run get-then-put as
-      // separate dexie calls both read the same stale row and the later
-      // `put` silently overwrites the earlier one's patch.
       const merged = await database.transaction('rw', database.config, async () => {
         const existing = await database.config.get(CONFIG_ID)
         if (!existing) {

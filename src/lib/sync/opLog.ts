@@ -1,19 +1,7 @@
 import type { Hlc } from '@/lib/hlc'
 import type { Activo, Config, Movimiento } from '@/lib/schema'
 
-// opLog.ts — the Drive sync format (specs.md §10.19): file shapes, filename
-// conventions, and the pure replay/merge engine. No network, no Drive/repo
-// import — this module only ever sees op envelopes already parsed into
-// memory (validate.ts is what turns untrusted Drive bytes into these types).
-//
-// "Reading = replay every op from every file in logical order; per id, the
-// last one wins" is the whole rule. What follows is that rule made precise
-// enough to test: how ops are grouped per id, and the one documented
-// exception (a concurrent delete-vs-edit revives).
-
 export const OP_FORMAT_VERSION = 1
-
-// --- op envelopes ------------------------------------------------------
 
 export interface MovPutOp {
   op: 'put'
@@ -43,9 +31,6 @@ export interface ActDelOp {
 }
 export type ActOpEntry = ActPutOp | ActDelOp
 
-// Config has no `del` — specs.md §10.19 only ever describes a config `put`
-// (the whole `Config`, the known gap tracked in specs.md §12/§11 rather than
-// fixed here — see this track's report).
 export interface ConfigPutOp {
   op: 'put'
   hlc: Hlc
@@ -54,12 +39,9 @@ export interface ConfigPutOp {
 }
 export type ConfigOpEntry = ConfigPutOp
 
-// --- op files (one per Drive JSON file) ---------------------------------
-
 export interface MovOpFile {
   v: number
   device: string
-  /** `YYYY-MM` for a monthly shard, `YYYY` for a closed-year compaction. */
   periodo: string
   ops: MovOpEntry[]
 }
@@ -73,13 +55,6 @@ export interface ConfigOpFile {
   device: string
   ops: ConfigOpEntry[]
 }
-
-// --- filenames -----------------------------------------------------------
-//
-// specs.md §10.19's file table. `device` is deviceStore.ts's short,
-// filename-safe id (`[0-9a-z]{8}`, but the pattern below is deliberately
-// permissive of any lowercase-alphanumeric run so a future longer id still
-// round-trips).
 
 const DEVICE_SEGMENT = String.raw`[0-9a-z]+`
 const MONTH_SEGMENT = String.raw`\d{4}-\d{2}`
@@ -116,13 +91,6 @@ export interface ParsedFilename {
   periodo?: string
 }
 
-/**
- * Classifies a filename from a `files.list` response — the transport layer's
- * only way to know what a file *is* before downloading it (specs.md §10.19:
- * "the folder listing is the manifest"). Never throws: an unrecognized name
- * is `kind: 'unknown'`, left alone by every caller (edge cases: "ignored and
- * left untouched, never deleted").
- */
 export const parseDriveFilename = (name: string): ParsedFilename => {
   if (name === LEEME_FILENAME) return { kind: 'leeme' }
   const csv = CSV_YEAR_RE.exec(name)
@@ -138,30 +106,12 @@ export const parseDriveFilename = (name: string): ParsedFilename => {
   return { kind: 'unknown' }
 }
 
-// --- periodo helpers -------------------------------------------------------
-//
-// Shard placement is by *this device's current wall-clock period at write
-// time*, never by the movimiento's own `fecha` — the same rule that already
-// governs edits ("the op lands in the current shard and wins on replay")
-// applies identically to creates and deletes, because a `del` carries no
-// `fecha` to place it by (just `{ id }`). Local calendar time, not UTC: this
-// is a filename bucket a human never sees misaligned with "this month," and
-// since exactly one device ever writes its own file there is no cross-device
-// clock-agreement requirement to satisfy.
-
 export const currentPeriodo = (now: Date = new Date()): string =>
   `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 
 export const currentYear = (now: Date = new Date()): string => String(now.getFullYear())
 
 export const yearOfPeriodo = (periodo: string): string => periodo.slice(0, 4)
-
-// --- generic replay/merge engine -------------------------------------------
-//
-// One function serves movimientos (grouped by id), activos (grouped by id)
-// and config (grouped under one synthetic id — specs.md §12's known gap:
-// a config `put` is the whole `Config`, so "merge" is really whole-object
-// last-write-wins, same mechanism, deliberately not fixed here).
 
 export const CONFIG_ENTITY_ID = 'config'
 
@@ -177,20 +127,6 @@ export type ReplayState<T> =
   | { state: 'alive'; value: T; hlc: Hlc; basedOn: Hlc | null; revived: boolean }
   | { state: 'deleted'; hlc: Hlc; basedOn: Hlc | null }
 
-/**
- * Per id: sort every op by `hlc` (the total order, identical on every
- * device — hlc.ts's encoding makes `a.hlc < b.hlc` a plain string compare).
- * The last op wins outright *unless* it is a `del` that is concurrent with
- * the `put` immediately before it — "concurrent" meaning the `del` was not
- * based on that `put` (`del.basedOn !== put.hlc`), so the deleting device
- * never saw the edit. Decided (user, 2026-08-19, specs.md §10.19): that
- * specific case revives the record rather than silently discarding the
- * edit. A `put` never needs the same check: last-hlc-wins for two
- * concurrent edits is the documented base rule, with no revival exception —
- * the future "which version?" review screen is what a real three-way
- * conflict needs, not this function (nothing here discards history: every
- * source op is still in its file, this only decides the *projection*).
- */
 export const replayEntity = <T>(ops: readonly NormalizedOp<T>[]): Map<string, ReplayState<T>> => {
   const byId = new Map<string, NormalizedOp<T>[]>()
   for (const entry of ops) {
@@ -237,7 +173,6 @@ export const replayEntity = <T>(ops: readonly NormalizedOp<T>[]): Map<string, Re
 export interface MovReplayResult {
   items: Movimiento[]
   revivedIds: string[]
-  /** id → the winning op's hlc/basedOn/state, kept for the sync tip cache and compaction — never persisted onto `Movimiento` itself (schema.ts stays untouched). */
   tips: Map<string, ReplayState<Movimiento>>
 }
 

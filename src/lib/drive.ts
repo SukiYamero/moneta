@@ -15,16 +15,7 @@ const auth = (token: string): HeadersInit => {
   return { Authorization: `Bearer ${token}` }
 }
 
-// The freshest server `Date` this module has observed, from *any* response
-// — captured passively, on every call, success or failure alike (verified
-// live against googleapis.com: `date` is in `Access-Control-Expose-Headers`
-// even on a 403). specs.md §10.19 leans on this to clamp a skewed device
-// clock "at no extra request cost, since we are already talking to Drive" —
-// a dedicated request just to read a clock would contradict that. Module
-// state, not a return value: threading it through every function's return
-// type would force every caller to unpack `{ data, serverTime }` whether or
-// not it cares, for a value that's genuinely orthogonal to what each call
-// returns.
+// googleapis.com exposes the `date` response header via Access-Control-Expose-Headers, even on a 403.
 let lastServerDateMs: number | null = null
 
 export const getLastKnownServerTime = (): number | null => lastServerDateMs
@@ -148,12 +139,6 @@ export const readJsonFile = async <T>(token: string, fileId: string): Promise<T>
 export const writeJsonFile = async (token: string, fileId: string, data: unknown): Promise<void> =>
   writeContentFile(token, fileId, JSON.stringify(data), 'application/json', 'write')
 
-/**
- * Plain-text counterpart to `createJsonFile`/`writeJsonFile`/`readJsonFile`
- * — `LEEME.txt` and the yearly CSV (specs.md §10.19) are prose/spreadsheet
- * data, not JSON, and forcing them through `JSON.stringify` would quote and
- * escape a file meant to be opened directly in a text editor or Excel.
- */
 export const createTextFile = async (
   token: string,
   opts: { name: string; content: string; mimeType: string; parent?: string; space?: DriveSpace },
@@ -185,17 +170,9 @@ export const deleteFile = async (token: string, fileId: string): Promise<void> =
 export interface DriveFileListing {
   id: string
   name: string
-  /** ISO datetime — the revision check specs.md §10.19 asks for ("download only the files whose modifiedTime moved"). */
   modifiedTime: string
 }
 
-/**
- * The transport layer's one and only manifest read (specs.md §10.19: "the
- * folder listing is the manifest" — deliberately no separate manifest
- * file). Paginated internally so a folder with more than one page of shards
- * (Drive's default `pageSize` is 100) is never silently truncated to the
- * first page — a real risk for a multi-year history sharded monthly.
- */
 export const listFiles = async (
   token: string,
   opts: { parent?: string; space?: DriveSpace },
@@ -220,13 +197,6 @@ export const listFiles = async (
   return files
 }
 
-/**
- * Find-or-create-then-overwrite — distinct from `bootstrap.ts`'s own
- * find-then-*keep* semantics (a stored `config.json` there must never be
- * clobbered with a fresh seed). This is what the sync engine's push path
- * needs instead: this device's own shard file always gets the latest
- * content, whether it already existed or not.
- */
 export const upsertJsonFile = async (
   token: string,
   opts: { name: string; data: unknown; parent?: string; space?: DriveSpace },
@@ -243,7 +213,6 @@ export const upsertJsonFile = async (
   return createJsonFile(token, opts)
 }
 
-/** `upsertJsonFile`'s plain-text counterpart — `LEEME.txt`, rewritten whenever the format version changes (specs.md §10.19). */
 export const upsertTextFile = async (
   token: string,
   opts: { name: string; content: string; mimeType: string; parent?: string; space?: DriveSpace },

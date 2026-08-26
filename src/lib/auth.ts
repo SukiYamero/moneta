@@ -1,5 +1,3 @@
-// Login asks for identity only; Drive scopes are requested incrementally
-// (see connectDrive) so the app is usable local-first without a Drive consent.
 export const IDENTITY_SCOPES = 'openid email profile'
 export const DRIVE_SCOPES =
   'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.appdata'
@@ -15,11 +13,6 @@ export class AuthError extends Error {
 }
 
 export type AuthSession = { accessToken: string; expiresAt: number }
-// `sub` is the OIDC subject identifier — stable and never reassigned, unlike
-// `email` (a Workspace admin can rename a primary address). `userinfo`
-// already returns it on every call (IDENTITY_SCOPES always includes
-// `openid`); optional here only so a pre-existing cached/legacy `GoogleUser`
-// without one still type-checks (specs.md §11, 2026-08-19).
 export type GoogleUser = { email: string; name: string; photoLink?: string; sub?: string }
 
 const clientId = (): string => {
@@ -74,8 +67,7 @@ export const requestAccessToken = (
       client.requestAccessToken({ prompt })
     })
 
-  // When GIS is already loaded, initTokenClient must be called synchronously
-  // so callers can interact with the token client in the same tick.
+  // GIS requires initTokenClient to be called synchronously within the triggering call stack.
   if (window.google?.accounts?.oauth2) return makeRequest()
   return loadGis().then(() => makeRequest())
 }

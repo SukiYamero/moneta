@@ -14,11 +14,6 @@ import {
   touchGuestLockActive,
 } from '@/lib/deviceStore'
 
-// What actually comes back out of the vault on a successful unlock — the
-// session alone used to be the whole plaintext; the cached profile is new
-// (specs.md §10.11/§2.1(1)): the vault decrypt already proves identity
-// locally, so a caller no longer needs a network round trip just to have a
-// name/avatar to render.
 export type VaultSession = { session: AuthSession; user: GoogleUser | null }
 
 const PIN_ITERATIONS = 310_000
@@ -26,11 +21,10 @@ const MAX_ATTEMPTS = 5
 export const BACKGROUND_TIMEOUT_MS = 7 * 60_000
 const enc = new TextEncoder()
 const dec = new TextDecoder()
-// Frozen: changing this string breaks decryption of every existing vault.
 const HKDF_INFO = enc.encode('kurobello-lock-dek')
 
-// WebCrypto's BufferSource requires an ArrayBuffer-backed view; TS 5.7+ widens a
-// bare Uint8Array to ArrayBufferLike (incl. SharedArrayBuffer). Ours never are.
+// TS 5.7+ widens a bare Uint8Array to ArrayBufferLike (incl. SharedArrayBuffer);
+// WebCrypto's BufferSource requires an ArrayBuffer-backed view.
 type Bytes = Uint8Array<ArrayBuffer>
 
 let activeDek: Bytes | null = null
@@ -56,13 +50,6 @@ export class BiometricUnavailableError extends Error {
   }
 }
 
-// Distinct from BiometricUnavailableError: that one is thrown by the
-// *account* vault's PRF-based unlock (a wrap that could, in principle,
-// succeed or fail for reasons tied to the vault). This one has no vault, no
-// DEK, no PRF at all — a guest's lock is a plain WebAuthn presence/
-// verification check (specs.md §10.2.1) — so keeping the classes separate
-// stops a future caller from writing an `instanceof BiometricUnavailableError`
-// that silently also has to handle the session-less guest case.
 export class GuestBiometricUnavailableError extends Error {
   constructor() {
     super('lock: guest biometric unavailable')
@@ -171,10 +158,6 @@ export const isBiometricAvailable = async (): Promise<boolean> => {
   try {
     return await api.isUserVerifyingPlatformAuthenticatorAvailable()
   } catch (e) {
-    // Legitimate swallow: a platform-capability probe failing just means
-    // "no biometrics" (the mandatory PIN fallback always exists), but per
-    // docs/error-handling.md §2 a legitimate swallow must still say why and
-    // never be silent.
     console.warn('lock: could not probe platform authenticator availability', e)
     return false
   }
@@ -185,13 +168,6 @@ export const biometricEnabled = async (): Promise<boolean> => {
   return vault?.biometric !== undefined
 }
 
-// The vault plaintext envelope — versioned so a vault written before the
-// cached-profile field existed still decrypts (specs.md §10.11/§2.1(1)).
-// v1 vaults (pre-2026-08-19) stored the bare AuthSession as the *entire*
-// plaintext, no envelope at all; v2 wraps it with a discriminant and the
-// optional cached profile. `db.ts` (Track V-owned, frozen for this track)
-// is untouched by this: the vault *row*'s shape (tokenCipher/tokenIv/etc)
-// never changes, only what's inside the encrypted bytes.
 type VaultPayloadV2 = { v: 2; session: AuthSession; user: GoogleUser | null }
 
 const encodeVaultPayload = (session: AuthSession, user: GoogleUser | null): Bytes => {
@@ -203,10 +179,6 @@ const isVaultPayloadV2 = (v: unknown): v is VaultPayloadV2 => {
   return typeof v === 'object' && v !== null && (v as { v?: unknown }).v === 2
 }
 
-// Structural sniff, not a trust in vault.schemaVersion: the actual bytes are
-// the ground truth for what shape they're in, and a v1 vault decrypts
-// correctly regardless of what its (also pre-existing) schemaVersion field
-// happens to say.
 const decodeVaultPayload = (json: string): VaultSession => {
   const parsed: unknown = JSON.parse(json)
   if (isVaultPayloadV2(parsed)) return { session: parsed.session, user: parsed.user }
@@ -255,15 +227,11 @@ export const enableLock = async (opts: {
   }
 
   await db.vault.put({ id: VAULT_ID, ...vault })
-  // Enabling the lock is conceptually the same act as unlocking it — the user
-  // just proved knowledge of the PIN by setting it — so this tab shouldn't need
-  // a separate unlock before updateSession works.
   activeDek = dek
 }
 
-// A partial db.vault.update() makes the store round-trip the untouched binary
-// fields back as plain numeric-keyed objects, which WebCrypto rejects.
-// Re-wrap them into a real Uint8Array before any crypto call.
+// A partial db.vault.update() round-trips untouched binary fields back as plain
+// numeric-keyed objects, which WebCrypto rejects — re-wrap them into a real Uint8Array.
 const asBytes = (v: unknown): Bytes => {
   if (v instanceof Uint8Array) return Uint8Array.from(v)
   if (v instanceof ArrayBuffer) return new Uint8Array(v)
@@ -302,17 +270,11 @@ export const unlockWithBiometric = async (): Promise<VaultSession> => {
     asBytes(vault.biometric.prfWrapIv),
     asBytes(vault.biometric.dekWrappedByPrf),
   )
-  // Unconditional, not "if failedAttempts !== 0 then reset": a write that
-  // doesn't depend on a prior read can never lose a concurrent update, so
-  // there is nothing to make atomic here (unlike the increment below).
   await db.vault.update(VAULT_ID, { failedAttempts: 0 })
   activeDek = dek
   return decryptVaultPayload(vault, dek)
 }
 
-// The only place module-level key material is discarded. Exported so callers
-// (lockStore, on any transition into the locked phase) can make the key
-// disappear without reaching into pinLock's module state themselves.
 export const forgetDek = (): void => {
   activeDek = null
 }
@@ -320,13 +282,6 @@ export const forgetDek = (): void => {
 export const resetVault = async (): Promise<void> => {
   await db.vault.delete(VAULT_ID)
   forgetDek()
-  // The vault, this device's "has logged in before" signal, and its
-  // persisted Drive decision are wiped together: both lockStore.resume()'s
-  // lockout branch and lockStore.reset() funnel through here, and specs.md
-  // §11 (2026-08-19) requires all three cleared so a lockout-forced re-login
-  // both forces a genuine Google re-login and doesn't hand whoever logs in
-  // next (possibly a different Google account, same device) the previous
-  // account's Drive answer.
   await clearLoggedIn()
   await clearDriveDecision()
 }
@@ -340,13 +295,6 @@ export const unlockWithPin = async (pin: string): Promise<VaultSession> => {
   try {
     dek = await aesDecrypt(pinKey, asBytes(vault.pinWrapIv), asBytes(vault.dekWrappedByPin))
   } catch {
-    // Atomic read -> increment, inside one Dexie 'rw' transaction: two
-    // concurrent wrong PINs must not both read the same stale failedAttempts
-    // and each write "current + 1", losing an attempt and defeating the
-    // 5-attempt throttle that is this app's entire brute-force defense for a
-    // 4-digit PIN (specs.md §5). Mirrors the transactional read-modify-write
-    // pattern already used by repo.local.ts's update()/remove() — the
-    // identical race, closed the same way.
     await db.transaction('rw', db.vault, async () => {
       const current = await db.vault.get(VAULT_ID)
       await db.vault.update(VAULT_ID, { failedAttempts: (current?.failedAttempts ?? 0) + 1 })
@@ -354,17 +302,11 @@ export const unlockWithPin = async (pin: string): Promise<VaultSession> => {
     throw new WrongPinError()
   }
 
-  // Unconditional, not "if failedAttempts !== 0 then reset": see the
-  // matching comment on unlockWithBiometric's reset above.
   await db.vault.update(VAULT_ID, { failedAttempts: 0 })
   activeDek = dek
   return decryptVaultPayload(vault, dek)
 }
 
-// `user` is required, not optional, so a caller must be explicit about
-// whether it has a fresher profile to cache or wants the existing cached
-// one left alone — passing `null` here would silently blow away a
-// previously-cached profile the next unlock would otherwise still have.
 export const updateSession = async (
   session: AuthSession,
   user: GoogleUser | null,
@@ -372,10 +314,6 @@ export const updateSession = async (
   if (!activeDek) throw new Error('lock: not unlocked')
   const dekKey = await importAesKey(activeDek)
   const token = await aesEncrypt(dekKey, encodeVaultPayload(session, user))
-  // Opportunistic self-heal: a vault still carrying the pre-envelope v1
-  // marker upgrades to v2 the next time it's written, without a dedicated
-  // migration step — decodeVaultPayload never depended on this field being
-  // accurate, so there's nothing unsafe about updating it lazily here.
   await db.vault.update(VAULT_ID, {
     tokenCipher: token.cipher,
     tokenIv: token.iv,
@@ -387,13 +325,6 @@ export const markActive = async (now: number = Date.now()): Promise<void> => {
   try {
     await db.vault.update(VAULT_ID, { lastActiveAt: now })
   } catch (e) {
-    // lockStore.onHidden() calls this as `void markActive()` (docs/error-
-    // handling.md §7: a void call site is only safe when the action self-
-    // catches). Best-effort: a missed write just means the next
-    // isBackgroundExpired() check compares against a slightly stale
-    // timestamp — isBackgroundExpired's own caller (lockStore.onVisible)
-    // already fails closed (re-locks) if that read itself fails, so this
-    // side effect being lossy is not a security gap on its own.
     console.warn('lock: failed to record last-active time', e)
   }
 }
@@ -404,24 +335,6 @@ export const isBackgroundExpired = async (now: number = Date.now()): Promise<boo
   return now - vault.lastActiveAt > BACKGROUND_TIMEOUT_MS
 }
 
-// --- Guest biometric lock (specs.md §10.2.1) ---
-//
-// Session-less by construction: a guest has no AuthSession, so there is
-// nothing to encrypt and nothing to wrap. What follows is a plain WebAuthn
-// enrollment/assertion pair — no PRF extension, no DEK, no envelope. What
-// the credential gates is the UI only, never a cryptographic boundary
-// (specs.md §11, 2026-08-20) — do not let this grow into encrypting the
-// local database; that is separate, deferred work (specs.md §12).
-
-// Thin re-exports, same reasoning as markGuestLockActive below: lockStore's
-// cold-start guest gate (specs.md §10.33) needs to know whether the account
-// or guest marker exists on this device before it decides whether the
-// guest lock should gate the boot at all ("account wins on restore" — a
-// device that also carries the account marker must not be gated behind a
-// guest credential it will never actually need). These are auth-domain
-// signals, not lock ones, but routing them through here keeps lockStore.ts
-// talking to one module for every device-storage read instead of reaching
-// past it into deviceStore.ts directly.
 export { hasLoggedInBefore, hasUsedGuestBefore }
 
 const registerGuestCredential = async (): Promise<Bytes | null> => {
@@ -452,13 +365,6 @@ export const enableGuestLock = async (): Promise<void> => {
   const credentialId = await registerGuestCredential()
   if (!credentialId) throw new GuestBiometricUnavailableError()
   await setGuestLock({ credentialId, lastActiveAt: Date.now() })
-  // setGuestLock() self-catches (deviceStore.ts's posture for every device
-  // signal there) — a storage failure resolves silently instead of
-  // throwing. Verify the row actually landed rather than reporting a
-  // successful enrollment the storage layer silently dropped: a guest who
-  // believes background re-lock is on and it silently isn't (onVisible's
-  // isGuestLockBackgroundExpired() reads "no row" as "never expired," so it
-  // would never re-lock) is the unsafe direction — fail loud here instead.
   if (!(await hasGuestLock())) throw new Error('lock: guest lock could not be saved')
 }
 
@@ -486,18 +392,8 @@ export const verifyGuestLock = async (): Promise<void> => {
   await touchGuestLockActive()
 }
 
-// A thin re-export, not a new try/catch: `deviceStore.touchGuestLockActive`
-// already self-catches (device.ts's own best-effort posture). Named to
-// match `markActive` above so `lockStore.ts` only ever talks to this
-// module for lock-domain actions, never reaching past it into
-// `deviceStore.ts` directly.
 export const markGuestLockActive = touchGuestLockActive
 
-// Reads `deviceDb.guestLock` directly, not through getGuestLock()'s
-// self-catching wrapper: a storage failure here must propagate so
-// lockStore.onVisible can fail closed (re-lock) instead of this layer
-// silently swallowing it into "not expired" — the same reasoning
-// isBackgroundExpired's own account-vault read follows.
 export const isGuestLockBackgroundExpired = async (now: number = Date.now()): Promise<boolean> => {
   const row = await deviceDb.guestLock.get(GUEST_LOCK_ID)
   if (!row) return false

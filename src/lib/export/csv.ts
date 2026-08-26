@@ -1,11 +1,5 @@
 import type { Categoria, Movimiento, Seccion } from '@/lib/schema'
 
-// Header row is the schema field names, not localized labels (AGENTS.md:
-// they're the real Drive column contract) — stable across locales, and a
-// re-import elsewhere keeps meaning the same thing. `extra` is deliberately
-// excluded: it's schema.ts's escape hatch for fields not yet promoted to a
-// real column, not a stable column itself, and its shape isn't uniform
-// across rows.
 const COLUMNS = [
   'id',
   'fecha',
@@ -26,25 +20,13 @@ const ROW_SEPARATOR = '\r\n'
 const BOM = '\uFEFF'
 const SEP_HINT_LINE = `sep=${FIELD_SEPARATOR}`
 
-// Rows are built and joined in bounded batches, never accumulated with one
-// running `+=` across the whole dataset, and returned as separate string
-// parts (see buildMovimientoCsvParts) so a caller can hand them straight to
-// `new Blob(parts)` without ever forming one giant in-memory string for a
-// large export (specs.md §10.12: "build the file in chunks").
 const CHUNK_SIZE = 500
 
 const INJECTION_PREFIX_RE = /^[=+\-@]/
 const NEEDS_QUOTING_RE = new RegExp(`["\r\n${FIELD_SEPARATOR}]`)
 
-/**
- * A field whose value starts with `=`, `+`, `-` or `@` is executed as a
- * formula by Excel/Sheets. `nota` and category/section names are free text
- * the user writes, so this is reachable (specs.md §10.12 hazard 4) — a
- * security issue, not a formatting nit. Prefixing with `'` makes
- * Excel/Sheets render the cell as text. Applied to every column uniformly,
- * not only the free-text ones: a future column staying safe shouldn't
- * depend on remembering which fields were "the risky ones."
- */
+// A field starting with =, +, - or @ is executed as a formula by Excel/Sheets;
+// prefixing it with ' makes them render the cell as text instead.
 const escapeFormulaInjection = (value: string): string =>
   INJECTION_PREFIX_RE.test(value) ? `'${value}` : value
 
@@ -53,27 +35,9 @@ const quoteIfNeeded = (value: string): string =>
 
 const encodeField = (value: string): string => quoteIfNeeded(escapeFormulaInjection(value))
 
-/**
- * `useGrouping: false` — a thousands separator is one more punctuation mark
- * to reason about for no benefit here (this is a data file, not a display
- * label), and it removes any doubt about which locale's grouping character
- * might appear next to the `;` field separator (specs.md §10.12 hazard 3).
- * `maximumFractionDigits: 20` (Intl's own ceiling) instead of the default 3:
- * this is a data export, not a currency label, so it must preserve the
- * exact stored value rather than rounding it — only the decimal *mark*
- * should come from the locale, never the precision.
- */
 const createMontoFormatter = (locale: string): Intl.NumberFormat =>
   new Intl.NumberFormat(locale, { useGrouping: false, maximumFractionDigits: 20 })
 
-/**
- * `seccion`/`categoria` are ids (specs.md §10.22) — the exported file is for
- * a person, not a developer, so the column shows the resolved *name*.
- * Falls back to the raw id when it isn't in `Config` (an unsynced shard, a
- * category deleted elsewhere): still more useful in a data export a person
- * can cross-reference against the JSON than a blank or a generic label
- * would be, unlike a screen where a raw id is never acceptable.
- */
 const buildRow = (
   movimiento: Movimiento,
   formatMonto: (value: number) => string,
@@ -104,20 +68,11 @@ const chunk = <T>(items: readonly T[], size: number): T[][] => {
 }
 
 export interface CsvExportOptions {
-  /** Intl tag, e.g. `useLocaleFormatting().locale` — never a hand-rolled default. */
   locale: string
-  /** `Config.secciones`/`Config.categorias` — resolves `seccion`/`categoria` ids to names. */
   secciones: readonly Pick<Seccion, 'id' | 'nombre'>[]
   categorias: readonly Pick<Categoria, 'id' | 'nombre'>[]
 }
 
-/**
- * Pure serialisation: `Movimiento[]` → CSV file, as an array of string
- * parts. No repo/store/UI import, no platform branching (see delivery.ts).
- * An empty `movimientos` array produces a header-only file, not an error.
- * Dates pass through as the stored ISO `yyyy-mm-dd`/ISO datetime — no
- * reformatting.
- */
 export const buildMovimientoCsvParts = (
   movimientos: readonly Movimiento[],
   { locale, secciones, categorias }: CsvExportOptions,
