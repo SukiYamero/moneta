@@ -382,26 +382,37 @@ export const MovimientoAmountInput = ({
           // edge, so the ~22px strip down each side of the phone is
           // genuinely outside `wrapperRef` and a tap there dismissed the pad
           // even though a user reading the screen sees only the pad there
-          // (specs.md §10.54). The standard viewport-relative full-bleed
-          // technique (`width: 100dvw` from a `margin` that cancels however
-          // far the ancestor padding has indented this element) moves the
-          // DOM box to match what's visually on screen, so the existing
-          // `wrapperRef.contains()` check is correct again with no
-          // measured/hardcoded padding value and no separate geometry —
-          // self-adjusting to whatever the sheet's own padding is. Both
-          // sides, deliberately: `wrapperRef` centers its children
-          // (`items-center`), so a *wider-than-parent* child with only a
-          // left margin overflows asymmetrically and gets re-centered
-          // around its own (wrong) margin box — verified live (Chromium)
-          // this lands short of both true edges. A symmetric margin keeps
-          // the margin box exactly as wide as the parent's own content box,
-          // so centering resolves to flush with no overflow to correct for.
-          // `px-5.5` rides along on this same element (`NumericKeypad`'s
-          // grid, its only rendered element) to keep the keys themselves
-          // inset at the sheet's usual padding despite the box beneath them
-          // bleeding to the true edges — `twMerge` resolves the width
-          // conflict with the grid's own default `w-full`.
-          className="mt-2 w-[100dvw] mx-[calc(50%-50dvw)] px-5.5 animate-sheet-up"
+          // (specs.md §10.54). A *viewport*-relative bleed (`100dvw` off a
+          // margin computed against `50%`) mixes two different reference
+          // frames: `dvw` is half the viewport, `%` resolves against the
+          // containing block's own content box, which a reserved-space
+          // scrollbar narrows below the viewport's width — so the two no
+          // longer cancel and the bled box drifts off-center by exactly the
+          // scrollbar's width (reproduced live: a 15px scrollbar left the
+          // pad's box 7.5px short of the right edge, the same "gutter
+          // belongs to the pad" bug in a narrower form). `calc(100% +
+          // 2.75rem)` (2.75rem = the two `px-5.5` insets this bleeds past,
+          // this one and the ancestor's) avoids that: `%` here resolves
+          // against this element's own flex-item parent, whose available
+          // width already reflects the scrollbar with no viewport unit
+          // involved — one reference frame, plus a fixed constant, never
+          // two. A plain `-mx-5.5` alone (no `w-` override) does **not**
+          // work here even though it reads correctly: this element is a
+          // flex item under `wrapperRef`'s `items-center` (not `stretch`),
+          // so a negative margin on an otherwise-`w-full` (definite,
+          // 100%-of-parent) width just re-centers the *same*, un-widened
+          // box — verified live, the margin had zero visible effect. Cross-
+          // axis stretch only expands an `auto` cross size, and `auto`
+          // isn't viable either: this element's `1fr` grid columns fall
+          // back to content-sized tracks once the grid container's own
+          // width is indefinite, breaking the even 3-column layout. The
+          // explicit `calc()` width sidesteps both: always definite, so the
+          // grid tracks stay evenly sized, and already the exact target
+          // width, so the matching `-mx-5.5` only needs to reposition it,
+          // not expand it. `px-5.5` rides along on this same element
+          // (`NumericKeypad`'s grid, its only rendered element) to re-inset
+          // the keys after the bleed reaches the true edges.
+          className="mt-2 w-[calc(100%+2.75rem)] -mx-5.5 px-5.5 animate-sheet-up"
           size="compact"
           disabled={disabled}
           onDigit={handleKeypadDigit}
