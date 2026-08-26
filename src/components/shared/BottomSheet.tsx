@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { cn } from '@/lib/utils'
 import {
   OVERLAY_PANEL_CLASS,
+  useBackdropDismiss,
   useOverlay,
   type OverlayShellProps,
 } from '@/components/shared/useOverlay'
@@ -44,6 +45,10 @@ export const BottomSheet = ({
   ref,
 }: BottomSheetProps) => {
   const panelRef = useOverlay<HTMLDivElement>({ open, onClose, initialFocus, ref })
+  const { backdropRef, onClick: handleBackdropClick } = useBackdropDismiss<HTMLDivElement>(
+    open,
+    onClose,
+  )
   const viewportInset = useVisualViewportInset(open)
   const [dragY, setDragY] = useState(0)
   const [dragging, setDragging] = useState(false)
@@ -118,7 +123,8 @@ export const BottomSheet = ({
           rendering exactly the full layout viewport under a real device's
           keyboard-driven pan — unverified from this repo twice already. */}
       <div
-        onClick={onClose}
+        ref={backdropRef}
+        onClick={handleBackdropClick}
         style={{
           top: OVERLAY_BACKDROP_OVERSCAN_BLOCK,
           bottom: OVERLAY_BACKDROP_OVERSCAN_BLOCK,

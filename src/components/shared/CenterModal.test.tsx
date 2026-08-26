@@ -56,6 +56,36 @@ describe('CenterModal', () => {
     expect(onClose).toHaveBeenCalledOnce()
   })
 
+  it('does not close when a click retargets onto the backdrop after the gesture began on the panel', () => {
+    // Same shape as BottomSheet's own regression test: a click can be
+    // retargeted onto the backdrop by a layout shift between pointerup and
+    // the browser's click dispatch, even though the gesture itself started
+    // on the panel. jsdom never retargets on its own, so this is dispatched
+    // directly rather than via user-event.
+    const onClose = vi.fn()
+    render(<Harness open onClose={onClose} />)
+    const panelButton = screen.getByRole('button', { name: 'Cancelar' })
+    const backdrop = document.querySelector('[aria-hidden="true"]') as HTMLElement
+
+    panelButton.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
+    panelButton.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }))
+    backdrop.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it('closes on a click retargeted onto the backdrop when the gesture itself began on the backdrop', () => {
+    const onClose = vi.fn()
+    render(<Harness open onClose={onClose} />)
+    const backdrop = document.querySelector('[aria-hidden="true"]') as HTMLElement
+
+    backdrop.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
+    backdrop.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }))
+    backdrop.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+
+    expect(onClose).toHaveBeenCalledOnce()
+  })
+
   it('calls onClose on Escape', async () => {
     const user = userEvent.setup()
     const onClose = vi.fn()

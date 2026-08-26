@@ -2,6 +2,7 @@ import { createPortal } from 'react-dom'
 import { cn } from '@/lib/utils'
 import {
   OVERLAY_PANEL_CLASS,
+  useBackdropDismiss,
   useOverlay,
   type OverlayShellProps,
 } from '@/components/shared/useOverlay'
@@ -27,6 +28,10 @@ export const CenterModal = ({
   ref,
 }: CenterModalProps) => {
   const panelRef = useOverlay<HTMLDivElement>({ open, onClose, initialFocus, ref })
+  const { backdropRef, onClick: handleBackdropClick } = useBackdropDismiss<HTMLDivElement>(
+    open,
+    onClose,
+  )
   const viewportInset = useVisualViewportInset(open)
 
   if (!open) return null
@@ -41,7 +46,8 @@ export const CenterModal = ({
           review). Also overscans past `inset-0` on every edge — same
           reasoning as `BottomSheet`'s own comment (specs.md §10.53). */}
       <div
-        onClick={onClose}
+        ref={backdropRef}
+        onClick={handleBackdropClick}
         style={{
           top: OVERLAY_BACKDROP_OVERSCAN_BLOCK,
           bottom: OVERLAY_BACKDROP_OVERSCAN_BLOCK,
