@@ -295,6 +295,36 @@ category picker? Then, separately: leave the amount as something invalid
 — does the keyboard stay up with the amount field still focused and visible
 (not covered), rather than flickering or losing your place?
 
+### 20. Is the band above the keyboard finally gone? — `owner: user`
+
+The strip of undimmed app background above the iOS keyboard, reported three
+times against three different fixes. The first three treated it as geometry
+and were all wrong.
+
+The cause is a WebKit clipping bug (bug 300965): a `position: fixed` element
+painting at **exactly** `opacity: 1` is treated as a simple fill and clipped
+to the main viewport, leaving out the region behind the keyboard's accessory
+bar. `animate-fade-in` ends at `opacity: 1` with no fill-mode, so every
+overlay layer sat precisely on the triggering value at rest. They now paint
+at `.99` — imperceptible, and enough to escape the clipping. A second,
+structurally different fallback dims the `body`'s own background while any
+overlay is open; a root canvas paint is not a fixed layer, so it cannot be
+clipped the same way.
+
+**PLAUSIBLE, not confirmed.** No agent here has an iOS device. What _was_
+proven is that the geometry is sound — the overscan, the clamp and the scroll
+container were all measured correct in real WebKit — so the model was never
+the problem. The mechanism is corroborated by independent external reports of
+the same symptom and the same workaround.
+
+**The check, and it has two halves — please report both:** on your iPhone,
+open the Add sheet and raise the keyboard.
+
+1. Is the strip above the keyboard now dimmed like the rest of the screen,
+   with no app background, no `+` and no tab icons?
+2. Are the category chips **scrollable** rather than sliced off? In your
+   screenshot they were cut mid-shape with no sign more content existed.
+
 ### 19. Keeping the app in portrait — what actually locks, and the guard screen's design — `owner: user`
 
 Raised 2026-08-25, Track AJ4-A (`specs.md` §10.53), from "the app should
