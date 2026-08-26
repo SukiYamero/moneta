@@ -59,7 +59,7 @@ fields (Decision 1):
   used it, specs.md §10.48.) Reuses `isAmountInputInvalid` for its
   `aria-invalid` check — extracted into `amountFormat.ts` when a second
   consumer (`AmountField`) read the same parser's result independently and
-  could drift from it (specs.md §10.41.1/§12); `AmountField` is gone
+  could drift from it (specs.md §10.41/§12); `AmountField` is gone
   (specs.md §10.48), so this is the helper's only caller today, kept
   separate as a property of the parse result rather than inlined. Also uses
   `formatAmountLive` for
@@ -79,7 +79,7 @@ items-center` parent) is shrink-to-fit, and the input's
   `max-w-[calc(100%-3rem)]` resolves against that unbounded content width
   instead of the sheet's real one; a review pass reproduced this in a real
   browser (a six-digit `PEN` amount overflowing the sheet with the clamp
-  doing nothing) before adding `w-full` (specs.md §10.45.1). Its
+  doing nothing) before adding `w-full` (specs.md §10.45). Its
   `onChange` handler reformats and repositions the caret **synchronously on
   the native DOM node**, not via an effect keyed on the `value` prop — a
   real bug found building this: React bails out of the whole render+effects
@@ -106,7 +106,7 @@ items-center` parent) is shrink-to-fit, and the input's
   Dismissing without saving is the sheet's existing backdrop-tap/Escape/
   drag-to-dismiss, all routed through one `handleClose` that also resets
   the draft, so a cancelled create never resurfaces next time the sheet
-  opens. Judged correct on review (specs.md §10.41.1): drag-handle,
+  opens. Judged correct on review (specs.md §10.41): drag-handle,
   backdrop-tap and Escape each carry a visible cue and none needs hover, so
   this isn't the hover-only problem `AGENTS.md` warns against. **The
   primary button's label follows the type toggle** (`form.addCta.gasto`/
@@ -120,7 +120,7 @@ items-center` parent) is shrink-to-fit, and the input's
   `size="touch"` typography, which is a touch-target minimum and nothing
   more (specs.md §10.46). Its own module rather than an export off either
   sheet, so neither becomes the other's dependency for a value they own
-  equally (§10.46.1). Edit's Cancel takes the height/radius half only — a
+  equally (§10.46). Edit's Cancel takes the height/radius half only — a
   flex row of two explicit-height buttons has to match, but Cancel is not
   the commit action the heavier type calls out.
 - `MovimientoSheet.tsx` — `BottomSheet` hosting view ⇄ edit for an existing

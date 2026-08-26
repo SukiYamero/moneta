@@ -319,9 +319,9 @@ Two things need you, not more engineering:
   actually stay in portrait, or does the screen rotate? Separately, on a
   real mobile browser tab (not installed), rotate the phone — does the
   "rotate your phone" message appear and go away correctly as you rotate
-  back? (Coverage note, not a question for you: that guard currently only
-  covers the three bottom-nav tabs, not the pre-auth/lock screens or
-  `/settings` — see `specs.md` §12.)
+  back? (The guard covers the whole app — it mounts in `src/main.tsx`,
+  above the router, so the auth screens, the PIN lock and `/settings` are
+  guarded too, not just the three bottom-nav tabs.)
 
 ---
 

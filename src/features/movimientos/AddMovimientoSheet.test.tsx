@@ -173,7 +173,7 @@ describe('AddMovimientoSheet', () => {
 
   // The artboard's action row binds `{{addLabel}}` to the sheet's own type
   // toggle — a generic "Guardar" is the old vertical form's copy. Edit mode
-  // keeps the generic label (specs.md §10.41.1): only create names the
+  // keeps the generic label (specs.md §10.41): only create names the
   // action being taken, because only create's toggle picks what gets made.
   it('the primary action names what it creates, following the type toggle', async () => {
     const user = userEvent.setup()

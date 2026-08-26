@@ -5,18 +5,45 @@ Codex, Cursor, Gemini CLI, …). `CLAUDE.md` is only a pointer to this file.
 
 ## Source of truth: `specs.md`
 
-We follow **spec-driven development**. `specs.md` is the source of truth.
+We follow **spec-driven development**. `specs.md` is the source of truth for
+**what the product does** — business logic, what each feature is for, how it is
+meant to be implemented, and the traps worth knowing about.
 
-1. **Before building any feature**, read `specs.md`. If the feature isn't
-   specified, write its spec in §10 first (Goal · User story · UI · Data touched ·
-   Edge cases · Done when), then implement.
-2. **After any decision**, record it in `specs.md` §11 (Decisions log).
-3. If code and `specs.md` disagree, `specs.md` wins — update the code or update
+1. **Before building any feature**, read its `specs.md` §10 entry. If the
+   feature isn't specified, write it first, in the file's own format:
+   **Goal** (one sentence) · **Rules** (3–8 bullets, each one a thing that is a
+   bug if violated) · **Implementation** (where it lives, and what isn't
+   obvious from reading it) · **Watch out** (only if a real trap exists).
+2. If code and `specs.md` disagree, `specs.md` wins — update the code or update
    the spec, never let them silently drift.
-4. Bumping behavior or data shape ⇒ update `specs.md` in the same change.
-5. The verification/deferred-work backlog lives in `specs.md` §12; the
-   parallel-track wave plan and worktree log live in `docs/waves.md` — pick
-   up from either and keep it updated when you finish or defer something.
+3. Changing behavior or data shape ⇒ update the §10 entry in the same change.
+4. The backlog lives in §12: genuinely open work only, one or two sentences per
+   item. An item that is done gets **deleted**, not annotated as done.
+
+### `specs.md` is not a log, and this is enforced
+
+The file reached 13,000 lines because every track wrote its reasoning into it.
+It is now ~1,100. Keeping it there is a rule, not an aspiration:
+
+- **Never write history into it.** No dates, no track or agent names, no batch
+  names, no commit hashes, no "was changed to" / "previously" / "take two".
+- **Never write process into it.** No review-pass write-ups, no what-a-sweep-
+  covered, no CONFIRMED/PLAUSIBLE marks, no who-escalated-what, no lessons
+  learned about how the project works.
+- **Never write a decisions log.** A decision that still governs behavior is a
+  **rule** in its §10 entry, stated flatly with no story. A decision that
+  governs nothing is not worth a line. §11 is a stub kept only because old code
+  comments cite it.
+- **The reasoning goes in the commit message**, which already captures it, is
+  free to read, and is attached to the change it explains.
+  `git log -S'<term>' -- <path>` finds it later.
+- **~20 lines per feature entry, hard.** Longer means it is two features, or it
+  is being narrated instead of specified.
+- **Present tense, describing the system as it is.** A reader must not be able
+  to tell the file has a history.
+
+If you find yourself writing "this was found by" or "the user decided on", stop
+— that sentence belongs in your commit or your report to the operator.
 
 ## Open items that need the user — `docs/pendientes-usuario.md`
 
@@ -315,8 +342,8 @@ These apply to any agent on this project, whatever it was asked to do.
 - **Read the project's own rules before applying generic best practice.**
   This file, `specs.md` (the source of truth), `docs/error-handling.md`,
   `docs/waves.md`, `ARCHITECTURE.md`, and the per-directory `README.md`s.
-  Check `specs.md` §11 before calling something a mistake — it may be a
-  recorded, deliberate decision. Check whether a relevant skill exists before
+  Check the relevant `specs.md` §10 entry before calling something a
+  mistake — what looks wrong may be a stated rule. Check whether a relevant skill exists before
   inventing an approach.
 - **Stop rather than guess** when something is genuinely cross-cutting or
   outside what you own. Report it and let the operator decide; do not edit
@@ -342,7 +369,13 @@ session, and the operator/orchestrator owns running it.
 4. **Anything delicate — a judgment call, a product decision, a
    cross-cutting change, or scope widening — is escalated to the operator,
    who decides.** The reviewer says what it would do and why, and stops.
-5. **A track's doc lines land in the same commit as its merge, never in a
+5. **A reviewer reports its findings to the operator; it does not write them
+   into `specs.md`.** A review pass is process, and process is exactly what
+   that file may not contain. What a review may add is a **rule** it
+   established, folded into the relevant §10 entry in the file's own format —
+   never a section describing the review itself. Everything else goes in the
+   commit message and the report.
+6. **A track's doc lines land in the same commit as its merge, never in a
    batch at the end.** A track hands its `README.md` edits to the operator
    (§1.2 of a wave plan makes those files operator-owned so parallel tracks
    don't clobber each other) — and those drafts **rot**. Measured, not
@@ -351,7 +384,7 @@ session, and the operator/orchestrator owns running it.
    it. A README that reads as trustworthy and is quietly wrong is worse than
    one that was never written. If a draft is applied late anyway, **verify
    every line against the current code first** rather than pasting it.
-6. **At the end of the whole batch, the operator launches a general review**
+7. **At the end of the whole batch, the operator launches a general review**
    across everything that landed, deliberately looking for what the
    per-track reviewers structurally _could not_ see: drift between tracks,
    the same concept solved two ways in two folders, a rule applied in one

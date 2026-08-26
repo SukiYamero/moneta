@@ -9,6 +9,6 @@
  * module, not exported from either component file, so neither sheet
  * becomes the other's dependency for a value that belongs to both equally
  * (same reasoning as `tintClasses.ts`/`categoryIconKeys.ts` in
- * `src/components/shared/` — specs.md §10.46.1).
+ * `src/components/shared/` — specs.md §10.46).
  */
 export const MOVIMIENTO_PRIMARY_CTA_CLASS = 'h-13.5 rounded-2xl text-md font-extrabold'
