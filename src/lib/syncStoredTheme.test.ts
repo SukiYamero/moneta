@@ -65,7 +65,6 @@ describe('syncStoredTheme', () => {
     expect(setItemSpy).not.toHaveBeenCalled()
   })
 
-  // specs.md §10.30: a phone theme flipped mid-session must apply without a reload.
   it('follows a live prefers-color-scheme change while tema is sistema', async () => {
     const media = stubMatchMedia(false)
     syncStoredTheme()

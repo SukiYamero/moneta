@@ -86,8 +86,8 @@ afterEach(async () => {
   await dbB.movimientos.clear()
 })
 
-describe('cross-profile pull coalescing (lead 1 — Track AB review)', () => {
-  it("a pull for profile B started while profile A pull is in flight must populate B, not silently ride on A's promise (reproduced against the unkeyed guard before this fix)", async () => {
+describe('cross-profile pull coalescing', () => {
+  it("a pull for profile B started while profile A's pull is in flight populates B, not silently riding on A's promise", async () => {
     const resolvers: ((files: ReturnType<typeof listing>[]) => void)[] = []
     mListFiles.mockImplementation((_token, opts) =>
       opts.space === 'appDataFolder'

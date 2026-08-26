@@ -4,14 +4,8 @@ import { afterEach, beforeEach, expect, test } from 'vitest'
 // Deliberately does NOT statically import '@/lib/deviceStore' — same reason
 // as the v3/v4/v5 upgrade tests: importing it opens the real
 // `kurobello-device` connection and upgrades it immediately, which would
-// make it impossible to seed a v6-only database first.
-//
-// v7 added the `guestLock` table (specs.md §10.2.1, Track AF Wave 4.1 half
-// 2). A v6 device (marker + driveDecision + anchor + profiles + deviceId +
-// syncTips + syncFileCache, no guestLock yet) must upgrade to v7 without
-// losing any of the seven, and `getGuestLock` must answer `undefined` for a
-// device that never enrolled rather than treating the missing table as an
-// error.
+// make it impossible to seed a v6-only database first. A v6 device must
+// upgrade to v7 (adds `guestLock`) without losing any of its seven tables, and getGuestLock must answer undefined rather than treat the missing table as an error.
 type MarkerRow = { id: number; loggedInBefore: boolean }
 type DriveDecisionRow = { id: number; decision: 'connected' | 'dismissed' }
 type AnchorRow = { id: number; lastOnlineAt: number }

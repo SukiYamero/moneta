@@ -12,15 +12,9 @@ const isPlainObject = (value: unknown): value is JsonRecord =>
 
 // Flattens a locale resource to a sorted list of dotted leaf paths — e.g.
 // `{ auth: { welcome: { googleCta: '...' } } }` → `['auth.welcome.googleCta']`.
-// `es` is the base/fallback locale (`resources.ts`) and the shape every
-// other locale file must match; nothing else in the toolchain (not `tsc`,
-// not `oxlint`) notices a key present in `es` and silently missing from
-// `en`/`es-AR`/`pt-BR` — that only degrades to `fallbackLng: 'es'` at
-// runtime, i.e. a mixed-language screen nobody gets an error for.
-// An empty object (`{}`) is treated as its own leaf rather than recursed
-// into and dropped — otherwise a namespace present-but-empty on one side
-// and entirely absent on the other flatten to the same (empty) set of
-// paths and the parity check below can't tell them apart.
+// An empty object (`{}`) is its own leaf rather than recursed into and
+// dropped, so a namespace present-but-empty on one side and entirely
+// absent on the other don't flatten to the same (empty) set of paths.
 const flattenKeys = (value: JsonRecord, prefix = ''): string[] =>
   Object.entries(value).flatMap(([key, child]) => {
     const path = prefix ? `${prefix}.${key}` : key
@@ -47,16 +41,10 @@ describe('flattenKeys distinguishes an empty-object namespace from an absent one
   })
 })
 
-// `I18N_NAMESPACES` is the reserved list i18next is initialized with, and
-// it drifts silently: a namespace added to the locale files still resolves
-// at runtime (resources are loaded inline, no backend), so nothing fails
-// when the array is not updated to match. Measured, not feared — three
-// namespaces had drifted out of it by 2026-08-25 (`movimientos`, plus
-// `sync` and `dateChipPicker` from the README's copy of the same list),
-// each added by a track whose plan made `index.ts` read-only, each
-// resolving fine and each leaving the declared contract wrong. Two review
-// passes closed one of them and did not ask whether its twins had the same
-// gap. This asserts the two can never disagree again.
+// `I18N_NAMESPACES` is the reserved list i18next is initialized with, and it
+// drifts silently: a namespace added to the locale files still resolves at
+// runtime (resources are loaded inline, no backend), so nothing else fails
+// when the array isn't updated to match.
 describe('I18N_NAMESPACES matches the locale files it declares', () => {
   it('lists exactly the top-level namespaces present in es', () => {
     expect([...I18N_NAMESPACES].toSorted()).toEqual(Object.keys(es).toSorted())

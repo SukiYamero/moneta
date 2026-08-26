@@ -108,7 +108,7 @@ describe('sanitizeConfig', () => {
     expect(sanitizeConfig(value)).toBeNull()
   })
 
-  it('strips an invalid icono but keeps the category and the rest of the config — an unknown icono is never a reason to drop a category the user created (specs.md §10.22)', () => {
+  it('strips an invalid icono but keeps the category and the rest of the config — an unknown icono is never a reason to drop a category the user created', () => {
     const value = {
       ...CONFIG_SEMILLA,
       categorias: [
@@ -143,7 +143,7 @@ describe('sanitizeConfig', () => {
   })
 })
 
-describe('sanitizeConfig — Preferencias.idioma (specs.md §12, Wave 4 stage-2 cross-track pass)', () => {
+describe('sanitizeConfig — Preferencias.idioma', () => {
   it('strips an unsupported idioma and keeps the rest of the config', () => {
     const value = {
       ...CONFIG_SEMILLA,
@@ -214,7 +214,7 @@ describe('parseMovOpFile', () => {
     expect(parseMovOpFile({ v: 1, device: 'dev1', periodo: '2026-08' })).toEqual({
       file: null,
       skipped: 0,
-    }) // ops missing
+    })
     expect(parseMovOpFile({ v: 1, device: 'dev1', periodo: 'not-a-periodo', ops: [] })).toEqual({
       file: null,
       skipped: 0,

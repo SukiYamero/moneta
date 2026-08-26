@@ -4,16 +4,8 @@ import { afterEach, beforeEach, expect, test } from 'vitest'
 // Deliberately does NOT statically import '@/lib/deviceStore' — same reason
 // as the v3/v4/v5/v7 upgrade tests: importing it opens the real
 // `kurobello-device` connection and upgrades it immediately, which would
-// make it impossible to seed a v7-only database first.
-//
-// v8 added the `guestMarker` table (specs.md §10.33): "this device last used
-// the app as a guest," the second half of the "has this device been used
-// before" question RequireAuth/lockStore's cold-start decisions now ask. A
-// v7 device (marker + driveDecision + anchor + profiles + deviceId +
-// syncTips + syncFileCache + guestLock, no guestMarker yet) must upgrade to
-// v8 without losing any of the eight, and `hasUsedGuestBefore` must answer
-// `false` for a device that never used guest mode rather than treating the
-// missing table as an error.
+// make it impossible to seed a v7-only database first. A v7 device must
+// upgrade to v8 (adds `guestMarker`) without losing any of its eight tables, and hasUsedGuestBefore must answer false rather than treat the missing table as an error.
 type MarkerRow = { id: number; loggedInBefore: boolean }
 type DriveDecisionRow = { id: number; decision: 'connected' | 'dismissed' }
 type AnchorRow = { id: number; lastOnlineAt: number }

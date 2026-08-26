@@ -86,9 +86,7 @@ test('a guest profile and a signed-in profile stay side by side: nothing is ever
   expect(all.map((p) => p.id).toSorted()).toEqual([DEFAULT_PROFILE_ID, 'google-1'].toSorted())
 })
 
-// docs/error-handling.md §8: every swallow needs a test proving the failure
-// path. Same posture as deviceStore.ts: storage trouble degrades to "no
-// signal", never blocks boot.
+// Same posture as deviceStore.ts: storage trouble degrades to "no signal", never blocks boot.
 test('listProfiles degrades to an empty array on a storage read failure', async () => {
   const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
   const spy = vi.spyOn(deviceDb.profiles, 'toArray').mockRejectedValue(new Error('IDB blocked'))
@@ -122,13 +120,8 @@ test('touchLastUsed is safe to fire-and-forget: a write failure is caught and lo
   warn.mockRestore()
 })
 
-// specs.md §10.20: today two Google accounts on one device are
-// indistinguishable — `ProfileRecord` said only what kind a profile is
-// (`kind`), never whose it is. `resolveGoogleProfile` is what makes
-// `getActiveProfile()`'s existing recency resolution identity-aware,
-// without that function's own signature changing at all: whichever account
-// resolves here becomes, by construction, the most-recently-touched
-// profile.
+// resolveGoogleProfile keys a profile by account, not just kind, so two Google
+// accounts on one device resolve to two distinct profiles instead of one.
 test('resolveGoogleProfile registers a new profile keyed by account on first sign-in', async () => {
   const profile = await resolveGoogleProfile({ accountKey: 'ana@example.com', label: 'Ana' })
 
@@ -155,10 +148,9 @@ test('resolveGoogleProfile gives two different accounts on the same device two d
   expect(ana.databaseName).not.toBe(beto.databaseName)
 })
 
-// This is the actual fix for "signing back in does not return you to your
-// own profile": resolveGoogleProfile touches the matched profile's
-// lastUsedAt, so getActiveProfile()'s pure-recency resolution naturally
-// tracks whichever account most recently established a session.
+// resolveGoogleProfile touches the matched profile's lastUsedAt, so
+// getActiveProfile()'s pure-recency resolution tracks the account that most
+// recently established a session.
 test('signing back into a previously-used account makes it the active profile again', async () => {
   const ana = await resolveGoogleProfile({ accountKey: 'ana@example.com', label: 'Ana' })
   await resolveGoogleProfile({ accountKey: 'beto@example.com', label: 'Beto' })
@@ -170,14 +162,10 @@ test('signing back into a previously-used account makes it the active profile ag
   expect((await getActiveProfile()).id).toBe(ana.id)
 })
 
-// The registry has had a same-tick race fixed once already (getActiveProfile's
-// monotonic-timestamp fix, specs.md §11 2026-08-19); resolveGoogleProfile's
-// read-then-write (listProfiles(), then either touchLastUsed or
-// registerProfile, each its own separate transaction) has the identical
-// shape: login() and restore()/hydrate() can both resolve the same account
-// in the same tick (a login racing a silent restore, or two tabs restoring
-// the same account concurrently), and two calls that both read "no existing
-// profile" before either writes mint two profiles for one account.
+// resolveGoogleProfile's read-then-write (listProfiles(), then either
+// touchLastUsed or registerProfile, each its own transaction) is racy: login()
+// and restore()/hydrate() can resolve the same account in the same tick, and
+// two calls that both read "no existing profile" before either writes mint two.
 test('two concurrent resolveGoogleProfile calls for the same account resolve to one profile, not two', async () => {
   const [a, b] = await Promise.all([
     resolveGoogleProfile({ accountKey: 'ana@example.com', label: 'Ana' }),
@@ -202,8 +190,7 @@ test('getActiveProfile still returns a usable default record when persisting it 
   warn.mockRestore()
 })
 
-// specs.md §10.19: the watermark that answers every sync question instead
-// of a stale isSynced boolean — written only by sync/engine.ts.
+// The watermark that answers every sync question instead of a stale isSynced boolean.
 test('setDriveFolderId / recordSuccessfulPush / recordSuccessfulPull each patch just their own field', async () => {
   await getActiveProfile() // ensures the default profile row exists to update
 
@@ -228,11 +215,9 @@ test('a profile with no watermark yet has undefined driveFolderId/lastPushAt/las
   expect(active.lastPullAt).toBeUndefined()
 })
 
-// specs.md §10.31 §1: the explicit active-profile pointer. Recency stays
-// only as the fallback for a device that has never made an explicit choice
-// — this is what lets a user who switches to an *older* profile and closes
-// the app land back in the one they chose, not the one used most recently
-// before that.
+// Recency stays only as the fallback for a device that has never made an
+// explicit choice — this lets a user who switches to an *older* profile and
+// closes the app land back in the one they chose, not the one used most recently.
 test('getActiveProfileId is undefined on a device that has never set the pointer', async () => {
   expect(await getActiveProfileId()).toBeUndefined()
 })
@@ -284,8 +269,6 @@ test('getActiveProfileId degrades to undefined, falling back to recency, on a st
   warn.mockRestore()
 })
 
-// specs.md §10.31 edge case: offering removal for a profile whose database
-// is gone, so a dangling registry row doesn't linger forever.
 test('removeProfile deletes the profile from the registry', async () => {
   await registerProfile({
     id: 'p-remove',

@@ -69,8 +69,8 @@ afterEach(async () => {
   setOutboxDatabase(db)
 })
 
-describe('push() removes its own operations from the pushing profile’s outbox, not whichever table setOutboxDatabase() currently points to (specs.md §10.31 edge case)', () => {
-  it('a switch (setOutboxDatabase redirect) happening while A’s push is still in flight must not strand A’s already-uploaded op in A’s own outbox', async () => {
+describe('push() removes its own operations from the pushing profile’s outbox, not whichever table setOutboxDatabase() currently points to', () => {
+  it('a profile switch (setOutboxDatabase redirect) happening while A’s push is still in flight does not strand A’s already-uploaded op in A’s own outbox', async () => {
     const dbA = getProfileDatabase('kurobello-outboxscope-a')
     const dbB = getProfileDatabase('kurobello-outboxscope-b')
 
@@ -102,9 +102,8 @@ describe('push() removes its own operations from the pushing profile’s outbox,
     // A's push starts while the outbox module still points at A's table.
     const pushA = push('tokA', profileA)
 
-    // The switcher (specs.md §10.31) redirects the outbox to B mid-flight —
-    // boot.ts's rebind path proceeds unconditionally, never waiting for an
-    // in-flight push to settle first.
+    // The switcher redirects the outbox to B mid-flight — boot.ts's rebind
+    // path proceeds unconditionally, never waiting for an in-flight push.
     setOutboxDatabase(dbB)
 
     await vi.waitFor(() => expect(findResolvers).toHaveLength(1))

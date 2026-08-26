@@ -82,12 +82,9 @@ beforeEach(async () => {
   })
   await setDriveFolderId(registered.id, 'FOLD')
   profile = (await getProfile('p1'))!
-  // specs.md §10.31 edge case: push()/pull() now read/write the pushing
-  // profile's own outbox table explicitly (getProfileDatabase(profile.
-  // databaseName)) rather than outbox.ts's module-level redirect — matching
-  // real boot.ts behavior, which always redirects the outbox to the active
-  // profile before anything can push/pull. Every enqueueOperation() call
-  // below (with no explicit database argument) writes wherever this points.
+  // push()/pull() read/write the pushing profile's own outbox table via
+  // getProfileDatabase(), not outbox.ts's module-level redirect — matching
+  // real boot.ts behavior. Every enqueueOperation() below writes there.
   setOutboxDatabase(getProfileDatabase('kurobello-engine-test'))
 })
 
@@ -128,7 +125,7 @@ describe('pull', () => {
     expect((await getProfile('p1'))?.lastPullAt).toBeDefined()
   })
 
-  it('carries the count of malformed entries dropped across every reconciled file into PullSummary (specs.md §12, 2026-08-20)', async () => {
+  it('carries the count of malformed entries dropped across every reconciled file into PullSummary', async () => {
     mListFiles.mockImplementation(async (_token, opts) =>
       opts.space === 'appDataFolder' ? [] : [listing('f1', 'mov-remdev-2026-08.json')],
     )
@@ -151,7 +148,7 @@ describe('pull', () => {
     await expect(database.movimientos.toArray()).resolves.toEqual([movimiento()])
   })
 
-  it('serializes pull() against itself: a second call arriving before the first settles coalesces into it instead of re-listing/re-downloading (specs.md §10.26 §1 sweep)', async () => {
+  it('serializes pull() against itself: a second call arriving before the first settles coalesces into it instead of re-listing/re-downloading', async () => {
     let resolveList!: (files: ReturnType<typeof listing>[]) => void
     mListFiles.mockImplementation((_token, opts) =>
       opts.space === 'appDataFolder'
@@ -173,10 +170,8 @@ describe('pull', () => {
     resolveList([listing('f1', 'mov-remdev-2026-08.json')])
     const [summaryA, summaryB] = await Promise.all([pullA, pullB])
 
-    // Reference-equal: two independent pullOnce() runs would each construct
-    // their own PullSummary object. The same object back on both sides is
-    // only possible if the second call coalesced into the first's promise
-    // rather than starting a second, concurrent listing/download/replay.
+    // Two independent runs would each build their own PullSummary object;
+    // reference-equality only holds if the second call coalesced into the first's.
     expect(summaryA).toBe(summaryB)
   })
 
@@ -322,27 +317,23 @@ describe('push', () => {
     expect(mUpsertJsonFile).not.toHaveBeenCalled()
   })
 
-  it('serializes push() against itself: a second call arriving before the first settles coalesces into it instead of racing it (specs.md §10.26 §1, reproduced by the general review)', async () => {
+  it('serializes push() against itself: a second call arriving before the first settles coalesces into it instead of racing it', async () => {
     mFindFile.mockResolvedValue(null)
     mUpsertJsonFile.mockResolvedValue('shard-id')
     await enqueueOperation({ entity: 'movimiento', op: 'put', payload: movimiento({ id: 'op1' }) })
 
-    // Two calls issued back-to-back, neither awaited before the second
-    // fires — the exact shape of two overlapping triggers (onOnline's
-    // pull-then-push and the debounced post-write push) in ordinary mobile
-    // use (unlock as signal returns).
+    // Two calls issued back-to-back, neither awaited before the second fires —
+    // the shape of two overlapping triggers (online pull-then-push and a
+    // debounced post-write push) in ordinary mobile use.
     const pushA = push('tok', profile)
     const pushB = push('tok', profile)
 
     await Promise.all([pushA, pushB])
 
-    // A second, independent read-modify-write against the same Drive file
-    // is exactly the race that drops an operation permanently — there must
-    // only ever be one.
     expect(mUpsertJsonFile).toHaveBeenCalledTimes(1)
   })
 
-  it('does not lose an operation enqueued while the first push is still writing (the exact data-loss shape §10.26 §1 describes)', async () => {
+  it('does not lose an operation enqueued while the first push is still writing', async () => {
     let resolveFind!: (id: string | null) => void
     mFindFile.mockImplementation(
       () =>
@@ -358,9 +349,8 @@ describe('push', () => {
     const pushA = push('tok', profile)
 
     // op2 arrives, and a second push is triggered, while A is still in
-    // flight — without the reentrancy guard, the original bug (§10.26 §1)
-    // has A's stale write land after B's and silently drop op2 from both
-    // Drive and the outbox.
+    // flight — without a reentrancy guard, A's stale write could land after
+    // B's and silently drop op2 from both Drive and the outbox.
     await enqueueOperation({ entity: 'movimiento', op: 'put', payload: movimiento({ id: 'op2' }) })
     const pushB = push('tok', profile)
 
@@ -418,9 +408,8 @@ describe('compactYear', () => {
   const device = 'devicea'
 
   beforeEach(async () => {
-    // Pins getDeviceId() to a known value via the real device-id table
-    // (rather than mocking the module) so compactYear's own "only this
-    // device's own files" filter has something real to match against.
+    // Pins getDeviceId() via the real device-id table so compactYear's
+    // "only this device's own files" filter has something real to match.
     __resetDeviceIdForTests()
     await deviceDb.deviceId.put({ id: 1, value: device })
   })
@@ -639,7 +628,7 @@ describe('startSyncTriggers', () => {
     expect(mListFiles).not.toHaveBeenCalled()
   })
 
-  it('"locked mid-sync" (specs.md §10.26 edge cases): stop() does not abort a push already in flight — it completes and drains the outbox normally, only *new* pushes are prevented', async () => {
+  it('locked mid-sync: stop() does not abort a push already in flight — it completes and drains the outbox normally, only new pushes are prevented', async () => {
     let resolveFind!: (id: string | null) => void
     mFindFile.mockImplementation(
       () =>
@@ -653,10 +642,9 @@ describe('startSyncTriggers', () => {
     await enqueueOperation({ entity: 'movimiento', op: 'put', payload: movimiento() })
     await vi.waitFor(() => expect(mFindFile).toHaveBeenCalled()) // the push is now in flight (blocked on findFile)
 
-    // The lock fires here in the real app (lockStore.ts's `lock()` calling
-    // `stopSyncSession()`) — the outbox's own binding never changes on a
-    // lock (only a boot rebind redirects it), so nothing about *this*
-    // push's target table becomes stale by locking mid-flight.
+    // The lock fires here in the real app (lockStore.ts's lock() calling
+    // stopSyncSession()) — the outbox's binding only changes on a boot
+    // rebind, never on lock, so this push's target table stays valid.
     handle.stop()
     handle = undefined
 

@@ -78,10 +78,8 @@ describe('switchToProfile', () => {
       kind: 'google',
       databaseName: 'kurobello-switch-target',
     })
-    // The switcher's own pre-check reads the target's owner marker — a
-    // profile only ever reachable through the switcher after having been
-    // bound at least once (specs.md §10.31 §2's reasoning), so simulate
-    // that prior bind directly rather than going through a full sign-in.
+    // The switcher's pre-check reads the target's owner marker, only ever
+    // populated by a prior bind — simulate that directly rather than a full sign-in.
     const targetDb = getProfileDatabase('kurobello-switch-target')
     await targetDb.profileOwner.put({ id: 1, kind: 'google', createdAt: 'T1' })
     const target = (await getProfile('switch-target'))!
@@ -123,12 +121,10 @@ describe('switchToProfile', () => {
     expect(mStartSyncSession).toHaveBeenCalled()
   })
 
-  // `useBootStore.run()` never rejects — it swallows its own failures into
-  // `status: 'error'` — so switchToProfile can't tell a failed rebind apart
-  // from a successful one just by awaiting it. This simulates exactly that:
-  // run() "completing" without ever actually moving the repo binding away
-  // from the profile that was active before the switch (e.g. because
-  // resolveActiveProfileBinding() threw before bindActiveProfile() ran).
+  // useBootStore.run() never rejects — it swallows failures into status:'error' —
+  // so switchToProfile can't tell a failed rebind apart from a successful one
+  // just by awaiting it. Simulates run() "completing" without moving the repo
+  // binding away from the profile that was active before the switch.
   it('reports failure and reverts the pointer when run() completes without actually rebinding to the target', async () => {
     const { useBootStore } = await import('@/lib/boot')
     await useBootStore.getState().run() // establishes the default profile as bound first
@@ -181,12 +177,9 @@ describe('switchToProfile', () => {
     expect(mStopSyncSession).not.toHaveBeenCalled()
   })
 
-  // A transient read failure (Safari eviction, a blocked version change, quota
-  // pressure) must not be reported the same way as a genuinely missing marker
-  // — 'profile-database-gone' drives an irreversible registry removal in the
-  // UI (ProfilesSection's confirm), and this is not evidence the database is
-  // gone. Simulates the read throwing, distinct from the "no marker" test
-  // below, which never registers a mock at all.
+  // A transient read failure must not be reported the same way as a genuinely
+  // missing marker — 'profile-database-gone' drives an irreversible registry
+  // removal in the UI, and a thrown read is not evidence the database is gone.
   it('reports a check failure, distinct from profile-database-gone, when reading the target owner marker throws', async () => {
     const { useBootStore } = await import('@/lib/boot')
     await useBootStore.getState().run()

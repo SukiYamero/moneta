@@ -122,9 +122,8 @@ describe('useDataStore', () => {
     expect(s.error).toBeNull()
   })
 
-  // boot.ts's only caller (specs.md §10.28): back to the pre-load shape
-  // before re-load()ing on a profile rebind, so a previous profile's rows
-  // can never linger — even transiently — under the newly-bound one.
+  // boot.ts calls this before rebinding to a new profile, so a previous
+  // profile's rows never linger — even transiently — under the newly-bound one.
   it('reset() clears loaded data and status back to idle', async () => {
     const repo = makeFakeRepo({ movimientos: [movimiento()], activos: [activo()] })
     mGetRepo.mockReturnValue(repo)
@@ -392,7 +391,7 @@ describe('useDataStore.deleteMovimiento', () => {
     })
   })
 
-  it('is allowed offline, within the window (deleting is terminal — specs.md §11, 2026-08-19)', async () => {
+  it('is allowed offline, within the window — deleting is terminal, unlike edits', async () => {
     const existing = movimiento()
     useDataStore.setState({ movimientos: [existing] })
     useNetworkStore.setState({ online: false, lastOnlineAt: Date.now() })
@@ -588,13 +587,9 @@ describe('useDataStore.upsertCategoria', () => {
     expect(await listPendingOperations()).toEqual([])
   })
 
-  // specs.md §10.22's first edge case, verbatim: "Two categories created in
-  // the same tick... The new dataStore actions must build the array from
-  // the freshest store state inside the set, not from a value captured
-  // before an await." The repo mock below performs a real shallow merge
-  // (mirroring repo.fake.ts's updateConfig), so an implementation that
-  // captured a stale `categorias` array before its own `await` would lose
-  // whichever category's write settles first.
+  // The repo mock performs a real shallow merge (mirroring repo.fake.ts's
+  // updateConfig), so an implementation reading a stale `categorias` array
+  // captured before its own `await` would lose whichever write settles first.
   it('two categories created in the same tick both land: no lost update', async () => {
     useDataStore.setState({ config: CONFIG_SEMILLA })
     const repo = makeFakeRepo()
@@ -617,17 +612,10 @@ describe('useDataStore.upsertCategoria', () => {
     expect(ids).toHaveLength(CONFIG_SEMILLA.categorias.length + 2)
   })
 
-  // A same-tick Promise.all always serializes each call's optimistic apply
-  // before the next call starts (JS runs each async function synchronously
-  // up to its first await), so a snapshot taken at a later call's start
-  // already includes an earlier call's optimistic change. That ordering
-  // quirk is not a guarantee — real writes settle on real network timing,
-  // not in dispatch order. This test forces the case Promise.all can't
-  // produce: A starts first (slow, eventually fails), B starts after A's
-  // optimistic apply and *fully succeeds and settles* before A's rejection
-  // ever arrives. A's rollback then restores the snapshot it captured at
-  // its own start — which predates B's write entirely, not just B's
-  // optimistic apply — and must not erase B's already-committed category.
+  // A same-tick Promise.all can't force B to fully settle before A's
+  // rejection arrives, so this test drives it manually: A stays pending
+  // while B resolves first, then A rejects. A's rollback must restore only
+  // its own pre-write snapshot, not erase B's already-committed category.
   it('a slow failing upsert rolling back must not erase a concurrent one that already succeeded', async () => {
     useDataStore.setState({ config: CONFIG_SEMILLA })
     const repo = makeFakeRepo()
@@ -789,10 +777,6 @@ describe('useDataStore.deleteCategoria', () => {
   })
 })
 
-// --- Wave 4 stage-2 groundwork (specs.md §10.23 Decision 3, §10.24 edge cases,
-// docs/wave-4-plan.md §5). Landed before Track F and Track G2 are dispatched so
-// neither has to edit this file.
-
 /** `makeFakeRepo`'s write mocks are bare `vi.fn()`s — echo the written value back. */
 const withEchoingWrites = (repo: Repo): Repo => {
   vi.mocked(repo.movimientos.add).mockImplementation(async (m) => m)
@@ -808,7 +792,7 @@ const withEchoingWrites = (repo: Repo): Repo => {
   return repo
 }
 
-describe('mutations report whether they committed (specs.md §10.23 Decision 3)', () => {
+describe('mutations report whether they committed', () => {
   it('createMovimiento resolves true on success and false when refused offline', async () => {
     const repo = withEchoingWrites(makeFakeRepo())
     mGetRepo.mockReturnValue(repo)
@@ -859,7 +843,7 @@ describe('mutations report whether they committed (specs.md §10.23 Decision 3)'
   })
 })
 
-describe('useDataStore.updateConfig — concurrent writes (specs.md §12)', () => {
+describe('useDataStore.updateConfig — concurrent writes', () => {
   it("a slow updateConfig's success must not erase a category a concurrent write already committed", async () => {
     useDataStore.setState({ config: CONFIG_SEMILLA })
     const repo = makeFakeRepo()
@@ -883,8 +867,8 @@ describe('useDataStore.updateConfig — concurrent writes (specs.md §12)', () =
     expect(useDataStore.getState().config?.categorias.map((c) => c.nombre)).toContain('Gimnasio')
 
     // The repo settles the preferences write with the Config as it looked
-    // *before* the category landed — the real interleaving once repo.drive.ts
-    // adds network latency.
+    // *before* the category landed — the real interleaving once network
+    // latency is involved.
     resolvePrefs({
       ...CONFIG_SEMILLA,
       preferencias: { ...CONFIG_SEMILLA.preferencias, primerDiaSemana: 0 },
@@ -897,18 +881,16 @@ describe('useDataStore.updateConfig — concurrent writes (specs.md §12)', () =
   })
 })
 
-describe('useDataStore.updateConfig — idioma round-trips through undefined (specs.md §10.24)', () => {
+describe('useDataStore.updateConfig — idioma round-trips through undefined', () => {
   it('"seguir el dispositivo" writes idioma: undefined, and the store ends up with no idioma — not the previous value', async () => {
     useDataStore.setState({
       config: { ...CONFIG_SEMILLA, preferencias: { ...CONFIG_SEMILLA.preferencias, idioma: 'en' } },
     })
     const repo = makeFakeRepo()
     mGetRepo.mockReturnValue(repo)
-    // repo.updateConfig echoes back whatever the merged Config looks like —
-    // same contract repo.local.ts's `{ ...existing, ...patch }` honors, and
-    // the concrete case the round-trip must survive: a `Partial<Config>`
-    // patch whose value is `undefined` (not an absent key) all the way
-    // through the store → repo → back to the store.
+    // A `Partial<Config>` patch whose value is `undefined` (not an absent
+    // key) must survive store → repo → store, mirroring repo.local.ts's
+    // `{ ...existing, ...patch }` merge contract.
     vi.mocked(repo.updateConfig).mockImplementation((patch) =>
       Promise.resolve({
         ...CONFIG_SEMILLA,

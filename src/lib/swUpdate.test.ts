@@ -168,7 +168,7 @@ describe('createSwUpdateController', () => {
       expect(update).toHaveBeenCalledTimes(2)
     })
 
-    it('a failed periodic check is swallowed from the user, but still logged (specs.md §10.16, docs/error-handling.md §2)', async () => {
+    it('a failed periodic check is swallowed from the user, but still logged', async () => {
       const { createSwUpdateController } = await import('@/lib/swUpdate')
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
       const fake = createFakeRegisterSW()

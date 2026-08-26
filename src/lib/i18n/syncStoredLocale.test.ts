@@ -19,10 +19,9 @@ describe('syncStoredLocale', () => {
     expect(i18next.resolvedLanguage).toBe('en')
   })
 
-  // specs.md §10.24 edge case: choosing "seguir el dispositivo" writes
-  // `idioma: undefined`, and the very next resolution must fall back to the
-  // detected locale — live, not just on the next boot.
   it('falls back to the detected locale once idioma is written back to undefined', async () => {
+    // Choosing "seguir el dispositivo" writes idioma: undefined, and the
+    // very next resolution must fall back live, not just on the next boot.
     syncStoredLocale()
     useDataStore.setState({
       config: { ...CONFIG_SEMILLA, preferencias: { ...CONFIG_SEMILLA.preferencias, idioma: 'en' } },

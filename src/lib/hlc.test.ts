@@ -68,8 +68,7 @@ describe('createLogicalClock', () => {
 describe('observe', () => {
   it('makes the next tick sort after a remote hlc that is ahead of this clock', () => {
     // Two independent devices' clocks have no relation until one observes
-    // the other — the exact gap that broke a `basedOn` chain across
-    // devices before this method existed.
+    // the other.
     const remoteClock = createLogicalClock('remote', () => 50_000)
     const remote = remoteClock.tick()
 
@@ -110,11 +109,9 @@ describe('observe', () => {
 describe('clampToServer', () => {
   it('pulls a runaway local clock down to server time so a later, sane reading is not forced to append onto the poisoned base', () => {
     // A stuck-clock reboot: the first reading is wildly wrong, then the
-    // system clock corrects itself (e.g. NTP catches up) — but this
-    // LogicalClock instance lives for the whole session, so without
-    // clamping, `lastMillis` would stay pinned at the poisoned value
-    // forever and every later tick would just append a counter onto it,
-    // never reflecting real time again.
+    // system clock corrects itself — but this LogicalClock instance lives
+    // for the whole session, so without clamping, `lastMillis` stays
+    // pinned at the poisoned value forever.
     let reading = 10_000_000_000 // implausibly far in the "future"
     const clock = createLogicalClock('dev1', () => reading)
     clock.tick() // lastMillis is now poisoned

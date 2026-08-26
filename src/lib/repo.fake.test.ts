@@ -19,10 +19,9 @@ const emptyFakeRepo = async (): Promise<Repo> => {
   return repo
 }
 
-// Behavior every Repo implementation must agree on (docs/error-handling.md
-// §6) — the same suite runs in repo.local.test.ts. Anything below this point
-// in the file is implementation-specific to the fake (seed determinism, the
-// index-encoded cursor, message-text regressions).
+// Behavior every Repo implementation must agree on — the same suite runs in
+// repo.local.test.ts. Anything below this point is implementation-specific
+// to the fake (seed determinism, timezone safety, singleton behavior).
 testRepoContract(emptyFakeRepo)
 
 describe('createFakeRepo', () => {
@@ -171,13 +170,9 @@ describe('createFakeRepo — parity with the real (dexie) repo contract', () => 
 })
 
 describe('seed dates are timezone-safe', () => {
-  // The exported singleton is what every screen renders in dev, and this
-  // app's audience is entirely west of UTC. FAKE_REPO_SEED_DATE is evaluated
-  // at import time, so this can only be exercised by the process TZ, not by
-  // vi.stubEnv — hence the assertion on the singleton rather than on a
+  // FAKE_REPO_SEED_DATE is evaluated at import time, so only the process TZ
+  // exercises it (vi.stubEnv can't) — assert on the singleton itself, not a
   // locally-constructed repo, which would silently bypass the constant.
-  // Guards the regression Track E4 found: a UTC-midnight seed formatted as a
-  // local calendar day landed a day early for every targeted timezone.
   it('anchors the seed on its intended calendar day', async () => {
     const { items } = await fakeRepo.movimientos.list()
     expect(

@@ -49,8 +49,8 @@ const repoStubWithList = (list: Repo['movimientos']['list']): Repo => {
       remove: notUsed,
       removeMany: notUsed,
     },
-    // exportMovimientosToCsv() resolves category/section names for the CSV
-    // (specs.md §10.22) — every test needs a real Config, not `notUsed`.
+    // exportMovimientosToCsv() resolves category/section names for the CSV,
+    // so every test needs a real Config, not `notUsed`.
     getConfig: () => Promise.resolve(CONFIG_SEMILLA),
     updateConfig: notUsed,
   }
@@ -108,8 +108,8 @@ describe('exportMovimientosToCsv()', () => {
       expect(csv).toContain(`${item.id};`)
     }
     // Every page after the first was issued with the same sortBy/sortDir as
-    // the first (docs/error-handling.md §4: a cursor replayed under a
-    // different sort is rejected as invalid_input, not silently answered).
+    // the first — a cursor replayed under a different sort is rejected as
+    // invalid_input, not silently answered.
     for (const [query] of listSpy.mock.calls) {
       expect(query).toMatchObject({ sortBy: 'fecha', sortDir: 'asc' })
     }

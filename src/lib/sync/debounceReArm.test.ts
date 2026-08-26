@@ -47,10 +47,8 @@ beforeEach(async () => {
   })
   await setDriveFolderId(reg.id, 'FOLD')
   profile = (await getProfile('pDebounce'))!
-  // specs.md §10.31 edge case: push() now reads/writes the pushing
-  // profile's own database explicitly, so the outbox redirect below must
-  // point at that same database, not the frozen default — matching what
-  // boot.ts's real rebind always does.
+  // push() reads/writes the pushing profile's own database explicitly, so
+  // the outbox redirect must target that same database, matching boot.ts.
   setOutboxDatabase(getProfileDatabase('kurobello-debounce-test'))
 })
 
@@ -64,7 +62,7 @@ afterEach(async () => {
   useSyncStore.setState({ phase: 'idle', pullProgress: null, lastError: null })
 })
 
-describe('trigger wiring: re-arming the debounce (lead 2 — Track AB review)', () => {
+describe('trigger wiring: re-arming the debounce', () => {
   it('a write enqueued while dirty is already true (an earlier push still in flight) still gets pushed, via a re-armed debounce round once that push settles', async () => {
     const findResolvers: ((v: string | null) => void)[] = []
     mFindFile.mockImplementation(

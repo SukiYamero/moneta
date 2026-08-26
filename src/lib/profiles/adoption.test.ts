@@ -61,12 +61,9 @@ describe('countGuestMovements', () => {
     expect(await countGuestMovements()).toBe(3)
   })
 
-  // docs/error-handling.md §4: 0 is a real, valid count, so a storage
-  // failure must not degrade to it — that would be indistinguishable from
-  // "genuinely no local data" and silently suppress the adoption offer on
-  // a device whose storage is actually broken. `authStore.ts`'s
-  // `checkGuestAdoption` is the one place that decides how to degrade this
-  // (its own test covers that); this module must let the failure through.
+  // 0 is a real, valid count, so a storage failure must not degrade to it —
+  // that would be indistinguishable from "genuinely no local data" and
+  // silently suppress the adoption offer on a device whose storage is broken.
   it('propagates a storage failure rather than degrading to 0', async () => {
     const spy = vi.spyOn(db.movimientos, 'count').mockRejectedValue(new Error('IDB blocked'))
 
@@ -101,8 +98,6 @@ describe('adoptGuestMovements', () => {
     expect(queued.every((e) => e.operation.op === 'put')).toBe(true)
   })
 
-  // specs.md §10.32: "the emptied guest profile stays... it simply has no
-  // movements left."
   it('empties the local/guest profile once its movements have been moved', async () => {
     const target = await registerTarget()
     await db.movimientos.bulkPut([movimiento()])
@@ -112,9 +107,6 @@ describe('adoptGuestMovements', () => {
     expect(await db.movimientos.toArray()).toEqual([])
   })
 
-  // specs.md §10.32 edge case: "the account already has data in Drive...
-  // adoption is a merge, not a replace... both months end up present. This
-  // must be true rather than assumed — it gets a test."
   it('merges with data the target profile already has, rather than replacing it', async () => {
     const target = await registerTarget()
     const targetDb = getProfileDatabase(TARGET_DB_NAME)
@@ -130,9 +122,7 @@ describe('adoptGuestMovements', () => {
     expect(finalIds).toEqual(['existing', 'guest-1'].toSorted())
   })
 
-  // specs.md §10.32: "adoption interrupted (a tab closed mid-move)... must
-  // be resumable or atomic, never half-moved." Written test-first: this
-  // simulates the interruption by making the target write fail partway
+  // Simulates the interruption by making the target write fail partway
   // through, then verifies the state is safe to resume from, then resumes.
   it('is resumable after an interruption: a partial failure never half-moves data, and calling it again finishes the job', async () => {
     const target = await registerTarget()
@@ -183,11 +173,10 @@ describe('adoptGuestMovements', () => {
   })
 })
 
-// specs.md §10.32/§11 (2026-08-21): "yes" is consent for the whole move, not
-// merely for whichever attempt happened to be running when the tab closed
-// — finishing it later needs no new prompt. `finishConsentedAdoption` is
-// the "do the move, then forget we owed it" pair shared by the
-// user-initiated accept (`authStore.ts`) and the silent resume below.
+// "yes" is consent for the whole move, not merely for whichever attempt was
+// running when the tab closed — finishConsentedAdoption is the "do the move,
+// then forget we owed it" pair shared by the user-initiated accept
+// (authStore.ts) and the silent resume below.
 describe('finishConsentedAdoption', () => {
   it('moves the movements and only then clears the consent marker', async () => {
     const target = await registerTarget()
@@ -202,8 +191,7 @@ describe('finishConsentedAdoption', () => {
 
   // The ordering matters: clearing the marker before the move is confirmed
   // would strand an interruption with no record that anything was ever
-  // consented to — the exact "half-moved, and now untraceable" failure
-  // §10.32 rules out.
+  // consented to, leaving the data half-moved and untraceable.
   it('leaves the consent marker in place when the move itself fails', async () => {
     const target = await registerTarget()
     const targetDb = getProfileDatabase(TARGET_DB_NAME)
@@ -223,10 +211,9 @@ describe('finishConsentedAdoption', () => {
   })
 })
 
-// specs.md §10.32/§11 (2026-08-21): resuming an adoption already consented
-// to is completion, not a new offer — it runs silently, on boot, with no
-// prompt and no special "resume" argument, driven only by whatever
-// `deviceStore.ts`'s `adoptionConsent` marker says is still owed.
+// Resuming an adoption already consented to is completion, not a new offer —
+// it runs silently, on boot, with no prompt, driven only by whatever
+// deviceStore.ts's adoptionConsent marker says is still owed.
 describe('resumePendingAdoption', () => {
   it('does nothing when there is no pending consent', async () => {
     const target = await registerTarget()
@@ -250,12 +237,9 @@ describe('resumePendingAdoption', () => {
     expect(await getAdoptionConsent()).toBeUndefined()
   })
 
-  // The interrupted-then-resumed case (specs.md §10.32's own "this is the
-  // one part of this section that can lose data"), now attacked at the
-  // whole-system level rather than only the function level: the first
-  // "boot" hits the exact same interruption `adoptGuestMovements`'s own
-  // test simulates, and the second — with no special argument, driven only
-  // by the still-present marker — finishes the job.
+  // The first "boot" hits the exact same interruption adoptGuestMovements's
+  // own test simulates, and the second — with no special argument, driven
+  // only by the still-present marker — finishes the job.
   it('finishes an adoption interrupted mid-move when resumed silently on a later boot, with no prompt', async () => {
     const target = await registerTarget()
     const targetDb = getProfileDatabase(TARGET_DB_NAME)
@@ -324,9 +308,8 @@ describe('resumePendingAdoption', () => {
     __clearProfileDatabaseCacheForTests(OTHER_DB_NAME)
   })
 
-  // Both fields name the target (specs.md §10.32/§11: "profile id + account
-  // key," not merely one) — a matching id with a mismatched account key
-  // must be rejected exactly like an outright different profile.
+  // Both fields name the target, not merely one — a matching id with a
+  // mismatched account key must be rejected exactly like a different profile.
   it('does not move data when the profile id matches but the account key does not', async () => {
     const target = await registerTarget() // accountKey undefined
     await db.movimientos.bulkPut([movimiento({ id: 'm1' })])

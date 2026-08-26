@@ -92,49 +92,6 @@ test('the login marker and the Drive decision are independent', async () => {
   expect(await getDriveDecision()).toBeUndefined()
 })
 
-// docs/error-handling.md §8: every swallow needs a test proving the failure
-// path, not just the happy path. Each of these is a best-effort side effect
-// (device-local caching signals, never the primary operation they ride on
-// in authStore.ts) that must degrade rather than throw, and must still log
-// (docs/error-handling.md §2 — a legitimate swallow must never be silent).
-test('hasLoggedInBefore degrades to false on a storage read failure', async () => {
-  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-  const spy = vi.spyOn(deviceDb.marker, 'get').mockRejectedValue(new Error('IDB blocked'))
-
-  expect(await hasLoggedInBefore()).toBe(false)
-  expect(warn).toHaveBeenCalled()
-
-  spy.mockRestore()
-  warn.mockRestore()
-})
-
-test('markLoggedIn is safe to fire-and-forget: a write failure is caught and logged, not thrown', async () => {
-  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-  const spy = vi.spyOn(deviceDb.marker, 'put').mockRejectedValue(new Error('IDB blocked'))
-
-  await expect(markLoggedIn()).resolves.toBeUndefined()
-  expect(warn).toHaveBeenCalled()
-
-  spy.mockRestore()
-  warn.mockRestore()
-})
-
-test('clearLoggedIn is safe to fire-and-forget: a delete failure is caught and logged, not thrown', async () => {
-  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-  const spy = vi.spyOn(deviceDb.marker, 'delete').mockRejectedValue(new Error('IDB blocked'))
-
-  await expect(clearLoggedIn()).resolves.toBeUndefined()
-  expect(warn).toHaveBeenCalled()
-
-  spy.mockRestore()
-  warn.mockRestore()
-})
-
-// specs.md §10.33: a second, independent device-history marker — "this
-// device last used the app as a guest" — that RequireAuth/lockStore now
-// consult alongside the login marker. Presence-only, like driveDecision/
-// guestLock below (no second state to distinguish, unlike loggedInBefore's
-// boolean field), so a distinct table rather than a field on `marker`.
 test('no guest marker on a fresh device', async () => {
   expect(await hasUsedGuestBefore()).toBe(false)
 })
@@ -165,41 +122,6 @@ test('the login marker and the guest marker are independent', async () => {
   expect(await hasUsedGuestBefore()).toBe(false)
 })
 
-test('hasUsedGuestBefore degrades to false on a storage read failure', async () => {
-  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-  const spy = vi.spyOn(deviceDb.guestMarker, 'get').mockRejectedValue(new Error('IDB blocked'))
-
-  expect(await hasUsedGuestBefore()).toBe(false)
-  expect(warn).toHaveBeenCalled()
-
-  spy.mockRestore()
-  warn.mockRestore()
-})
-
-test('markGuestUsed is safe to fire-and-forget: a write failure is caught and logged, not thrown', async () => {
-  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-  const spy = vi.spyOn(deviceDb.guestMarker, 'put').mockRejectedValue(new Error('IDB blocked'))
-
-  await expect(markGuestUsed()).resolves.toBeUndefined()
-  expect(warn).toHaveBeenCalled()
-
-  spy.mockRestore()
-  warn.mockRestore()
-})
-
-test('clearGuestUsed is safe to fire-and-forget: a delete failure is caught and logged, not thrown', async () => {
-  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-  const spy = vi.spyOn(deviceDb.guestMarker, 'delete').mockRejectedValue(new Error('IDB blocked'))
-
-  await expect(clearGuestUsed()).resolves.toBeUndefined()
-  expect(warn).toHaveBeenCalled()
-
-  spy.mockRestore()
-  warn.mockRestore()
-})
-
-// specs.md §10.2.1 (Track AF, Wave 4.1 half 2): a guest's session-less
-// biometric lock enrollment — device-scoped, no DEK/token to wrap.
 test('no guest lock on a fresh device', async () => {
   expect(await getGuestLock()).toBeUndefined()
 })
@@ -234,74 +156,6 @@ test('touchGuestLockActive updates only the last-active time', async () => {
   expect(
     Uint8Array.from(Object.values(row?.credentialId as unknown as Record<string, number>)),
   ).toEqual(credentialId)
-})
-
-test('getGuestLock degrades to undefined on a storage read failure', async () => {
-  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-  const spy = vi.spyOn(deviceDb.guestLock, 'get').mockRejectedValue(new Error('IDB blocked'))
-
-  expect(await getGuestLock()).toBeUndefined()
-  expect(warn).toHaveBeenCalled()
-
-  spy.mockRestore()
-  warn.mockRestore()
-})
-
-test('setGuestLock is safe to fire-and-forget: a write failure is caught and logged, not thrown', async () => {
-  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-  const spy = vi.spyOn(deviceDb.guestLock, 'put').mockRejectedValue(new Error('IDB blocked'))
-
-  await expect(
-    setGuestLock({ credentialId: new Uint8Array([1]), lastActiveAt: 1 }),
-  ).resolves.toBeUndefined()
-  expect(warn).toHaveBeenCalled()
-
-  spy.mockRestore()
-  warn.mockRestore()
-})
-
-test('touchGuestLockActive is safe to fire-and-forget: an update failure is caught and logged, not thrown', async () => {
-  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-  const spy = vi.spyOn(deviceDb.guestLock, 'update').mockRejectedValue(new Error('IDB blocked'))
-
-  await expect(touchGuestLockActive(1)).resolves.toBeUndefined()
-  expect(warn).toHaveBeenCalled()
-
-  spy.mockRestore()
-  warn.mockRestore()
-})
-
-test('getDriveDecision degrades to undefined (unanswered) on a storage read failure', async () => {
-  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-  const spy = vi.spyOn(deviceDb.driveDecision, 'get').mockRejectedValue(new Error('IDB blocked'))
-
-  expect(await getDriveDecision()).toBeUndefined()
-  expect(warn).toHaveBeenCalled()
-
-  spy.mockRestore()
-  warn.mockRestore()
-})
-
-test('setDriveDecision is safe to fire-and-forget: a write failure is caught and logged, not thrown', async () => {
-  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-  const spy = vi.spyOn(deviceDb.driveDecision, 'put').mockRejectedValue(new Error('IDB blocked'))
-
-  await expect(setDriveDecision('connected')).resolves.toBeUndefined()
-  expect(warn).toHaveBeenCalled()
-
-  spy.mockRestore()
-  warn.mockRestore()
-})
-
-test('clearDriveDecision is safe to fire-and-forget: a delete failure is caught and logged, not thrown', async () => {
-  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-  const spy = vi.spyOn(deviceDb.driveDecision, 'delete').mockRejectedValue(new Error('IDB blocked'))
-
-  await expect(clearDriveDecision()).resolves.toBeUndefined()
-  expect(warn).toHaveBeenCalled()
-
-  spy.mockRestore()
-  warn.mockRestore()
 })
 
 test('getDeviceId mints an 8-char lowercase-alphanumeric id and persists it', async () => {
@@ -353,10 +207,6 @@ test('getDeviceId is safe to fire-and-forget on a persist failure: still resolve
   warn.mockRestore()
 })
 
-// specs.md §10.32/§11 (2026-08-21): the persisted "yes, bring these
-// movements into that account" consent — deviceStore.ts, not zustand,
-// specifically so it survives the interruption it exists to let
-// `profiles/adoption.ts`'s `resumePendingAdoption` recover from.
 test('no adoption consent on a fresh device', async () => {
   expect(await getAdoptionConsent()).toBeUndefined()
 })
@@ -393,39 +243,146 @@ test('clearAdoptionConsent on an already-clear consent is a no-op, not an error'
   expect(await getAdoptionConsent()).toBeUndefined()
 })
 
-test('getAdoptionConsent degrades to undefined on a storage read failure', async () => {
-  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-  const spy = vi.spyOn(deviceDb.adoptionConsent, 'get').mockRejectedValue(new Error('IDB blocked'))
+// Every device-local marker below is a best-effort caching signal, never the
+// primary operation it rides on in authStore.ts — a storage failure must
+// degrade the read to its "unset" value and log, never throw.
+const READ_FAILURE_CASES = [
+  {
+    name: 'hasLoggedInBefore degrades to false',
+    arrange: () => vi.spyOn(deviceDb.marker, 'get').mockRejectedValue(new Error('IDB blocked')),
+    act: () => hasLoggedInBefore(),
+    expected: false,
+  },
+  {
+    name: 'hasUsedGuestBefore degrades to false',
+    arrange: () =>
+      vi.spyOn(deviceDb.guestMarker, 'get').mockRejectedValue(new Error('IDB blocked')),
+    act: () => hasUsedGuestBefore(),
+    expected: false,
+  },
+  {
+    name: 'getGuestLock degrades to undefined',
+    arrange: () => vi.spyOn(deviceDb.guestLock, 'get').mockRejectedValue(new Error('IDB blocked')),
+    act: () => getGuestLock(),
+    expected: undefined,
+  },
+  {
+    name: 'getDriveDecision degrades to undefined',
+    arrange: () =>
+      vi.spyOn(deviceDb.driveDecision, 'get').mockRejectedValue(new Error('IDB blocked')),
+    act: () => getDriveDecision(),
+    expected: undefined,
+  },
+  {
+    name: 'getAdoptionConsent degrades to undefined',
+    arrange: () =>
+      vi.spyOn(deviceDb.adoptionConsent, 'get').mockRejectedValue(new Error('IDB blocked')),
+    act: () => getAdoptionConsent(),
+    expected: undefined,
+  },
+] as const
 
-  expect(await getAdoptionConsent()).toBeUndefined()
-  expect(warn).toHaveBeenCalled()
+test.each(READ_FAILURE_CASES)(
+  '$name on a storage read failure, warning instead of throwing',
+  async ({ arrange, act, expected }) => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const spy = arrange()
 
-  spy.mockRestore()
-  warn.mockRestore()
-})
+    expect(await act()).toBe(expected)
+    expect(warn).toHaveBeenCalled()
 
-test('setAdoptionConsent is safe to fire-and-forget: a write failure is caught and logged, not thrown', async () => {
-  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-  const spy = vi.spyOn(deviceDb.adoptionConsent, 'put').mockRejectedValue(new Error('IDB blocked'))
+    spy.mockRestore()
+    warn.mockRestore()
+  },
+)
 
-  await expect(
-    setAdoptionConsent({ profileId: 'p1', accountKey: 'ana@example.com' }),
-  ).resolves.toBeUndefined()
-  expect(warn).toHaveBeenCalled()
+const WRITE_FAILURE_CASES = [
+  {
+    name: 'markLoggedIn',
+    arrange: () => vi.spyOn(deviceDb.marker, 'put').mockRejectedValue(new Error('IDB blocked')),
+    act: () => markLoggedIn(),
+  },
+  {
+    name: 'markGuestUsed',
+    arrange: () =>
+      vi.spyOn(deviceDb.guestMarker, 'put').mockRejectedValue(new Error('IDB blocked')),
+    act: () => markGuestUsed(),
+  },
+  {
+    name: 'setGuestLock',
+    arrange: () => vi.spyOn(deviceDb.guestLock, 'put').mockRejectedValue(new Error('IDB blocked')),
+    act: () => setGuestLock({ credentialId: new Uint8Array([1]), lastActiveAt: 1 }),
+  },
+  {
+    name: 'setDriveDecision',
+    arrange: () =>
+      vi.spyOn(deviceDb.driveDecision, 'put').mockRejectedValue(new Error('IDB blocked')),
+    act: () => setDriveDecision('connected'),
+  },
+  {
+    name: 'setAdoptionConsent',
+    arrange: () =>
+      vi.spyOn(deviceDb.adoptionConsent, 'put').mockRejectedValue(new Error('IDB blocked')),
+    act: () => setAdoptionConsent({ profileId: 'p1', accountKey: 'ana@example.com' }),
+  },
+] as const
 
-  spy.mockRestore()
-  warn.mockRestore()
-})
+test.each(WRITE_FAILURE_CASES)(
+  '$name is safe to fire-and-forget: a write failure is caught and logged, not thrown',
+  async ({ arrange, act }) => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const spy = arrange()
 
-test('clearAdoptionConsent is safe to fire-and-forget: a delete failure is caught and logged, not thrown', async () => {
-  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-  const spy = vi
-    .spyOn(deviceDb.adoptionConsent, 'delete')
-    .mockRejectedValue(new Error('IDB blocked'))
+    await expect(act()).resolves.toBeUndefined()
+    expect(warn).toHaveBeenCalled()
 
-  await expect(clearAdoptionConsent()).resolves.toBeUndefined()
-  expect(warn).toHaveBeenCalled()
+    spy.mockRestore()
+    warn.mockRestore()
+  },
+)
 
-  spy.mockRestore()
-  warn.mockRestore()
-})
+const MUTATION_FAILURE_CASES = [
+  {
+    name: 'clearLoggedIn (delete)',
+    arrange: () => vi.spyOn(deviceDb.marker, 'delete').mockRejectedValue(new Error('IDB blocked')),
+    act: () => clearLoggedIn(),
+  },
+  {
+    name: 'clearGuestUsed (delete)',
+    arrange: () =>
+      vi.spyOn(deviceDb.guestMarker, 'delete').mockRejectedValue(new Error('IDB blocked')),
+    act: () => clearGuestUsed(),
+  },
+  {
+    name: 'touchGuestLockActive (update)',
+    arrange: () =>
+      vi.spyOn(deviceDb.guestLock, 'update').mockRejectedValue(new Error('IDB blocked')),
+    act: () => touchGuestLockActive(1),
+  },
+  {
+    name: 'clearDriveDecision (delete)',
+    arrange: () =>
+      vi.spyOn(deviceDb.driveDecision, 'delete').mockRejectedValue(new Error('IDB blocked')),
+    act: () => clearDriveDecision(),
+  },
+  {
+    name: 'clearAdoptionConsent (delete)',
+    arrange: () =>
+      vi.spyOn(deviceDb.adoptionConsent, 'delete').mockRejectedValue(new Error('IDB blocked')),
+    act: () => clearAdoptionConsent(),
+  },
+] as const
+
+test.each(MUTATION_FAILURE_CASES)(
+  '$name is safe to fire-and-forget: a failure is caught and logged, not thrown',
+  async ({ arrange, act }) => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const spy = arrange()
+
+    await expect(act()).resolves.toBeUndefined()
+    expect(warn).toHaveBeenCalled()
+
+    spy.mockRestore()
+    warn.mockRestore()
+  },
+)

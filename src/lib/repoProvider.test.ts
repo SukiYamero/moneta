@@ -20,9 +20,9 @@ import {
 } from '@/lib/repoProvider'
 import type { Movimiento } from '@/lib/schema'
 
-// specs.md §10.25/§10.28: the flip. getRepo() now serves the binding
-// src/lib/boot.ts establishes, never the fake repo, and never a silent
-// fallback if a caller reaches it before the boot sequence has run.
+// getRepo() serves the binding src/lib/boot.ts establishes, never the fake
+// repo, and never a silent fallback if a caller reaches it before the boot
+// sequence has run.
 describe('getRepo()', () => {
   afterEach(() => {
     __resetRepoBindingForTests()
@@ -85,8 +85,7 @@ describe("getActiveProfileRepo() — resolves fresh every call, independent of g
     const guestMovimiento = await guestRepo.movimientos.add(movimiento())
 
     // Signing in registers a second profile and makes it the most recently
-    // used — "nothing is ever replaced" (specs.md §10.15): the guest data
-    // above stays exactly where it was.
+    // used — nothing is ever replaced, so the guest data above stays put.
     await registerProfile({
       id: GOOGLE_PROFILE_ID,
       label: 'Cuenta de Google',
@@ -103,19 +102,17 @@ describe("getActiveProfileRepo() — resolves fresh every call, independent of g
     expect(await db.movimientos.get(guestMovimiento.id)).toBeDefined()
     expect(await db.movimientos.get(googleMovimiento.id)).toBeUndefined()
 
-    // Switching back (touchLastUsed again, standing in for a future
-    // profile switcher, Wave 5+) reaches the guest data untouched.
+    // Switching back reaches the guest data untouched.
     await touchLastUsed(DEFAULT_PROFILE_ID)
     const guestRepoAgain = await getActiveProfileRepo()
     expect(await guestRepoAgain.movimientos.get(guestMovimiento.id)).toBeDefined()
   })
 })
 
-// specs.md §10.28: the binding boot.ts establishes — separate from
-// getActiveProfileRepo() above, which resolves fresh every call and binds
-// nothing. getRepo() does not read this yet (that is the flip, specs.md
-// §10.25); these tests only cover the binding's own bookkeeping.
-describe('the active-profile binding (specs.md §10.28 — this is what getRepo() now serves)', () => {
+// The binding boot.ts establishes — separate from getActiveProfileRepo()
+// above, which resolves fresh every call and binds nothing. These tests
+// only cover the binding's own bookkeeping.
+describe('the active-profile binding — this is what getRepo() serves', () => {
   afterEach(async () => {
     __resetRepoBindingForTests()
     await db.movimientos.clear()
@@ -142,13 +139,9 @@ describe('the active-profile binding (specs.md §10.28 — this is what getRepo(
     expect(getActiveProfileBinding()).toBe(binding)
   })
 
-  // specs.md §10.28's "two tabs open at once" edge case: both boot
-  // sequences call resolveActiveProfileBinding() independently (no shared
-  // in-memory state across tabs) and must both land on the same profile,
-  // with neither losing the other's touchLastUsed() write — the same
-  // strictly-increasing-timestamp guarantee profileRegistry.test.ts already
-  // proves for touchLastUsed() itself, exercised here through the binding
-  // both tabs would actually call.
+  // Two tabs' boot sequences each call resolveActiveProfileBinding()
+  // independently (no shared in-memory state across tabs) and must both
+  // land on the same profile, through the binding both tabs actually call.
   it('two concurrent resolutions (two tabs) both resolve the same profile, neither losing the other’s touch', async () => {
     const [bindingA, bindingB] = await Promise.all([
       resolveActiveProfileBinding(),

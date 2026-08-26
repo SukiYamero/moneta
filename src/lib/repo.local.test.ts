@@ -91,8 +91,6 @@ describe('ready() / schemaVersion gate', () => {
     expect(config).toEqual(CONFIG_SEMILLA)
   })
 
-  // specs.md §10.7: the initial monedaPrincipal derives from the device
-  // region, not from a static "COP" baked into CONFIG_SEMILLA.
   it('derives monedaPrincipal from the device region on a fresh store', async () => {
     vi.stubGlobal('navigator', { ...navigator, languages: ['es-MX'] })
     const repo = createLocalRepo()
@@ -103,7 +101,7 @@ describe('ready() / schemaVersion gate', () => {
   })
 
   // A stored Config always wins — this is a first-run default, never a
-  // reassignment of a currency the user already has (specs.md §10.7 edge case).
+  // reassignment of a currency the user already has.
   it('never re-derives monedaPrincipal for an already-seeded store, even if the device region changes', async () => {
     await db.config.put({ ...CONFIG_SEMILLA, id: 1 })
     vi.stubGlobal('navigator', { ...navigator, languages: ['es-MX'] })
@@ -183,14 +181,18 @@ describe('ready() / schemaVersion gate', () => {
 describe('movimientos CRUD', () => {
   it('update() not_found error names the entity, not the date field it happens to sort by', async () => {
     const repo = createLocalRepo()
-    // Regression for a message bug: it used to render "no fecha entity..."
-    // (the internal date-field name) instead of naming the actual entity.
+    // The error must name the entity, not the internal field it sorts by.
     await expect(repo.movimientos.update('missing', { monto: 1 })).rejects.toThrow(
       /movimiento with id/i,
     )
     await expect(repo.activos.update('missing', { valorActual: 1 })).rejects.toThrow(
       /activo with id/i,
     )
+  })
+
+  it('removeMany() not_found error names the entity too, same as remove()/update()', async () => {
+    const repo = createLocalRepo()
+    await expect(repo.movimientos.removeMany(['missing'])).rejects.toThrow(/movimiento with id/i)
   })
 
   it('add() with a duplicate id rejects as invalid_input, naming the id, not unknown', async () => {
@@ -201,11 +203,6 @@ describe('movimientos CRUD', () => {
     // to the generic 'unknown' code.
     await expect(repo.movimientos.add({ ...m })).rejects.toMatchObject({ code: 'invalid_input' })
     await expect(repo.movimientos.add({ ...m })).rejects.toThrow(new RegExp(m.id))
-  })
-
-  it('removeMany() not_found error names the entity too, same as remove()/update()', async () => {
-    const repo = createLocalRepo()
-    await expect(repo.movimientos.removeMany(['missing'])).rejects.toThrow(/movimiento with id/i)
   })
 })
 
@@ -418,35 +415,35 @@ describe('Config', () => {
   })
 })
 
-describe('Config — error normalization (docs/error-handling.md §6)', () => {
+describe('Config — error normalization', () => {
   // getConfig()/updateConfig() sit outside createCrudRepo's factory and must
   // funnel a raw storage failure through the same wrapUnknown() normalization
   // every CrudRepo method uses, or a caller's `instanceof RepoError` check
   // silently falls through to an unhandled bare Error.
-  it('getConfig() wraps an unexpected db.config.get() failure as RepoError', async () => {
+  it.each([
+    [
+      'getConfig() wraps an unexpected db.config.get() failure',
+      'get',
+      (repo: ReturnType<typeof createLocalRepo>) => repo.getConfig(),
+    ],
+    [
+      'updateConfig() wraps an unexpected db.config.get() failure',
+      'get',
+      (repo: ReturnType<typeof createLocalRepo>) => repo.updateConfig({ secciones: [] }),
+    ],
+    [
+      'updateConfig() wraps an unexpected db.config.put() failure',
+      'put',
+      (repo: ReturnType<typeof createLocalRepo>) => repo.updateConfig({ secciones: [] }),
+    ],
+  ] as const)('%s as RepoError(unknown)', async (_label, method, run) => {
     const repo = createLocalRepo()
     await repo.ready()
-    const getSpy = vi.spyOn(db.config, 'get').mockRejectedValueOnce(new Error('boom'))
-    const error: unknown = await repo.getConfig().catch((e: unknown) => e)
+    const spy = vi.spyOn(db.config, method).mockRejectedValueOnce(new Error('boom'))
+    const error: unknown = await run(repo).catch((e: unknown) => e)
     expect(error).toBeInstanceOf(RepoError)
     expect(error).toMatchObject({ code: 'unknown' })
-    getSpy.mockRestore()
-  })
-
-  it('updateConfig() wraps an unexpected db.config.get() failure as RepoError', async () => {
-    const repo = createLocalRepo()
-    await repo.ready()
-    const getSpy = vi.spyOn(db.config, 'get').mockRejectedValueOnce(new Error('boom'))
-    await expect(repo.updateConfig({ secciones: [] })).rejects.toBeInstanceOf(RepoError)
-    getSpy.mockRestore()
-  })
-
-  it('updateConfig() wraps an unexpected db.config.put() failure as RepoError', async () => {
-    const repo = createLocalRepo()
-    await repo.ready()
-    const putSpy = vi.spyOn(db.config, 'put').mockRejectedValueOnce(new Error('boom'))
-    await expect(repo.updateConfig({ secciones: [] })).rejects.toBeInstanceOf(RepoError)
-    putSpy.mockRestore()
+    spy.mockRestore()
   })
 
   it('updateConfig() still rejects a caller-supplied schemaVersion as invalid_input, not unknown', async () => {
@@ -574,32 +571,22 @@ describe('list() — fast path correctness at the exact-tie boundary', () => {
     return seen
   }
 
-  it('walks a tie cluster smaller than TIE_SAFETY_MARGIN with no skips or duplicates', async () => {
+  // TIE_SAFETY_MARGIN is 32: a tie cluster under it stays on the fast path;
+  // over it forces `tryFastPath` to bail (it can't prove it's seen
+  // everything within its bounded window) and fall back to `listSlow`.
+  it.each([
+    ['smaller than TIE_SAFETY_MARGIN (fast path)', 10],
+    ['larger than TIE_SAFETY_MARGIN (listSlow fallback)', 50],
+  ])('walks a tie cluster %s with no skips or duplicates', async (_label, count) => {
     const repo = createLocalRepo()
-    const tied = Array.from({ length: 10 }, () =>
+    const tied = Array.from({ length: count }, () =>
       movimiento({ fecha: '2026-01-01', createdAt: '2026-01-01T00:00:00.000Z' }),
     )
     await repo.movimientos.addMany(tied)
 
     const seen = await walkAllPages(repo, 3)
-    expect(seen).toHaveLength(10)
-    expect(new Set(seen).size).toBe(10)
-    expect(new Set(seen)).toEqual(new Set(tied.map((m) => m.id)))
-  })
-
-  it('walks a tie cluster larger than TIE_SAFETY_MARGIN correctly via the slow-path bail-out', async () => {
-    const repo = createLocalRepo()
-    // TIE_SAFETY_MARGIN is 32; a 50-row exact tie forces `tryFastPath` to
-    // bail (it can't prove it's seen everything within its bounded window),
-    // exercising the fallback to `listSlow` rather than just the common case.
-    const tied = Array.from({ length: 50 }, () =>
-      movimiento({ fecha: '2026-01-01', createdAt: '2026-01-01T00:00:00.000Z' }),
-    )
-    await repo.movimientos.addMany(tied)
-
-    const seen = await walkAllPages(repo, 3)
-    expect(seen).toHaveLength(50)
-    expect(new Set(seen).size).toBe(50)
+    expect(seen).toHaveLength(count)
+    expect(new Set(seen).size).toBe(count)
     expect(new Set(seen)).toEqual(new Set(tied.map((m) => m.id)))
   })
 
@@ -623,7 +610,6 @@ describe('list() — fast path correctness at the exact-tie boundary', () => {
   })
 })
 
-// specs.md §10.15: one dexie database per profile, not a `profileId` column.
 // createLocalRepo() must be able to open against any ProfileDb, not just the
 // frozen module-level `db` — this is what lets a guest and a signed-in
 // account read/write entirely separate stores on the same device.
