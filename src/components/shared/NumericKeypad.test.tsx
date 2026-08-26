@@ -96,6 +96,23 @@ describe('NumericKeypad', () => {
     expect(screen.getByRole('button', { name: 'Delete' })).toBeDisabled()
   })
 
+  it('does not steal focus from another element when a key is tapped — a bare button would take focus on its own mousedown/pointerdown default action, which is exactly what would blur/unmount a focus-gated keypad mid-tap', async () => {
+    const user = userEvent.setup()
+    render(
+      <div>
+        <input aria-label="Elsewhere" />
+        <NumericKeypad onDigit={() => {}} onDelete={() => {}} deleteAriaLabel="Delete" />
+      </div>,
+    )
+    const elsewhere = screen.getByLabelText('Elsewhere')
+    await user.click(elsewhere)
+    expect(elsewhere).toHaveFocus()
+
+    await user.click(screen.getByRole('button', { name: '5' }))
+
+    expect(elsewhere).toHaveFocus()
+  })
+
   it('disables every key when disabled is true, regardless of the individual flags', () => {
     render(
       <NumericKeypad

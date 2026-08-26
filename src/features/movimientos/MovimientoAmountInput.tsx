@@ -1,4 +1,12 @@
-import { useId, useMemo, useRef, type ChangeEvent, type Ref } from 'react'
+import {
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type FocusEvent,
+  type Ref,
+} from 'react'
 import { useTranslation } from 'react-i18next'
 import type { Moneda, TipoMovimiento } from '@/lib/schema'
 import {
@@ -125,6 +133,30 @@ export const MovimientoAmountInput = ({
     else if (ref) (ref as { current: HTMLInputElement | null }).current = node
   }
 
+  // The pad shows exactly while focus is somewhere inside this field's own
+  // wrapper (the input itself, or one of the pad's own keys) — never
+  // hardcoded to "always on". `initialFocus` (`AddMovimientoSheet`) focusing
+  // the input on sheet-open is what makes the pad appear on open, with no
+  // extra wiring here.
+  const [keypadOpen, setKeypadOpen] = useState(false)
+  const wrapperRef = useRef<HTMLDivElement>(null)
+
+  const handleWrapperFocus = () => setKeypadOpen(true)
+
+  // Checking `relatedTarget` (the element about to receive focus) against
+  // the wrapper, rather than closing on every blur unconditionally, is what
+  // keeps the pad open across Tab-ing from the input onto one of its own
+  // keys — a bare "close on blur" would unmount the very key that just
+  // received focus. `NumericKeypad`'s own `pointerdown` preventDefault
+  // handles the pointer/touch/mouse case (focus never leaves the input at
+  // all there, so this handler never even runs for a tap); this covers the
+  // keyboard-navigation case that preventDefault can't reach.
+  const handleWrapperBlur = (event: FocusEvent<HTMLDivElement>) => {
+    const next = event.relatedTarget as Node | null
+    if (next && wrapperRef.current?.contains(next)) return
+    setKeypadOpen(false)
+  }
+
   /**
    * Reformats synchronously and moves the caret **on the DOM node itself**,
    * before handing the formatted string to `onChange` — not via a `value`-
@@ -197,7 +229,12 @@ export const MovimientoAmountInput = ({
   }
 
   return (
-    <div className="flex flex-col items-center gap-2">
+    <div
+      ref={wrapperRef}
+      onFocus={handleWrapperFocus}
+      onBlur={handleWrapperBlur}
+      className="flex flex-col items-center gap-2"
+    >
       <span className="text-xs font-semibold text-fg-tertiary">{t('form.amountLabel')}</span>
       <div className="flex w-full items-center justify-center gap-2">
         <span aria-hidden="true" className="shrink-0 text-6xl font-extrabold text-fg-faint">
@@ -238,9 +275,9 @@ export const MovimientoAmountInput = ({
           {error}
         </p>
       )}
-      {SUPPRESS_NATIVE_KEYBOARD_FOR_AMOUNT && (
+      {SUPPRESS_NATIVE_KEYBOARD_FOR_AMOUNT && keypadOpen && (
         <NumericKeypad
-          className="mt-2"
+          className="mt-2 animate-sheet-up"
           disabled={disabled}
           onDigit={handleKeypadDigit}
           onDelete={handleKeypadDelete}
