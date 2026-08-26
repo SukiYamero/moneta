@@ -255,7 +255,9 @@ Categoria[]` prop (no default, same no-silent-fallback rule as
   Deliberately minimal (existing tokens, existing `common` copy, no
   illustration) — the user is designing this screen themselves
   (`docs/pendientes-usuario.md`); this file is the seam their design drops
-  into without touching `useIsLandscape.ts` or the mount site.
+  into without touching `useIsLandscape.ts` or the mount site. Its skip is
+  session-scoped state from `src/lib/landscapeGateStore.ts`, not a stored
+  preference — see that file and `specs.md` §10.53.
 - `Toast.tsx` — a single toast card: `role="alert"` (errors) /
   `role="status"` (confirmations), swipe-to-dismiss via Pointer Events
   (`touch-pan-y`, mirroring `BottomSheet`'s drag handling), plus a

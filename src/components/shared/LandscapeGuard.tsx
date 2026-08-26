@@ -1,8 +1,7 @@
-import { useEffect, useState } from 'react'
 import { Smartphone } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useIsLandscape } from '@/components/shared/useIsLandscape'
-import { hasSkippedLandscapeGate, markLandscapeGateSkipped } from '@/lib/deviceStore'
+import { skipLandscapeGateForSession, useLandscapeGateStore } from '@/lib/landscapeGateStore'
 
 /**
  * The one context with no real orientation lock available: a bare mobile
@@ -12,33 +11,18 @@ import { hasSkippedLandscapeGate, markLandscapeGateSkipped } from '@/lib/deviceS
  * device, landscape); this is only the "what" — the user's own design
  * (`docs/ui/landscape-gate.html`).
  *
- * The skip is a per-device preference (`deviceStore.ts`), not a per-render
- * one: `skipped` starts `null` ("not resolved yet") so a device that
- * already dismissed it never flashes the gate open on mount, and a tap
- * updates state immediately (no round trip to IndexedDB) while the write
- * persists in the background.
+ * The skip is a per-session dismissal (`landscapeGateStore.ts`), not a
+ * per-device one: in-memory state, never persisted, so a reload or a fresh
+ * app launch shows the gate once again. Nothing here waits on storage, so
+ * the gate can render on the very first pass — no tri-state "not resolved
+ * yet" needed to avoid a flash.
  */
 export const LandscapeGuard = () => {
   const isLandscape = useIsLandscape()
   const { t } = useTranslation('common')
-  const [skipped, setSkipped] = useState<boolean | null>(null)
+  const skipped = useLandscapeGateStore((state) => state.skippedThisSession)
 
-  useEffect(() => {
-    let cancelled = false
-    void hasSkippedLandscapeGate().then((value) => {
-      if (!cancelled) setSkipped(value)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  if (!isLandscape || skipped !== false) return null
-
-  const handleSkip = () => {
-    setSkipped(true)
-    void markLandscapeGateSkipped()
-  }
+  if (!isLandscape || skipped) return null
 
   return (
     <div
@@ -61,7 +45,7 @@ export const LandscapeGuard = () => {
         </div>
         <button
           type="button"
-          onClick={handleSkip}
+          onClick={skipLandscapeGateForSession}
           className="mt-1 min-h-11 rounded-2xl border border-border-subtle px-5.5 py-3.5 text-base font-bold text-fg-tertiary"
         >
           {t('landscapeGuard.skip')}

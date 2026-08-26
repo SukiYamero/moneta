@@ -115,21 +115,12 @@ export type AdoptionDeclinedRow = { id: number }
 // given. Single synthetic row, like every other device-wide answer here:
 // only one adoption is ever "the" pending one at a time.
 export type AdoptionConsentRow = { id: number; profileId: string; accountKey?: string }
-// `LandscapeGuard`'s "Omitir y continuar" — a per-device UI dismissal, not
-// app config (specs.md's `Config.preferencias` is profile-scoped and syncs
-// over Drive; this must not follow the account to a second device, since a
-// screen size that's genuinely too small there might still need the gate).
-// Presence-only, like `guestMarker`/`adoptionDeclined` above: once tapped it
-// stays tapped, with no reset — a deliberate product decision, not the
-// per-rotation reset a first draft of this screen's own design export used.
-export type LandscapeGateSkippedRow = { id: number }
 
 const MARKER_ID = 1 as const
 const GUEST_MARKER_ID = 1 as const
 const DRIVE_DECISION_ID = 1 as const
 const ADOPTION_DECLINED_ID = 1 as const
 const ADOPTION_CONSENT_ID = 1 as const
-const LANDSCAPE_GATE_SKIPPED_ID = 1 as const
 const DEVICE_ID_ROW = 1 as const
 const DEVICE_ID_LENGTH = 8
 const DEVICE_ID_ALPHABET = '0123456789abcdefghijklmnopqrstuvwxyz'
@@ -156,7 +147,6 @@ export const deviceDb = new Dexie('kurobello-device') as Dexie & {
   activeProfile: EntityTable<ActiveProfileRow, 'id'>
   adoptionDeclined: EntityTable<AdoptionDeclinedRow, 'id'>
   adoptionConsent: EntityTable<AdoptionConsentRow, 'id'>
-  landscapeGateSkipped: EntityTable<LandscapeGateSkippedRow, 'id'>
 }
 deviceDb.version(1).stores({ marker: 'id' })
 // Additive: `marker` keeps its v1 definition unchanged — same reasoning as
@@ -282,8 +272,8 @@ deviceDb.version(10).stores({
   adoptionDeclined: 'id',
   adoptionConsent: 'id',
 })
-// Additive again: `landscapeGateSkipped` (this module's own
-// `LandscapeGateSkippedRow` comment). Every earlier table restated
+// Additive again: `landscapeGateSkipped` (specs.md §10.53's earlier
+// per-device dismissal of `LandscapeGuard`). Every earlier table restated
 // unchanged.
 deviceDb.version(11).stores({
   marker: 'id',
@@ -299,6 +289,27 @@ deviceDb.version(11).stores({
   adoptionDeclined: 'id',
   adoptionConsent: 'id',
   landscapeGateSkipped: 'id',
+})
+// Subtractive, for the first time: `landscapeGateSkipped` is dropped
+// (specs.md §10.53) — the gate's dismissal is now session-scoped in-memory
+// state (`landscapeGateStore.ts`), not a per-device preference, so the old
+// row is stale data, not a fact worth carrying forward. Dexie deletes an
+// object store when a later version's `.stores()` maps it to `null`; every
+// other table is restated unchanged, same as every earlier bump.
+deviceDb.version(12).stores({
+  marker: 'id',
+  driveDecision: 'id',
+  anchor: 'id',
+  profiles: 'id, kind, lastUsedAt',
+  deviceId: 'id',
+  syncTips: 'id',
+  syncFileCache: 'id',
+  guestLock: 'id',
+  guestMarker: 'id',
+  activeProfile: 'id',
+  adoptionDeclined: 'id',
+  adoptionConsent: 'id',
+  landscapeGateSkipped: null,
 })
 
 export const hasLoggedInBefore = async (): Promise<boolean> => {
@@ -363,37 +374,6 @@ export const clearGuestUsed = async (): Promise<void> => {
     await deviceDb.guestMarker.delete(GUEST_MARKER_ID)
   } catch (e) {
     console.warn('device: could not clear the guest marker', e)
-  }
-}
-
-// Absence means "never dismissed" — a read failure degrades to showing the
-// gate again rather than silently suppressing it, the same posture as every
-// other presence-only signal above.
-export const hasSkippedLandscapeGate = async (): Promise<boolean> => {
-  try {
-    return (await deviceDb.landscapeGateSkipped.get(LANDSCAPE_GATE_SKIPPED_ID)) !== undefined
-  } catch (e) {
-    console.warn('device: could not read the landscape gate dismissal, treating as not skipped', e)
-    return false
-  }
-}
-
-export const markLandscapeGateSkipped = async (): Promise<void> => {
-  try {
-    await deviceDb.landscapeGateSkipped.put({ id: LANDSCAPE_GATE_SKIPPED_ID })
-  } catch (e) {
-    // Best-effort, same posture as markGuestUsed: losing this write just
-    // means the gate can reappear next time this device rotates, not that
-    // the tap the user just made gets undone within this session.
-    console.warn('device: could not persist the landscape gate dismissal', e)
-  }
-}
-
-export const clearLandscapeGateSkipped = async (): Promise<void> => {
-  try {
-    await deviceDb.landscapeGateSkipped.delete(LANDSCAPE_GATE_SKIPPED_ID)
-  } catch (e) {
-    console.warn('device: could not clear the landscape gate dismissal', e)
   }
 }
 
