@@ -458,6 +458,33 @@ describe('MovimientoAmountInput', () => {
       expect(outer?.className).toContain('w-[100dvw]')
       expect(outer?.className).toContain('mx-[calc(50%-50dvw)]')
     })
+
+    // jsdom has no layout engine — `getBoundingClientRect()` always returns
+    // zeros here, so a real pixel assertion ("the outer box reaches x=0/390
+    // while the keys sit at x=22/368") is not expressible in this suite; it
+    // would need a real browser (Playwright e2e), which this project has no
+    // infrastructure for yet (`bun run test` is vitest/jsdom only). This
+    // asserts the CSS mechanism that *produces* that geometry instead: the
+    // bleed lives on the outer box alone, and the grid — the direct parent
+    // of the keys — carries its own `px-5.5`, the same inset the rest of
+    // the sheet uses, so the keys render exactly where they did before the
+    // outer box ever moved. Regression coverage for the bug this guards
+    // against (the keys rendering flush against both screen edges, with
+    // zero margin, once the outer box went full-bleed) is genuinely a class
+    // assertion or nothing, given the constraint above.
+    it("insets the grid with the sheet's own padding, so bleeding the outer box to the edges doesn't also push the keys there", async () => {
+      const user = userEvent.setup()
+      render(<ControlledHarness locale="es-CO" moneda="COP" tipo="gasto" />)
+      await user.click(screen.getByLabelText('Monto'))
+
+      const grid = screen.getByRole('button', { name: '1' }).parentElement
+      const outer = grid?.parentElement
+      expect(grid?.className).toContain('px-5.5')
+      // The inset lives on the grid, not duplicated onto the outer box —
+      // one and only one element bleeds to the edges.
+      expect(outer?.className).not.toContain('px-5.5')
+      expect(grid?.className).not.toContain('w-[100dvw]')
+    })
   })
 
   describe('keypad shows only while the amount field is focused', () => {

@@ -172,7 +172,18 @@ export const NumericKeypad = ({
 
   const grid = (
     <div
-      className={cn('grid w-full grid-cols-3 gap-3', onDismiss ? undefined : className)}
+      className={cn(
+        'grid w-full grid-cols-3 gap-3',
+        // The dismiss bar's own outer container bleeds to the true
+        // viewport edges (`MovimientoAmountInput.tsx`) so the strip beside
+        // the keys belongs to the pad's own hit-test box, not the sheet's
+        // scrollable body — but that box existing there doesn't mean the
+        // *keys* should render there too. Re-applying the sheet's own
+        // `px-5.5` here, on the grid alone, keeps the keys sitting exactly
+        // where they always did (specs.md §10.54) while the invisible box
+        // around them still reaches the edges.
+        onDismiss ? 'px-5.5' : className,
+      )}
       // A key is activated with a tap/click, not by holding focus — but a
       // button's own default pointerdown action focuses it regardless,
       // which would blur whatever the caller actually wants focus to stay
