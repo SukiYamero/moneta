@@ -325,6 +325,23 @@ open the Add sheet and raise the keyboard.
 2. Are the category chips **scrollable** rather than sliced off? In your
    screenshot they were cut mid-shape with no sign more content existed.
 
+**Partially answered 2026-08-25 (user), and his premise needs one
+correction.** He reports the band was the iOS keyboard's own chrome, and
+that since the amount field now uses our on-screen keypad it no longer
+affects him — so the workarounds could come out.
+
+The first half is right; the conclusion is not, and removing them would
+reintroduce the bug. **The OS keyboard has not left this sheet.** The note
+field behind "Más detalles" is an ordinary `TextField`, and so is the
+create-category name field — both still raise it. Only the amount field
+stopped doing so. The overscan, the `.99` opacity paint and `BottomNav`'s
+hide all stay.
+
+**The check is therefore re-worded, not closed:** open the Add sheet, expand
+"Más detalles", and tap into the **note** field so the iOS keyboard comes up.
+Both halves still apply — is the strip above it dimmed, and are the category
+chips scrollable rather than sliced?
+
 ### 19. Keeping the app in portrait — what actually locks, and the guard screen's design — `owner: user`
 
 Raised 2026-08-25, Track AJ4-A (`specs.md` §10.53), from "the app should
@@ -352,6 +369,72 @@ Two things need you, not more engineering:
   back? (The guard covers the whole app — it mounts in `src/main.tsx`,
   above the router, so the auth screens, the PIN lock and `/settings` are
   guarded too, not just the three bottom-nav tabs.)
+
+**Partially answered 2026-08-25 (user), and it settled one half while
+opening a new question.** He saw the gate on a real phone, dismissed it —
+and it never came back, because the skip was written to IndexedDB as a
+per-device preference. That confirms the gate appears and that its dismiss
+works; it also told him the persistence was wrong. The skip is now
+per-session (`specs.md` §10.53): dismiss it and it stays quiet for the rest
+of that run however much you rotate, but a reload or a fresh launch shows it
+once again.
+
+Three things in this item are still open, and they are not the same
+question as "does the gate appear":
+
+- the **installed PWA** actually staying in portrait when you rotate it —
+  nothing in this session touched that, and no agent here can test it;
+- the **new per-session behavior** on your device: dismiss it, rotate back
+  and forth (it must stay quiet), then reload (it must come back once);
+- your own **design** for the screen, which is still yours and still
+  unstarted. What ships is the placeholder.
+
+### 21. Do the PIN screens still summon the iOS keyboard? — `owner: user`
+
+Raised 2026-08-25, sweeping for the shape of the amount field's fix
+(`specs.md` §10.2, §10.54). `LockScreen` and `PinSetup` each back their PIN
+dots with an `sr-only` `<input>`. `sr-only` clips the box to a pixel but
+leaves it real and focusable — so WebKit still raises the OS numeric
+keyboard for it, on top of `PinPad`, which is the keypad those screens
+actually show. `PinSetup` focuses it synchronously on open (`initialFocus`),
+and on `LockScreen` the wrapping `<label>` forwards a tap on the visible
+dots to it, so both screens reach it without any autofocus.
+
+Both now carry `inputMode="none"`, the same fix the amount field uses.
+**CONFIRMED** that the input is focusable (read from the compiled Tailwind
+`sr-only` rule) and that `PinPad`'s keys are real labelled buttons, so the
+accessible path survives. **PLAUSIBLE, not confirmed**, that iOS was
+actually raising the keyboard there — no iOS device exists in this
+environment, the same limit as items 16/17/20.
+
+**The check:** on your iPhone, open _Configurar PIN_ from the profile sheet,
+and separately reach the unlock screen and tap the dots. In both, does only
+our own keypad appear — no second, system keyboard sliding up over it?
+
+### 22. Does the amount keypad behave on the device? — `owner: user`
+
+Raised 2026-08-25, from your own report that it never went away
+(`specs.md` §10.54). Four behaviors changed and all four are **CONFIRMED in
+Chromium and PLAUSIBLE on iOS** — the root cause was WebKit-specific and no
+iOS device is available here, so the fix is deliberately built not to depend
+on either engine's focus behavior rather than verified against the one that
+broke.
+
+**The check, and please report each separately:**
+
+1. Tapping anywhere outside the pad hides it and clears the green ring.
+2. Tapping the small bar above the keys hides it — and dragging that bar
+   downward hides it too, while a short drag springs back.
+3. Tapping the gutter beside the outer keys, or between two keys, does
+   **not** hide it.
+4. Tapping a category chip while the pad is up selects that chip on the
+   **first** tap, rather than only closing the pad.
+
+Separately, a question rather than a check: with the pad up, the amount
+field keeps a green focus ring, because it genuinely holds focus the whole
+time. It goes away when you dismiss the pad. Do you want it suppressed on
+that field specifically, given our own keypad already makes it obvious where
+you are typing?
 
 ---
 
