@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { BottomSheet } from '@/components/shared/BottomSheet'
@@ -7,6 +7,18 @@ import {
   MovimientoAmountInput,
   type MovimientoAmountInputProps,
 } from '@/features/movimientos/MovimientoAmountInput'
+
+const stubMatchMedia = (coarsePointer: boolean) => {
+  vi.stubGlobal(
+    'matchMedia',
+    vi.fn().mockImplementation((query: string) => ({
+      matches: query === '(pointer: coarse)' && coarsePointer,
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })),
+  )
+}
 
 type HarnessProps = Omit<MovimientoAmountInputProps, 'value' | 'onChange'> & {
   initialValue?: string
@@ -21,6 +33,37 @@ const ControlledHarness = ({ initialValue = '', ...props }: HarnessProps) => {
 }
 
 describe('MovimientoAmountInput', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  describe('the on-screen pad is gated to touch devices (coarse pointer)', () => {
+    it('renders the pad and sets inputMode=none on a coarse-pointer (touch) device', async () => {
+      stubMatchMedia(true)
+      const user = userEvent.setup()
+      render(<ControlledHarness locale="es-CO" moneda="COP" tipo="gasto" />)
+      const input = screen.getByLabelText('Monto')
+
+      expect(input).toHaveAttribute('inputMode', 'none')
+      await user.click(input)
+      expect(screen.getByRole('button', { name: '1' })).toBeInTheDocument()
+    })
+
+    it('renders no pad at all, and leaves inputMode=decimal, on a fine-pointer (desktop) device', async () => {
+      stubMatchMedia(false)
+      const user = userEvent.setup()
+      render(<ControlledHarness locale="es-CO" moneda="COP" tipo="gasto" />)
+      const input = screen.getByLabelText('Monto')
+
+      expect(input).toHaveAttribute('inputMode', 'decimal')
+      await user.click(input)
+      expect(screen.queryByRole('button', { name: '1' })).not.toBeInTheDocument()
+
+      await user.keyboard('123')
+      expect(input).toHaveValue('123')
+    })
+  })
+
   it('labels the field via aria-label, and never renders type=number', () => {
     render(
       <MovimientoAmountInput

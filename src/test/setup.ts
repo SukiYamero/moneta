@@ -16,7 +16,31 @@ import { i18next } from '@/lib/i18n'
 // `unstubAllGlobals` restores `globalThis.navigator` to this same mutated
 // object, not to jsdom's original `en-US` one. `es-CO` matches the
 // pre-region-awareness baseline every existing test was written against.
+const COARSE_POINTER_QUERY = '(pointer: coarse)'
+
+// jsdom has no `matchMedia` at all, which every `useMediaQuery`-based hook
+// (landscape, reduced-motion, theme, the amount pad's coarse-pointer gate)
+// degrades on to "doesn't match" — silently hiding touch-only behavior from
+// the whole suite. Query-aware rather than `matches: true` for everything:
+// this project is mobile-first (AGENTS.md), so the suite defaults to a
+// touch device by matching only `(pointer: coarse)`, false for every other
+// query (`prefers-reduced-motion`, `prefers-color-scheme`, orientation).
+// A test that needs a different device stubs `matchMedia` itself
+// (`vi.stubGlobal`), which restores to this default afterward.
+const createMatchMedia = (query: string): MediaQueryList =>
+  ({
+    matches: query === COARSE_POINTER_QUERY,
+    media: query,
+    onchange: null,
+    addListener: () => {},
+    removeListener: () => {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    dispatchEvent: () => false,
+  }) as MediaQueryList
+
 beforeAll(async () => {
+  window.matchMedia = createMatchMedia
   Object.defineProperty(navigator, 'language', { value: 'es-CO', configurable: true })
   Object.defineProperty(navigator, 'languages', { value: ['es-CO'], configurable: true })
   await i18next.changeLanguage('es')

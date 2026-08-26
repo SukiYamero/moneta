@@ -11,18 +11,9 @@ import {
 } from '@/lib/i18n/amountFormat'
 import { Input } from '@/components/ui/input'
 import { NumericKeypad } from '@/components/shared/NumericKeypad'
+import { useIsCoarsePointer } from '@/components/shared/useIsCoarsePointer'
 import { armKeypadDebugLog, logKeypadState } from '@/features/movimientos/keypadDebugLog'
 import { cn } from '@/lib/utils'
-
-/**
- * The one switch for the WebKit AutoFill-accessory clipping bug this field
- * used to hit (`docs/pendientes-usuario.md`): flip to `false` to bring back
- * the OS software keyboard (`inputMode="decimal"`, no on-screen pad) exactly
- * as it worked before. Kept local to this file rather than scattered across
- * the input's `inputMode`, the keypad's render guard and the ref wiring
- * separately.
- */
-const SUPPRESS_NATIVE_KEYBOARD_FOR_AMOUNT = true
 
 export interface MovimientoAmountInputProps {
   value: string
@@ -111,6 +102,10 @@ export const MovimientoAmountInput = ({
   ref,
 }: MovimientoAmountInputProps) => {
   const { t } = useTranslation('movimientos')
+  // Touch (phone/tablet) keeps the on-screen pad — it's also the WebKit
+  // AutoFill-accessory clipping-bug workaround (`docs/pendientes-usuario.md`)
+  // — desktop has neither problem and gets the OS keyboard back.
+  const isCoarsePointer = useIsCoarsePointer()
   const errorId = useId()
   const symbol = useMemo(() => currencySymbolFor(moneda, locale), [moneda, locale])
   const decimal = useMemo(() => decimalSeparatorFor(locale), [locale])
@@ -135,7 +130,9 @@ export const MovimientoAmountInput = ({
   const wrapperRef = useRef<HTMLDivElement>(null)
   const padRef = useRef<HTMLDivElement>(null)
 
-  const handleWrapperFocus = () => setKeypadOpen(true)
+  const handleWrapperFocus = () => {
+    if (isCoarsePointer) setKeypadOpen(true)
+  }
 
   // The one way the pad closes from a pointer gesture (as opposed to Tab or
   // the sheet itself closing): blurring the input keeps it from looking
@@ -311,7 +308,7 @@ export const MovimientoAmountInput = ({
         <Input
           ref={setRef}
           type="text"
-          inputMode={SUPPRESS_NATIVE_KEYBOARD_FOR_AMOUNT ? 'none' : 'decimal'}
+          inputMode={isCoarsePointer ? 'none' : 'decimal'}
           value={value}
           onChange={handleChange}
           disabled={disabled}
@@ -343,7 +340,7 @@ export const MovimientoAmountInput = ({
           {error}
         </p>
       )}
-      {SUPPRESS_NATIVE_KEYBOARD_FOR_AMOUNT && keypadOpen && (
+      {isCoarsePointer && keypadOpen && (
         <NumericKeypad
           // `BottomSheet`'s scrollable body applies `px-5.5` — without the
           // bleed below, the pad's own box stops at that padded content
