@@ -32,6 +32,9 @@ const NORMALIZED_AMOUNT = /^-?\d+(\.\d+)?$/
 /** The locale's own decimal separator character (e.g. "," for es-CO, "." for en-US) — the amount keypad's decimal key reads its label from this rather than hardcoding one, same rule as the rest of this file. */
 export const decimalSeparatorFor = (locale: string): string => separatorsFor(locale).decimal
 
+/** The locale's own grouping separator (e.g. "." for es-CO, "," for en-US) — the keypad's delete key uses this to tell auto-inserted grouping from real, user-typed content (see `MovimientoAmountInput`'s `handleKeypadDelete`). */
+export const groupSeparatorFor = (locale: string): string => separatorsFor(locale).group
+
 export type ParsedAmount =
   | { ok: true; value: number }
   | { ok: false; reason: 'empty' | 'malformed' | 'not_positive' }

@@ -8,12 +8,20 @@ import {
   digitsBeforeIndex,
   indexAfterDigitCount,
   decimalSeparatorFor,
+  groupSeparatorFor,
 } from '@/lib/i18n/amountFormat'
 
 describe('decimalSeparatorFor', () => {
   it("returns the locale's own decimal separator — comma for es-CO, dot for en-US", () => {
     expect(decimalSeparatorFor('es-CO')).toBe(',')
     expect(decimalSeparatorFor('en-US')).toBe('.')
+  })
+})
+
+describe('groupSeparatorFor', () => {
+  it("returns the locale's own grouping separator — dot for es-CO, comma for en-US", () => {
+    expect(groupSeparatorFor('es-CO')).toBe('.')
+    expect(groupSeparatorFor('en-US')).toBe(',')
   })
 })
 

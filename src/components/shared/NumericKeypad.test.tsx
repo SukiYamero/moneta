@@ -52,10 +52,12 @@ describe('NumericKeypad', () => {
     expect(onDecimal).toHaveBeenCalledOnce()
   })
 
-  it('disables every digit button when digitsDisabled is true', () => {
+  it('marks every digit button aria-disabled and ignores taps on them when digitsDisabled is true', async () => {
+    const user = userEvent.setup()
+    const onDigit = vi.fn()
     render(
       <NumericKeypad
-        onDigit={() => {}}
+        onDigit={onDigit}
         onDelete={() => {}}
         deleteAriaLabel="Delete"
         digitsDisabled
@@ -63,16 +65,22 @@ describe('NumericKeypad', () => {
     )
 
     for (const digit of [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]) {
-      expect(screen.getByRole('button', { name: String(digit) })).toBeDisabled()
+      const button = screen.getByRole('button', { name: String(digit) })
+      expect(button).toHaveAttribute('aria-disabled', 'true')
+      expect(button).not.toBeDisabled()
     }
+    await user.click(screen.getByRole('button', { name: '7' }))
+    expect(onDigit).not.toHaveBeenCalled()
   })
 
-  it('disables the decimal button when decimalDisabled is true', () => {
+  it('marks the decimal button aria-disabled and ignores taps on it when decimalDisabled is true', async () => {
+    const user = userEvent.setup()
+    const onDecimal = vi.fn()
     render(
       <NumericKeypad
         onDigit={() => {}}
         onDelete={() => {}}
-        onDecimal={() => {}}
+        onDecimal={onDecimal}
         decimalLabel=","
         decimalAriaLabel="Decimal separator"
         deleteAriaLabel="Delete"
@@ -80,20 +88,52 @@ describe('NumericKeypad', () => {
       />,
     )
 
-    expect(screen.getByRole('button', { name: 'Decimal separator' })).toBeDisabled()
+    const button = screen.getByRole('button', { name: 'Decimal separator' })
+    expect(button).toHaveAttribute('aria-disabled', 'true')
+    expect(button).not.toBeDisabled()
+    await user.click(button)
+    expect(onDecimal).not.toHaveBeenCalled()
   })
 
-  it('disables the delete button when deleteDisabled is true', () => {
+  it('marks the delete button aria-disabled and ignores taps on it when deleteDisabled is true', async () => {
+    const user = userEvent.setup()
+    const onDelete = vi.fn()
     render(
       <NumericKeypad
         onDigit={() => {}}
-        onDelete={() => {}}
+        onDelete={onDelete}
         deleteAriaLabel="Delete"
         deleteDisabled
       />,
     )
 
-    expect(screen.getByRole('button', { name: 'Delete' })).toBeDisabled()
+    const button = screen.getByRole('button', { name: 'Delete' })
+    expect(button).toHaveAttribute('aria-disabled', 'true')
+    expect(button).not.toBeDisabled()
+    await user.click(button)
+    expect(onDelete).not.toHaveBeenCalled()
+  })
+
+  it('a logically-disabled key still dispatches pointerdown, so a container-level focus guard still runs for it — unlike a native `disabled` button, which dispatches no pointer events at all', async () => {
+    const user = userEvent.setup()
+    render(
+      <div>
+        <input aria-label="Elsewhere" />
+        <NumericKeypad
+          onDigit={() => {}}
+          onDelete={() => {}}
+          deleteAriaLabel="Delete"
+          deleteDisabled
+        />
+      </div>,
+    )
+    const elsewhere = screen.getByLabelText('Elsewhere')
+    await user.click(elsewhere)
+    expect(elsewhere).toHaveFocus()
+
+    await user.click(screen.getByRole('button', { name: 'Delete' }))
+
+    expect(elsewhere).toHaveFocus()
   })
 
   it('does not steal focus from another element when a key is tapped — a bare button would take focus on its own mousedown/pointerdown default action, which is exactly what would blur/unmount a focus-gated keypad mid-tap', async () => {
@@ -113,7 +153,7 @@ describe('NumericKeypad', () => {
     expect(elsewhere).toHaveFocus()
   })
 
-  it('disables every key when disabled is true, regardless of the individual flags', () => {
+  it('marks every key aria-disabled when disabled is true, regardless of the individual flags', () => {
     render(
       <NumericKeypad
         onDigit={() => {}}
@@ -126,9 +166,12 @@ describe('NumericKeypad', () => {
       />,
     )
 
-    expect(screen.getByRole('button', { name: '1' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Decimal separator' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Delete' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '1' })).toHaveAttribute('aria-disabled', 'true')
+    expect(screen.getByRole('button', { name: 'Decimal separator' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    )
+    expect(screen.getByRole('button', { name: 'Delete' })).toHaveAttribute('aria-disabled', 'true')
   })
 
   describe('key size', () => {
