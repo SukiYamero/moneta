@@ -25,8 +25,8 @@ const mockStore = (overrides: Partial<ReturnType<typeof useDataStore>>) => {
 }
 
 describe('HistoryScreen status handling', () => {
-  // Anti-flash gate (specs.md §10.9): a load fast enough to beat the
-  // ~150ms show-delay must render nothing, not the skeleton immediately.
+  // Anti-flash gate: a load fast enough to beat the ~150ms show-delay must
+  // render nothing, not the skeleton immediately.
   it('shows nothing yet immediately while status is idle or loading, before the anti-flash delay elapses', () => {
     vi.useFakeTimers()
     mockStore({ status: 'loading' })
@@ -44,11 +44,9 @@ describe('HistoryScreen status handling', () => {
     vi.useRealTimers()
   })
 
-  it('shows an error message with role="alert" when status is error, per docs/error-handling.md §7', () => {
+  it('shows an error message with role="alert" when status is error', () => {
     mockStore({ status: 'error', error: 'unknown' })
     render(<HistoryScreen />)
-    // specs.md §10.11: History now names the actual failure via the shared
-    // repoErrorCopyKey table, not a generic per-screen string.
     expect(screen.getByRole('alert')).toHaveTextContent('Ocurrió un error inesperado')
     // A polite `role="status"` node must not exist alongside — Home/Search
     // don't render one for the error path either, and having both would
@@ -56,9 +54,8 @@ describe('HistoryScreen status handling', () => {
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
   })
 
-  // The actual point of the move to a shared errorCopy table (specs.md
-  // §10.11): a user with no connection is told that specifically, not the
-  // same generic line every other failure shows.
+  // The shared errorCopy table names a network failure specifically, not
+  // the same generic line every other failure shows.
   it('names a network failure specifically, not the generic fallback', () => {
     mockStore({ status: 'error', error: 'network' })
     render(<HistoryScreen />)
@@ -85,14 +82,8 @@ describe('HistoryScreen status handling', () => {
     expect(load).toHaveBeenCalled()
   })
 
-  // Was a characterization of the specs.md §12 bug: with `config` still
-  // null, the `semana` header rendered the week boundary CONFIG_SEMILLA
-  // assumes and then visibly jumped once the real `primerDiaSemana`
-  // resolved. Wave 4 stage-2 groundwork closed it (specs.md §10.24
-  // Prerequisite 1) — the week-derived chrome now waits for `ready` instead
-  // of guessing, so this asserts the fix rather than documenting the defect.
-  // `toFake: ['Date']` pins "today" without faking `setTimeout` — the
-  // pairing that hangs with `user-event` (specs.md §11, 2026-08-19).
+  // `toFake: ['Date']` pins "today" without faking `setTimeout`, which
+  // hangs when paired with `user-event`.
   it('never renders a guessed week boundary before config resolves — it waits, then shows the real one', async () => {
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(new Date('2026-08-19T12:00:00'))
@@ -138,8 +129,7 @@ describe('HistoryScreen status handling', () => {
 
     // `dia` is the default scope and `periodRange` ignores primerDiaSemana for
     // it, so its header renders immediately with no placeholder. The gate is
-    // scoped to the one thing that can actually be wrong, not to the whole
-    // screen (specs.md §10.9: no loader in front of work that finishes in ms).
+    // scoped to the one thing that can actually be wrong, not the whole screen.
     expect(screen.getByRole('radio', { name: 'Día' })).toBeChecked()
     // No placeholder in the header: `dia` does not depend on primerDiaSemana,
     // so its label is a fact from the moment it renders.

@@ -20,8 +20,8 @@ describe('ProfileSheet', () => {
   })
 
   it('opens as a dialog carrying every section heading', async () => {
-    // Security only renders for a signed-in account (specs.md §10.2.1): a
-    // guest never sees a lock control that could only fail (§12).
+    // Security only renders for a signed-in account: a guest never sees
+    // a lock control that could only fail.
     useAuthStore.setState({
       status: 'authenticated',
       user: { email: 'a@b.com', name: 'Ana' },

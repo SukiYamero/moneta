@@ -19,9 +19,9 @@ const reset = vi.fn()
 const clearError = vi.fn()
 let error: string | null = null
 let biometricEnrolled = false
-// Which credential is gating the locked phase (specs.md §10.33) — LockScreen
-// dispatches on this, not authStore.status, because the cold-start guest
-// gate (lockStore.init()) can lock the app before authStore has resolved
+// Which credential is gating the locked phase — LockScreen dispatches on
+// this, not authStore.status, because the cold-start guest gate
+// (lockStore.init()) can lock the app before authStore has resolved
 // anything at all.
 let lockKind: 'account' | 'guest' = 'account'
 
@@ -74,10 +74,10 @@ test('shows an actionable error for a wrong PIN — never the raw message', () =
   expect(screen.queryByText(/lock: wrong pin/i)).not.toBeInTheDocument()
 })
 
-// Finding 9: the biometric button must reflect whether *this vault*
-// enrolled biometrics, not just platform capability — offering it to a
-// PIN-only user always fails with a misleading "not available on this
-// device" message, even though the device does support it.
+// The biometric button must reflect whether *this vault* enrolled
+// biometrics, not just platform capability — offering it to a PIN-only
+// user always fails with a misleading "not available on this device"
+// message, even though the device does support it.
 test('does not offer biometric unlock when this vault never enrolled it', () => {
   biometricEnrolled = false
   render(<LockScreen />)
@@ -117,10 +117,9 @@ test('cancelling the forgot-PIN dialog leaves the vault untouched', async () => 
   expect(screen.queryByText(T('lock:forgotConfirm.title'))).not.toBeInTheDocument()
 })
 
-// specs.md §10.2.1: a guest never has a PIN vault — the guest branch is
-// biometric-only, no keypad, no "Olvidé mi PIN" (there is nothing to wipe
-// that would help — the credential gates the UI, not a cryptographic
-// boundary).
+// A guest never has a PIN vault — the guest branch is biometric-only, no
+// keypad, no "Olvidé mi PIN" (there is nothing to wipe that would help —
+// the credential gates the UI, not a cryptographic boundary).
 test('a guest never sees the PIN keypad or "Olvidé mi PIN" — biometric only', () => {
   lockKind = 'guest'
   render(<LockScreen />)
@@ -151,11 +150,11 @@ test('a guest sees an actionable error for a failed biometric attempt', () => {
   expect(screen.getByRole('alert')).toHaveTextContent(T('lock:errors.biometricUnavailable'))
 })
 
-// The hidden input backs `PinPad`, our own on-screen keypad — same shape as
-// the amount field (specs.md §10.54): without inputMode="none", focusing
-// this real, sr-only-but-focusable input raises the OS software keyboard on
-// top of the app's own keypad. Tapping the dots forwards focus here via the
-// wrapping <label>, so this is reachable without any explicit autofocus.
+// The hidden input backs `PinPad`, our own on-screen keypad: without
+// inputMode="none", focusing this real, sr-only-but-focusable input raises
+// the OS software keyboard on top of the app's own keypad. Tapping the dots
+// forwards focus here via the wrapping <label>, so this is reachable
+// without any explicit autofocus.
 test('the hidden PIN input suppresses the native keyboard so only the on-screen pad shows', () => {
   render(<LockScreen />)
   expect(screen.getByLabelText(T('lock:screen.pinLabel'))).toHaveAttribute('inputMode', 'none')

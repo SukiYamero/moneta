@@ -10,38 +10,26 @@ import { enableLockErrorCopy, unlockErrorCopy } from '@/features/lock/errorCopy'
 // Derived from the real error classes/exported constants, not restated as
 // literals — a message-template change in pinLock.ts, or a rename of one
 // of lockStore.ts's hand-thrown literals, fails these tests instead of
-// silently degrading to the generic fallback (docs/error-handling.md §7).
-// The expected output is a translation key, not Spanish copy — the
-// component resolves it (`t(unlockErrorCopy(error))`), the same split
-// `src/features/auth/errorCopy.test.ts` already tests against.
+// silently degrading to the generic fallback. The expected output is a
+// translation key, not Spanish copy.
 describe('unlockErrorCopy', () => {
-  it('maps a wrong PIN to its translation key', () => {
-    expect(unlockErrorCopy(new WrongPinError().message)).toBe('errors.wrongPin')
-  })
-
-  it('maps unavailable biometrics to its translation key', () => {
-    expect(unlockErrorCopy(new BiometricUnavailableError().message)).toBe(
+  it.each([
+    ['a wrong PIN', new WrongPinError().message, 'errors.wrongPin'],
+    ['unavailable biometrics', new BiometricUnavailableError().message, 'errors.biometricUnavailable'],
+    // The guest path has no PIN fallback, so its own unavailable-biometrics
+    // error reuses the account path's copy.
+    [
+      'an unavailable guest biometric',
+      new GuestBiometricUnavailableError().message,
       'errors.biometricUnavailable',
-    )
-  })
-
-  // specs.md §10.2.1: the guest path has no PIN fallback, so its own
-  // unavailable-biometrics error reuses the same copy as the account path's.
-  it('maps an unavailable guest biometric to the same translation key', () => {
-    expect(unlockErrorCopy(new GuestBiometricUnavailableError().message)).toBe(
-      'errors.biometricUnavailable',
-    )
-  })
-
-  it('maps a lockout to its translation key', () => {
-    expect(unlockErrorCopy(LOCKED_OUT_ERROR)).toBe('errors.lockedOut')
-  })
-
-  // Finding 3 (specs.md §11, 2026-08-19): resume() checking hydrate()'s
-  // actual outcome, instead of assuming success, needs its own actionable
-  // copy distinct from a wrong PIN or a lockout — the PIN itself was correct.
-  it('maps a failed session restore to its translation key', () => {
-    expect(unlockErrorCopy(SESSION_RESTORE_ERROR)).toBe('errors.sessionRestoreFailed')
+    ],
+    ['a lockout', LOCKED_OUT_ERROR, 'errors.lockedOut'],
+    // resume() checking hydrate()'s actual outcome, instead of assuming
+    // success, needs its own actionable copy distinct from a wrong PIN or a
+    // lockout — the PIN itself was correct.
+    ['a failed session restore', SESSION_RESTORE_ERROR, 'errors.sessionRestoreFailed'],
+  ])('maps %s to its translation key', (_desc, message, key) => {
+    expect(unlockErrorCopy(message)).toBe(key)
   })
 
   it('falls back to the generic unlock key for an unmapped message', () => {

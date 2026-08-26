@@ -63,8 +63,8 @@ describe('Home', () => {
     expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('Alex Rivera')
   })
 
-  // Anti-flash gate (specs.md §10.9): a load fast enough to beat the
-  // ~150ms show-delay must render nothing, not the skeleton immediately.
+  // Anti-flash gate: a load fast enough to beat the ~150ms show-delay must
+  // render nothing, not the skeleton immediately.
   it('shows nothing yet immediately after mount, before the anti-flash delay elapses', () => {
     vi.useFakeTimers()
     mGetRepo.mockReturnValue(makeRepo({}))
@@ -135,9 +135,9 @@ describe('Home', () => {
     expect(areas).toBeDisabled()
   })
 
-  // specs.md §10.27: a user who switched monedaPrincipal after already
-  // recording COP movements must see the total say so, not silently
-  // exclude (or, the older bug, silently mix in) the other currency.
+  // A user who switched monedaPrincipal after already recording COP
+  // movements must see the total say so, not silently exclude or mix in
+  // the other currency.
   it('names another currency present in the data, without folding it into the total', async () => {
     const config: Config = {
       ...CONFIG_SEMILLA,
@@ -153,7 +153,7 @@ describe('Home', () => {
     expect(await screen.findByText(/COP/)).toBeInTheDocument()
     // The balance itself must be the USD-only figure (100), never
     // 500_000 + 100 folded into one number — narrowSymbol renders USD as
-    // "$" too (specs.md §10.7), so match on the digits, not the symbol.
+    // "$" too, so match on the digits, not the symbol.
     expect(screen.getAllByText(/\$\s*100,00/).length).toBeGreaterThan(0)
   })
 

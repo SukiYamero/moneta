@@ -95,25 +95,18 @@ describe('WeeklyChart', () => {
     expect(screen.getAllByText(/\$\s*999\.999\.999,00/).length).toBeGreaterThan(0)
   })
 
-  it('passes isAnimationActive=true when the user has no reduced-motion preference', () => {
-    stubMatchMedia(false)
+  it.each([
+    [false, 'true'],
+    [true, 'false'],
+  ] as const)('prefers-reduced-motion=%s -> isAnimationActive=%s', (prefersReduced, expectedAnimated) => {
+    stubMatchMedia(prefersReduced)
     render(<WeeklyChart chart={week()} totalGastos={0} moneda="COP" todayIso={TODAY} />)
 
-    expect(screen.getByTestId('bar')).toHaveAttribute('data-animated', 'true')
+    expect(screen.getByTestId('bar')).toHaveAttribute('data-animated', expectedAnimated)
   })
 
-  it('passes isAnimationActive=false when the user prefers reduced motion', () => {
-    stubMatchMedia(true)
-    render(<WeeklyChart chart={week()} totalGastos={0} moneda="COP" todayIso={TODAY} />)
-
-    expect(screen.getByTestId('bar')).toHaveAttribute('data-animated', 'false')
-  })
-
-  // The Done-when guarantee (docs/wave-2/track-m.md): switching locale must
-  // change the currency formatting AND the day labels together — a
-  // translated chart still showing Spanish month/day names next to
-  // en-US-grouped money would be a half-translated screen, worse than the
-  // original all-Spanish bug.
+  // Switching locale must change currency formatting AND day labels
+  // together — a half-translated chart is worse than an all-Spanish one.
   it('renders money and day labels together in the locale passed by the caller', async () => {
     await i18next.changeLanguage('en')
     render(<WeeklyChart chart={week()} totalGastos={1999} moneda="USD" todayIso={TODAY} />)

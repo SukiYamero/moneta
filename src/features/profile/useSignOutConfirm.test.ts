@@ -31,9 +31,9 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-// specs.md §10.20: the modal is a warning about data at risk of being
-// stranded, not a generic "are you sure" — it only makes sense when there is
-// something unsynced AND nowhere else (Drive) for it to be safe.
+// The modal is a warning about data at risk of being stranded, not a generic
+// "are you sure" — it only makes sense when there is something unsynced AND
+// nowhere else (Drive) for it to be safe.
 describe('useSignOutConfirm', () => {
   it('signs out directly, with no modal and no unsynced check, when Drive is connected', async () => {
     useAuthStore.setState({ driveOptIn: 'connected' })
@@ -132,10 +132,9 @@ describe('useSignOutConfirm', () => {
     expect(useAuthStore.getState().logout).not.toHaveBeenCalled()
   })
 
-  // outbox.ts's own listPendingOperations() already degrades to `[]` on a
-  // storage failure (self-catching) — this just pins down that the fallback
-  // is "sign out, no warning" rather than "block sign-out on a broken read",
-  // matching specs.md §10.20's "sign-out must still complete" posture.
+  // outbox.ts's listPendingOperations() degrades to `[]` on a storage
+  // failure — this pins the fallback to "sign out, no warning" rather than
+  // "block sign-out on a broken read."
   it('fails open (signs out without the modal) if the unsynced check itself comes back empty on failure', async () => {
     useAuthStore.setState({ driveOptIn: 'pending' })
     mListPending.mockResolvedValue([])

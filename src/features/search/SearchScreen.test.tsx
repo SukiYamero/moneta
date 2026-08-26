@@ -92,16 +92,16 @@ describe('SearchScreen', () => {
   })
 
   // AppShell's scroll pane already reserves --bottom-nav-clearance for
-  // every routed screen (docs/wave-2/review-l.md finding 1) — a second copy
-  // here would double the clearance under the nav on this one screen.
+  // every routed screen — a second copy here would double the clearance
+  // under the nav on this one screen.
   it("does not duplicate the shell's --bottom-nav-clearance padding on its own <main>", () => {
     setReady([])
     const { container } = render(<SearchScreen />)
     expect(container.querySelector('main')?.className).not.toMatch(/bottom-nav-clearance/)
   })
 
-  // Anti-flash gate (specs.md §10.9): a load fast enough to beat the
-  // ~150ms show-delay must render nothing, not the skeleton immediately.
+  // Anti-flash gate: a load fast enough to beat the ~150ms show-delay must
+  // render nothing, not the skeleton immediately.
   it('shows nothing yet immediately while the data store is not ready, before the anti-flash delay elapses', () => {
     vi.useFakeTimers()
     useDataStore.setState({ status: 'loading' })
@@ -129,9 +129,8 @@ describe('SearchScreen', () => {
     mGetRepo.mockReturnValue(makeRepo({ readyError: new Error('boom') }))
     render(<SearchScreen />)
 
-    // specs.md §10.11: Search now names the actual failure via the shared
-    // repoErrorCopyKey table — a plain (non-RepoError) failure lands as
-    // dataStore's 'unknown' code, not the old generic "couldn't load" string.
+    // A plain (non-RepoError) failure lands as dataStore's 'unknown' code,
+    // named via the shared repoErrorCopyKey table.
     await waitFor(() => {
       expect(screen.getByRole('alert')).toHaveTextContent(/error inesperado/i)
     })
@@ -168,7 +167,7 @@ describe('SearchScreen', () => {
     expect(screen.getByText('Uber al trabajo')).toBeInTheDocument()
   })
 
-  it('tapping a result opens the movement sheet for that id (specs.md §10.23)', async () => {
+  it('tapping a result opens the movement sheet for that id', async () => {
     const user = userEvent.setup()
     useMovimientoSheetStore.setState({ addOpen: false, viewId: null })
     const target = movimiento({ nota: 'Café de la mañana' })
@@ -196,8 +195,6 @@ describe('SearchScreen', () => {
     expect(screen.getByText('Uber al trabajo')).toBeInTheDocument()
   })
 
-  // The exact case the track brief calls out: a Spanish app where "camion"
-  // doesn't find "camión" is broken.
   it('search is accent- and case-insensitive', async () => {
     const user = userEvent.setup()
     setReady([
@@ -214,9 +211,8 @@ describe('SearchScreen', () => {
     expect(screen.getByText('Viaje en camión')).toBeInTheDocument()
   })
 
-  // `Movimiento.categoria` is a category id (specs.md §10.22) — free-text
-  // search must match the category's resolved *name*, not the id, and
-  // never accidentally match the raw id string either.
+  // `Movimiento.categoria` is a category id — free-text search must match
+  // the category's resolved *name*, not the id, and never the raw id.
   it('matches a movement by its resolved category name, not the raw category id', async () => {
     const user = userEvent.setup()
     setReady([
@@ -293,10 +289,8 @@ describe('SearchScreen', () => {
     expect(screen.queryByText('Sueldo de agosto')).not.toBeInTheDocument()
   })
 
-  // `filters.selectedTags` holds category ids (specs.md §10.22); the active
-  // chip rendered above the results must show the resolved *name*, never
-  // the raw id — the exact bug shape the reference-migration sweep exists
-  // to close.
+  // `filters.selectedTags` holds category ids; the active chip rendered
+  // above the results must show the resolved *name*, never the raw id.
   it('the active tag chip shows the category name, never the raw category id', async () => {
     const user = userEvent.setup()
     setReady([movimiento({ nota: 'Café de la mañana', categoria: 'cat_comida' })])
@@ -348,10 +342,8 @@ describe('SearchScreen', () => {
     expect(screen.getByText('Café de la mañana')).toBeInTheDocument()
   })
 
-  // AGENTS.md § UI: touch targets ≥ 44px. specs.md §10.5.1 fixed this exact
-  // shape (a small visible icon/pill as the whole button, no invisible
-  // 44px hit-area padding) on TagChip/SegmentedControl/DateChipPicker —
-  // sweeping this track's own screen for the same shape.
+  // Touch targets stay ≥44px via an invisible hit-area padding wrapper,
+  // never by inflating the small visible icon/pill itself.
   it('the clear-search button meets the 44px touch-target floor without inflating the visible circle', async () => {
     const user = userEvent.setup()
     setReady([movimiento({ nota: 'Café de la mañana' })])
@@ -400,19 +392,16 @@ describe('SearchScreen', () => {
     expect(screen.getByText('Sueldo de agosto')).toBeInTheDocument()
   })
 
-  // The Done-when guarantee (docs/wave-2/track-m.md): switching locale must
-  // change the currency formatting AND the date labels together — a
-  // translated screen still showing an es-CO amount next to a Spanish
-  // month abbreviation would be a half-translated screen, worse than the
-  // original all-Spanish bug.
+  // Switching locale must change currency formatting AND date labels
+  // together — a half-translated screen is worse than an all-Spanish one.
   it('renders money and date labels together in the locale passed by the caller', async () => {
     await i18next.changeLanguage('en')
     setReady([movimiento({ nota: 'Coffee', monto: 1999, moneda: 'USD', fecha: '2026-08-10' })])
     render(<SearchScreen />)
 
     expect(screen.getByText('10 Aug')).toBeInTheDocument()
-    // The sign attaches to the number, not the currency (specs.md §10.7):
-    // "$-1,999.00", not "-$1,999.00".
+    // The sign attaches to the number, not the currency: "$-1,999.00",
+    // not "-$1,999.00".
     expect(screen.getByText('$-1,999.00')).toBeInTheDocument()
 
     await i18next.changeLanguage('es')

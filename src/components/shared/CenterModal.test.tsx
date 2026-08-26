@@ -28,10 +28,9 @@ describe('CenterModal', () => {
   })
 
   it('never draws a focus ring on the panel itself, even when it has no focusable children', async () => {
-    // Same fix as BottomSheet, applied at the shared useOverlay seam: with no
-    // focusable content the fallback focuses the panel (tabIndex={-1})
-    // directly, and the global outline-ring/50 base style must not paint a
-    // ring on it.
+    // With no focusable content, useOverlay's fallback focuses the panel
+    // (tabIndex={-1}) itself, which would otherwise paint the global
+    // :focus-visible ring around the whole modal.
     render(
       <CenterModal open onClose={() => {}} ariaLabel="Modal sin contenido enfocable">
         <p>Solo texto, sin controles.</p>
@@ -57,11 +56,9 @@ describe('CenterModal', () => {
   })
 
   it('does not close when a click retargets onto the backdrop after the gesture began on the panel', () => {
-    // Same shape as BottomSheet's own regression test: a click can be
-    // retargeted onto the backdrop by a layout shift between pointerup and
-    // the browser's click dispatch, even though the gesture itself started
-    // on the panel. jsdom never retargets on its own, so this is dispatched
-    // directly rather than via user-event.
+    // A layout shift between pointerup and the browser's click dispatch can
+    // land the click on the backdrop even though the gesture began on the
+    // panel; dismissal must key off where the gesture began.
     const onClose = vi.fn()
     render(<Harness open onClose={onClose} />)
     const panelButton = screen.getByRole('button', { name: 'Cancelar' })
@@ -134,9 +131,6 @@ describe('CenterModal', () => {
       expect(wrapper.style.top).toBe('')
       expect(wrapper.style.height).toBe('')
       expect(dialog.style.maxHeight).toBe('')
-      // Still bounded/scrollable by its own static class even with no
-      // keyboard involved — previously unbounded at any height
-      // (specs.md §10.49).
       expect(dialog).toHaveClass('max-h-[88dvh]', 'overflow-y-auto')
     })
 
@@ -160,11 +154,9 @@ describe('CenterModal', () => {
     })
 
     it('never shrinks the backdrop along with the keyboard-safe wrapper', () => {
-      // Same shared bug as BottomSheet's own regression test: the backdrop
-      // used to be nested inside the wrapper it now sits beside, so it
-      // shrank along with the keyboard-safe correction and let whatever
-      // sits behind (BottomNav included) show through the strip the
-      // wrapper no longer covers (cross-track review, specs.md §10.49).
+      // The backdrop must stay outside the wrapper's subtree, or it shrinks
+      // along with it and lets whatever sits behind (BottomNav included)
+      // show through the uncovered strip.
       const viewport = new FakeVisualViewport()
       vi.stubGlobal('visualViewport', viewport)
       render(<Harness open onClose={() => {}} />)
@@ -180,21 +172,15 @@ describe('CenterModal', () => {
         viewport.dispatchEvent(new Event('resize'))
       })
 
-      // The backdrop's own inline `top` (its static overscan, specs.md
-      // §10.53) is untouched by `viewportInset` — it never reads from the
-      // hook at all, so it cannot shrink or shift with it either.
+      // The backdrop's own inline `top` (its static overscan) is never
+      // touched by the viewport-inset hook.
       expect(wrapper.contains(backdrop)).toBe(false)
       expect(backdrop.style.top).toBe(backdropTopBeforeResize)
       expect(backdrop.style.height).toBe('')
     })
   })
 
-  describe('backdrop overscan — uncoverable regardless of pan/shrink (specs.md §10.53)', () => {
-    // Same reasoning as BottomSheet's own overscan test: `inset-0` spans
-    // exactly the layout viewport per spec, which is already unverified
-    // against a real device for this exact symptom (specs.md §10.49,
-    // §10.52). Overscanning removes the dependency on getting that geometry
-    // right.
+  describe('backdrop overscan — uncoverable regardless of pan/shrink', () => {
     it('extends the backdrop past every edge of the layout viewport, not just inset-0', () => {
       render(<Harness open onClose={() => {}} />)
       const backdrop = document.querySelector('[aria-hidden="true"]') as HTMLElement

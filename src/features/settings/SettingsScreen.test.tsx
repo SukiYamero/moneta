@@ -83,13 +83,11 @@ describe('SettingsScreen', () => {
     expect(mockNavigate).toHaveBeenCalledWith(-1)
   })
 
-  // specs.md §12, 2026-08-20: `CategoriesSection`/`PreferencesEditor` reuse
-  // `ProfileSectionHeading` — a hardcoded `<h3>` built for `ProfileSheet.tsx`,
-  // where its own `<h2>` sits above it. Reused directly under this screen's
-  // `<h1>`, that skips a level. Each section gets its own `<h2>` here
-  // instead, so a real `<h3>` inside it (this file mocks both sections away,
-  // so it can't see that `<h3>` — `CategoriesSection.test.tsx`/
-  // `PreferencesEditor.test.tsx` own that) nests correctly.
+  // `CategoriesSection`/`PreferencesEditor` reuse `ProfileSectionHeading`
+  // (a hardcoded `<h3>` built for `ProfileSheet.tsx`'s own `<h2>`), which
+  // would skip a level under this screen's `<h1>` without an `<h2>` of its
+  // own here. Both sections are mocked away in this file, so their `<h3>`
+  // is covered by their own test files instead.
   it('supplies an <h2> for each section, so the real heading below never skips a level', () => {
     mockStore({ status: 'ready', config: CONFIG_SEMILLA })
     renderScreen()

@@ -22,20 +22,13 @@ const movimiento = (overrides: Partial<Movimiento> = {}): Movimiento => ({
 })
 
 describe('getGreetingKey', () => {
-  it('returns morning for early hours', () => {
-    expect(getGreetingKey(new Date(2026, 7, 19, 6))).toBe('morning')
-  })
-
-  it('returns afternoon for midday hours', () => {
-    expect(getGreetingKey(new Date(2026, 7, 19, 14))).toBe('afternoon')
-  })
-
-  it('returns evening for night hours', () => {
-    expect(getGreetingKey(new Date(2026, 7, 19, 22))).toBe('evening')
-  })
-
-  it('returns evening for the early-morning boundary before 5am', () => {
-    expect(getGreetingKey(new Date(2026, 7, 19, 2))).toBe('evening')
+  it.each([
+    [6, 'morning'],
+    [14, 'afternoon'],
+    [22, 'evening'],
+    [2, 'evening'],
+  ] as const)('hour %i maps to %s', (hour, expected) => {
+    expect(getGreetingKey(new Date(2026, 7, 19, hour))).toBe(expected)
   })
 })
 

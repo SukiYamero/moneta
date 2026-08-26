@@ -117,7 +117,10 @@ describe('FirstSyncGate', () => {
     loadSpy.mockRestore()
   })
 
-  it('a profile dismissed via "continue without Drive" must not re-show the gate on the very next remount (specs.md §10.19: "once," and router.tsx mounts a fresh FirstSyncGate on every top-level route — /settings is a sibling route to /, not nested, so navigating there remounts this component even though no boot rebind happened)', async () => {
+  // router.tsx mounts a fresh FirstSyncGate on every top-level route
+  // (/settings is a sibling of /, not nested), so this remounts the
+  // component with no boot rebind in between.
+  it('a profile dismissed via "continue without Drive" does not re-show the gate on the next remount', async () => {
     const user = userEvent.setup()
     useAuthStore.setState({ status: 'authenticated', drive: { folderId: 'F' } })
     // The profile never gets a lastPullAt in this test — simulating a pull that

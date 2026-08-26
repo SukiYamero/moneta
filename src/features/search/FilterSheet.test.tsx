@@ -22,7 +22,7 @@ const categories: Categoria[] = [
     icono: 'briefcase',
     color: 'emerald',
   },
-  // No icono/color: exercises the tipo-based fallback (specs.md §10.8/§10.22).
+  // No icono/color: exercises the tipo-based fallback.
   { id: 'cat_custom', nombre: 'Etiqueta inventada', seccionId: 'sec_personal', tipo: 'gasto' },
 ]
 

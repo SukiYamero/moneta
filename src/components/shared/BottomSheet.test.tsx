@@ -26,11 +26,8 @@ describe('BottomSheet', () => {
   })
 
   it('keeps the grab handle outside the scrollable content box', () => {
-    // The handle must be fixed chrome — a sibling of the scrolling body,
-    // never inside it — or scrolling the body's content drags the handle
-    // away with it. On `main`, the panel itself was the `overflow-y-auto`
-    // box and the handle was its first child, so `scrollBox` there is the
-    // dialog itself and this assertion fails.
+    // The handle is fixed chrome, a sibling of the scrolling body — never
+    // inside it, or scrolling the body drags the handle away with it.
     render(<Harness open onClose={() => {}} />)
     const dialog = screen.getByRole('dialog')
     const handle = dialog.firstElementChild as HTMLElement
@@ -43,10 +40,8 @@ describe('BottomSheet', () => {
 
   it('never draws a focus ring on the panel itself, even when it has no focusable children', async () => {
     // With no focusable content, useOverlay's fallback focuses the panel
-    // (tabIndex={-1}) directly — that's the exact case that showed a bright
-    // ring around the whole sheet (the global outline-ring/50 base style
-    // painting :focus-visible on it), reading as a web modal instead of a
-    // native sheet.
+    // (tabIndex={-1}) itself, which would otherwise paint the global
+    // :focus-visible ring around the whole sheet.
     render(
       <BottomSheet open onClose={() => {}} ariaLabel="Sheet sin contenido enfocable">
         <p>Solo texto, sin controles.</p>
@@ -74,11 +69,9 @@ describe('BottomSheet', () => {
   })
 
   it('does not close when a click retargets onto the backdrop after the gesture began on the panel', () => {
-    // Reproduces the Android report: the pad collapsing under a tap shrinks
-    // the sheet between pointerup and the browser's own click dispatch, so
-    // the click lands on the backdrop even though pointerdown/pointerup
-    // both hit the panel. jsdom never reflows or retargets on its own, so
-    // the sequence is dispatched directly rather than via user-event.
+    // Content shrinking under a tap (e.g. the amount pad collapsing) can
+    // move a `click` onto the backdrop even though pointerdown/pointerup
+    // both hit the panel; dismissal must key off where the gesture began.
     const onClose = vi.fn()
     render(<Harness open onClose={onClose} />)
     const panelButton = screen.getByRole('button', { name: 'Primero' })
@@ -177,21 +170,14 @@ describe('BottomSheet', () => {
         viewport.dispatchEvent(new Event('resize'))
       })
 
-      // Pinning the wrapper to the visible area is what keeps the sheet's
-      // own top (the gasto/ingreso toggle) from being dragged off-screen —
-      // specs.md §10.49.
       expect(wrapper.style.top).toBe('120px')
       expect(wrapper.style.height).toBe('400px')
       expect(dialog.style.maxHeight).toBe(`${400 * 0.88}px`)
     })
 
     it('never shrinks the backdrop along with the keyboard-safe wrapper', () => {
-      // A real iPhone showed BottomNav (also `fixed`, same z-50) through the
-      // strip a shrunk visual viewport leaves outside the wrapper — because
-      // the backdrop used to be nested *inside* that wrapper and shrank
-      // right along with it (cross-track review, specs.md §10.49). The
-      // backdrop must stay outside the wrapper's subtree so it keeps
-      // dimming the full screen regardless of what the wrapper clamps to.
+      // The backdrop must stay outside the wrapper's subtree, or it shrinks
+      // along with it and lets BottomNav show through the uncovered strip.
       const viewport = new FakeVisualViewport()
       vi.stubGlobal('visualViewport', viewport)
       render(<Harness open onClose={() => {}} />)
@@ -207,25 +193,15 @@ describe('BottomSheet', () => {
         viewport.dispatchEvent(new Event('resize'))
       })
 
-      // The backdrop's own inline `top` (its static overscan, specs.md
-      // §10.53) is untouched by `viewportInset` — it never reads from the
-      // hook at all, so it cannot shrink or shift with it either.
+      // The backdrop's own inline `top` (its static overscan) is never
+      // touched by the viewport-inset hook.
       expect(wrapper.contains(backdrop)).toBe(false)
       expect(backdrop.style.top).toBe(backdropTopBeforeResize)
       expect(backdrop.style.height).toBe('')
     })
   })
 
-  describe('backdrop overscan — uncoverable regardless of pan/shrink (specs.md §10.53)', () => {
-    // A plain `inset-0` box spans exactly the layout viewport per spec,
-    // which this repo's own reasoning says already contains any visible
-    // pan/shrink combination the keyboard causes on iOS — but that
-    // reasoning is unverified against a real device, and the backdrop has
-    // already needed two device-reported fixes for the same visible symptom
-    // (specs.md §10.49, §10.52). Overscanning the backdrop well beyond the
-    // viewport in every direction makes it uncoverable by any pan/shrink up
-    // to that margin without depending on which exact geometry model is
-    // right.
+  describe('backdrop overscan — uncoverable regardless of pan/shrink', () => {
     it('extends the backdrop past every edge of the layout viewport, not just inset-0', () => {
       render(<Harness open onClose={() => {}} />)
       const backdrop = document.querySelector('[aria-hidden="true"]') as HTMLElement
@@ -303,9 +279,8 @@ describe('BottomSheet', () => {
       const handle = getHandle()
 
       // pointercancel is browser/OS-generated (a system gesture, multi-touch
-      // conflict…), not a user interaction — user-event's pointer API has no
-      // equivalent, so this dispatches the native event directly rather than
-      // reaching for the banned `fireEvent`.
+      // conflict…); user-event's pointer API has no equivalent, so it's
+      // dispatched as a raw native event.
       await user.pointer({ keys: '[MouseLeft>]', target: handle, coords: { clientY: 0 } })
       await user.pointer({ coords: { clientY: 300 } })
       handle.dispatchEvent(

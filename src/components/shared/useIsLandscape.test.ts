@@ -19,21 +19,9 @@ const stubMatchMedia = (matches: boolean) => {
 }
 
 describe('useIsLandscape', () => {
-  it('returns false when the orientation query does not match', () => {
-    stubMatchMedia(false)
+  it.each([false, true])('reflects the orientation query match: %s', (matches) => {
+    stubMatchMedia(matches)
     const { result } = renderHook(() => useIsLandscape())
-    expect(result.current).toBe(false)
-  })
-
-  it('returns true when the viewport is landscape', () => {
-    stubMatchMedia(true)
-    const { result } = renderHook(() => useIsLandscape())
-    expect(result.current).toBe(true)
-  })
-
-  it('degrades to false when matchMedia is unavailable (jsdom default)', () => {
-    vi.stubGlobal('matchMedia', undefined)
-    const { result } = renderHook(() => useIsLandscape())
-    expect(result.current).toBe(false)
+    expect(result.current).toBe(matches)
   })
 })

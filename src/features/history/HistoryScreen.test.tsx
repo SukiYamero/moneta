@@ -10,15 +10,13 @@ import { formatMonto, formatMontoWithSign } from '@/components/shared/movimiento
 import { i18next } from '@/lib/i18n'
 import { useMovimientoSheetStore } from '@/features/movimientos'
 
-// The fake repo's seed data is pinned to a fixed clock (repo.fake.ts,
-// independent of the system clock), so pinning the system clock here to the
-// same moment is what makes "today"'s dia scope show real seed data.
-// Read the seed's own "day 0" fecha rather than assuming a literal date
-// string: `repo.fake.ts` derives it via `format(subDays(seedDate, 0), ...)`,
-// a *local*-calendar-day format of a UTC-midnight instant, which lands on
-// the previous calendar day under any negative-UTC-offset TZ (see
-// docs/wave-2/track-e4.md) — asserting against the real value keeps this
-// suite correct under any TZ instead of baking in that same assumption.
+// The fake repo's seed data is pinned to a fixed clock, independent of the
+// system clock, so pinning the system clock here to the same moment is what
+// makes "today"'s dia scope show real seed data. Read the seed's own "day 0"
+// fecha rather than assuming a literal date string: `repo.fake.ts` derives
+// it via a *local*-calendar-day format of a UTC-midnight instant, which
+// lands on the previous calendar day under a negative-UTC-offset TZ —
+// asserting against the real value keeps this suite TZ-independent.
 let seedTodayIso: string
 
 // `getByText`'s default normalizer collapses whitespace runs (including
@@ -30,11 +28,10 @@ const money = (text: string): string => text.replaceAll(' ', ' ')
 
 describe('HistoryScreen', () => {
   beforeEach(async () => {
-    // specs.md §10.25: getRepo() now throws unless the boot sequence has
-    // bound a profile — this suite exercises the real dataStore.load()
-    // against the real fakeRepo (unlike the other screens' tests, which
-    // mock repoProvider outright), so it needs to establish that binding
-    // itself. profile/database are never read on this path.
+    // getRepo() throws unless the boot sequence has bound a profile — this
+    // suite exercises the real dataStore.load() against the real fakeRepo
+    // (unlike the other screens' tests, which mock repoProvider outright),
+    // so it needs to establish that binding itself.
     bindActiveProfile({ profile: {} as never, database: {} as ProfileDb, repo: fakeRepo })
     const movimientos = (await fakeRepo.movimientos.list()).items
     seedTodayIso = movimientos.find((m) => m.nota === 'Café de la mañana')!.fecha
@@ -90,14 +87,10 @@ describe('HistoryScreen', () => {
     expect(screen.getByText('No hay registros en este periodo')).toBeInTheDocument()
   })
 
-  // The guarantee this track exists to produce: every figure on screen
-  // traces to movimientoStats called with the screen's own scope/anchor —
-  // never a second aggregation path living inside the component. Checked
-  // for all four Periodo values, each computed independently in the test
-  // rather than read back out of the component, so a local shortcut in
-  // HistoryScreen would make this fail. (Home has no month-scoped total to
-  // compare against — its balance card is all-time — so this is the
-  // guarantee against movimientoStats itself, not a cross-screen diff.)
+  // Every figure on screen must trace to movimientoStats called with the
+  // screen's own scope/anchor — never a second aggregation path inside the
+  // component. Each expected value is computed independently here rather
+  // than read back out of the component, so a local shortcut would fail.
   it.each([
     ['dia', 'Día'],
     ['semana', 'Semana'],
@@ -152,8 +145,8 @@ describe('HistoryScreen', () => {
 
     await user.click(await screen.findByRole('radio', { name: 'Ingresos' }))
 
-    // `topIngreso.key` is a category id (specs.md §10.22) — the screen must
-    // render its resolved *name*, never the raw id.
+    // `topIngreso.key` is a category id — the screen must render its
+    // resolved *name*, never the raw id.
     const topIngresoName = config.categorias.find((c) => c.id === topIngreso!.key)?.nombre
     expect(topIngresoName).toBeDefined()
     expect(await screen.findByText(topIngresoName!)).toBeInTheDocument()
@@ -178,10 +171,9 @@ describe('HistoryScreen', () => {
     )
   })
 
-  // The Done-when guarantee (docs/wave-2/track-m.md): switching locale must
-  // change the period's month name AND the currency formatting together —
-  // a translated header still showing es-CO-formatted totals would be a
-  // half-translated screen, worse than the original all-Spanish bug.
+  // Switching locale must change the period's month name AND the currency
+  // formatting together — a half-translated screen is worse than an
+  // all-Spanish one.
   it('renders the period month name and totals together in the locale passed by the caller', async () => {
     const user = userEvent.setup()
     await i18next.changeLanguage('en')
@@ -199,7 +191,7 @@ describe('HistoryScreen', () => {
     expect(screen.getByText(new RegExp(`^[A-Z][a-z]+ \\d{4}$`))).toBeInTheDocument()
     // Device region is stubbed to CO (src/test/setup.ts); it's independent
     // of the copy locale, so switching copy to `en` formats as en-CO here,
-    // not en-US (specs.md §10.7).
+    // not en-US.
     expect(
       await screen.findAllByText(money(formatMontoWithSign(expected.ingresos, moneda, 'en-CO'))),
     ).not.toHaveLength(0)
@@ -207,7 +199,7 @@ describe('HistoryScreen', () => {
     await i18next.changeLanguage('es')
   })
 
-  it('tapping a row opens the movement sheet for that id (specs.md §10.23)', async () => {
+  it('tapping a row opens the movement sheet for that id', async () => {
     const user = userEvent.setup()
     useMovimientoSheetStore.setState({ addOpen: false, viewId: null })
     render(<HistoryScreen />)

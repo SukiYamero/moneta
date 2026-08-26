@@ -43,6 +43,15 @@ describe('Toaster', () => {
     expect(card.closest('body')).toBe(document.body)
   })
 
+  it('stacks above the overlay shells and stays clear of the safe-area/bottom-nav', () => {
+    render(<Toaster />)
+    raise(() => toast.success('toast:demo.saved'))
+
+    const stack = screen.getByRole('status').parentElement
+    expect(stack?.className).toMatch(/(^|\s)z-\[60\](\s|$)/)
+    expect(stack).toHaveClass('pb-(--bottom-nav-clearance)')
+  })
+
   it('stacks concurrent toasts, oldest nearest the anchored bottom edge', () => {
     render(<Toaster />)
     raise(() => toast.success('toast:demo.one'))

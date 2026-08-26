@@ -9,13 +9,10 @@ vi.mock('@/routes/Kit', () => {
   throw new Error('chunk failed to load')
 })
 
-// Vitest's default 5s budget is not enough for this one: the dynamic
-// `import('@/router')` below pulls and transforms the whole route module
-// graph inside the test itself, and three Wave 3 tracks independently hit a
-// timeout here while sibling agent worktrees ran their own suites on the
-// same machine. The assertion is event-based (`findByRole`), so the budget
-// bounds transform time under CPU contention, not a race — raising it does
-// not weaken what the test proves.
+// The dynamic `import('@/router')` below transforms the whole route module
+// graph inside the test itself, which can exceed the 5s default under load;
+// the assertion is event-based (`findByRole`), so this only widens the
+// budget, it doesn't turn the assertion into a race.
 const CHUNK_FAILURE_TIMEOUT_MS = 30_000
 
 describe('router — /kit dev route, lazy chunk failure', () => {

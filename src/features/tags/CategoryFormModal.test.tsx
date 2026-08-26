@@ -58,7 +58,7 @@ describe('CategoryFormModal', () => {
     expect(screen.getByRole('heading', { name: /editar categoría/i })).toBeInTheDocument()
   })
 
-  it('pre-fills the name from initialName when creating (Decision 4: "create from query")', () => {
+  it('pre-fills the name from initialName when creating from a "create from query" flow', () => {
     render(
       <CategoryFormModal
         open
@@ -98,8 +98,6 @@ describe('CategoryFormModal', () => {
         initialName="gym"
       />,
     )
-    // "gym" -> dumbbell/rose (categorySuggest.test.ts pins the mapping) —
-    // the preview chip renders with that visible pre-selection.
     expect(screen.getByRole('button', { name: /dumbbell/i, pressed: true })).toBeInTheDocument()
   })
 

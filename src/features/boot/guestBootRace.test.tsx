@@ -19,8 +19,7 @@ import {
 
 // Not module-mocked: this test runs the real profile registry (fake-
 // indexeddb), the real boot sequence, and the real repoProvider/outbox
-// bindings — it exists to answer one question empirically rather than by
-// reasoning about it (operator's brief, track-boot review): does
+// bindings — it exists to answer one question empirically: does
 // `continueAsGuest()`'s unawaited `touchLastUsed()` reliably land before
 // `BootGate`'s effect-driven `run()` reads the profile registry?
 
@@ -58,8 +57,7 @@ afterEach(() => {
 describe('continueAsGuest() vs. the boot sequence — the recency race', () => {
   it('binds the guest profile, not a more-recently-touched Google profile that predates it, on the very next boot', async () => {
     // Simulates a device that signed into a Google account (touched more
-    // recently than the untouched default profile) and later signed out —
-    // the scenario the track's own comment on continueAsGuest() names.
+    // recently than the untouched default profile) and later signed out.
     await registerProfile({
       id: DEFAULT_PROFILE_ID,
       label: 'Local',
