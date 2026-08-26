@@ -721,9 +721,9 @@ Check this table against `git worktree list` at the start of any parallel
 session; prune anything stale (merged-but-not-removed, or on disk but
 missing/finished here).
 
-| Path                                        | Branch                             | Status                                                                   |
-| ------------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------ |
-| `.claude/worktrees/agent-a0989e3de4966f947` | `worktree-agent-a0989e3de4966f947` | active (Track KP-B, landscape gate session-scoped skip, specs.md §10.53) |
+| Path                                        | Branch                             | Status                                                                      |
+| ------------------------------------------- | ---------------------------------- | --------------------------------------------------------------------------- |
+| `.claude/worktrees/agent-ad512be09375d9b2e` | `worktree-agent-ad512be09375d9b2e` | active (Track KP-A, amount keypad dismissal + drag-handle, specs.md §10.54) |
 
 **Pruned 2026-08-25 (cross-track review, `review-ajustes-2`):** AJ2-A's row
 (`../moneta-worktrees/aj2-a`, `aj2-a-amount-display`) still claimed `active`

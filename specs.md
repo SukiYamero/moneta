@@ -1047,6 +1047,21 @@ Its original "UI" subsection is superseded by §10.41 below (which also folds in
 
 **Watch out.** iOS has no documented equivalent to the manifest orientation lock even when installed to the home screen — the portrait guarantee on iOS rests entirely on `LandscapeGuard`, not a platform-level lock.
 
+### 10.54 The amount keypad's outside-tap dismissal doesn't depend on native blur
+
+**Goal.** `MovimientoAmountInput`'s on-screen `NumericKeypad` (§10.41, `SUPPRESS_NATIVE_KEYBOARD_FOR_AMOUNT`) shows exactly while focus is inside its own wrapper, and reliably dismisses on a tap anywhere outside it, on every platform.
+
+**Rules.**
+
+- `keypadOpen` is still driven by native `focus`/`blur` on the field's wrapper (`handleWrapperFocus`/`handleWrapperBlur`) — unchanged, and still what makes Tab-ing onto a pad key keep the pad open.
+- A tap outside the wrapper must not rely on that `blur` firing on its own: WebKit does not shift focus away from a focused input for a tap on a non-focusable target (a label, dead space between fields), so the native event this used to depend on simply never happens there, and the pad stayed open forever (Chromium moves focus off the input for the same tap, which is why the bug was invisible in a desktop browser).
+- A document-level `pointerdown` listener, active only while `keypadOpen`, explicitly calls `.blur()` on the amount input whenever the pointerdown's target is outside the wrapper — independent of whatever focus-shift behavior the platform would or wouldn't have done on its own. The existing focus-gated open/close logic above still owns the actual show/hide; this only forces the blur that drives it.
+- A tap on one of the pad's own keys never reaches that path: the keys render inside the same wrapper, so the outside-target check excludes them, on top of `NumericKeypad`'s own `pointerdown` `preventDefault()` that already keeps the input itself focused during a tap.
+- Because the dismissal is a real `blur()`, not a separate "hidden" flag, tapping the field again always fires a genuine `focus` event and reopens the pad — a flag-based dismiss would miss this, since a second tap on an already-focused input fires no `focus` event at all.
+- Escape still closes the whole sheet (`useOverlay`'s cross-cutting keydown handler) rather than just the pad — no per-field Escape interception exists here.
+
+**Implementation.** `src/features/movimientos/MovimientoAmountInput.tsx`. `NumericKeypad` itself (`src/components/shared/NumericKeypad.tsx`) has no visibility gating of its own and needed no change — `PinPad`/`LockScreen` render it unconditionally, with no focus-driven show/hide, so this fix is not applicable there.
+
 ## 11. Decisions
 
 Deliberately not a log. A decision that still governs behavior is written as a
