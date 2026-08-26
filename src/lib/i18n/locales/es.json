@@ -15,7 +15,8 @@
     },
     "landscapeGuard": {
       "title": "Gira tu teléfono",
-      "body": "Esta app está diseñada para usarse en vertical."
+      "body": "Esta app está pensada para usarse en vertical. Vuelve a ese modo para la mejor experiencia.",
+      "skip": "Omitir y continuar"
     }
   },
   "auth": {
