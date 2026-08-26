@@ -82,6 +82,82 @@ it there immediately rather than leaving it in a conversation that ends.
   scratch. This is what makes the codebase agentic: a fresh agent (or you,
   in a fresh context) reads the scoped doc instead of the whole tree.
 
+## Architecture and patterns
+
+Read this before exploring the tree. `ARCHITECTURE.md` indexes the folders;
+each one's `README.md` has the detail.
+
+### Layers, bottom to top
+
+| Layer                                                        | May import                                        |
+| ------------------------------------------------------------ | ------------------------------------------------- |
+| `src/lib/` — data contract, storage, stores, auth/lock/sync  | nothing above it                                  |
+| `src/components/ui/` — shadcn/Radix primitives               | `lib`                                             |
+| `src/components/shared/` — cross-feature composed components | `lib`, `ui`                                       |
+| `src/features/<name>/` — one folder per screen/feature       | `lib`, `ui`, `shared`, a sibling feature's barrel |
+| `src/routes/` — route pages wired in `src/router.tsx`        | everything below                                  |
+
+`src/lib/` importing `@/components` or `@/features` is a build failure
+(`scripts/no-ui-imports-in-lib.sh`, via `bun run lint:units`). The other
+directions are not script-enforced but hold everywhere — keep them.
+
+### One write, one read
+
+**Write** — `useMovimientoForm.submit()` → `dataStore.createMovimiento()` →
+`runMutation()`: `networkStore.canWrite()` gate → optimistic `set()` →
+`getRepo().movimientos.add()` (Dexie, via `repoProvider` → `repo.local.ts`)
+→ on success `enqueueOperation()` (`outbox.ts`, a Dexie table on the
+profile's own db) → `sync/engine.ts` debounces on `useOutboxStore.dirty` and
+`push()`es to Drive. **Nothing writes to Drive directly** — always
+outbox, then debounced push.
+
+**Read** — screen mounts → `dataStore.load()` → `getRepo()` (bound once per
+boot by `boot.ts`) → `repo.movimientos.list()` → store holds the rows, and
+the screen derives totals/breakdowns/ranges with the pure functions in
+`movimientoStats.ts`. Drive data only ever arrives through `engine.pull()`
+materializing into the same local Dexie db.
+
+### State ownership
+
+Scope is the thing that bites here, so it is named per store:
+
+- **Profile-scoped:** `dataStore` (movimientos/activos/config/status) — reset
+  and reloaded by `boot.ts` on every profile rebind. Never treat it as
+  global for the app's lifetime.
+- **Device-scoped (persisted):** `deviceStore` (markers, Drive decision,
+  guest lock), `networkStore`'s `lastOnlineAt` anchor, and the PIN vault
+  (`pinLock.ts`, on the default profile database — a device secret, not
+  per-profile data).
+- **Session-only (in memory):** `authStore`, `lockStore`, `bootStore`,
+  `syncStore`, `toastStore`, `landscapeGateStore`, `outboxStore`'s `dirty`
+  flag, and the feature-local `movimientoSheetStore`.
+
+Deliberately **not** in a store: derived totals (`movimientoStats.ts`),
+category icon/tint resolution (`movimientoView.ts`), and form field state
+(local `useState` in `useMovimientoForm.ts`).
+
+### Patterns — copy these files
+
+| Need                     | Copy from                                                                                                    |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| Feature folder shape     | `src/features/movimientos/` — hook owns state/validation/submit, component is presentational                 |
+| Sheet / modal            | `BottomSheet.tsx` or `CenterModal.tsx`, both on `useOverlay.ts` (focus trap, scroll lock, nesting)           |
+| Loading + error states   | `HistoryScreen.tsx` with `usePendingDelay()`, plus a `*LoadingState`/`*ErrorState` pair                      |
+| UI copy                  | `useTranslation('<ns>')` + `t('key')`; add to `locales/es.json` first, then the other three at the same path |
+| Form + validation        | `useMovimientoForm.ts` — errors surface only after a submit attempt                                          |
+| Mutation failure         | `dataStore.runMutation()` — optimistic apply, rollback, toast                                                |
+| Action failure on screen | `features/auth/errorCopy.ts` — message-keyed table into `role="alert"`, never `error.message` raw            |
+| Styles                   | Tailwind utilities from the tokens in `src/styles/index.css`, composed with `cn()`                           |
+
+### Stubs — do not mistake these for finished patterns
+
+- `repo.drive.ts` delegates to `createLocalRepo` and has no production call
+  site at all; the real Drive path is outbox → `sync/engine.ts`.
+- `Activo` has no outbox variant, so it never pushes to Drive.
+- `config` sync is whole-object last-write-wins, no field-level merge.
+- `DataSection.tsx`'s "delete stored data" is a disabled stub.
+- `/kit` (`routes/Kit.tsx`) is a dev-only gallery, not a real screen.
+
 ## Branding vs storage identifiers
 
 - The user-facing app name lives in **`src/lib/branding.ts` (`APP_NAME`)** and is
@@ -133,7 +209,20 @@ it there immediately rather than leaving it in a conversation that ends.
   cites nothing — no module headers, no decisions, no past bugs, no
   measurements, no references to `specs.md`, `docs/*`, waves or tracks. If a
   comment doesn't clear that bar, delete it; the reasoning belongs in the
-  commit message, findable later with `git log -S`.
+  commit message, findable later with `git log -S`. Self-test every comment
+  you are about to write: _could a reader have discovered this by reading
+  this repo?_ If yes, don't write it. Where a comment exists because a name
+  is vague, **fix the name**.
+- **A directive is not a comment.** `// oxlint-disable-next-line …`,
+  `// @ts-expect-error`, `// prettier-ignore`, `// v8 ignore` are
+  configuration — never sweep them out with the prose.
+- **Prose follows the same bar as comments.** A line in a `.md` survives only
+  if it states a rule, a mechanism of the product, or a precise location an
+  agent needs. No dates, no anecdotes, no decision logs, no process
+  write-ups, no "this was found by". The one exception in the whole repo is
+  `docs/error-handling.md`, which keeps a section of the bugs this project
+  shipped — 2 to 4 lines each, what failed and the rule that came out of it,
+  at the end so the rules above it stay dry.
 - Use the `@/` alias for imports from `src`.
 - **No namespace imports — `import * as React from 'react'` is banned.** Import only
   what you use, named: `import type { ComponentProps } from 'react'`,
@@ -261,13 +350,12 @@ it there immediately rather than leaving it in a conversation that ends.
   `docs/ui/design-tokens.md` for what's tokenized, what's deliberately not
   (one-off layout spacing), and why.
 
-## State: zustand
+## File and component structure
 
-Shared/global state goes in zustand stores under `src/lib` or the owning feature.
-Local-only state stays in React hooks. No Redux.
-
-## Architecture & file naming
-
+- **State: zustand.** Shared/global state goes in a store under `src/lib` or
+  the owning feature; local-only state stays in React hooks. No Redux. See
+  Architecture and patterns above for which store owns what, and at which
+  scope.
 - **Barrels for public surface, never for the component itself.** A folder that
   exposes multiple things to the outside (e.g. a feature's components/hooks)
   may have an `index.ts` barrel re-exporting them. But a component/view file
@@ -297,144 +385,106 @@ Local-only state stays in React hooks. No Redux.
 - **Interactions use `@testing-library/user-event`, never `fireEvent`** (deprecated style).
 - Use TDD for `auth.ts`, `repo.ts`, `pinLock.ts` and any money math — write the
   failing test first, then the implementation.
+- **A test earns its place by failing when the product breaks.** Cases that
+  differ only in an input value are one `it.each` table, not five `it`s. Do
+  not test an implementation detail that could change with no user-visible
+  effect, and do not test the framework or the library.
+- **Every rule in a `specs.md` §10 entry keeps at least one test that fails
+  if it is broken.** That is the coverage bar — not a line percentage.
+- The comment rule applies inside tests too. If a comment exists because the
+  test's name does not say what it guarantees, **fix the name**.
 
-## How every agent works (reviewers, implementers, researchers)
+## Roles and the workflow
 
-These apply to any agent on this project, whatever it was asked to do.
+Every agent works in one of four roles. The dispatching prompt names the
+role; **read `docs/roles/<role>.md` before anything else**, then this file.
 
-- **Fix the shape, not the instance.** When you fix a defect, sweep your whole
-  area for other occurrences of the _same shape_ before calling it done, and
-  report what the sweep found — including "nothing else" when that is the
-  honest answer. A fix that stops at the one call site that happened to be
-  reported, leaving an identical unguarded pattern in a sibling function, is
-  not done.
-- **Question the framing you were given.** Whoever dispatched you has blind
-  spots, and a brief is an argument, not a specification of reality. If the
-  task is scoped wrongly, if a stated assumption is false, or if the real
-  problem is next to the one you were pointed at, say so. Disagreeing with
-  the operator, with reasoning, is doing the job — not a failure to follow
-  instructions.
-- **Name systematic blind spots.** If you notice that a _process_ keeps
-  producing a class of defect, report the process problem, not just the
-  defect. That finding is usually worth more than the bug that revealed it.
-- **Never pad a report.** A short, honest "three real issues, here they are"
-  beats a long one inflated to look thorough. Say plainly when something is
-  fine. Padding hides the real findings among the filler.
-- **Separate what you proved from what you reasoned.** Mark a finding
-  CONFIRMED only if you traced it precisely or reproduced it — say which —
-  and PLAUSIBLE otherwise. If you cannot write a concrete failure scenario
-  (specific inputs or actions leading to a specific bad outcome), say so and
-  lower your own confidence.
+| Role        | File                                                   | Output                                 |
+| ----------- | ------------------------------------------------------ | -------------------------------------- |
+| Operator    | [docs/roles/operator.md](docs/roles/operator.md)       | Dispatches, decides, talks to the user |
+| Planner     | [docs/roles/planner.md](docs/roles/planner.md)         | A plan. Never code.                    |
+| Implementer | [docs/roles/implementer.md](docs/roles/implementer.md) | Working code on its own branch         |
+| Reviewer    | [docs/roles/reviewer.md](docs/roles/reviewer.md)       | Applied fixes plus a report            |
+
+The cycle, which the operator runs:
+
+1. A task exists — the user names it, or it is already written in a `.md`.
+   If the feature has no `specs.md` §10 entry, one is written first: Goal,
+   Rules, Implementation, short and close to ready to execute.
+2. **Implementers** build it, in parallel where the file sets are disjoint.
+   Each owns an explicit list of files and touches nothing else.
+3. A **reviewer** goes over each finished branch — always, not only when
+   something looks wrong.
+4. The operator tells the user what to test and **what to expect to see**.
+5. The user confirms. Silence is not confirmation; a failure restarts at 2.
+6. Only then the docs land: the task's own `.md` is **replaced** by the
+   shortest honest statement of what now exists and why it was needed, and
+   the `specs.md` §10 entry is consolidated to what the product does.
+7. Commit, then merge. A branch waits, unmerged, until 5 and 6 are done.
+
+Documentation is deferred on purpose. Work that has not been confirmed does
+not get written down as though it had, and a plan left in place after the
+work lands reads as current when it is not.
+
+## Rules every agent follows
+
+Whatever you were asked to do:
+
+- **Question the framing you were given.** A brief is an argument, not a
+  description of reality. If the scope is wrong, an assumption is false, or
+  the real problem sits next to the one you were pointed at, say so.
+  Disagreeing with reasoning is doing the job.
+- **Stop rather than guess** when something is cross-cutting or outside what
+  you own. Report it and let the operator decide. Never edit another agent's
+  files; never silently widen your scope.
+- **Fix the shape, not the instance.** Sweep your area for the same shape
+  before calling a fix done, and say what the sweep found — including
+  "nothing else".
 - **Verify before you claim.** Never report a command as passing without
-  running it and reading its real output. A test you did not watch fail
-  proves nothing — write it first, see it fail for the right reason, then
-  fix.
+  reading its real output. Mark a finding CONFIRMED only if you traced or
+  reproduced it — say which — and PLAUSIBLE otherwise. If you cannot write a
+  concrete failure scenario, say so and lower your own confidence.
+- **Never pad a report.** Say plainly when something is fine.
+- **Name systematic blind spots.** A process that keeps producing a class of
+  defect is a bigger finding than the defect.
+- **Read this project's rules before applying generic best practice**: this
+  file, `specs.md` (the source of truth), `docs/error-handling.md`,
+  `ARCHITECTURE.md`, and the per-directory `README.md`s. Check the relevant
+  §10 entry before calling something a mistake — what looks wrong may be a
+  stated rule. Check whether a relevant skill exists before inventing an
+  approach.
 - **A design reference disagreeing with existing code is a question, not a
-  licence.** Being handed a Claude Design link does not mean "overwrite what
-  is there": the canvas section may be older than the code, or the code may
-  have moved on deliberately. Implementing the canvas faithfully can silently
-  revert real work; assuming the code wins can silently drop a change the user
-  wanted. **Ask which is authoritative for that specific section**, naming what
-  already exists and in what form. The exception, so this doesn't fire
-  constantly: divergences already recorded in `docs/ui/design-tokens.md`
-  (fluid layout over the fixed frame, Lucide over CDN Phosphor, tokens over
-  inline styles, ≥44px targets) are settled decisions — proceed.
-- **Read the project's own rules before applying generic best practice.**
-  This file, `specs.md` (the source of truth), `docs/error-handling.md`,
-  `docs/waves.md`, `ARCHITECTURE.md`, and the per-directory `README.md`s.
-  Check the relevant `specs.md` §10 entry before calling something a
-  mistake — what looks wrong may be a stated rule. Check whether a relevant skill exists before
-  inventing an approach.
-- **Stop rather than guess** when something is genuinely cross-cutting or
-  outside what you own. Report it and let the operator decide; do not edit
-  another track's files, and do not silently widen your scope.
+  licence.** The canvas may be older than the code, or the code may have
+  moved on deliberately. Ask which is authoritative for that specific
+  section, naming what exists and in what form. Divergences already recorded
+  in `docs/ui/design-tokens.md` (fluid layout over the fixed frame, Lucide
+  over CDN Phosphor, tokens over inline styles, ≥44px targets) are settled —
+  proceed.
 
-## Review protocol (operator-owned)
+## Working in parallel
 
-This is not optional and not per-wave — it applies to every track, in every
-session, and the operator/orchestrator owns running it.
-
-1. **Every track gets its own review subagent, scoped to that track's
-   section alone.** Dispatched after the track's work is verified and
-   merged, so a reviewer never files findings against code a later stage
-   rewrites.
-2. **The reviewer looks for four things, not one:** bugs, **redundancy**,
-   **optimization**, and **better approaches** than the one taken. A review
-   that only hunts correctness bugs is doing a quarter of the job — a
-   duplicated lookup table or a defaulted parameter nobody passes is a real
-   finding even though neither is a bug in the "it crashes" sense.
-3. **The reviewer applies what it finds** when the fix is clearly correct
-   and in scope. It does not merely report a list for someone else.
-4. **Anything delicate — a judgment call, a product decision, a
-   cross-cutting change, or scope widening — is escalated to the operator,
-   who decides.** The reviewer says what it would do and why, and stops.
-5. **A reviewer reports its findings to the operator; it does not write them
-   into `specs.md`.** A review pass is process, and process is exactly what
-   that file may not contain. What a review may add is a **rule** it
-   established, folded into the relevant §10 entry in the file's own format —
-   never a section describing the review itself. Everything else goes in the
-   commit message and the report.
-6. **A track's doc lines land in the same commit as its merge, never in a
-   batch at the end.** An unapplied `README.md` draft rots — later commits
-   move the code it describes, and a README that reads as trustworthy but is
-   quietly wrong is worse than one that was never written. If a draft is
-   applied late anyway, **verify every line against the current code first**
-   rather than pasting it.
-7. **At the end of the whole batch, the operator launches a general review**
-   across everything that landed, deliberately looking for what the
-   per-track reviewers structurally _could not_ see: drift between tracks,
-   the same concept solved two ways in two folders, a rule applied in one
-   place and not its twin, dead seams left between tracks, and consistency
-   of the shared surface. Per-track reviewers are blind to the seams
-   between tracks by construction — this pass exists for exactly that.
-
-## Working in parallel (multiple agents)
-
-- One agent = one branch = one worktree. Never two writers on the same branch.
-- **The rule is one writer per _checkout_, not per branch, and it binds the
-  operator too.** A reviewer that applies fixes is a writer; so is the
-  operator applying a doc line. Concretely: **review passes get worktrees,
-  and while any agent is running, the operator does not commit to `main`** —
-  operator edits queue until every agent has returned. Never `git add -A` on
-  a shared checkout; stage named paths. This is a mechanical constraint ("no
-  commits to `main` while an agent runs"), not advice to be careful — a
-  concurrent `git add -A` can silently sweep another agent's uncommitted
-  work into an unrelated commit.
-- Each task declares the files it owns (see the wave/track plan in
-  `docs/waves.md`); do not edit files owned by another in-flight track.
-- `specs.md` edits from parallel tracks are **append-only**: add your own §10
-  subsection or §11 (backlog) lines, never rewrite someone else's. Same rule
-  for `docs/waves.md`'s worktree log.
-- Merge to `main` early and often (trunk-based, no `develop`); rebase your
-  worktree on `main` before finishing.
-- Every agent in every track follows the Coding rules comment policy above
-  strictly. No exceptions per-track.
-- **Log every worktree** you create in `docs/waves.md` "Worktree log" the
-  moment you create it (path, branch, status `active`). When your track's
-  branch merges to `main`, remove the worktree (`git worktree remove <path>`)
-  and delete its row — don't leave it lying around "just in case".
-  At the start of any parallel session, check the log against
-  `git worktree list` and prune anything stale (merged-but-not-removed, or
-  present on disk but missing/finished in the log).
+- One agent = one branch = one worktree. **One writer per _checkout_, and it
+  binds the operator too:** no commits to `main` while any agent is running,
+  and never `git add -A` on a shared checkout — stage named paths. A
+  concurrent `git add -A` silently sweeps another agent's uncommitted work
+  into an unrelated commit.
+- Each task declares the files it owns. When planning parallel work, hunt for
+  the file **nobody** owns that two agents will both want — an unassigned
+  shared file is how two agents each build their own version of the same
+  thing.
+- `specs.md` edits from parallel agents are append-only: add your own
+  entry, never rewrite someone else's.
+- Rebase on `main` before finishing. Remove your worktree once its branch
+  merges; prune stale ones at the start of a session (`git worktree list`).
 - **A worktree under `.claude/worktrees/` is inside the repo, so it is inside
   every default glob.** `vite.config.ts`'s `test.exclude` and the `lint`
-  script's `--ignore-pattern` are what keep an active worktree's own tests
-  from running against `main`'s `node_modules` as if they were this branch's
-  — a new tool that walks the tree needs the same exclusion, or `bun run
-check` starts reporting another branch's state as this one's.
-- **When drafting a wave's file-ownership table, hunt for the _unowned_ file
-  two tracks will both want.** Assigning every file a track will edit is not
-  enough: the expensive case is a shared file assigned to nobody, which each
-  track then correctly routes around by building its own copy of the thing —
-  two independent tracks each inventing their own version of the same store
-  is a planning failure, not a track failure. Ask explicitly which unassigned
-  file two tracks in the same stage will each want for different reasons, and
-  resolve it at planning time.
-- **Subagent model/effort:** always Sonnet 5, never downgrade to another
-  model. Only two effort tiers — pick per task, don't default to `high` out
-  of habit:
-  - `normal` — straightforward/mechanical work: search/lookup, boilerplate,
-    small well-scoped edits, running commands and reporting results.
-  - `high` — anything correctness-critical or open-ended: architecture or
-    design decisions, money math, auth/lock/crypto code, debugging a real
-    bug, code review/verification passes.
+  script's `--ignore-pattern` are what stop an active worktree's tests from
+  running as if they were this branch's. A new tool that walks the tree needs
+  the same exclusion.
+- **Run `bun run check` in the foreground**, as one blocking call. An agent
+  that backgrounds it ends its turn with no done gate and the work sits
+  unverified.
+- **Subagent model/effort:** always Sonnet 5. `normal` for mechanical work
+  (search, boilerplate, small scoped edits, running commands); `high` for
+  anything correctness-critical or open-ended (architecture, money math,
+  auth/lock/crypto, debugging a real bug, review passes).
