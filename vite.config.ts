@@ -57,6 +57,8 @@ export default defineConfig({
     exclude: [...configDefaults.exclude, '.claude/worktrees/**'],
     globals: false,
     setupFiles: ['./src/test/setup.ts'],
+    // css: false would mock every .css import to an empty string, including
+    // an explicit ?raw request, which otherwise bypasses CSS processing entirely.
     css: { include: [/index\.css/] },
   },
 })
