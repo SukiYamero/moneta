@@ -19,13 +19,6 @@ Route-level page components, wired into `src/router.tsx`.
   `<ProfileSheet>` (`src/features/profile`) alongside `BottomNav` — the
   shared nav takes `profileOpen`/`onOpenProfile` as props so
   `src/components/shared/**` never imports a feature.
-- `AppShell.tsx` also mounts `<LandscapeGuard />` (`specs.md` §10.53) — the
-  self-contained full-screen block for the one context with no real
-  orientation lock, a bare mobile browser tab. It only covers the three
-  bottom-nav tabs mounted here; the pre-auth/lock screens and `/settings`
-  mount outside `AppShell` entirely (`src/router.tsx`) and are not guarded —
-  extending coverage there means mounting the same component in
-  `src/main.tsx`/`AppLock.tsx`, both outside this track's writable set.
 - `Home.tsx` — the `/` screen's content, rendered inside `AppShell`'s
   `<Outlet />`: the dashboard (greeting, balance, week strip, weekly chart,
   recent movements) composed from `src/features/home/**`. See that

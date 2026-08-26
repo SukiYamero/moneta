@@ -7574,6 +7574,19 @@ values and the guard's copy/layout use only existing tokens/utilities),
 with this track's belt-and-braces fix and the still-open device check;
 Goal 2's per-context claims added as a new check.
 
+**Mount site corrected by the operator, same day.** §10.53 shipped
+`<LandscapeGuard />` inside `src/routes/AppShell.tsx` and **named the gap
+rather than hiding it**: the auth screens, the PIN lock and `/settings` all
+mount outside `AppShell`, so none of them were guarded — "the app is
+portrait-only" was true of three tabs and false everywhere else. The track
+was right not to reach outside its writable set, and right to file it.
+Closed by moving the mount to `src/main.tsx`, above `AppLock` and the
+router, where it covers every screen. `AppShell`'s mount-wiring test was
+deleted rather than relocated: `LandscapeGuard.test.tsx` and
+`useIsLandscape.test.ts` already cover the component and the hook, and a
+test asserting `AppShell` mounts something it no longer mounts is worse
+than no test at all.
+
 ## 11. Decisions log
 
 - 2026-06-25 — Package manager: **bun**. Node: **24 LTS** (`.nvmrc`).

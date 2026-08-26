@@ -88,33 +88,6 @@ describe('AppShell layout', () => {
     const scrollPane = container.querySelector('.overflow-y-auto')
     expect(scrollPane?.className).toMatch(/overscroll-y-contain/)
   })
-
-  // specs.md §10.53: the mobile-browser-tab path has no real orientation
-  // lock available, so AppShell mounts the guard directly — this proves
-  // the wiring, not the hook's own matchMedia logic (useIsLandscape.test.ts).
-  it('mounts LandscapeGuard, which blocks the screen once the viewport reports landscape', () => {
-    vi.stubGlobal(
-      'matchMedia',
-      vi.fn().mockImplementation((query: string) => ({
-        matches: true,
-        media: query,
-        addEventListener: vi.fn(),
-        removeEventListener: vi.fn(),
-      })),
-    )
-
-    render(
-      <RouterProvider
-        router={createMemoryRouter(
-          [{ element: <AppShell />, children: [{ index: true, element: <div>content</div> }] }],
-          { initialEntries: ['/'] },
-        )}
-      />,
-    )
-
-    expect(screen.getByRole('status')).toBeInTheDocument()
-    vi.unstubAllGlobals()
-  })
 })
 
 describe('AppShell resilience', () => {

@@ -244,8 +244,10 @@ Categoria[]` prop (no default, same no-silent-fallback rule as
   `LandscapeGuard.tsx`'s presentation on purpose, per that section's own
   reasoning about what a real lock does and doesn't cover in each context.
 - `LandscapeGuard.tsx` — the presentation half: self-contained, mounted
-  unconditionally (currently by `src/routes/AppShell.tsx`), renders nothing
-  in portrait and a full-screen blocking `role="status"` in landscape.
+  once in `src/main.tsx` above `AppLock` and the router (not inside
+  `AppShell`, which would miss the auth screens, the PIN lock and
+  `/settings` — every one of them outside it), renders nothing in portrait
+  and a full-screen blocking `role="status"` in landscape.
   Deliberately minimal (existing tokens, existing `common` copy, no
   illustration) — the user is designing this screen themselves
   (`docs/pendientes-usuario.md`); this file is the seam their design drops
