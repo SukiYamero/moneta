@@ -461,8 +461,8 @@ here.
    move off the key, or reach an empty field.
 3. As the amount grows past 9 and 12 characters, the digits shrink a step
    (measured ~28px and ~67px narrower than they'd otherwise be) so more of
-   a large number stays visible — the largest amounts still look the same
-   as before.
+   a large number stays visible — short amounts render at exactly the size
+   they always did.
 
 ---
 
