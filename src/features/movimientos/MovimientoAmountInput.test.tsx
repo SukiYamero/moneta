@@ -472,4 +472,77 @@ describe('MovimientoAmountInput', () => {
       expect(screen.getByRole('button', { name: '1' })).toBeInTheDocument()
     })
   })
+
+  describe('dismissing on an outside tap that never fires a native blur', () => {
+    // iOS Safari does not shift focus away from a focused input when the tap
+    // target itself isn't focusable (a plain div, dead space, a label) — the
+    // native `blur`/`focusout` this component relied on simply never fires
+    // there, so `handleWrapperBlur` never runs and the pad is stuck open
+    // (the user's report). jsdom's own default click behavior already moves
+    // focus to `<body>` on any non-focusable target, matching Chromium, not
+    // WebKit — so it can't reproduce the bug directly. A `mousedown` handler
+    // on the outside target that calls `preventDefault()` produces the same
+    // observable DOM state a real WebKit tap does (the input stays
+    // `document.activeElement`), which is the accurate, browser-agnostic way
+    // to exercise this without an actual iOS device.
+    const OutsideNonFocusableTarget = ({ onMouseDown }: { onMouseDown?: () => void }) => (
+      <div
+        data-testid="outside"
+        onMouseDown={(event) => {
+          event.preventDefault()
+          onMouseDown?.()
+        }}
+      >
+        dead space
+      </div>
+    )
+
+    it('closes the pad on an outside pointerdown even when the target never lets native focus move', async () => {
+      const user = userEvent.setup()
+      render(
+        <div>
+          <ControlledHarness locale="es-CO" moneda="COP" tipo="gasto" />
+          <OutsideNonFocusableTarget />
+        </div>,
+      )
+      const input = screen.getByLabelText('Monto')
+      await user.click(input)
+      expect(screen.getByRole('button', { name: '1' })).toBeInTheDocument()
+
+      await user.click(screen.getByTestId('outside'))
+
+      expect(screen.queryByRole('button', { name: '1' })).not.toBeInTheDocument()
+      expect(input).not.toHaveFocus()
+    })
+
+    it('tapping the amount field again after such a dismissal reopens the pad', async () => {
+      const user = userEvent.setup()
+      render(
+        <div>
+          <ControlledHarness locale="es-CO" moneda="COP" tipo="gasto" />
+          <OutsideNonFocusableTarget />
+        </div>,
+      )
+      const input = screen.getByLabelText('Monto')
+      await user.click(input)
+      await user.click(screen.getByTestId('outside'))
+      expect(screen.queryByRole('button', { name: '1' })).not.toBeInTheDocument()
+
+      await user.click(input)
+
+      expect(screen.getByRole('button', { name: '1' })).toBeInTheDocument()
+    })
+
+    it('a tap on one of the pad’s own keys never triggers the outside-dismiss path', async () => {
+      const user = userEvent.setup()
+      render(<ControlledHarness locale="es-CO" moneda="COP" tipo="gasto" />)
+      const input = screen.getByLabelText('Monto')
+      await user.click(input)
+
+      await user.click(screen.getByRole('button', { name: '7' }))
+
+      expect(screen.getByRole('button', { name: '7' })).toBeInTheDocument()
+      expect(input).toHaveValue('7')
+    })
+  })
 })

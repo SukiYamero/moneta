@@ -1,4 +1,5 @@
 import {
+  useEffect,
   useId,
   useMemo,
   useRef,
@@ -156,6 +157,27 @@ export const MovimientoAmountInput = ({
     if (next && wrapperRef.current?.contains(next)) return
     setKeypadOpen(false)
   }
+
+  // iOS Safari never fires the blur above for a tap outside this field: it
+  // only shifts focus away from a focused input when the tap target is
+  // itself focusable, so tapping dead space (a label, a gap between fields)
+  // leaves the input focused and the pad stuck open forever. A document-level
+  // `pointerdown` fires on every platform regardless of what the tap target
+  // is, so it doesn't depend on that platform-specific focus-shift behavior
+  // at all — `blur()`ing the input explicitly is one mechanism that reuses
+  // the existing focus-gated open/close logic above unchanged (a tap on the
+  // input re-focuses it and reopens the pad exactly as it already did),
+  // rather than a second "dismissed" flag running in parallel with it.
+  useEffect(() => {
+    if (!keypadOpen) return
+    const handlePointerDownOutside = (event: PointerEvent) => {
+      const target = event.target as Node | null
+      if (target && wrapperRef.current?.contains(target)) return
+      inputElRef.current?.blur()
+    }
+    document.addEventListener('pointerdown', handlePointerDownOutside)
+    return () => document.removeEventListener('pointerdown', handlePointerDownOutside)
+  }, [keypadOpen])
 
   /**
    * Reformats synchronously and moves the caret **on the DOM node itself**,

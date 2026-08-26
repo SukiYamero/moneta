@@ -723,6 +723,7 @@ missing/finished here).
 
 | Path | Branch | Status |
 | ---- | ------ | ------ |
+| `.claude/worktrees/agent-ad512be09375d9b2e` | `worktree-agent-ad512be09375d9b2e` | active |
 
 **Pruned 2026-08-25 (cross-track review, `review-ajustes-2`):** AJ2-A's row
 (`../moneta-worktrees/aj2-a`, `aj2-a-amount-display`) still claimed `active`
