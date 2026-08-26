@@ -287,3 +287,48 @@ export const useEscapeToClose = ({ open, onClose }: UseEscapeToCloseOptions) => 
     }
   }, [open])
 }
+
+/**
+ * A backdrop closes its overlay only when the gesture that produced the
+ * `click` actually started on the backdrop itself — not whenever a click
+ * merely lands there. On a touch device, dismissing content in-flow above
+ * the backdrop (`MovimientoAmountInput`'s pad, for one) can shrink the
+ * panel between `pointerdown` and the browser's `click`, sliding the
+ * backdrop under a finger that never intended to leave the sheet; the
+ * `click` then retargets there even though `pointerdown`/`pointerup` both
+ * hit the panel. A document-level `pointerdown` listener — not the
+ * backdrop's own — is what lets this catch that case: it fires for every
+ * gesture regardless of where it starts, so a `pointerdown` on the panel
+ * still clears a `true` left over from an earlier backdrop-originated one.
+ */
+export const useBackdropDismiss = <T extends HTMLElement>(open: boolean, onClose: () => void) => {
+  const backdropRef = useRef<T | null>(null)
+  const gestureStartedOnBackdropRef = useRef(false)
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
+
+  useEffect(() => {
+    if (!open) return
+
+    const handlePointerDown = (event: PointerEvent) => {
+      gestureStartedOnBackdropRef.current = event.target === backdropRef.current
+    }
+    // No click follows a cancelled gesture in practice, but this keeps the
+    // flag from ever outliving the gesture that set it.
+    const handlePointerCancel = () => {
+      gestureStartedOnBackdropRef.current = false
+    }
+    document.addEventListener('pointerdown', handlePointerDown)
+    document.addEventListener('pointercancel', handlePointerCancel)
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+      document.removeEventListener('pointercancel', handlePointerCancel)
+    }
+  }, [open])
+
+  const handleBackdropClick = () => {
+    if (gestureStartedOnBackdropRef.current) onCloseRef.current()
+  }
+
+  return { backdropRef, onClick: handleBackdropClick }
+}

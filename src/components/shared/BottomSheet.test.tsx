@@ -73,6 +73,36 @@ describe('BottomSheet', () => {
     expect(onClose).toHaveBeenCalledOnce()
   })
 
+  it('does not close when a click retargets onto the backdrop after the gesture began on the panel', () => {
+    // Reproduces the Android report: the pad collapsing under a tap shrinks
+    // the sheet between pointerup and the browser's own click dispatch, so
+    // the click lands on the backdrop even though pointerdown/pointerup
+    // both hit the panel. jsdom never reflows or retargets on its own, so
+    // the sequence is dispatched directly rather than via user-event.
+    const onClose = vi.fn()
+    render(<Harness open onClose={onClose} />)
+    const panelButton = screen.getByRole('button', { name: 'Primero' })
+    const backdrop = document.querySelector('[aria-hidden="true"]') as HTMLElement
+
+    panelButton.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
+    panelButton.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }))
+    backdrop.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it('closes on a click retargeted onto the backdrop when the gesture itself began on the backdrop', () => {
+    const onClose = vi.fn()
+    render(<Harness open onClose={onClose} />)
+    const backdrop = document.querySelector('[aria-hidden="true"]') as HTMLElement
+
+    backdrop.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
+    backdrop.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }))
+    backdrop.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+
+    expect(onClose).toHaveBeenCalledOnce()
+  })
+
   it('calls onClose on Escape', async () => {
     const user = userEvent.setup()
     const onClose = vi.fn()

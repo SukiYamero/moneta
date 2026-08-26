@@ -149,10 +149,10 @@ export const MovimientoAmountInput = ({
   // iOS log showed focus walking outside only *after* `pointerup` resolved.
   const gestureStartedInsidePadRef = useRef(true)
 
-  // The collapse waits for `pointerup`, not `pointerdown`: this component
-  // is in-flow, so collapsing it earlier shifts the layout under a gesture
-  // still in flight, and the browser hit-tests that gesture's own
-  // `pointerup`/`click` against whatever slid into its place instead.
+  // The collapse waits for `pointerup`, not `pointerdown`, so it can't
+  // retarget that same event when the in-flow layout shifts. The browser's
+  // later `click` is its own, separate hit-test against the post-collapse
+  // DOM — still exposed to it; `BottomSheet`'s backdrop guards that case.
   useEffect(() => {
     if (!keypadOpen) return
     logKeypadState('probe armed; pad is', wrapperRef.current)
