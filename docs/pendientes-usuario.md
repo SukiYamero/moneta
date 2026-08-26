@@ -423,12 +423,24 @@ broke.
 **The check, and please report each separately:**
 
 1. Tapping anywhere outside the pad hides it and clears the green ring.
-2. Tapping the small bar above the keys hides it — and dragging that bar
-   downward hides it too, while a short drag springs back.
-3. Tapping the gutter beside the outer keys, or between two keys, does
-   **not** hide it.
+   **This is now the only way to dismiss it** — the drag bar the user asked
+   for was removed at his own request the same day, for eating vertical
+   space, so if this fails on his device he is stranded with the pad up.
+2. Tapping the gutter beside the outer keys, between two keys, or dead
+   centre where four keys meet, does **not** hide it. This is the case he
+   reported twice; it could not be reproduced in Chromium _or_ in real
+   WebKit, so the fix is an invariant (a gesture starting on the pad never
+   dismisses it) rather than a repair of a proven fault.
+3. All twelve keys are visible without the bottom row being cut. Keys are
+   53px tall now; the previous 62px plus the bar overflowed a small sheet
+   by 36px, which is what he was hitting.
 4. Tapping a category chip while the pad is up selects that chip on the
    **first** tap, rather than only closing the pad.
+
+**Before reporting a failure, rule out a stale build.** This is a PWA; a
+service worker can serve an older bundle, and the user was testing against a
+work-in-progress dev server at one point. A forced reload separates "the fix
+does not work" from "the fix was not there".
 
 Separately, a question rather than a check: with the pad up, the amount
 field keeps a green focus ring, because it genuinely holds focus the whole
