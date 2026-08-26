@@ -188,6 +188,10 @@ html {
   --animate-sheet-up: sheet-up 0.32s var(--ease-ios);
   --animate-pop-in: pop-in 0.22s var(--ease-ios);
   --animate-push-in: push-in 0.28s var(--ease-ios);
+  /* LandscapeGuard's rotate hint (docs/ui/landscape-gate.html) — ported
+     verbatim from the design export's own `lgRotateHint` keyframe. */
+  --animate-landscape-rotate-hint: landscape-rotate-hint 2.2s cubic-bezier(0.65, 0, 0.35, 1)
+    infinite;
 
   @keyframes fade-in {
     from {
@@ -223,6 +227,20 @@ html {
     to {
       transform: translateX(0);
       opacity: 1;
+    }
+  }
+  @keyframes landscape-rotate-hint {
+    0%,
+    15% {
+      transform: rotate(90deg);
+    }
+    35%,
+    90% {
+      transform: rotate(0deg);
+    }
+    91%,
+    100% {
+      transform: rotate(90deg);
     }
   }
 }

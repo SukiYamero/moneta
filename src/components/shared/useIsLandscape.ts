@@ -1,6 +1,12 @@
 import { useSyncExternalStore } from 'react'
 
-const LANDSCAPE_QUERY = '(orientation: landscape)'
+// `pointer: coarse` is the primary-input-mechanism signal, not a width
+// breakpoint — it's true on a phone or tablet (no mouse/trackpad as the
+// primary pointer) and false on a desktop/laptop window, however narrow or
+// tall that window is made. Combined with `orientation: landscape` this
+// gates touch devices only, tablets included, with no width ceiling to
+// misclassify either a narrow desktop window or a large tablet.
+const LANDSCAPE_QUERY = '(orientation: landscape) and (pointer: coarse)'
 
 // jsdom (the test environment) has no matchMedia — same guard shape as
 // src/features/home/usePrefersReducedMotion.ts, degrading to "not
@@ -19,9 +25,11 @@ const getSnapshot = (): boolean =>
   supportsMatchMedia() ? window.matchMedia(LANDSCAPE_QUERY).matches : false
 
 /**
- * Whether the viewport is currently wider than it is tall — the only
- * cross-context signal available for "keep the app in portrait" (specs.md
- * §10.53) that actually works everywhere. The Web App Manifest's
+ * Whether the viewport is currently wider than it is tall on a touch
+ * device — the only cross-context signal available for "keep the app in
+ * portrait" (specs.md §10.53) that actually works everywhere, and the one
+ * that also has to leave a mouse-driven desktop window alone regardless of
+ * how it's sized (`pointer: coarse` above). The Web App Manifest's
  * `orientation: 'portrait'` (vite.config.ts) is honored once the PWA is
  * installed (Android and a Play Store TWA wrapping it, both the same
  * Chrome/WebView engine); the Screen Orientation API's `lock()` only works
