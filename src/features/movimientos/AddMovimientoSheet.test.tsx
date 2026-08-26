@@ -63,19 +63,10 @@ describe('AddMovimientoSheet', () => {
     expect(mCreateMovimiento).not.toHaveBeenCalled()
   })
 
-  // Item 3 (docs/ajustes-3-plan.md §2/§4): the category-missing message
-  // already rendered before this fix (test above) — the bug is that on a
-  // real phone it renders behind the software keyboard the amount field's
-  // `initialFocus` just opened, so a tap that fails validation reads as
-  // "nothing happened". jsdom can't reproduce keyboard occlusion, but it
-  // can verify the two things that fix it: the field that blocked the save
-  // is brought on screen, and focus actually moves onto its first
-  // focusable control (moving focus off the amount input is what dismisses
-  // the software keyboard on a real phone — an explicit `blur()` isn't
-  // needed for that, and it left keyboard-driven desktop focus nowhere,
-  // specs.md §10.51) — asserted regardless of whether jsdom's
-  // `scrollIntoView` (unimplemented — stubbed here, same as
-  // `PeriodPickerRow.tsx`) is even present.
+  // jsdom can't reproduce a real phone's keyboard occlusion, but it can verify
+  // the two things that fix it: the blocking section is scrolled into view,
+  // and focus moves onto its first focusable control. jsdom's own
+  // `scrollIntoView` is unimplemented, hence the stub.
   it('moves focus to the category picker and scrolls its section into view when a submit is blocked by a missing category', async () => {
     const user = userEvent.setup()
     const scrollIntoView = vi.fn()
@@ -111,8 +102,6 @@ describe('AddMovimientoSheet', () => {
 
     await user.type(screen.getByRole('textbox', { name: /monto/i }), '18000')
     await user.click(screen.getByRole('button', { name: 'Servicios' }))
-    // The note field is behind the "ver más" disclosure (docs/ui/
-    // design-export-add-sheet.md §2, specs.md §10.41).
     await user.click(screen.getByRole('button', { name: /más detalles/i }))
     await user.type(screen.getByRole('textbox', { name: /descripción/i }), 'Internet')
     await user.click(screen.getByRole('button', { name: /agregar gasto/i }))
@@ -131,10 +120,9 @@ describe('AddMovimientoSheet', () => {
     await waitFor(() => expect(useMovimientoSheetStore.getState().addOpen).toBe(false))
   })
 
-  // The design (docs/ui/design-export-add-sheet.md §2, specs.md §10.41) has
-  // no Cancel button in the create sheet's action row — only the sheet's
-  // existing backdrop-tap/Escape/drag-to-dismiss, all routed through
-  // `handleClose`. Simulated here via Escape, the keyboard-reachable path.
+  // The create sheet has no Cancel button — dismissal is backdrop-tap/
+  // Escape/drag-to-dismiss only, routed through `handleClose`. Simulated
+  // here via Escape, the keyboard-reachable path.
   it('dismissing without saving discards the draft — reopening starts blank again', async () => {
     const user = userEvent.setup()
     useMovimientoSheetStore.setState({ addOpen: true })
@@ -171,10 +159,8 @@ describe('AddMovimientoSheet', () => {
     await waitFor(() => expect(useMovimientoSheetStore.getState().addOpen).toBe(false))
   })
 
-  // The artboard's action row binds `{{addLabel}}` to the sheet's own type
-  // toggle — a generic "Guardar" is the old vertical form's copy. Edit mode
-  // keeps the generic label (specs.md §10.41): only create names the
-  // action being taken, because only create's toggle picks what gets made.
+  // Only create names the action taken — edit keeps a generic "Guardar"
+  // since its toggle changes an existing movement rather than naming a new one.
   it('the primary action names what it creates, following the type toggle', async () => {
     const user = userEvent.setup()
     useMovimientoSheetStore.setState({ addOpen: true })
@@ -188,10 +174,8 @@ describe('AddMovimientoSheet', () => {
     expect(screen.queryByRole('button', { name: /agregar gasto/i })).not.toBeInTheDocument()
   })
 
-  // docs/ui/design-export-add-sheet.md §2 draws the commit button at
-  // height:54px/border-radius:18px/font-size:15.5px/font-weight:800 — this
-  // pins the token classes rather than `size="touch"`'s 44px/12px/500
-  // touch-target defaults, which is all the sheet rendered before this fix.
+  // Pins the export-sized CTA classes, distinct from `size="touch"`'s
+  // smaller 44px/12px/500 touch-target defaults.
   it('sizes the primary action to the design export, not the bare touch-target size', () => {
     useMovimientoSheetStore.setState({ addOpen: true })
     render(<AddMovimientoSheet />)
@@ -200,12 +184,9 @@ describe('AddMovimientoSheet', () => {
     expect(cta).toHaveClass('h-13.5', 'rounded-2xl', 'text-md', 'font-extrabold')
   })
 
-  // The count button opens `TagPickerSheet` as a second `BottomSheet`
-  // nested above this one — a real, reachable case `useOverlay`'s
-  // render-order stack (specs.md §10.5.1) must handle, not just the two
-  // sheets happening to both exist. Verified live in a real browser too
-  // (Escape and a backdrop tap both closed only the nested picker); this
-  // pins the same behavior at the component level.
+  // The count button opens `TagPickerSheet` as a second `BottomSheet` nested
+  // above this one — a real, reachable overlay-stack case, not just two
+  // sheets happening to both exist.
   describe('the nested TagPickerSheet (count button) stacks correctly above this sheet', () => {
     const openBoth = async (user: ReturnType<typeof userEvent.setup>) => {
       useMovimientoSheetStore.setState({ addOpen: true })

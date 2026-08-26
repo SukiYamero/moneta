@@ -50,11 +50,11 @@ afterEach(async () => {
   await __clearRegistryForTests()
 })
 
-// specs.md §10.2.1: "Olvidé mi PIN" runs the same destructive action as the
-// 5-failed-attempts lockout — lockStore.reset() (resetVault() + logout()).
-// This proves, against the real stores (not the mocked ones
-// lockStore.test.ts uses), what that action actually destroys: the vault
-// and the device's login markers, never the profile's own financial data.
+// "Olvidé mi PIN" runs the same destructive action as the 5-failed-attempts
+// lockout — lockStore.reset() (resetVault() + logout()). This proves,
+// against the real stores (not the mocked ones lockStore.test.ts uses),
+// what that action actually destroys: the vault and the device's login
+// markers, never the profile's own financial data.
 describe('lockStore.reset() — what "Olvidé mi PIN" actually destroys', () => {
   it("deletes the vault but leaves the profile's movements untouched", async () => {
     await db.movimientos.put(movimiento)
@@ -91,10 +91,9 @@ describe('lockStore.reset() — what "Olvidé mi PIN" actually destroys', () => 
     await useLockStore.getState().reset()
 
     // authStore.restore()'s *silent* re-auth is the only thing this marker
-    // gates (specs.md §11, 2026-08-19) — login()'s explicit "Sign in with
-    // Google" path (the one WelcomeScreen offers) never reads it, so
-    // clearing it changes which screen greets a returning user, not
-    // whether their data is still reachable through that button.
+    // gates — login()'s explicit "Sign in with Google" path (the one
+    // WelcomeScreen offers) never reads it, so clearing it changes which
+    // screen greets a returning user, not whether their data is reachable.
     expect(await hasLoggedInBefore()).toBe(false)
   })
 })

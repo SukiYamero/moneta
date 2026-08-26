@@ -124,11 +124,10 @@ describe('MovimientoSheet — edit mode', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: /editar/i })).toBeInTheDocument())
   })
 
-  // specs.md §10.41 has edit inherit the Add sheet's layout — Save is the
-  // same commit action as the Add sheet's own CTA, so it takes the same
-  // design-export sizing (docs/ui/design-export-add-sheet.md §2). Cancel
-  // matches its height/radius only (row alignment), keeping its lighter
-  // touch-target typography since it isn't the commit action.
+  // Save is the same commit action as the Add sheet's own CTA, so it takes
+  // the same export sizing. Cancel matches height/radius only (row
+  // alignment), keeping its lighter touch-target typography since it isn't
+  // the commit action.
   it('sizes Save to the design export and matches Cancel to it in height only', async () => {
     const user = userEvent.setup()
     state.movimientos = [movimiento()]
@@ -145,10 +144,8 @@ describe('MovimientoSheet — edit mode', () => {
     expect(cancel).not.toHaveClass('font-extrabold')
   })
 
-  // Same shape as AddMovimientoSheet's item-3 fix (docs/ajustes-3-plan.md
-  // §2/§4) — `MovimientoFormFields` is the one shared field set, so a
-  // blocked Save here must get the same on-screen treatment, not just the
-  // create sheet's Add.
+  // `MovimientoFormFields` is the one shared field set, so a blocked Save
+  // here must get the same on-screen treatment as the create sheet's Add.
   it('moves focus back to the amount input and scrolls its section into view when Save is blocked by an invalid amount', async () => {
     const user = userEvent.setup()
     const scrollIntoView = vi.fn()
@@ -165,12 +162,9 @@ describe('MovimientoSheet — edit mode', () => {
     await user.click(screen.getByRole('button', { name: /guardar/i }))
 
     expect(await screen.findByText(/ingresa un monto/i)).toBeInTheDocument()
-    // Clicking Guardar left the button itself focused (specs.md §10.51's
-    // escalated bug: a plain `blur()` here would leave focus nowhere for a
-    // keyboard user) — the fix moves focus back to the field that actually
-    // blocked the save, which is also what keeps the field visible above
-    // the keyboard on iOS instead of dismissing it (AJ3-B's viewport fix
-    // keeps a focused field on-screen; there is nothing left to dismiss).
+    // Clicking Guardar left the button itself focused — an unconditional
+    // `blur()` here would leave focus nowhere for a keyboard user, so the
+    // fix moves focus back to the field that actually blocked the save.
     expect(amountInput).toHaveFocus()
     // `toHaveBeenCalled()` alone would pass even if the effect scrolled the
     // wrong section — assert on `this` (the element `scrollIntoView` was
@@ -232,7 +226,7 @@ describe('MovimientoSheet — delete', () => {
   })
 })
 
-describe('MovimientoSheet — the movement vanishing underneath an open sheet (specs.md §10.23 Decision 2)', () => {
+describe('MovimientoSheet — the movement vanishing underneath an open sheet', () => {
   it('closes the sheet and raises a toast instead of rendering blank', () => {
     state.movimientos = [movimiento()]
     useMovimientoSheetStore.setState({ viewId: 'mov_1' })

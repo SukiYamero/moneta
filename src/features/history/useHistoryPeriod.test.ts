@@ -74,11 +74,9 @@ describe('useHistoryPeriod', () => {
     expect(result.current.anchor).toBe('2024-08-19')
   })
 
-  // date-fns's setYear does NOT clamp Feb 29 -> Feb 28 for a non-leap target
-  // year the way addYears/addMonths do: it overflows the Date into March 1
-  // instead. Anchored on a leap day, picking a non-leap year from the year
-  // menu must land on Feb 28 of that year, not silently roll the anchor (and
-  // therefore periodRange, in mes/dia scope) into March.
+  // date-fns's setYear doesn't clamp Feb 29 -> Feb 28 for a non-leap year the
+  // way addYears/addMonths do — it overflows into March 1 instead, so this
+  // guards against silently rolling the anchor into March on a leap-day pick.
   it('selectYear clamps Feb 29 to Feb 28 when the target year is not a leap year', () => {
     const { result } = renderHook(() =>
       useHistoryPeriod({ today: new Date('2028-02-29T12:00:00.000Z') }),

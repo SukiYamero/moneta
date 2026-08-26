@@ -16,8 +16,6 @@ describe('normalizeForSearch()', () => {
 })
 
 describe('matchesQuery()', () => {
-  // The exact case AGENTS.md/the track brief call out: a Spanish app where
-  // "camion" doesn't find "camión" is broken.
   it('finds an accented field by its unaccented query', () => {
     expect(matchesQuery('camion', 'Viaje en camión')).toBe(true)
   })

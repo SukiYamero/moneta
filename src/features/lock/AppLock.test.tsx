@@ -64,11 +64,9 @@ test('renders children once unlocked', () => {
   expect(screen.getByText('app')).toBeInTheDocument()
 })
 
-// Finding 4 ("invisible"): resume()'s lockout branch sets phase: 'unlocked'
-// and error: LOCKED_OUT_ERROR in the same set() — LockScreen (the only prior
-// consumer of lockStore.error) unmounts in that same instant, so the message
-// was structurally unreachable. AppLock is one level up and stays mounted
-// across the phase transition, so it's the right place to surface it.
+// resume()'s lockout branch sets phase: 'unlocked' and error: LOCKED_OUT_ERROR
+// in the same set() — LockScreen unmounts in that same instant, so it can't
+// be the one to show this. AppLock stays mounted across the transition.
 test('surfaces a lockout/session error above the app once the phase leaves "locked"', () => {
   state = { phase: 'unlocked', error: 'locked out' }
   render(

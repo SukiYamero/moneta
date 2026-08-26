@@ -7,11 +7,8 @@ import type { Categoria } from '@/lib/schema'
 const totals: Totals = { ingresos: 12000, gastos: 5000, balance: 7000 }
 
 describe('BreakdownCard', () => {
-  // specs.md §10.7: the sign attaches to the number, not the currency
-  // ("$ -12.000,00", not "-$ 12.000,00") — found during the sweep for
-  // string-prepended signs the same bug shape `getMovimientoAmountView`
-  // had. `BreakdownCard` built its ingreso/gasto mini-totals and its
-  // negative-balance case the same broken way.
+  // The sign attaches to the number, not the currency symbol:
+  // "$ -12.000,00", never "-$ 12.000,00".
   it('never renders a sign before the currency symbol', () => {
     render(
       <BreakdownCard
@@ -90,8 +87,8 @@ describe('BreakdownCard', () => {
     expect(screen.queryByText('cat_missing')).not.toBeInTheDocument()
   })
 
-  // specs.md §10.27: a total scoped to `monedaPrincipal` must never look
-  // like the whole picture when it isn't — the screen says so.
+  // A total scoped to monedaPrincipal must never look like the whole
+  // picture when the period actually has movements in other currencies.
   describe('other-currency note', () => {
     it('renders nothing when otherCurrencies is empty (the common case)', () => {
       render(

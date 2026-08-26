@@ -38,8 +38,6 @@ describe('BottomNav', () => {
     expect(screen.getByRole('link', { name: /inicio/i })).not.toHaveAttribute('aria-current')
   })
 
-  // The Add slot opens the real Add-movimiento sheet now (specs.md
-  // §10.23) — it is no longer the disabled stub Wave 3 shipped.
   it('calls onOpenAdd when the Add button is tapped', async () => {
     const user = userEvent.setup()
     const { onOpenAdd } = renderNav()
@@ -57,8 +55,6 @@ describe('BottomNav', () => {
     )
   })
 
-  // The Profile slot opens the real profile sheet now (specs.md §10.18) —
-  // it is no longer the disabled stub Wave 2 shipped.
   it('calls onOpenProfile when the Profile button is tapped', async () => {
     const user = userEvent.setup()
     const { onOpenProfile } = renderNav()
@@ -83,15 +79,11 @@ describe('BottomNav', () => {
   })
 })
 
-// specs.md §10.53: a real iPhone showed BottomNav's own background/icons
-// through the strip above the keyboard while the Add sheet was open, even
-// after the backdrop was fixed to no longer shrink — this is the
-// belt-and-braces half that doesn't depend on getting that geometry right
-// at all: BottomNav simply must not paint while *any* overlay is open,
-// discovered via the shared `useOverlay` stack (`useHasOpenOverlay`), not a
-// local `addOpen || profileOpen` check that would miss every other sheet
-// (filter, tag picker, category modal, anything future).
-describe('BottomNav — hides while any overlay is open, without unmounting (specs.md §10.53)', () => {
+// BottomNav must not paint while *any* overlay is open — read from the
+// shared `useOverlay` stack (`useHasOpenOverlay`), not a local
+// `addOpen || profileOpen` check that would miss every other sheet (filter,
+// tag picker, category modal, anything future).
+describe('BottomNav — hides while any overlay is open, without unmounting', () => {
   it('applies opacity-0/pointer-events-none while an unrelated BottomSheet elsewhere is open, and stays interactive again once it closes — never unmounting', async () => {
     const user = userEvent.setup()
 

@@ -25,7 +25,6 @@ describe('suggestCategoryVisual', () => {
   })
 
   it('does not match a keyword as a bare substring of an unrelated word', () => {
-    // "regalo" must not match inside "regalote" or similar — whole-word only.
     const result = suggestCategoryVisual('regalote', [])
     expect(result.icono).not.toBe('gift')
   })
@@ -36,9 +35,8 @@ describe('suggestCategoryVisual', () => {
     expect(result.color).toBeDefined()
   })
 
-  it('a matched concept keeps its own semantic color even when a category already uses it (specs.md §10.22 Decision 7)', () => {
+  it('a matched concept keeps its own tint even when a category already uses it, ignoring least-used-tint diversion', () => {
     const existing: Pick<Categoria, 'color'>[] = [{ color: 'amber' }, { color: 'amber' }]
-    // "comida" is amber — must stay amber, not divert to a less-used tint.
     expect(suggestCategoryVisual('comida', existing).color).toBe('amber')
   })
 })

@@ -14,10 +14,9 @@ const categoria = (overrides: Partial<Categoria> = {}): Categoria => ({
   ...overrides,
 })
 
-// `docs/ui/design-export-add-sheet.md` §2/specs.md §10.41: the inline
-// picker is a fixed column (count button + dashed "Custom" chip) beside a
-// horizontally-scrolling carousel — no inline search box any more, that
-// moved into `TagPickerSheet` (its own test file).
+// The inline picker is a fixed column (count button + dashed "Custom" chip)
+// beside a horizontally-scrolling carousel — no inline search box, that
+// lives in `TagPickerSheet` (its own test file).
 describe('CategoryPicker', () => {
   it('renders every non-archived category as a selectable chip in the carousel', () => {
     const categorias = [

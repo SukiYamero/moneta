@@ -6,7 +6,7 @@ import { BalanceCard } from '@/features/home/BalanceCard'
 const totals = { ingresos: 1_000_000, gastos: 400_000, balance: 600_000 }
 
 describe('BalanceCard', () => {
-  it('gives the hide/show toggle a real 44px touch target (AGENTS.md § UI)', () => {
+  it('gives the hide/show toggle a real 44px touch target', () => {
     render(<BalanceCard totals={totals} moneda="COP" />)
 
     expect(screen.getByRole('button', { name: /ocultar montos/i })).toHaveClass(

@@ -54,39 +54,17 @@ describe('resolveCategoria', () => {
 })
 
 describe('formatMonto', () => {
-  it('formats a positive amount as COP currency, narrowSymbol only (never the ISO code)', () => {
-    const text = formatMonto(1200, 'COP', 'es-CO')
-    expect(text).toContain('1.200')
-    expect(text).not.toContain('COP')
-  })
-
-  it('formats a positive amount as USD currency, narrowSymbol only (never the ISO code)', () => {
-    const text = formatMonto(1200, 'USD', 'es-CO')
-    expect(text).toContain('$')
-    expect(text).not.toContain('USD')
-  })
-
-  it('reuses one Intl.NumberFormat per currency instead of constructing one per call', () => {
-    // The formatters are built once at module scope on import — spying
-    // after import and calling formatMonto repeatedly (including a
-    // currency switch) must never trigger a new construction, otherwise
-    // MovimientoRow would be doing this per row per render.
-    const constructorSpy = vi.spyOn(Intl, 'NumberFormat')
-
-    formatMonto(1000, 'COP', 'es-CO')
-    formatMonto(2000, 'COP', 'es-CO')
-    formatMonto(3000, 'USD', 'es-CO')
-    formatMonto(4000, 'USD', 'es-CO')
-
-    expect(constructorSpy).not.toHaveBeenCalled()
-    constructorSpy.mockRestore()
-  })
-
-  // `locale` has no default (docs/wave-2/track-m.md) — the only way to get
-  // es-CO formatting is to pass it explicitly, same as any other locale.
-  it('formats es-CO explicitly the same way on repeat calls', () => {
-    expect(formatMonto(1200, 'COP', 'es-CO')).toBe(formatMonto(1200, 'COP', 'es-CO'))
-  })
+  it.each([
+    ['COP', '1.200'],
+    ['USD', '$'],
+  ] as const)(
+    'formats a positive amount as %s currency, narrowSymbol only (never the ISO code)',
+    (moneda, expectedSubstring) => {
+      const text = formatMonto(1200, moneda, 'es-CO')
+      expect(text).toContain(expectedSubstring)
+      expect(text).not.toContain(moneda)
+    },
+  )
 
   it('accepts an explicit locale and formats accordingly', () => {
     // en-US groups thousands with a comma and uses a period as the decimal
@@ -96,23 +74,22 @@ describe('formatMonto', () => {
     expect(formatMonto(1200, 'USD', 'en-US')).not.toContain('1.200')
   })
 
-  it('reuses one Intl.NumberFormat per (locale, currency) pair across repeat calls', () => {
-    formatMonto(500, 'COP', 'pt-BR') // warm the cache before spying, same pattern as the test above
+  it('reuses one Intl.NumberFormat per (locale, currency) pair, never building one per call', () => {
+    formatMonto(500, 'COP', 'pt-BR') // warm the cache before spying
+    formatMonto(500, 'USD', 'pt-BR')
     const constructorSpy = vi.spyOn(Intl, 'NumberFormat')
 
     formatMonto(1000, 'COP', 'pt-BR')
-    formatMonto(2000, 'COP', 'pt-BR')
+    formatMonto(2000, 'USD', 'pt-BR')
 
     expect(constructorSpy).not.toHaveBeenCalled()
     constructorSpy.mockRestore()
   })
 
-  // specs.md §10.7: a negative amount (e.g. totals.balance) attaches its
-  // sign to the number, not to the currency — "$ -12.000,00", not
-  // "-$ 12.000,00" (Intl's own default). Checked via formatToParts-level
-  // reasoning (the sign must immediately precede the first digit) across
-  // several locales whose symbol placement differs (R$ leads in pt-BR,
-  // trails in es-CO/en-US) rather than a single hardcoded string.
+  // A negative amount attaches its sign to the number, not to the currency
+  // — "$ -12.000,00", not "-$ 12.000,00" (Intl's own default) — checked
+  // across locales whose symbol placement differs (R$ leads in pt-BR,
+  // trails in es-CO/en-US) rather than via a single hardcoded string.
   it('attaches a negative sign to the number, not to the currency, across locales', () => {
     const cases: Array<[locale: string, moneda: 'COP' | 'USD' | 'BRL']> = [
       ['es-CO', 'COP'],
@@ -173,13 +150,9 @@ describe('getMovimientoAmountView', () => {
     }
   })
 
-  it('forwards an explicit locale through to formatMonto', () => {
+  it('forwards an explicit locale through to formatMonto without leaking the ISO code', () => {
     const view = getMovimientoAmountView({ monto: 1200, moneda: 'USD', tipo: 'ingreso' }, 'en-US')
     expect(view.text).toContain('1,200')
-  })
-
-  it('never renders the ISO currency code, only narrowSymbol', () => {
-    const view = getMovimientoAmountView({ monto: 1200, moneda: 'USD', tipo: 'ingreso' }, 'en-US')
     expect(view.text).not.toContain('USD')
   })
 

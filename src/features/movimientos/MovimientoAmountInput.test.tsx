@@ -38,7 +38,7 @@ describe('MovimientoAmountInput', () => {
   })
 
   describe('the on-screen pad is gated to touch devices (coarse pointer)', () => {
-    it('renders the pad and sets inputMode=none on a coarse-pointer (touch) device', async () => {
+    it('renders the pad at compact key height and sets inputMode=none on a coarse-pointer (touch) device', async () => {
       stubMatchMedia(true)
       const user = userEvent.setup()
       render(<ControlledHarness locale="es-CO" moneda="COP" tipo="gasto" />)
@@ -47,6 +47,7 @@ describe('MovimientoAmountInput', () => {
       expect(input).toHaveAttribute('inputMode', 'none')
       await user.click(input)
       expect(screen.getByRole('button', { name: '1' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: '1' })).toHaveClass('min-h-13.25')
     })
 
     it('renders no pad at all, and leaves inputMode=decimal, on a fine-pointer (desktop) device', async () => {
@@ -113,7 +114,7 @@ describe('MovimientoAmountInput', () => {
     expect(row?.children[1]).toBe(input)
   })
 
-  it("the row itself is w-full — jsdom has no layout engine to prove it, but a real-browser repro (specs.md §10.45) showed the row is otherwise shrink-to-fit under its flex-col items-center parent, making the input's max-w-[calc(100%-3rem)] resolve against the row's own unbounded content width instead of the sheet's real one, so a six-digit PEN amount overflowed the sheet with the clamp doing nothing", () => {
+  it("the symbol/input/mirror row is w-full, so the input's max-width clamp resolves against a definite width rather than its own shrink-to-fit content", () => {
     render(
       <MovimientoAmountInput
         value=""
@@ -231,26 +232,22 @@ describe('MovimientoAmountInput', () => {
   })
 
   describe('live locale grouping', () => {
-    it('groups digits as the user types under a dot-grouping locale', async () => {
+    it.each([
+      { locale: 'es-CO', moneda: 'COP' as const, expected: '1.234.567' },
+      { locale: 'en-US', moneda: 'USD' as const, expected: '1,234,567' },
+    ])('groups digits as the user types under $locale', async ({ locale, moneda, expected }) => {
       const user = userEvent.setup()
-      render(<ControlledHarness locale="es-CO" moneda="COP" tipo="gasto" />)
+      render(<ControlledHarness locale={locale} moneda={moneda} tipo="gasto" />)
       const input = screen.getByLabelText('Monto')
 
       await user.type(input, '1234567')
 
-      expect(input).toHaveValue('1.234.567')
+      expect(input).toHaveValue(expected)
     })
 
-    it('groups digits as the user types under a comma-grouping locale', async () => {
-      const user = userEvent.setup()
-      render(<ControlledHarness locale="en-US" moneda="USD" tipo="gasto" />)
-      const input = screen.getByLabelText('Monto')
-
-      await user.type(input, '1234567')
-
-      expect(input).toHaveValue('1,234,567')
-    })
-
+    // fr-FR's group separator isn't a stable literal across ICU versions
+    // (may be a narrow no-break space), so the expectation is computed from
+    // `Intl` rather than hardcoded like the table above.
     it('groups digits as the user types under a space-grouping locale', async () => {
       const user = userEvent.setup()
       render(<ControlledHarness locale="fr-FR" moneda="USD" tipo="gasto" />)
@@ -368,36 +365,23 @@ describe('MovimientoAmountInput', () => {
   })
 
   describe('on-screen keypad (native software keyboard suppressed)', () => {
-    it('sets inputMode=none so no software keyboard rises, instead of decimal', () => {
-      render(
-        <MovimientoAmountInput
-          value=""
-          onChange={() => {}}
-          locale="es-CO"
-          moneda="COP"
-          tipo="gasto"
-        />,
-      )
-
-      expect(screen.getByLabelText('Monto')).toHaveAttribute('inputMode', 'none')
-    })
-
-    it("renders a decimal key labeled with the locale's own separator, once the input is focused", async () => {
-      const user = userEvent.setup()
-      render(<ControlledHarness locale="es-CO" moneda="COP" tipo="gasto" />)
-      await user.click(screen.getByLabelText('Monto'))
-      expect(screen.getByRole('button', { name: 'Separador decimal' })).toHaveTextContent(',')
-    })
-
-    it('renders the dot as the decimal key under a dot-decimal locale', async () => {
-      // `locale` drives `Intl`-based number formatting; the UI copy (aria-label)
-      // stays whatever `i18next`'s language is — forced to `es` in tests
-      // (`src/test/setup.ts`) independently of the `locale` prop here.
-      const user = userEvent.setup()
-      render(<ControlledHarness locale="en-US" moneda="USD" tipo="gasto" />)
-      await user.click(screen.getByLabelText('Monto'))
-      expect(screen.getByRole('button', { name: 'Separador decimal' })).toHaveTextContent('.')
-    })
+    // The decimal key's label follows `locale`'s own separator; the UI copy
+    // (aria-label) stays whatever i18next's language is, forced to `es` in
+    // tests independently of `locale`.
+    it.each([
+      { locale: 'es-CO', moneda: 'COP' as const, separator: ',' },
+      { locale: 'en-US', moneda: 'USD' as const, separator: '.' },
+    ])(
+      "renders the decimal key labeled with the locale's own separator ($locale)",
+      async ({ locale, moneda, separator }) => {
+        const user = userEvent.setup()
+        render(<ControlledHarness locale={locale} moneda={moneda} tipo="gasto" />)
+        await user.click(screen.getByLabelText('Monto'))
+        expect(screen.getByRole('button', { name: 'Separador decimal' })).toHaveTextContent(
+          separator,
+        )
+      },
+    )
 
     it('tapping digit keys appends through the same live-grouping pipeline as typing', async () => {
       const user = userEvent.setup()
@@ -487,7 +471,7 @@ describe('MovimientoAmountInput', () => {
 
       // caret right after the "." grouping separator, before "000" — a
       // position a real tap can land on, not one the reformat itself ever
-      // produces (specs.md §10.54).
+      // produces.
       await user.click(input)
       input.setSelectionRange(2, 2)
       await user.click(screen.getByRole('button', { name: 'Borrar' }))
@@ -509,40 +493,11 @@ describe('MovimientoAmountInput', () => {
   })
 
   describe("the keypad bleeds past the sheet's own side padding to the true screen edges", () => {
-    // `BottomSheet`'s scrollable body applies `px-5.5` — the pad's wrapper
-    // stops at that padded content edge, so without this, the ~22px strip
-    // down each side of the phone sits genuinely outside `wrapperRef` and a
-    // tap there dismissed the pad (reproduced live: a tap well inside that
-    // strip closed it). A user perceives that strip as part of the
-    // full-width pad, not "outside" it (it is not "the note field" or
-    // "the category picker" — nothing else lives there), so the fix moves
-    // the pad's own DOM box to match what is visually there — expressed as
-    // an explicit width plus a matching negative margin, both resolved
-    // against this element's own parent alone (never the viewport), so a
-    // reserved-space scrollbar narrowing that parent narrows the bleed
-    // right along with it instead of leaving it centered on stale geometry
-    // (specs.md §10.54). The grid itself — `NumericKeypad`'s only rendered
-    // element, once the dismiss bar is gone — carries the bleed and the
-    // sheet's own `px-5.5` at once: jsdom has no layout engine to prove the
-    // resulting box reaches the true edges, so this only asserts the
-    // classes that produce that box are present.
-    it('renders with the full-bleed width/margin classes, and the same padding the rest of the sheet uses, on the one grid element', async () => {
-      const user = userEvent.setup()
-      render(<ControlledHarness locale="es-CO" moneda="COP" tipo="gasto" />)
-      await user.click(screen.getByLabelText('Monto'))
-
-      const grid = screen.getByRole('button', { name: '1' }).parentElement
-      expect(grid?.className).toContain('w-[calc(100%+2.75rem)]')
-      expect(grid?.className).toContain('-mx-5.5')
-      expect(grid?.className).toContain('px-5.5')
-    })
-
-    // The bleed's three numbers — this element's own `px-5.5`, its
-    // `-mx-5.5`, and the `2.75rem` inside its `calc()` width (twice the
-    // padding it bleeds past) — must each track `BottomSheet`'s own
-    // `px-5.5` on the scrollable body. Nothing in the type system enforces
-    // that; this test does, so a change to either side breaks the build
-    // instead of a user's thumb finding it.
+    // The pad's wrapper otherwise stops at `BottomSheet`'s own padded
+    // content edge, so the side gutters would sit outside `wrapperRef` and
+    // dismiss the pad on a tap that visually looks like it's still inside.
+    // jsdom has no layout engine, so this only asserts the classes that
+    // produce the bled box, not the resulting geometry.
     it("keeps its bleed numbers locked to BottomSheet's own scrollable-body padding", async () => {
       render(
         <BottomSheet open onClose={() => {}} ariaLabel="Sheet de prueba">
@@ -611,22 +566,17 @@ describe('MovimientoAmountInput', () => {
       expect(screen.queryByRole('button', { name: '1' })).not.toBeInTheDocument()
     })
 
-    it(
-      'keeps the keypad open — and the tap still registers — across a tap on one of its own keys: a naive ' +
-        'implementation that hides the pad on the input’s bare blur would unmount the very button being tapped ' +
-        'before its click fires',
-      async () => {
-        const user = userEvent.setup()
-        render(<ControlledHarness locale="es-CO" moneda="COP" tipo="gasto" />)
-        await user.click(screen.getByLabelText('Monto'))
+    it('keeps the keypad open, and the tap still registers, across repeated taps on one of its own keys', async () => {
+      const user = userEvent.setup()
+      render(<ControlledHarness locale="es-CO" moneda="COP" tipo="gasto" />)
+      await user.click(screen.getByLabelText('Monto'))
 
-        await user.click(screen.getByRole('button', { name: '7' }))
-        await user.click(screen.getByRole('button', { name: '7' }))
+      await user.click(screen.getByRole('button', { name: '7' }))
+      await user.click(screen.getByRole('button', { name: '7' }))
 
-        expect(screen.getByRole('button', { name: '7' })).toBeInTheDocument()
-        expect(screen.getByLabelText('Monto')).toHaveValue('77')
-      },
-    )
+      expect(screen.getByRole('button', { name: '7' })).toBeInTheDocument()
+      expect(screen.getByLabelText('Monto')).toHaveValue('77')
+    })
 
     it('keeps the keypad open when focus tabs from the input onto one of the pad’s own keys', async () => {
       const user = userEvent.setup()
@@ -640,17 +590,11 @@ describe('MovimientoAmountInput', () => {
   })
 
   describe('dismissing on an outside tap that never fires a native blur', () => {
-    // iOS Safari does not shift focus away from a focused input when the tap
-    // target itself isn't focusable (a plain div, dead space, a label) — the
-    // native `blur`/`focusout` this component relied on simply never fires
-    // there, so `handleWrapperBlur` never runs and the pad is stuck open
-    // (the user's report). jsdom's own default click behavior already moves
-    // focus to `<body>` on any non-focusable target, matching Chromium, not
-    // WebKit — so it can't reproduce the bug directly. A `mousedown` handler
-    // on the outside target that calls `preventDefault()` produces the same
-    // observable DOM state a real WebKit tap does (the input stays
-    // `document.activeElement`), which is the accurate, browser-agnostic way
-    // to exercise this without an actual iOS device.
+    // iOS Safari never shifts focus away from a focused input when the tap
+    // target itself isn't focusable, so a native blur/focusout can't be
+    // relied on to detect this dismissal. jsdom's own click moves focus to
+    // `<body>` regardless (Chromium behavior); `mousedown` + `preventDefault()`
+    // reproduces WebKit's actual DOM state instead.
     const OutsideNonFocusableTarget = ({ onMouseDown }: { onMouseDown?: () => void }) => (
       <div
         data-testid="outside"
@@ -711,25 +655,12 @@ describe('MovimientoAmountInput', () => {
       expect(input).toHaveValue('7')
     })
 
-    // A discrete-event state update inside a document-level `pointerdown`
-    // listener collapses the pad — and the whole layout shifts up to fill
-    // the space it occupied — before the finger lifts. The browser
-    // hit-tests `pointerup`/`click` against whatever now sits at those raw
-    // coordinates, which is a different element than the one `pointerdown`
-    // hit (reproduced live in Chromium: a tap on a category chip behind the
-    // pad landed its `click` on an unrelated ancestor once the pad's
-    // collapse ran on `pointerdown`, and the category was never selected —
-    // `aria-pressed` stayed `false`). Gating the collapse on `pointerup`
-    // instead means the browser has already resolved that event's own
-    // hit-test before our handler runs, so a mutation inside it can no
-    // longer retarget the gesture already in flight.
+    // Collapsing the pad on `pointerdown` shifts the layout up before the
+    // finger lifts, so the browser's later `pointerup`/`click` hit-tests
+    // against a different element than the one `pointerdown` actually hit —
+    // a tap on a control revealed behind the pad gets retargeted and never
+    // registers. Gating the collapse on `pointerup` avoids that.
     it('does not close the pad on pointerdown alone — only once the pointer lifts, so an in-flight tap on a control behind the pad cannot be retargeted by an early collapse', async () => {
-      // A real, natively-focusable outside target (a plain `<button>`) would
-      // blur the input via the browser's own mousedown-driven focus-shift —
-      // the existing `handleWrapperBlur` path, unrelated to the pointerup
-      // listener this test isolates. `OutsideNonFocusableTarget` blocks that
-      // native focus-shift (as the sibling describe block above does), so
-      // the *only* thing that can close the pad here is this handler.
       const user = userEvent.setup()
       render(
         <div>
@@ -751,16 +682,34 @@ describe('MovimientoAmountInput', () => {
       expect(input).not.toHaveFocus()
     })
 
+    it('never dismisses on pointercancel, even for a gesture that began outside', async () => {
+      const user = userEvent.setup()
+      render(
+        <div>
+          <ControlledHarness locale="es-CO" moneda="COP" tipo="gasto" />
+          <OutsideNonFocusableTarget />
+        </div>,
+      )
+      const input = screen.getByLabelText('Monto')
+      await user.click(input)
+      expect(screen.getByRole('button', { name: '1' })).toBeInTheDocument()
+
+      const outside = screen.getByTestId('outside')
+      outside.dispatchEvent(
+        new PointerEvent('pointerdown', { bubbles: true, cancelable: true, pointerId: 1 }),
+      )
+      outside.dispatchEvent(
+        new PointerEvent('pointercancel', { bubbles: true, cancelable: true, pointerId: 1 }),
+      )
+
+      expect(screen.getByRole('button', { name: '1' })).toBeInTheDocument()
+    })
+
     // A genuinely focusable outside control (a category chip, in the real
-    // sheet) never reaches the handler above at all: the browser's own
+    // sheet) never reaches the pointerup listener above: the browser's own
     // mousedown default action focuses it directly, firing a real native
-    // `blur` on the amount input during the same down-phase — well before
-    // `pointerup`. `handleWrapperBlur` predates this fix and reacted to
-    // that blur immediately, so it collapsed the pad on `pointerdown` too,
-    // just via a different path than the listener above (reproduced live:
-    // tapping a category chip while the pad was open left `aria-pressed`
-    // `false` on it — the tap never registered). It must defer the same
-    // way.
+    // `blur` on the amount input well before `pointerup`. That blur must
+    // defer the collapse the same way, or the tap still gets retargeted.
     it('a native blur from tapping a genuinely focusable outside control is deferred the same way, so the pad does not collapse before the pointer lifts', async () => {
       const user = userEvent.setup()
       render(
@@ -824,13 +773,11 @@ describe('MovimientoAmountInput', () => {
       expect(input).toHaveFocus()
     })
 
-    // The exact ordering from a real iOS device log (specs.md §10.54):
-    // `pointerdown`/`pointerup` both resolve, inside, with no focus change
-    // in between — then, only *after* `pointerup` has already finished,
-    // WebKit walks focus from the tapped grid to the dialog panel. A
-    // blur/focusout listener has no "gesture in progress" window left to
-    // protect this by the time it fires; only reading nothing from focus
-    // at all survives it.
+    // On WebKit, `pointerdown`/`pointerup` can both resolve inside with no
+    // focus change in between, and only *after* `pointerup` finishes does
+    // focus walk from the tapped grid to an ancestor panel. A blur/focusout
+    // listener has no "gesture in progress" window left to protect this by
+    // the time it fires — only ignoring focus state entirely survives it.
     it('stays open when the ancestor focus-walk happens only after pointerup has already resolved the gesture as inside', async () => {
       const user = userEvent.setup()
       render(
@@ -859,11 +806,9 @@ describe('MovimientoAmountInput', () => {
   })
 
   describe('the dismiss-free zone is the input and the pad, not the whole field column', () => {
-    // Before this fix, the visible symbol/label sat inside the same
-    // `wrapperRef` column as the pad, so a tap there was read as "inside" —
-    // not just ignored, but actively refocusing the input to undo jsdom's
-    // own default blur-to-body, keeping the pad open (the user's report:
-    // the empty flanks beside a short amount never dismissed it either).
+    // "Outside" is scoped to the input and the pad, not the whole wrapper
+    // column — the visible symbol, the label, and the empty flanks beside a
+    // short amount all still dismiss.
     it('dismisses the pad on a tap on the visible currency symbol beside the input', async () => {
       const user = userEvent.setup()
       render(<ControlledHarness initialValue="7" locale="es-CO" moneda="COP" tipo="gasto" />)

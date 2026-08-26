@@ -6,37 +6,18 @@ import { driveErrorCopy, loginErrorCopy } from '@/features/auth/errorCopy'
 // Every mapped key below is derived from the real AuthError/DriveError
 // construction (`new AuthError(reason).message`), never restated as a
 // literal — if auth.ts/drive.ts ever change the "auth: "/"drive: " message
-// template, these tests fail instead of the copy table silently going
-// stale while `bun run check` stays green (the exact drift this suite
-// exists to catch, per docs/error-handling.md §7). The expected output is
-// now a stable translation key, not a Spanish sentence — a copy reword no
-// longer breaks this suite, only a change in which error gets recognized
-// does.
+// template, these tests fail instead of the copy table silently going stale.
+// The expected output is a stable translation key, not a Spanish sentence —
+// a copy reword doesn't break this suite, only a recognition change does.
 describe('loginErrorCopy', () => {
-  it('maps a known AuthError reason to its translation key', () => {
-    expect(loginErrorCopy(new AuthError('access_denied').message)).toBe('errors.accessDenied')
-  })
-
-  it('maps a missing client id to its translation key', () => {
-    expect(loginErrorCopy(new AuthError('missing VITE_GOOGLE_CLIENT_ID').message)).toBe(
-      'errors.missingClientId',
-    )
-  })
-
-  it('maps a GIS script load failure to its translation key', () => {
-    expect(loginErrorCopy(new AuthError('GIS failed to load').message)).toBe(
-      'errors.gisFailedToLoad',
-    )
-  })
-
-  it('maps a closed popup to its translation key', () => {
-    expect(loginErrorCopy(new AuthError('popup_closed').message)).toBe('errors.popupClosed')
-  })
-
-  it('maps a blocked popup to its translation key', () => {
-    expect(loginErrorCopy(new AuthError('popup_failed_to_open').message)).toBe(
-      'errors.popupFailedToOpen',
-    )
+  it.each([
+    ['access_denied', 'errors.accessDenied'],
+    ['missing VITE_GOOGLE_CLIENT_ID', 'errors.missingClientId'],
+    ['GIS failed to load', 'errors.gisFailedToLoad'],
+    ['popup_closed', 'errors.popupClosed'],
+    ['popup_failed_to_open', 'errors.popupFailedToOpen'],
+  ])('maps AuthError reason %s to %s', (reason, key) => {
+    expect(loginErrorCopy(new AuthError(reason).message)).toBe(key)
   })
 
   it('falls back to the generic login key for a reason the table deliberately does not know', () => {

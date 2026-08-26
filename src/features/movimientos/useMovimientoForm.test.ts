@@ -188,11 +188,6 @@ describe('useMovimientoForm — validation only appears after a submit attempt',
     expect(repo.movimientos.add).not.toHaveBeenCalled()
   })
 
-  // A view driving "scroll/focus the field that blocked the save" (item 3,
-  // docs/ajustes-3-plan.md §4 AJ3-A) needs something that changes on every
-  // *attempt*, not just on the derived error flags themselves — those don't
-  // change on a second tap with the same invalid state, so a view keyed on
-  // them alone would never react to a repeated blocked tap.
   it('counts every submit call, including blocked and repeated ones, so a view can react to a fresh attempt', async () => {
     const { result } = renderHook(() =>
       useMovimientoForm({
@@ -267,8 +262,8 @@ describe('useMovimientoForm — successful create', () => {
       nota: 'Pesas',
     })
 
-    // The sheet stays mounted across opens (specs.md §10.23) — a
-    // successful save must clear the draft, not resurrect it next time.
+    // A create-mode sheet stays mounted across opens, so a save must clear
+    // the draft rather than leave it for next time.
     expect(result.current.amountRaw).toBe('')
     expect(result.current.nota).toBe('')
     expect(result.current.categoriaId).toBeUndefined()
@@ -296,7 +291,7 @@ describe('useMovimientoForm — successful create', () => {
   })
 })
 
-describe('useMovimientoForm — a refused or failed write keeps the sheet open with values intact (specs.md §10.23 Decision 3)', () => {
+describe('useMovimientoForm — a refused or failed write keeps the sheet open with values intact', () => {
   it('a write refused offline past the window does not call onSaved and keeps the typed values', async () => {
     useNetworkStore.setState({ online: false, lastOnlineAt: 0 })
     const repo = makeRepo()
@@ -444,7 +439,7 @@ describe('useMovimientoForm — editing tipo never lets monto go negative in sto
   })
 })
 
-describe('useMovimientoForm — applyParsedFields (the seam stage 3 wires a parser into)', () => {
+describe('useMovimientoForm — applyParsedFields', () => {
   it('sets fields directly without requiring a submit', () => {
     const { result } = renderHook(() =>
       useMovimientoForm({

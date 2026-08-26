@@ -88,28 +88,21 @@ describe('RequireAuth', () => {
     expect(screen.getByRole('button', { name: /permitir y continuar/i })).toBeInTheDocument()
   })
 
-  it('renders children once Drive sync is connected', () => {
-    useAuthStore.setState({ status: 'authenticated', driveOptIn: 'connected' })
-    render(
-      <RequireAuth>
-        <div>secret</div>
-      </RequireAuth>,
-    )
-    expect(screen.getByText('secret')).toBeInTheDocument()
-  })
+  it.each(['connected', 'dismissed'] as const)(
+    'renders children once driveOptIn is %s',
+    (driveOptIn) => {
+      useAuthStore.setState({ status: 'authenticated', driveOptIn })
+      render(
+        <RequireAuth>
+          <div>secret</div>
+        </RequireAuth>,
+      )
+      expect(screen.getByText('secret')).toBeInTheDocument()
+    },
+  )
 
-  it('renders children once the Drive prompt is dismissed for the session', () => {
-    useAuthStore.setState({ status: 'authenticated', driveOptIn: 'dismissed' })
-    render(
-      <RequireAuth>
-        <div>secret</div>
-      </RequireAuth>,
-    )
-    expect(screen.getByText('secret')).toBeInTheDocument()
-  })
-
-  // specs.md §10.32: a modal over the settled app, not a second full-screen
-  // gate — children render underneath it, not instead of it.
+  // A modal over the settled app, not a second full-screen gate — children
+  // render underneath it, not instead of it.
   it('renders the guest-adoption prompt alongside children, once Drive opt-in is resolved, when there is a pending offer', () => {
     useAuthStore.setState({
       status: 'authenticated',
@@ -229,7 +222,7 @@ describe('RequireAuth', () => {
     await userEvent.click(googleButton)
 
     // Still the welcome screen, showing its own inline busy state — never a
-    // full-screen boot placeholder (specs.md §10.9 tier 3).
+    // full-screen boot placeholder.
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: /conectando/i })).toBeInTheDocument()
   })
@@ -270,11 +263,10 @@ describe('RequireAuth', () => {
     )
   })
 
-  // specs.md §10.33: "has this device been used before" now draws on two
-  // markers, not one — a returning guest must get the same skeleton-then-
-  // children treatment a returning account holder already gets, never the
-  // first-run pitch.
-  describe('the returning guest (specs.md §10.33)', () => {
+  // "Has this device been used before" draws on two markers, not one — a
+  // returning guest must get the same skeleton-then-children treatment a
+  // returning account holder already gets, never the first-run pitch.
+  describe('the returning guest', () => {
     it('covers a returning-guest cold start with the skeleton while restore() resolves, never Welcome', async () => {
       mHasUsedGuestBefore.mockResolvedValue(true)
       let resolveRestore: () => void = () => {}
@@ -339,13 +331,11 @@ describe('RequireAuth', () => {
     })
   })
 
-  // The real regression this track owns (specs.md §10.29): a returning
-  // device's app must never flash the Welcome screen — the pre-§10.9 defect
-  // and the new-screen equivalent of it — while either the marker read or
-  // restore() itself is still resolving. Exercised under adversarial,
-  // independently-controlled timing for both signals rather than trusting
-  // them to happen to resolve in a safe order.
-  describe('boot-flash regression (specs.md §10.29)', () => {
+  // A returning device's app must never flash the Welcome screen while
+  // either the marker read or restore() itself is still resolving —
+  // exercised under adversarial, independently-controlled timing for both
+  // signals rather than trusting them to happen to resolve in a safe order.
+  describe('boot-flash regression', () => {
     it('never renders Welcome while a known-returning device is still resolving, in any interleaving', async () => {
       let resolveMarker: (v: boolean) => void = () => {}
       mHasLoggedInBefore.mockReturnValue(
@@ -388,9 +378,9 @@ describe('RequireAuth', () => {
       await waitFor(() =>
         expect(screen.getByRole('heading', { name: /hola de nuevo/i })).toBeInTheDocument(),
       )
-      // Distinct from WelcomeScreen even though both offer a guest path
-      // (specs.md §10.37): this screen's guest entry is gated behind a
-      // confirm dialog, and no first-run legal copy renders alongside it.
+      // Distinct from WelcomeScreen even though both offer a guest path:
+      // this screen's guest entry is gated behind a confirm dialog, and no
+      // first-run legal copy renders alongside it.
       expect(screen.queryByRole('button', { name: /términos/i })).not.toBeInTheDocument()
     })
 

@@ -62,8 +62,8 @@ describe('IdentitySection', () => {
     expect(screen.getByRole('button', { name: /cerrar sesión/i })).toBeInTheDocument()
   })
 
-  // specs.md §10.20: with Drive connected there is nothing at risk to warn
-  // about, so sign-out runs directly with no modal.
+  // With Drive connected there is nothing at risk to warn about, so
+  // sign-out runs directly with no modal.
   it('calls the real authStore.logout directly when Drive is connected', async () => {
     const logout = vi.fn()
     useAuthStore.setState({
@@ -93,9 +93,9 @@ describe('IdentitySection', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
-  // The confirmation modal itself: shown only when there is unsynced local
-  // data and Drive is not connected, names the real quantity, and its
-  // primary action signs out while keeping the data (specs.md §10.20).
+  // The confirmation modal: shown only when there is unsynced local data
+  // and Drive is not connected, names the real quantity, and its primary
+  // action signs out while keeping the data.
   it('shows a confirm modal naming the real quantity when unsynced data exists and Drive is not connected', async () => {
     const logout = vi.fn()
     mListPending.mockResolvedValue([

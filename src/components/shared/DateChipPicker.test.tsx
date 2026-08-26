@@ -82,13 +82,8 @@ describe('DateChipPicker', () => {
     expect(prevMonth.firstElementChild).toHaveClass('size-7')
   })
 
-  // Before this fix, the grid rendered exactly what
-  // `eachDayOfInterval(startOfWeek(startOfMonth) → endOfWeek(endOfMonth))`
-  // produced — 28/35/42 cells depending on the month — so the popover was a
-  // full row taller in March 2026 (6 real weeks) than in February 2027 (4
-  // real weeks). Both real months, both weekStartsOn:1 (the default): this
-  // assertion fails against that code and passes only once every month
-  // renders the same fixed 6-week (42-cell) grid.
+  // March 2026 spans 6 real weeks, February 2027 spans 4 (both weekStartsOn:1)
+  // — the grid must render the same 42-cell size for both regardless.
   it('renders the same 42-cell grid for two real months with different week counts', async () => {
     const user = userEvent.setup()
 
@@ -112,10 +107,9 @@ describe('DateChipPicker', () => {
     expect(februaryCells).toHaveLength(42)
   })
 
-  // `"d 'de' MMMM"` under date-fns would bake the Spanish connector "de"
-  // into every locale ("10 de August") — the chip label uses
-  // Intl.DateTimeFormat instead, which localizes the whole phrase, not just
-  // the month name (docs/wave-2/track-m.md).
+  // A hand-rolled `"d 'de' MMMM"` format would bake the Spanish connector
+  // "de" into every locale ("10 de August") — the label must localize the
+  // whole phrase via Intl.DateTimeFormat, not just the month name.
   it('renders the day+month label and the month header in the locale passed by the caller', async () => {
     const user = userEvent.setup()
     render(

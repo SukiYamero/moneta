@@ -9,32 +9,13 @@ describe('resolveDateRange()', () => {
     expect(resolveDateRange('all', NO_CUSTOM, TODAY)).toBeNull()
   })
 
-  it('"7d" is the 7 days ending today, inclusive', () => {
-    expect(resolveDateRange('7d', NO_CUSTOM, TODAY)).toEqual({
-      from: '2026-08-13',
-      to: '2026-08-19',
-    })
-  })
-
-  it('"30d" is the 30 days ending today, inclusive', () => {
-    expect(resolveDateRange('30d', NO_CUSTOM, TODAY)).toEqual({
-      from: '2026-07-21',
-      to: '2026-08-19',
-    })
-  })
-
-  it('"month" is the full calendar month containing today', () => {
-    expect(resolveDateRange('month', NO_CUSTOM, TODAY)).toEqual({
-      from: '2026-08-01',
-      to: '2026-08-31',
-    })
-  })
-
-  it('"year" is the full calendar year containing today', () => {
-    expect(resolveDateRange('year', NO_CUSTOM, TODAY)).toEqual({
-      from: '2026-01-01',
-      to: '2026-12-31',
-    })
+  it.each([
+    ['7d', { from: '2026-08-13', to: '2026-08-19' }],
+    ['30d', { from: '2026-07-21', to: '2026-08-19' }],
+    ['month', { from: '2026-08-01', to: '2026-08-31' }],
+    ['year', { from: '2026-01-01', to: '2026-12-31' }],
+  ] as const)('"%s" resolves to the expected inclusive range ending today', (preset, expected) => {
+    expect(resolveDateRange(preset, NO_CUSTOM, TODAY)).toEqual(expected)
   })
 
   it('"custom" passes the range through unchanged when already ordered', () => {

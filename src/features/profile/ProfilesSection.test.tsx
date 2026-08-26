@@ -22,11 +22,10 @@ import {
 import { ProfilesSection } from '@/features/profile/ProfilesSection'
 import { useProfiles, type UseProfilesResult } from '@/features/profile/useProfiles'
 
-// Defaults to the real hook (`importOriginal`) so the existing registry-backed
-// tests below are untouched; only the anti-flash tests below reassign the
-// mock's implementation to a fixed 'loading' return for their own render —
-// never `mockReturnValueOnce`, which would fall through to the real
-// (unmocked) hook mid-render and violate React's stable-hook-order rule.
+// Defaults to the real hook so registry-backed tests are untouched; only the
+// anti-flash tests reassign to a fixed 'loading' return. Never
+// `mockReturnValueOnce`, which falls through to the real hook mid-render and
+// violates React's stable-hook-order rule.
 const { realUseProfiles } = vi.hoisted(() => ({ realUseProfiles: vi.fn() }))
 vi.mock('@/features/profile/useProfiles', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/features/profile/useProfiles')>()
@@ -75,7 +74,6 @@ describe('ProfilesSection', () => {
     expect(screen.getAllByText('Activo')).toHaveLength(1)
   })
 
-  // specs.md §10.31: tapping a non-active profile switches the app to it.
   it('switching to another profile rebinds the app and moves the active badge', async () => {
     const user = userEvent.setup()
     await getActiveProfile() // adopts the default local profile first
@@ -85,21 +83,16 @@ describe('ProfilesSection', () => {
       kind: 'google',
       databaseName: 'kurobello-switch-ui-test',
     })
-    // The switcher's own pre-check reads the target's owner marker — a
-    // profile only ever reachable through the switcher after having been
-    // bound at least once (specs.md §10.31 §2), so simulate that prior
-    // bind directly rather than a full sign-in.
+    // The switcher's pre-check reads the target's owner marker, only ever
+    // present after a prior bind — simulate that bind directly.
     await getProfileDatabase(registered.databaseName).profileOwner.put({
       id: 1,
       kind: 'google',
       createdAt: registered.createdAt,
     })
-    // registerProfile() makes it the most-recently-touched profile, which
-    // would otherwise resolve as active by recency alone and disable its
-    // own row before the click below — the explicit pointer (specs.md
-    // §10.31 §1) is what a device that never opened the switcher relies on
-    // instead, so pin it at the default first, exactly the "switching away
-    // from local" scenario this test means to exercise.
+    // registerProfile() makes this the most-recently-touched profile, which
+    // would resolve as active by recency alone and disable its own row
+    // before the click — pin the default active explicitly first instead.
     const { setActiveProfileId, DEFAULT_PROFILE_ID } = await import('@/lib/profiles')
     await setActiveProfileId(DEFAULT_PROFILE_ID)
 
@@ -107,13 +100,9 @@ describe('ProfilesSection', () => {
     const row = await screen.findByText('alex@example.com')
     await user.click(row.closest('button')!)
 
-    // A single condition covering the whole settled state — not three
-    // separate `waitFor`s, each individually satisfiable at a different
-    // moment while the switch (registry pointer write, then boot.ts's
-    // rebind, then the hook's own reload()) is still in progress. Checking
-    // "exactly one Activo badge exists" and "it's on alex's row" apart lets
-    // a slow rebind pass the first (still on the default's, now-stale,
-    // pre-switch row) before the hook has actually caught up.
+    // One condition over the whole settled state — three separate `waitFor`s
+    // would each pass individually mid-switch, before the badge has actually
+    // moved to the new row.
     await waitFor(() => {
       expect(screen.getAllByText('Activo')).toHaveLength(1)
       expect(screen.getByText('alex@example.com').closest('button')).toContainElement(
@@ -123,8 +112,6 @@ describe('ProfilesSection', () => {
     expect(await getActiveProfileId()).toBe('p-switch')
   })
 
-  // specs.md §10.31 edge case: a registry row whose database storage was
-  // cleared must say so and offer removal, never fail opaquely.
   it('offers to remove a profile whose database is gone, instead of switching to it', async () => {
     const user = userEvent.setup()
     await getActiveProfile()
@@ -135,11 +122,9 @@ describe('ProfilesSection', () => {
       databaseName: 'kurobello-gone-ui-test',
     })
     // No owner marker written — the database looks freshly created/empty.
-    // Registering it makes it the most-recently-touched profile, which
-    // would otherwise resolve as active by recency alone and disable its
-    // row before the click this test needs ever fires — the explicit
-    // pointer (specs.md §10.31 §1) is what makes the default the active
-    // one instead, exactly what the switcher UI relies on in practice.
+    // Registering it makes it the most-recently-touched profile, which would
+    // resolve as active by recency alone and disable its own row before the
+    // click — pin the default active explicitly first instead.
     const { setActiveProfileId, DEFAULT_PROFILE_ID } = await import('@/lib/profiles')
     await setActiveProfileId(DEFAULT_PROFILE_ID)
 
@@ -153,9 +138,8 @@ describe('ProfilesSection', () => {
     await waitFor(async () => expect(await getProfile('p-gone')).toBeUndefined())
   })
 
-  // Anti-flash gate (specs.md §10.9), same convention as SearchScreen's own
-  // loading tests — `useProfiles` is mocked here because its real 'loading'
-  // window (an IndexedDB read) is too brief to hold open under fake timers.
+  // `useProfiles` is mocked because its real 'loading' window (an IndexedDB
+  // read) is too brief to hold open under fake timers.
   it('shows nothing yet immediately while the registry read is pending, before the anti-flash delay elapses', () => {
     mUseProfiles.mockImplementation(() => LOADING_STATE)
     vi.useFakeTimers()

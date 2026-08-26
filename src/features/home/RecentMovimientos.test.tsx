@@ -29,7 +29,7 @@ describe('RecentMovimientos', () => {
     expect(screen.getByRole('link', { name: /ver todo/i })).toHaveClass('min-h-11')
   })
 
-  it('tapping a row opens the movement sheet for that id (specs.md §10.23)', async () => {
+  it('tapping a row opens the movement sheet for that id', async () => {
     const user = userEvent.setup()
     render(<RecentMovimientos movimientos={[movimiento()]} categorias={[]} />, {
       wrapper: MemoryRouter,

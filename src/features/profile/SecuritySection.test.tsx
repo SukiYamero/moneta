@@ -56,10 +56,8 @@ beforeEach(() => {
   disableGuestLock.mockResolvedValue(undefined)
 })
 
-// specs.md §10.2.1 / §12: idle/authenticating/error have no session to
-// protect yet, so no lock control at all — verified here at the section
-// level, closing the backlog item CONFIRMED by the operator (§11,
-// 2026-08-20). Guest's own absence rule is tested separately below,
+// idle/authenticating/error have no session to protect yet, so no lock
+// control at all. Guest's own absence rule is tested separately below,
 // since it depends on platform biometric capability, not status alone.
 describe.each(['idle', 'authenticating', 'error'])('when status is %s', (status) => {
   it('renders nothing', () => {
@@ -92,9 +90,9 @@ describe('when authenticated', () => {
   })
 })
 
-// specs.md §10.2.1: a guest gets biometrics or nothing — never a PIN. Where
-// the device has no biometric capability, the whole section is absent, not
-// a disabled control.
+// A guest gets biometrics or nothing — never a PIN. Where the device has
+// no biometric capability, the whole section is absent, not a disabled
+// control.
 describe('when a guest', () => {
   beforeEach(() => {
     authStatus = 'guest'

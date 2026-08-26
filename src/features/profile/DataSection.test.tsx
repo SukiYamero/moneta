@@ -62,11 +62,9 @@ describe('DataSection', () => {
     toastSpy.mockRestore()
   })
 
-  // specs.md §10.20: the "delete stored data" control is the answer to the
-  // borrowed-device case, shipped visibly inert this wave. It must read as
-  // unavailable, not merely unimplemented — a native `disabled` control
-  // (no click handler ever fires, `aria-disabled` announced) rather than a
-  // row that only looks tappable.
+  // Shipped visibly inert: must read as unavailable, not merely
+  // unimplemented — a native `disabled` control, not a row that only
+  // looks tappable.
   describe('the delete-stored-data control', () => {
     it('renders visibly disabled and stays disabled after a click attempt', async () => {
       const user = userEvent.setup()

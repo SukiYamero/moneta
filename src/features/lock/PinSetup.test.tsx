@@ -168,10 +168,10 @@ test('renders nothing when closed', () => {
   expect(screen.queryByText(T('lock:setup.titleCreate'))).not.toBeInTheDocument()
 })
 
-// Same shape as the amount field (specs.md §10.54): the hidden input backs
-// `PinPad`, our own on-screen keypad, and is programmatically focused via
-// `initialFocus` the moment this panel opens — without inputMode="none" that
-// focus raises the OS keyboard on top of the pad it is meant to replace.
+// The hidden input backs `PinPad`, our own on-screen keypad, and is
+// programmatically focused via `initialFocus` the moment this panel opens —
+// without inputMode="none" that focus raises the OS keyboard on top of the
+// pad it is meant to replace.
 test('the hidden PIN input suppresses the native keyboard so only the on-screen pad shows', () => {
   render(<PinSetup open onClose={vi.fn()} mode="new" />)
   expect(screen.getByLabelText(T('lock:screen.pinLabel'))).toHaveAttribute('inputMode', 'none')

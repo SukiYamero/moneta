@@ -25,8 +25,8 @@ describe('BootGate', () => {
     expect(run).toHaveBeenCalledOnce()
   })
 
-  // specs.md §10.29: no full-screen loading treatment at all — the same
-  // shell+skeleton cover RequireAuth uses, never a distinct brand screen.
+  // No full-screen loading treatment at all — the same shell+skeleton
+  // cover RequireAuth uses, never a distinct brand screen.
   it('shows the shell+skeleton cover while status is idle/running, never the children', () => {
     render(
       <BootGate>
@@ -88,19 +88,11 @@ describe('BootGate', () => {
     expect(screen.queryByRole('navigation')).not.toBeInTheDocument()
   })
 
-  // CONFIRMED (track-boot review, reproduced before the fix): `status` is a
-  // module-global store, not scoped to "ready for the profile currently
-  // bound". A `BootGate` mounted while `status` is still 'ready' from a
-  // *previous* boot session renders `children` instantly off that stale
-  // value and never re-covers the screen even once `run()` later detects a
-  // rebind and starts resetting/reloading data underneath it — exactly the
-  // "even transiently" case specs.md §10.28's rebind path exists to
-  // prevent. This is why `authStore.ts`'s `logout()` calls
-  // `invalidateBootForSignOut()` (`src/lib/boot.ts`) before the next
-  // sign-in can ever remount `BootGate` — this test pins down what that
-  // reset actually buys: a mount starting from the state logout() leaves
-  // behind must show the cover until a genuine boot for *this* mount
-  // finishes, not before.
+  // `status` is a module-global store, not scoped to "ready for the profile
+  // currently bound". A `BootGate` mounted while `status` is still 'ready'
+  // from a previous boot session must not render `children` instantly off
+  // that stale value — `authStore.ts`'s `logout()` resets it via
+  // `invalidateBootForSignOut()` before a next sign-in can remount this.
   it('after an invalidated boot, a fresh mount stays covered through run() rather than assuming stale readiness', () => {
     let flipToRunning: () => void = () => {}
     const run = vi.fn().mockImplementation(
@@ -112,8 +104,7 @@ describe('BootGate', () => {
           }
         }),
     )
-    // The exact post-logout starting state invalidateBootForSignOut()
-    // produces — not the stale 'ready' a pre-fix mount would have inherited.
+    // The post-logout starting state invalidateBootForSignOut() produces.
     useBootStore.setState({ status: 'idle', error: null, run })
 
     render(

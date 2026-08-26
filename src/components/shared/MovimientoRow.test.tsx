@@ -32,8 +32,7 @@ describe('MovimientoRow', () => {
     )
 
     expect(screen.getByText('Sueldo')).toBeInTheDocument()
-    // The sign attaches to the number, not the currency (specs.md §10.7) —
-    // it never leads the string.
+    // The sign attaches to the number, not the currency symbol.
     expect(screen.getByText(/\+\d/)).toBeInTheDocument()
   })
 

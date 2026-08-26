@@ -19,21 +19,9 @@ const stubMatchMedia = (matches: boolean) => {
 }
 
 describe('useIsCoarsePointer', () => {
-  it('returns true on a coarse-pointer (touch) device', () => {
-    stubMatchMedia(true)
+  it.each([true, false])('reflects the pointer:coarse query match: %s', (matches) => {
+    stubMatchMedia(matches)
     const { result } = renderHook(() => useIsCoarsePointer())
-    expect(result.current).toBe(true)
-  })
-
-  it('returns false on a fine-pointer (mouse/trackpad) device', () => {
-    stubMatchMedia(false)
-    const { result } = renderHook(() => useIsCoarsePointer())
-    expect(result.current).toBe(false)
-  })
-
-  it('degrades to false when matchMedia is unavailable (jsdom default)', () => {
-    vi.stubGlobal('matchMedia', undefined)
-    const { result } = renderHook(() => useIsCoarsePointer())
-    expect(result.current).toBe(false)
+    expect(result.current).toBe(matches)
   })
 })

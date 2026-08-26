@@ -129,10 +129,9 @@ describe('useHomeDashboard', () => {
     expect(result.current.week.chart).toHaveLength(7)
   })
 
-  // specs.md §10.27: the exact failure scenario the fix targets — a user
-  // switches monedaPrincipal after already having COP movements. The
-  // headline total must never add the two currencies together.
-  describe('currency-correct totals (specs.md §10.27)', () => {
+  // A user switches monedaPrincipal after already having COP movements —
+  // the headline total must never add the two currencies together.
+  describe('currency-correct totals', () => {
     it('excludes movements in a currency other than monedaPrincipal from the totals', async () => {
       const config: Config = {
         ...CONFIG_SEMILLA,

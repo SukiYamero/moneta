@@ -14,11 +14,10 @@ const Bomb = () => {
 }
 
 // Mirrors src/router.tsx's shape — a pathless layout route (AppShell) with
-// absolute-path children — without RequireAuth or browser history. That
-// nesting pattern (needed so BottomNav mounts once instead of per-screen,
-// docs/wave-2/track-l.md) is the one thing reading router.tsx's source
-// can't confirm actually resolves at runtime; this proves it does, for all
-// three tabs.
+// absolute-path children — without RequireAuth or browser history, so
+// BottomNav mounts once instead of per-screen. Proves that nesting actually
+// resolves at runtime for all three tabs, which reading the router source
+// alone can't confirm.
 const renderAt = (initialPath: string) => {
   const router = createMemoryRouter(
     [
@@ -53,11 +52,9 @@ describe('AppShell layout', () => {
   })
 
   // jsdom doesn't run layout, so this can't prove the pixel-filling behavior
-  // (verified instead in a real browser, specs.md §10.43) — it pins the
-  // *shape* of the decision, so a future "simplification" back to a floor
-  // can't silently reintroduce the leaf-route collapse (specs.md §12).
-  // `h-full`, not `min-h-full`/`min-h-dvh`: a floor leaves the one flex-1
-  // child's height content-driven rather than definite.
+  // — it pins the *shape* of the decision so a future "simplification" back
+  // to a floor can't reintroduce a leaf-route collapse: `h-full`, not
+  // `min-h-full`/`min-h-dvh`, leaves the flex-1 child's height definite.
   it('roots the shell at a definite h-full, not a min-h-full floor or min-h-dvh', () => {
     const { container } = render(
       <RouterProvider
@@ -73,9 +70,9 @@ describe('AppShell layout', () => {
     expect(root?.className).not.toMatch(/min-h-dvh/)
   })
 
-  // Matches BottomSheet/FullScreenPanel's precedent (specs.md §10.35.1): once
-  // the shell root is a definite height, this pane is the app's real (and
-  // only) scroll container, so an at-boundary drag shouldn't chain into it.
+  // Matches BottomSheet/FullScreenPanel's precedent: once the shell root is
+  // a definite height, this pane is the app's real (and only) scroll
+  // container, so an at-boundary drag shouldn't chain into it.
   it('contains overscroll on the scroll pane', () => {
     const { container } = render(
       <RouterProvider
@@ -121,10 +118,7 @@ describe('AppShell routing', () => {
     renderAt('/')
     // Every route needs exactly one accessible heading — asserting *that*
     // is the invariant worth protecting, not any specific text: Home's <h1>
-    // is its greeting (the design's actual subject for this screen), which
-    // is real content, not a placeholder, and will keep changing with it
-    // (e.g. by time of day, by user). Pinning specific text here would tie
-    // this shell-routing test to a content decision Track E2 owns.
+    // is a time/user-dependent greeting, not stable content to pin here.
     expect(await screen.findByRole('heading', { level: 1 })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /inicio/i })).toHaveAttribute('aria-current', 'page')
   })
@@ -142,7 +136,7 @@ describe('AppShell routing', () => {
   })
 })
 
-describe('AppShell — the movement sheets (specs.md §10.23)', () => {
+describe('AppShell — the movement sheets', () => {
   it('the FAB opens AddMovimientoSheet, mounted once beside ProfileSheet', async () => {
     const user = userEvent.setup()
     useMovimientoSheetStore.setState({ addOpen: false, viewId: null })
