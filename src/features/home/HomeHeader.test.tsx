@@ -4,7 +4,7 @@ import { useAuthStore } from '@/lib/authStore'
 import { HomeHeader } from '@/features/home/HomeHeader'
 
 describe('HomeHeader', () => {
-  it('gives the notification bell a real 44px touch target (AGENTS.md § UI)', () => {
+  it('gives the notification bell a real 44px touch target', () => {
     useAuthStore.setState({ user: { email: 'alex@example.com', name: 'Alex Rivera' } })
     render(<HomeHeader />)
 

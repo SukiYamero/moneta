@@ -23,7 +23,7 @@ beforeEach(() => {
 })
 
 describe('RecentMovimientos', () => {
-  it('gives the "Ver todo" link a real 44px touch target (AGENTS.md § UI)', () => {
+  it('gives the "Ver todo" link a real 44px touch target', () => {
     render(<RecentMovimientos movimientos={[]} categorias={[]} />, { wrapper: MemoryRouter })
 
     expect(screen.getByRole('link', { name: /ver todo/i })).toHaveClass('min-h-11')
