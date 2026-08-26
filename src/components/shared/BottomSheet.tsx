@@ -9,6 +9,7 @@ import {
 import {
   OVERLAY_BACKDROP_OVERSCAN_BLOCK,
   OVERLAY_BACKDROP_OVERSCAN_INLINE,
+  OVERLAY_FIXED_LAYER_OPACITY_CLASS,
   OVERLAY_MAX_HEIGHT_FRACTION,
   useVisualViewportInset,
 } from '@/components/shared/useVisualViewportInset'
@@ -124,7 +125,7 @@ export const BottomSheet = ({
           left: OVERLAY_BACKDROP_OVERSCAN_INLINE,
           right: OVERLAY_BACKDROP_OVERSCAN_INLINE,
         }}
-        className="fixed z-50 animate-fade-in bg-black/55"
+        className={cn('fixed z-50 animate-fade-in bg-black/55', OVERLAY_FIXED_LAYER_OPACITY_CLASS)}
         aria-hidden="true"
       />
       {/* `top`/`height` here override the `inset-0` class's top/bottom only
@@ -138,7 +139,7 @@ export const BottomSheet = ({
           but outside the panel fall through to the backdrop above instead of
           being silently swallowed by an otherwise-invisible div. */}
       <div
-        className="pointer-events-none fixed inset-0 z-50"
+        className={cn('pointer-events-none fixed inset-0 z-50', OVERLAY_FIXED_LAYER_OPACITY_CLASS)}
         style={viewportInset ? { top: viewportInset.top, height: viewportInset.height } : undefined}
       >
         <div
@@ -162,6 +163,7 @@ export const BottomSheet = ({
           className={cn(
             'pointer-events-auto absolute inset-x-0 bottom-0 flex max-h-[88dvh] flex-col rounded-t-5xl border-t border-border-subtle bg-card animate-sheet-up transition-transform duration-200 ease-out',
             OVERLAY_PANEL_CLASS,
+            OVERLAY_FIXED_LAYER_OPACITY_CLASS,
             className,
           )}
         >

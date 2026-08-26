@@ -8,6 +8,7 @@ import {
 import {
   OVERLAY_BACKDROP_OVERSCAN_BLOCK,
   OVERLAY_BACKDROP_OVERSCAN_INLINE,
+  OVERLAY_FIXED_LAYER_OPACITY_CLASS,
   OVERLAY_MAX_HEIGHT_FRACTION,
   useVisualViewportInset,
 } from '@/components/shared/useVisualViewportInset'
@@ -47,7 +48,7 @@ export const CenterModal = ({
           left: OVERLAY_BACKDROP_OVERSCAN_INLINE,
           right: OVERLAY_BACKDROP_OVERSCAN_INLINE,
         }}
-        className="fixed z-50 animate-fade-in bg-black/70"
+        className={cn('fixed z-50 animate-fade-in bg-black/70', OVERLAY_FIXED_LAYER_OPACITY_CLASS)}
         aria-hidden="true"
       />
       {/* Same wrapper correction as `BottomSheet` — see its own comment. Also
@@ -58,7 +59,7 @@ export const CenterModal = ({
           tap inside this box but outside the panel fall through to the
           backdrop above instead of being swallowed by an invisible div. */}
       <div
-        className="pointer-events-none fixed inset-0 z-50"
+        className={cn('pointer-events-none fixed inset-0 z-50', OVERLAY_FIXED_LAYER_OPACITY_CLASS)}
         style={viewportInset ? { top: viewportInset.top, height: viewportInset.height } : undefined}
       >
         <div
@@ -79,6 +80,7 @@ export const CenterModal = ({
           className={cn(
             'pointer-events-auto absolute inset-x-6.5 top-1/2 max-h-[88dvh] -translate-y-1/2 overflow-y-auto overscroll-y-contain rounded-3xl border border-border-subtle bg-card p-6 animate-pop-in',
             OVERLAY_PANEL_CLASS,
+            OVERLAY_FIXED_LAYER_OPACITY_CLASS,
             className,
           )}
         >

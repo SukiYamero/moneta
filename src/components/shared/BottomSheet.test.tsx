@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { BottomSheet } from '@/components/shared/BottomSheet'
+import { OVERLAY_FIXED_LAYER_OPACITY_CLASS } from '@/components/shared/useVisualViewportInset'
 
 const Harness = ({ open, onClose }: { open: boolean; onClose: () => void }) => {
   return (
@@ -205,6 +206,25 @@ describe('BottomSheet', () => {
       expect(backdrop.style.bottom).toBe('-50dvh')
       expect(backdrop.style.left).toBe('-50dvw')
       expect(backdrop.style.right).toBe('-50dvw')
+    })
+  })
+
+  describe('fixed-layer opacity escape hatch (real iOS Safari 26 compositing bug)', () => {
+    it('gives the backdrop, wrapper and panel a real opacity below 1, not just an alpha-blended fill', () => {
+      render(<Harness open onClose={() => {}} />)
+      const dialog = screen.getByRole('dialog')
+      const wrapper = dialog.parentElement as HTMLElement
+      const backdrop = document.querySelector('[aria-hidden="true"]') as HTMLElement
+
+      expect(backdrop.className).toMatch(
+        new RegExp(`(^|\\s)${OVERLAY_FIXED_LAYER_OPACITY_CLASS}(\\s|$)`),
+      )
+      expect(wrapper.className).toMatch(
+        new RegExp(`(^|\\s)${OVERLAY_FIXED_LAYER_OPACITY_CLASS}(\\s|$)`),
+      )
+      expect(dialog.className).toMatch(
+        new RegExp(`(^|\\s)${OVERLAY_FIXED_LAYER_OPACITY_CLASS}(\\s|$)`),
+      )
     })
   })
 

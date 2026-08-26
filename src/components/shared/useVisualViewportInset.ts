@@ -39,6 +39,8 @@ const VIEWPORT_MATCH_TOLERANCE_PX = 1
 export const OVERLAY_BACKDROP_OVERSCAN_BLOCK = '-50dvh'
 export const OVERLAY_BACKDROP_OVERSCAN_INLINE = '-50dvw'
 
+export const OVERLAY_FIXED_LAYER_OPACITY_CLASS = 'opacity-99'
+
 export interface VisualViewportInset {
   /**
    * Distance in px from the layout viewport's top edge to the visual
