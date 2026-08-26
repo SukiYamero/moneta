@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Landscape Gate — handoff</title>
+    <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/bold/style.css" />
+    <style>
+      :root {
+        --lg-surface: #16181d;
+        --lg-text: #f4f4f5;
+        --lg-text3: #a8abb2;
+        --lg-muted2: #6c6f76;
+        --lg-line: rgba(255, 255, 255, 0.08);
+      }
+      body {
+        margin: 0;
+        font-family: -apple-system, 'Manrope', system-ui, sans-serif;
+      }
+
+      @keyframes lgRotateHint {
+        0%,
+        15% {
+          transform: rotate(90deg);
+        }
+        35%,
+        90% {
+          transform: rotate(0deg);
+        }
+        91%,
+        100% {
+          transform: rotate(90deg);
+        }
+      }
+
+      /* Full-viewport gate. position:fixed makes it escape any parent's
+     overflow:hidden, so it still covers the real screen even if your app
+     shell is a fixed-size mobile frame. */
+      .landscape-gate {
+        position: fixed;
+        inset: 0;
+        z-index: 999;
+        background: rgba(0, 0, 0, 0.72);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 5vh 24px;
+      }
+      .landscape-gate__panel {
+        width: 100%;
+        max-width: 360px;
+        height: 80vh;
+        max-height: 560px; /* ~80% of viewport, tall card, not full block */
+        background: var(--lg-surface);
+        border: 1px solid var(--lg-line);
+        border-radius: 28px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: 40px 32px;
+        gap: 22px;
+      }
+      .landscape-gate__icon {
+        font-size: 68px;
+        color: var(--lg-muted2);
+        display: inline-block;
+        animation: lgRotateHint 2.2s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+      }
+      .landscape-gate__title {
+        font-size: 19px;
+        font-weight: 800;
+        letter-spacing: -0.2px;
+        margin-bottom: 8px;
+        color: var(--lg-text);
+      }
+      .landscape-gate__body {
+        font-size: 14.5px;
+        color: var(--lg-text3);
+        font-weight: 500;
+        line-height: 1.5;
+      }
+      .landscape-gate__skip {
+        margin-top: 4px;
+        padding: 14px 22px;
+        border: 1px solid var(--lg-line);
+        border-radius: 15px;
+        background: transparent;
+        color: var(--lg-text3);
+        font-family: inherit;
+        font-size: 14px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="landscapeGate" class="landscape-gate" hidden>
+      <div class="landscape-gate__panel">
+        <i class="ph-bold ph-device-rotate landscape-gate__icon"></i>
+        <div>
+          <div class="landscape-gate__title">Gira tu teléfono</div>
+          <div class="landscape-gate__body">
+            Esta app está pensada para usarse en vertical. Vuelve a ese modo para la mejor
+            experiencia.
+          </div>
+        </div>
+        <button class="landscape-gate__skip" id="landscapeGateSkip">Omitir y continuar</button>
+      </div>
+    </div>
+
+    <script>
+      ;(function () {
+        var gate = document.getElementById('landscapeGate')
+        var skipBtn = document.getElementById('landscapeGateSkip')
+        var skipped = false
+
+        function check() {
+          // landscape AND phone-sized — excludes wide desktop windows.
+          var isLandscape = window.innerWidth > window.innerHeight && window.innerWidth < 900
+          if (isLandscape && !gate.dataset.wasLandscape) skipped = false // reset skip each time you re-enter landscape
+          gate.dataset.wasLandscape = isLandscape ? '1' : ''
+          gate.hidden = !(isLandscape && !skipped)
+        }
+
+        skipBtn.addEventListener('click', function () {
+          skipped = true
+          check()
+        })
+
+        window.addEventListener('resize', check)
+        window.addEventListener('orientationchange', check)
+        check()
+      })()
+    </script>
+  </body>
+</html>

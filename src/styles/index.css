@@ -101,6 +101,13 @@ html {
   --color-canvas: var(--canvas);
   --color-surface-sunken: var(--surface-sunken);
 
+  /* What the page reads as behind an open overlay. Matches BottomSheet's
+     own bg-black/55 backdrop over the canvas, so the one region a fixed
+     backdrop cannot cover on iOS (see useOverlay.ts) is indistinguishable
+     from the rest of the dimmed screen instead of a black bar. Resolves
+     per theme through --canvas. */
+  --overlay-dim: color-mix(in oklch, var(--canvas), black 55%);
+
   /* Border/hairline opacity scale — pick the semantic step, never type a
      raw rgba(255,255,255,.NN) in a component. */
   --color-border-subtle: var(--border-subtle);

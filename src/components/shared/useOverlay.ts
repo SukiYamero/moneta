@@ -61,7 +61,7 @@ interface OverlayHandle {
   readonly seq: number
 }
 
-export const OVERLAY_BODY_DIM_BACKGROUND = 'rgb(0, 0, 0)'
+export const OVERLAY_BODY_DIM_BACKGROUND = 'var(--overlay-dim)'
 
 let nextSeq = 0
 let stack: OverlayHandle[] = []
