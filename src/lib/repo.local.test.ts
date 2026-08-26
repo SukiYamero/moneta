@@ -47,8 +47,8 @@ const activo = (overrides: Partial<Activo> = {}): Activo => {
   }
 }
 
-// Behavior every Repo implementation must agree on (docs/error-handling.md
-// §6) — run here and in repo.fake.test.ts against the same suite. Anything
+// Behavior every Repo implementation must agree on — run here and in
+// repo.fake.test.ts against the same suite. Anything
 // below this point in the file is implementation-specific to the dexie-
 // backed repo (fast path, ready()/migration mechanics, cursor identity
 // binding, message-text regressions, concurrency mechanics).

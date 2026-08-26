@@ -22,7 +22,7 @@ const COARSE_POINTER_QUERY = '(pointer: coarse)'
 // (landscape, reduced-motion, theme, the amount pad's coarse-pointer gate)
 // degrades on to "doesn't match" — silently hiding touch-only behavior from
 // the whole suite. Query-aware rather than `matches: true` for everything:
-// this project is mobile-first (AGENTS.md), so the suite defaults to a
+// this project is mobile-first, so the suite defaults to a
 // touch device by matching only `(pointer: coarse)`, false for every other
 // query (`prefers-reduced-motion`, `prefers-color-scheme`, orientation).
 // A test that needs a different device stubs `matchMedia` itself

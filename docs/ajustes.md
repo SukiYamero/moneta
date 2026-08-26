@@ -6,7 +6,7 @@
 
 - Shell chrome standardized: no pinch/double-tap zoom, one shared top-inset token across screens, `BottomSheet`'s grab handle is fixed chrome instead of scrolling away with the panel content (specs.md §10.34–§10.35).
 - `min-h-dvh` on a root already padded by `env(safe-area-inset-*)` demands the full raw viewport on top of that padding and overflows by exactly the inset — invisible on desktop, real on any notched device; swept to `min-h-full` across every screen root (§10.39).
-- The Add-sheet spec (§10.23) had drifted from the design export's own Add-sheet artboard, which a marker-based search had skipped; the export is corrected to match and re-extracted to `docs/ui/design-export-add-sheet.md`.
+- The Add-sheet spec (§10.23) had drifted from the design export's own Add-sheet artboard, which a marker-based search had skipped; the spec is corrected to match.
 - The returning-user screen's duplicate "sign in" button is replaced with a guest escape hatch, gated behind a modal that states plainly that guest mode has no data from the signed-in account (§10.36–§10.37).
 - "Olvidé mi PIN" copy is rewritten: it does not delete financial data (only the token vault/login marker), and local data was never encrypted at rest in the first place — both claims the old copy made were false (§10.38).
 - `ConfirmDialog` takes a variant instead of hardcoding `destructive` on every confirmation, so a reversible action (guest switch, forgot-PIN) no longer renders as a delete (§10.40).

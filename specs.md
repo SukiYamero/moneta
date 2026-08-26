@@ -219,7 +219,7 @@ outcome as a rule in the relevant §10 entry.
 - 5 wrong PIN attempts force a vault wipe + re-login with Google.
 - No WebAuthn/PRF on the device → PIN-only, biometric option is not offered.
 - A guest's biometric lock (§10.2.1) is a separate `guestLock` row, not this `LockVault` — no DEK, no envelope, no session to protect.
-- Logout keeps the vault; offline unlock must not force a silent re-auth (see §10.11).
+- Logout invalidates the cached session inside the vault (§10.20); offline unlock must not force a silent re-auth (see §10.11).
 - Both `LockScreen` and `PinSetup` back their PIN dots with an `sr-only` `<input>` — `sr-only` clips it but leaves it real and focusable, so it still raises the OS keyboard on top of `PinPad`. That input carries `inputMode="none"`, same fix shape as `MovimientoAmountInput` (§10.54): the software keyboard is suppressed, `PinPad`'s own labelled buttons are the only on-screen entry surface, and a physical keyboard or screen reader still reaches the input.
 
 **Implementation.** `src/lib/pinLock.ts`, `src/lib/lockStore.ts`; UI in `src/features/lock/` (`LockScreen`, `LockSettings`, `PinSetup`), reached from `SecuritySection` in the profile sheet (§10.18).
@@ -412,7 +412,7 @@ outcome as a rule in the relevant §10 entry.
 - Cold boot must not strand the user on `WelcomeScreen` when offline: `authStore.restore()`/`hydrate()` must decrypt the vault and reach the app locally without requiring a network round trip.
 - A profile fetch (name/avatar) is a refresh, never a gate — the vault already proved identity locally.
 - One store owns online/offline state (`navigator.onLine` plus the `online`/`offline` events); everything else reads it. Treat `navigator.onLine === true` as a hint, not a guarantee — a failed request should downgrade it.
-- **Offline session window: 7 hours from the last successful online validation.** Offline, the user may read everything and create movements, but not edit, delete, or change settings — appends commute across devices (UUID ids), edits/deletes don't.
+- **Offline session window: 7 hours from the last successful online validation.** Offline, the user may read everything, create movements and delete them, but not edit or change settings. Creates commute across devices (UUID ids) and a delete is terminal, so both converge; a record-level last-write-wins edit can still silently drop one of two concurrent field edits, so editing stays online-only.
 - Past the 7-hour window, new writes are blocked (reads stay available) and the app asks the user to reconnect; copy must never imply data loss.
 - All three screens (Home/Search/History) share one failed-load message, derived from `RepoErrorCode`, not three ad hoc strings.
 
@@ -445,6 +445,7 @@ outcome as a rule in the relevant §10 entry.
 
 - Mutation actions (create/update/delete a `Movimiento`, update `Config`) live on `dataStore`, not scattered per screen.
 - A failed write must roll back the store rather than leave it silently dirty.
+- The repo write lands before the outbox append, never the reverse: a repo failure must not depend on the outbox, and an outbox failure must not roll back a write that already succeeded.
 - Errors surface through the Toast (§10.6) for a write issued from a sheet that has since closed.
 - The offline permission window (§10.11) is enforced in exactly one place — inside the write path, not per call site.
 
@@ -742,7 +743,7 @@ outcome as a rule in the relevant §10 entry.
 - The prompt states a concrete count of movements, states plainly that they'd go into this account's Drive, and states that declining leaves the data exactly where it was, reachable through the profile switcher (§10.31).
 - Adoption is a merge, not a replace — safe by construction because movement ids are `crypto.randomUUID()`; both an existing Drive account's data and the adopted guest data end up present.
 - An interrupted adoption (tab closed mid-move) must be resumable, never leaving data split half-and-half across two profiles. The consent itself is persisted the moment "yes" is tapped (before the move starts); resuming after an interruption is completion of that consent, not a new offer, and runs silently.
-- A resumed adoption must only ever resume into the _same_ profile + account key it was originally consented to — never "whatever profile happens to be active."
+- A resumed adoption must only ever resume into the _same_ profile + account key it was originally consented to — never "whatever profile happens to be active." On a mismatch the consent marker is left in place, not discarded, so it stays resumable if that profile becomes active again.
 - The emptied guest profile is never deleted — it is the default local profile and always exists.
 
 **Implementation.** `src/lib/profiles/adoption.ts` (`adoptGuestMovements`, `countGuestMovements`), `src/lib/deviceStore.ts` (persisted `adoptionConsent` marker), `src/lib/boot.ts` (silent resume hook), `src/features/auth/GuestAdoptionPrompt.tsx`.
@@ -1071,6 +1072,8 @@ outcome as a rule in the relevant §10 entry.
 - **`Movimiento.metodo` has no writer anywhere** — optional field, seeded only by `repo.fake.ts`'s demo data, no UI control writes it (`src/lib/schema.ts`).
 - **`MovimientoRow` has no amount-masking prop**, so History's hide/show-amounts toggle from the design isn't built (`src/features/history/README.md`).
 - **No `Activo` export** — `src/lib/export/index.ts` only exports `Movimiento`.
+- **`Activo` has no UI at all** — the type, the repo methods and the sync pull path exist, but no screen anywhere under `src/features/` reads or writes one.
+- **"Áreas" (category groups) is designed but unbuilt** — `src/features/home/AreasBanner.tsx` renders disabled; `schema.ts` has no `Grupo` concept, so it needs a new type or an `extra` field on `Categoria` first.
 
 ### i18n & accessibility
 
@@ -1092,7 +1095,7 @@ outcome as a rule in the relevant §10 entry.
 
 ### Branding / polish
 
-- **Diff every remaining design-export artboard against its spec section** — a one-time audit, still not done for most of the 19 artboards in `docs/ui/Moneta_ Expense Manager UI.zip`.
+- **Diff every design-canvas artboard against its spec section** — a one-time audit, still not done for most of the 19 artboards.
 - Rename the OAuth consent screen to the current brand name in Google Cloud Console — a user action, no code change.
 
 ### Waiting on the user

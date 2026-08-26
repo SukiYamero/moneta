@@ -75,7 +75,7 @@ describe('bootstrap', () => {
     expect(call.content).toContain('KuroBello')
   })
 
-  it('no longer pre-creates movimientos.json/activos.json/config.json — superseded by §10.19', async () => {
+  it('does not pre-create movimientos.json/activos.json/config.json', async () => {
     mockFolderExists()
     mockConfigOnDrive(true)
 

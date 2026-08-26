@@ -338,8 +338,7 @@ These apply to any agent on this project, whatever it was asked to do.
   already exists and in what form. The exception, so this doesn't fire
   constantly: divergences already recorded in `docs/ui/design-tokens.md`
   (fluid layout over the fixed frame, Lucide over CDN Phosphor, tokens over
-  inline styles, ≥44px targets) are settled decisions — proceed. Full rule in
-  `docs/ui/implementation-plan.md`.
+  inline styles, ≥44px targets) are settled decisions — proceed.
 - **Read the project's own rules before applying generic best practice.**
   This file, `specs.md` (the source of truth), `docs/error-handling.md`,
   `docs/waves.md`, `ARCHITECTURE.md`, and the per-directory `README.md`s.

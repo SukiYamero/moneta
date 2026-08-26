@@ -5,10 +5,8 @@ _why_ behind what's there; it is not a copy of the values, so it can't drift
 out of sync with the CSS the way a value-dump doc would. If a value here and
 the CSS ever disagree, the CSS wins — fix this doc, not the other way.
 
-Source design: the Claude Design canvas behind `docs/ui/moneta-theme.css`
-and `docs/ui/design-export-reference.md`/`design-export-add-sheet.md`. The
-canvas itself is not reachable from an agent session — those files are the
-versioned export, and the ones to read.
+Source design: the Claude Design canvas. It is not reachable from an agent
+session, so `docs/ui/moneta-theme.css` is the versioned export to read.
 
 ## Colors
 
