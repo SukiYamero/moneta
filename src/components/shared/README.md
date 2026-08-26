@@ -207,6 +207,9 @@ Categoria[]` prop (no default, same no-silent-fallback rule as
   `src/features/lock/PinPad.tsx` so it and `MovimientoAmountInput.tsx`'s
   amount keypad reuse one implementation; renders a decimal key only when
   a caller passes `decimalLabel`/`onDecimal`, otherwise a blank PIN-shaped cell.
+  A drag-handle dismiss bar above the grid is likewise opt-in
+  (`onDismiss`/`dismissAriaLabel`) — tap or drag it down past a threshold to
+  dismiss (specs.md §10.54); `PinPad` passes neither and renders unaffected.
 - `TextField.tsx` — labelled text input: `Label`/`Input` association via
   `useId()` (or a caller-supplied `id`), `aria-invalid`/`aria-describedby`
   wired to an optional `error` rendered as `role="alert"`, 44px touch

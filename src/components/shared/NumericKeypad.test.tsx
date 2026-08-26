@@ -130,4 +130,148 @@ describe('NumericKeypad', () => {
     expect(screen.getByRole('button', { name: 'Decimal separator' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Delete' })).toBeDisabled()
   })
+
+  describe('the opt-in dismiss bar', () => {
+    it('renders nothing extra when onDismiss is omitted — the PIN-shaped usage stays byte-identical', () => {
+      render(<NumericKeypad onDigit={() => {}} onDelete={() => {}} deleteAriaLabel="Delete" />)
+
+      // Same 10 digits + delete as the plain PIN shape — no dismiss button added.
+      expect(screen.getAllByRole('button')).toHaveLength(11)
+    })
+
+    it('renders a real, accessibly-labeled button when onDismiss is provided, and tapping it calls onDismiss', async () => {
+      const user = userEvent.setup()
+      const onDismiss = vi.fn()
+      render(
+        <NumericKeypad
+          onDigit={() => {}}
+          onDelete={() => {}}
+          deleteAriaLabel="Delete"
+          onDismiss={onDismiss}
+          dismissAriaLabel="Close keypad"
+        />,
+      )
+
+      const bar = screen.getByRole('button', { name: 'Close keypad' })
+      await user.click(bar)
+
+      expect(onDismiss).toHaveBeenCalledOnce()
+    })
+
+    it('is keyboard-reachable and activates on Enter — the drag is an enhancement, never the only path', async () => {
+      const user = userEvent.setup()
+      const onDismiss = vi.fn()
+      render(
+        <NumericKeypad
+          onDigit={() => {}}
+          onDelete={() => {}}
+          deleteAriaLabel="Delete"
+          onDismiss={onDismiss}
+          dismissAriaLabel="Close keypad"
+        />,
+      )
+
+      screen.getByRole('button', { name: 'Close keypad' }).focus()
+      await user.keyboard('{Enter}')
+
+      expect(onDismiss).toHaveBeenCalledOnce()
+    })
+
+    it('calls onDismiss when the bar is dragged down past the dismiss threshold', async () => {
+      const user = userEvent.setup()
+      const onDismiss = vi.fn()
+      render(
+        <NumericKeypad
+          onDigit={() => {}}
+          onDelete={() => {}}
+          deleteAriaLabel="Delete"
+          onDismiss={onDismiss}
+          dismissAriaLabel="Close keypad"
+        />,
+      )
+      const bar = screen.getByRole('button', { name: 'Close keypad' })
+
+      await user.pointer([
+        { keys: '[MouseLeft>]', target: bar, coords: { clientY: 0 } },
+        { coords: { clientY: 80 } },
+        '[/MouseLeft]',
+      ])
+
+      expect(onDismiss).toHaveBeenCalledOnce()
+    })
+
+    it('springs back without calling onDismiss when dragged below the threshold', async () => {
+      const user = userEvent.setup()
+      const onDismiss = vi.fn()
+      render(
+        <NumericKeypad
+          onDigit={() => {}}
+          onDelete={() => {}}
+          deleteAriaLabel="Delete"
+          onDismiss={onDismiss}
+          dismissAriaLabel="Close keypad"
+        />,
+      )
+      const bar = screen.getByRole('button', { name: 'Close keypad' })
+
+      await user.pointer([
+        { keys: '[MouseLeft>]', target: bar, coords: { clientY: 0 } },
+        { coords: { clientY: 10 } },
+        '[/MouseLeft]',
+      ])
+
+      expect(onDismiss).not.toHaveBeenCalled()
+    })
+
+    it("never dismisses on pointercancel, regardless of drag distance — a cancelled gesture is not user intent, same rule BottomSheet's own drag-to-dismiss follows", async () => {
+      const user = userEvent.setup()
+      const onDismiss = vi.fn()
+      render(
+        <NumericKeypad
+          onDigit={() => {}}
+          onDelete={() => {}}
+          deleteAriaLabel="Delete"
+          onDismiss={onDismiss}
+          dismissAriaLabel="Close keypad"
+        />,
+      )
+      const bar = screen.getByRole('button', { name: 'Close keypad' })
+
+      await user.pointer({ keys: '[MouseLeft>]', target: bar, coords: { clientY: 0 } })
+      await user.pointer({ coords: { clientY: 200 } })
+      bar.dispatchEvent(
+        new PointerEvent('pointercancel', { bubbles: true, cancelable: true, pointerId: 1 }),
+      )
+
+      expect(onDismiss).not.toHaveBeenCalled()
+    })
+
+    it('dragging the bar does not steal focus from the amount input mid-gesture', async () => {
+      const user = userEvent.setup()
+      render(
+        <div>
+          <input aria-label="Elsewhere" />
+          <NumericKeypad
+            onDigit={() => {}}
+            onDelete={() => {}}
+            deleteAriaLabel="Delete"
+            onDismiss={() => {}}
+            dismissAriaLabel="Close keypad"
+          />
+        </div>,
+      )
+      const elsewhere = screen.getByLabelText('Elsewhere')
+      await user.click(elsewhere)
+      expect(elsewhere).toHaveFocus()
+
+      const bar = screen.getByRole('button', { name: 'Close keypad' })
+      await user.pointer([
+        { keys: '[MouseLeft>]', target: bar, coords: { clientY: 0 } },
+        { coords: { clientY: 10 } },
+        '[/MouseLeft]',
+      ])
+
+      expect(elsewhere).toHaveFocus()
+    })
+  })
 })
