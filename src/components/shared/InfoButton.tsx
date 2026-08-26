@@ -4,13 +4,11 @@ import { cn } from '@/lib/utils'
 
 export interface InfoButtonProps {
   onClick: () => void
-  /** Defaults to a generic label; pass a specific one when several InfoButtons share a screen. */
   label?: string
   className?: string
   ref?: Ref<HTMLButtonElement>
 }
 
-/** The small "?" affordance that opens an info tooltip (CenterModal owned by the caller). */
 export const InfoButton = ({
   onClick,
   label = 'Más información',

@@ -12,16 +12,6 @@ export interface ProfileSheetProps {
   onClose: () => void
 }
 
-/**
- * The access point (specs.md §10.18) — a door, not its features. Identity/
- * Profiles/Security/Data are real; Preferences is deliberately inert (see
- * that section's own comment). `BottomSheet` already caps its scrollable body
- * at `max-h-[88dvh]`, with the grab handle fixed above it as chrome, so
- * this sheet growing to carry five sections instead of the original
- * design's two still scrolls inside its own bounds — without scrolling the
- * handle away — and never pushes `BottomNav` off-screen; no extra height
- * handling needed here.
- */
 export const ProfileSheet = ({ open, onClose }: ProfileSheetProps) => {
   const { t } = useTranslation('profile')
 

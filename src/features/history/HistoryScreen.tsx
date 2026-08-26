@@ -38,10 +38,6 @@ import { useMovimientoSheetStore } from '@/features/movimientos'
 
 const SCOPES: Periodo[] = ['dia', 'semana', 'mes', 'anio']
 
-// Named export `HistoryScreen`, no props: the stable contract this route
-// renders against (src/router.tsx). Enter animation kept from the L
-// placeholder — History is a push (a sibling tab), Search is a fade
-// (AGENTS.md § UI, docs/wave-2/track-e4.md).
 export const HistoryScreen = () => {
   const { t } = useTranslation('history')
   const { movimientos, config, status, error, load } = useDataStore()
@@ -55,15 +51,8 @@ export const HistoryScreen = () => {
   }, [load])
 
   const isPending = status === 'idle' || status === 'loading'
-  // Anti-flash gate (specs.md §10.9), same rule Home/Search share.
   const showLoading = usePendingDelay(isPending)
 
-  // The period nav, scope tabs and picker strip are pure functions of
-  // scope/anchor/movimientos — they need no more than CONFIG_SEMILLA's
-  // defaults to render correctly before the real config loads (same
-  // fallback Home/Search already use), so this chrome stays mounted
-  // through every status instead of disappearing behind a full-screen
-  // loading swap the way it used to.
   const { primerDiaSemana, monedaPrincipal } = (config ?? CONFIG_SEMILLA).preferencias
   const categorias = config?.categorias ?? CONFIG_SEMILLA.categorias
   const range = periodRange(scope, anchor, primerDiaSemana)
@@ -91,16 +80,6 @@ export const HistoryScreen = () => {
 
   const pickerKind = PICKER_FOR_SCOPE[scope]
 
-  // `primerDiaSemana` is the one preference the period chrome actually
-  // depends on, and only in `semana` scope (`periodRange` ignores it for
-  // dia/mes/anio). Before `config` resolves it falls back to CONFIG_SEMILLA's
-  // Monday — so the week header used to render a guessed boundary and then
-  // visibly jump when the real value arrived (specs.md §12). A user cannot
-  // tell a guess from a fact, so the guess is not shown at all: this waits.
-  // Deliberately the narrowest possible gate — the scope tabs, the nav arrows
-  // and every other scope keep rendering immediately, because §10.9's whole
-  // point is not putting a loader in front of work that usually finishes in
-  // milliseconds.
   const weekBoundaryUnknown = scope === 'semana' && config === null
 
   return (

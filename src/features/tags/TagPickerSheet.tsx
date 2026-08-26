@@ -21,20 +21,6 @@ export interface TagPickerSheetProps {
   onCreateRequested: (query: string) => void
 }
 
-/**
- * The full, searchable category picker (`docs/ui/design-export-add-sheet.md`
- * §3) — opened by `CategoryPicker`'s count button. A nested `BottomSheet`:
- * `useOverlay`'s render-order stack (specs.md §10.5.1) makes it stack
- * correctly above the Add/Edit sheet regardless of DOM depth, the same
- * mechanism `MovimientoSheet`'s delete `ConfirmDialog` already relies on.
- *
- * Selecting a category closes this sheet (a picker's job is to pick one
- * thing and hand it back). Tapping "crear «query»" hands the query to the
- * caller (`CategoryPicker` closes this sheet first, then opens
- * `CategoryFormModal`) — matching the inline picker's pre-existing
- * behavior, creating never auto-selects, so the new category shows up in
- * the Add sheet's own carousel to tap afterward.
- */
 export const TagPickerSheet = ({
   open,
   onClose,

@@ -7,19 +7,9 @@ import { getSyncContext } from '@/lib/sync/syncSession'
 import { pull, useSyncStore } from '@/lib/sync/engine'
 
 export interface DriveDownloadScreenProps {
-  /** Called once the pull that gates this screen has actually succeeded. */
   onDone: () => void
 }
 
-/**
- * The first-run download view (specs.md §10.19/§10.26 §3): the one
- * legitimate full-screen gate §10.9 allows, because a fresh Drive-linked
- * profile genuinely has nothing truthful to render behind it — a dashboard
- * of zeros here reads as data loss, not as "nothing yet." Built from
- * existing primitives per the user's 2026-08-20 decision (`specs.md`
- * §10.26 §3) rather than blocked on a canvas design; replaceable in place
- * if one lands later.
- */
 export const DriveDownloadScreen = ({ onDone }: DriveDownloadScreenProps) => {
   const { t } = useTranslation(['sync', 'common'])
   const online = useNetworkStore((s) => s.online)
@@ -30,10 +20,6 @@ export const DriveDownloadScreen = ({ onDone }: DriveDownloadScreenProps) => {
     setFailed(false)
     const ctx = await getSyncContext()
     if (!ctx) {
-      // Not expected on the real path (FirstSyncGate only renders this
-      // screen once it has already confirmed eligibility) — degrades
-      // honestly rather than hanging on a spinner forever if it somehow
-      // does happen (a token reacquire failing at the worst moment).
       setFailed(true)
       return
     }
@@ -46,11 +32,8 @@ export const DriveDownloadScreen = ({ onDone }: DriveDownloadScreenProps) => {
   }, [onDone])
 
   useEffect(() => {
-    if (!online) return // offline: say so, don't attempt and fail generically (specs.md §10.11)
+    if (!online) return
     void attempt()
-    // Retried automatically the moment the connection returns — `online`
-    // flipping false→true is exactly the "reconnect" trigger `attempt`
-    // itself has no other way to observe.
   }, [attempt, online])
 
   const progressLabel =
@@ -62,7 +45,6 @@ export const DriveDownloadScreen = ({ onDone }: DriveDownloadScreenProps) => {
       : null
 
   return (
-    // `min-h-full`, not `min-h-dvh`: overflows body's safe-area padding (specs.md §10.39).
     <div className="flex min-h-full flex-col items-center justify-center gap-5 bg-background px-8 text-center text-foreground">
       <div
         aria-hidden="true"

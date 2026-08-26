@@ -19,16 +19,6 @@ export const IconTile = ({ children }: { children: ReactNode }) => (
   </div>
 )
 
-/**
- * A guest never has a PIN vault (specs.md §10.2.1) — this branch mounts
- * either when the cold-start guest gate locks a returning guest before the
- * app has rendered anything else (`lockStore.init()`, specs.md §10.33), or
- * when an already-active guest session's own background timeout re-locks
- * it (`lockStore.onVisible`). No PIN keypad, no "Olvidé mi PIN": the
- * credential gates the UI, not a cryptographic boundary, so a guest's only
- * recovery is retrying the OS prompt — there is nothing to wipe that would
- * help.
- */
 const GuestLockScreen = () => {
   const { t } = useTranslation('lock')
   const unlockGuest = useLockStore((s) => s.unlockGuest)
@@ -42,7 +32,6 @@ const GuestLockScreen = () => {
   }, [unlockGuest])
 
   return (
-    // `min-h-full`, not `min-h-dvh`: overflows body's safe-area padding (specs.md §10.39).
     <div className="flex min-h-full flex-col items-center justify-center gap-8 p-6 text-center">
       <IconTile>
         <Fingerprint aria-hidden="true" className="size-8 text-primary-foreground" />
@@ -101,7 +90,6 @@ const AccountLockScreen = () => {
   }
 
   return (
-    // `min-h-full`, not `min-h-dvh`: overflows body's safe-area padding (specs.md §10.39).
     <div className="flex min-h-full flex-col items-center justify-center gap-6 p-6 text-center">
       <IconTile>
         <LockKeyhole aria-hidden="true" className="size-8 text-primary-foreground" />
@@ -126,12 +114,7 @@ const AccountLockScreen = () => {
         <span className="sr-only">{t('screen.pinLabel')}</span>
         <PinDots length={PIN_LENGTH} filled={pin.length} error={!!error} />
         <input
-          // `sr-only` clips the box but leaves it real and focusable, so
-          // WebKit still raises the OS numeric keyboard for it — on top of
-          // `PinPad` below, which is the keypad this screen actually shows.
-          // `inputMode="none"` keeps the input focusable (physical keyboard,
-          // screen reader) without inviting the software one; same fix
-          // shape as the amount field (specs.md §10.54).
+          // WebKit still raises the OS numeric keyboard for a focused input clipped with sr-only.
           inputMode="none"
           pattern="\d*"
           maxLength={PIN_LENGTH}
@@ -141,8 +124,6 @@ const AccountLockScreen = () => {
           aria-label={t('screen.pinLabel')}
         />
       </label>
-      {/* Reserved height (design export: 20px) so an error appearing never
-          shifts the keypad below it. */}
       <div className="flex h-5 items-center" aria-hidden={!error}>
         {error && (
           <p role="alert" className="text-sm text-destructive">
@@ -174,11 +155,6 @@ const AccountLockScreen = () => {
 
 const LockScreen = () => {
   const phase = useLockStore((s) => s.phase)
-  // Not authStore.status: the cold-start guest gate (lockStore.init(),
-  // specs.md §10.33) can lock the app before authStore has resolved
-  // anything — lockKind is set by the same code path that decided to lock,
-  // so it's correct at every entry point, not just the background-relock
-  // one that already knew authStore's status by the time it fired.
   const lockKind = useLockStore((s) => s.lockKind)
 
   if (phase !== 'locked') return null

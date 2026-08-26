@@ -23,25 +23,15 @@ import { suggestCategoryVisual } from '@/features/tags/categorySuggest'
 export interface CategoryFormModalProps {
   open: boolean
   onClose: () => void
-  /** The sheet's current toggle — a new category inherits it (specs.md §10.22 Decision 4). Ignored when editing: the existing category's own `tipo` wins. */
   tipo: TipoMovimiento
   secciones: Seccion[]
-  /** Every category (any section/type, archived or not) — for the duplicate-name check and the color suggestion's least-used-tint fallback. */
   categorias: Categoria[]
-  /** Present = editing that category; absent = creating a new one. */
   categoria?: Categoria
-  /** Pre-filled name when opened from `CategoryPicker`'s "crear «query»" chip. Ignored when editing. */
   initialName?: string
 }
 
-// Enforced on the value, not just the input's `maxlength` (specs.md §10.22
-// edge cases) — a name long enough to break the chip is capped either way a
-// value reaches this state (typed, pasted, or set programmatically).
 const MAX_NAME_LENGTH = 30
 
-// `as const` (not `Record<IconAvatarTint, string>`) so each value keeps its
-// literal type — `t()`'s typed keys (i18next.d.ts) only accept a real
-// resource path, not a widened `string`.
 const COLOR_NAME_KEY = {
   emerald: 'colors.emerald',
   blue: 'colors.blue',
@@ -54,11 +44,6 @@ const COLOR_NAME_KEY = {
   neutral: 'colors.neutral',
 } as const satisfies Record<IconAvatarTint, string>
 
-/**
- * Create and edit in one component (per the design). A `CenterModal`, so it
- * inherits Escape/focus-trap/scroll-lock/stacking from `useOverlay` — it
- * stacks correctly above the `BottomSheet` that opened it (specs.md §10.5.1).
- */
 export const CategoryFormModal = ({
   open,
   onClose,
@@ -84,9 +69,6 @@ export const CategoryFormModal = ({
   const [icono, setIcono] = useState<CategoryIconKey | undefined>(undefined)
   const [color, setColor] = useState<IconAvatarTint>('neutral')
 
-  // Reset from props only when the modal opens — it stays mounted (its
-  // parent toggles `open`) across closes/reopens, possibly for a different
-  // `categoria` each time, so state must not persist stale across that.
   useEffect(() => {
     if (!open) return
     if (categoria) {
@@ -130,9 +112,6 @@ export const CategoryFormModal = ({
       archivado: categoria?.archivado,
       presupuesto: categoria?.presupuesto,
     }
-    // Store owns its own optimistic-apply/rollback/error-toast (specs.md
-    // §10.13) — the sheet closes immediately, matching every other write
-    // here (Tier 3, specs.md §10.9): the busy state never blocks the modal.
     void upsertCategoria(result)
     onClose()
   }
@@ -188,10 +167,6 @@ export const CategoryFormModal = ({
                 key={key}
                 type="button"
                 aria-pressed={icono === key}
-                // Icon *keys* (`dumbbell`, `gift`…), not localized copy —
-                // a supplementary label for a visual grid, distinct from
-                // the color grid's real translated names below, which are
-                // the more meaningful semantic quality to get right.
                 aria-label={key}
                 onClick={() => setIcono(key)}
                 className={cn(

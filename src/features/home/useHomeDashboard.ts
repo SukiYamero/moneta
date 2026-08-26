@@ -20,9 +20,6 @@ import { buildWeekStripDays, monthYearLabel, type WeekStripDay } from '@/feature
 
 const RECENT_LIMIT = 6
 
-// Most recent movement first: `fecha` (the transaction date) is the primary
-// key, `createdAt` (audit timestamp) breaks ties for same-day entries —
-// both ISO strings, so a plain string comparison is chronological order.
 const sortByRecency = (a: Movimiento, b: Movimiento): number => {
   if (a.fecha !== b.fecha) return a.fecha < b.fecha ? 1 : -1
   return a.createdAt < b.createdAt ? 1 : -1
@@ -35,29 +32,15 @@ export interface HomeDashboard {
   moneda: Moneda
   todayIso: string
   monthLabel: string
-  /** All-time totals — "Balance total" is the running balance, not scoped to a period. */
   totals: Totals
-  /**
-   * Currencies other than `moneda` present in `movimientos` (specs.md
-   * §10.27) — empty in the common case where every movement shares one
-   * currency. `totals`/`week` above already exclude these; this is only
-   * what lets the screen say so rather than silently drop them.
-   */
   otherCurrencies: Moneda[]
   weekStripDays: WeekStripDay[]
   week: { range: DateRange; totalGastos: number; chart: SeriesBucket[] }
   recent: Movimiento[]
-  /** `Config.categorias` — `RecentMovimientos`/`MovimientoRow` resolve `categoria` ids against this. */
   categorias: Categoria[]
   retry: () => void
 }
 
-/**
- * Everything the Home dashboard renders, derived from the shared
- * `dataStore` (never a separate repo read — see repoProvider.ts) through
- * `movimientoStats`'s pure functions, so this screen's numbers cannot
- * disagree with History's or Search's for the same data.
- */
 export const useHomeDashboard = (): HomeDashboard => {
   const status = useDataStore((s) => s.status)
   const error = useDataStore((s) => s.error)
@@ -66,8 +49,6 @@ export const useHomeDashboard = (): HomeDashboard => {
   const load = useDataStore((s) => s.load)
   const { dateFnsLocale } = useLocaleFormatting()
 
-  // load() is idempotent/race-safe (dataStore.ts) — safe to call unconditionally
-  // on mount, mirroring RequireAuth's own `void store.action()` pattern.
   useEffect(() => {
     void load()
   }, [load])
@@ -82,8 +63,6 @@ export const useHomeDashboard = (): HomeDashboard => {
     [todayIso, primerDiaSemana],
   )
 
-  // Mid-week anchor for the month label, so a week straddling a month
-  // boundary reads as the month most of it belongs to (matches the design).
   const monthLabel = useMemo(
     () => monthYearLabel(addDays(parseISO(weekRange.from), 3), dateFnsLocale),
     [weekRange, dateFnsLocale],

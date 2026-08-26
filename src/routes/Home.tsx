@@ -14,24 +14,12 @@ import { WeekStrip } from '@/features/home/WeekStrip'
 import { WeeklyChart } from '@/features/home/WeeklyChart'
 import { useHomeDashboard } from '@/features/home/useHomeDashboard'
 
-// The dashboard: greeting/bell chrome and search entry render regardless of
-// data status; the money-dependent content below switches on
-// loading/error/empty/ready (docs/wave-2-plan.md §4, Track E2 "Done when").
-// The screen's <h1> lives inside HomeHeader (the greeting) — the design's
-// actual subject for this screen, not the app name.
 export const Home = () => {
   const { t } = useTranslation(['home', 'common'])
   const { locale } = useLocaleFormatting()
   const dashboard = useHomeDashboard()
   const isPending = dashboard.status === 'idle' || dashboard.status === 'loading'
-  // Anti-flash gate (specs.md §10.9): a first load fast enough to beat the
-  // delay shows nothing at all, and a skeleton that did appear never blinks
-  // back out before its minimum-visible time.
   const showLoading = usePendingDelay(isPending)
-  // specs.md §10.27: `dashboard.totals` already excludes these — this is
-  // only what lets the screen say so instead of silently dropping them.
-  // `Intl.ListFormat`, not a hand-joined string, for the same reason
-  // `formatMonto` builds off `formatToParts` (specs.md §10.7).
   const otherCurrenciesLabel =
     dashboard.otherCurrencies.length > 0
       ? new Intl.ListFormat(locale, { style: 'short', type: 'conjunction' }).format(

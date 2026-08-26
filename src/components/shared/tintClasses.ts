@@ -1,21 +1,6 @@
 import type { IconAvatarTint } from '@/lib/iconAvatarTint'
 
-/**
- * Single source of truth for which chart/status token each tint name
- * resolves to, in every shape a consumer needs. Tailwind's static scanner
- * needs each class name to appear as a literal string, so the three shapes
- * can't be built by concatenating a shorter per-tint fragment at runtime —
- * but they can still live in one exhaustive table instead of one per
- * consumer, which is what let `TagChip`'s own copy silently carry its own
- * "amber = chart-3" pairing instead of `IconAvatar`'s.
- * `icon`: text-only, for an always-colored icon on a neutral surface.
- * `badge`: translucent bg + text, `IconAvatar`'s filled square.
- * `pill`: `badge` plus a border, `TagChip`'s selected treatment.
- * `fill`: opaque, for a solid bar — the badge/pill shapes are translucent
- * (`/15`) for an icon on a surface, which reads washed out as a progress
- * bar. Added so `BreakdownCard` stops carrying a fourth private copy of
- * this mapping (`specs.md` §12, closed 2026-08-20).
- */
+// Tailwind's static scanner only sees class names present as literal strings.
 export const TINT_CLASSES: Record<
   IconAvatarTint,
   { icon: string; badge: string; pill: string; fill: string }
@@ -76,9 +61,4 @@ export const TINT_CLASSES: Record<
   },
 }
 
-/** Every `IconAvatarTint`, in a stable order — derived from `TINT_CLASSES` so a consumer that needs "all nine tints" (a color grid, the least-used-tint rule) never keeps its own second copy of the enum. */
-// Re-exported from its canonical home so the many existing
-// `@/components/shared/tintClasses` importers keep working; the list itself
-// lives in `src/lib/` because the sync layer validates against it and must
-// not import the UI (specs.md §11, 2026-08-20).
 export { ICON_AVATAR_TINTS } from '@/lib/iconAvatarTint'

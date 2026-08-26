@@ -22,12 +22,6 @@ export const AppLock = ({ children }: { children: ReactNode }) => {
     return () => document.removeEventListener('visibilitychange', onVisibilityChange)
   }, [])
 
-  // toastStore holds no domain state and reads no store itself (specs.md
-  // §10.6) — AppLock, which already owns `phase`, is what drives
-  // suppression. Anything other than 'unlocked' is suppressed: 'locked' (a
-  // notification about data is content, and the lock exists to hide
-  // content) and 'unknown' during boot too, where children aren't on
-  // screen yet either — not just 'locked' (docs/wave-2-plan.md §3.6).
   useEffect(() => {
     setToastsSuppressed(phase !== 'unlocked')
   }, [phase])
@@ -36,12 +30,6 @@ export const AppLock = ({ children }: { children: ReactNode }) => {
 
   return (
     <>
-      {/* A lockout or failed session-restore fires the same set() that
-          leaves 'locked' — LockScreen (the only other error consumer)
-          unmounts in that same instant, so its own alert never renders.
-          One level up, AppLock stays mounted across the transition, so the
-          message survives it instead of disappearing with the phase change
-          (docs/error-handling.md §7; specs.md §11, 2026-08-19, finding 4). */}
       {phase !== 'locked' && error && (
         <div
           role="alert"
@@ -59,8 +47,6 @@ export const AppLock = ({ children }: { children: ReactNode }) => {
         </div>
       )}
       {phase === 'locked' ? <LockScreen /> : children}
-      {/* Never renders over LockScreen — a notification about data is
-          content, and the lock exists to hide content (specs.md §10.6). */}
       {phase !== 'locked' && <Toaster />}
     </>
   )

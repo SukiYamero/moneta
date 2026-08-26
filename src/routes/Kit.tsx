@@ -117,7 +117,6 @@ const Section = ({ title, children }: { title: string; children: ReactNode }) =>
   )
 }
 
-/** Dev-only gallery for src/components/shared/** — gated on import.meta.env.DEV in router.tsx. */
 export const Kit = () => {
   const { locale, dateFnsLocale } = useLocaleFormatting()
   const [scope, setScope] = useState<(typeof SCOPE_OPTIONS)[number]['value']>('week')
@@ -131,17 +130,9 @@ export const Kit = () => {
   const [sheetOpen, setSheetOpen] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
   const [infoOpen, setInfoOpen] = useState(false)
-  // Nested-overlay demo: the delete-confirm CenterModal opens from inside
-  // the Movement BottomSheet — the real, reachable flow the overlay stack
-  // (useOverlay.ts) exists for.
   const [movementSheetOpen, setMovementSheetOpen] = useState(false)
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
-  // Non-destructive variant demo (specs.md §10.40): the gallery only showed
-  // `destructive` before this — the confirm button's other paint had no
-  // visual-QA entry of its own.
   const [signOutConfirmOpen, setSignOutConfirmOpen] = useState(false)
-  // initialFocus demo: the amount input should get focus on open even
-  // though it isn't the sheet's first focusable descendant.
   const [addSheetOpen, setAddSheetOpen] = useState(false)
   const amountInputRef = useRef<HTMLInputElement>(null)
   const [addSheetAmount, setAddSheetAmount] = useState('')
@@ -254,10 +245,6 @@ export const Kit = () => {
         >
           Editar “Sueldo”
         </button>
-        {/* Kit.tsx never calls dataStore.load(), so Config stays null here —
-            upsertCategoria() no-ops rather than throwing (dataStore.ts's own
-            guard). This section demos the picker/modal's UI and interaction
-            pattern, not a full write round-trip. */}
         <CategoryFormModal
           open={categoryModalOpen}
           onClose={() => setCategoryModalOpen(false)}
@@ -441,9 +428,6 @@ export const Kit = () => {
         destructive={false}
       />
 
-      {/* Nested-overlay demo: proves the overlay stack (useOverlay.ts) — the
-          delete-confirm CenterModal is the topmost overlay while it's open:
-          it gets initial focus, traps Tab, and Escape closes it first. */}
       <BottomSheet
         open={movementSheetOpen}
         onClose={() => setMovementSheetOpen(false)}
@@ -476,8 +460,6 @@ export const Kit = () => {
         </div>
       </BottomSheet>
 
-      {/* initialFocus demo: the amount input gets focus on open even though
-          it isn't the sheet's first focusable descendant. */}
       <BottomSheet
         open={addSheetOpen}
         onClose={() => setAddSheetOpen(false)}

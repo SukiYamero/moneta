@@ -16,10 +16,7 @@ const devRoutes = import.meta.env.DEV
   ? [
       {
         path: '/kit',
-        // React.lazy + Suspense (not react-router's own route-level `lazy`,
-        // which has no fallback slot of its own) so a real Tier 1
-        // `ScreenLoading` (specs.md §10.9) covers the module fetch instead
-        // of leaving the route pending with nothing on screen.
+        // react-router's own route-level `lazy` has no fallback slot of its own.
         element: (
           <Suspense fallback={<ScreenLoading />}>
             <KitLazy />
@@ -32,11 +29,6 @@ const devRoutes = import.meta.env.DEV
 
 export const router = createBrowserRouter([
   {
-    // Pathless layout route: BottomNav (via AppShell) persists across all
-    // three tabs, so RequireAuth wraps the shell once instead of each
-    // screen individually. errorElement here catches a failure in
-    // RequireAuth/AppShell itself; each child keeps its own too, so a
-    // crash in one screen doesn't take the persistent nav down with it.
     element: (
       <RequireAuth>
         <BootGate>
@@ -54,13 +46,6 @@ export const router = createBrowserRouter([
     ],
   },
   {
-    // `/settings` is its own `RequireAuth`-wrapped route, not a child of
-    // the layout route above: it's not a bottom-nav tab (no `BottomNav` to
-    // share), and its own mount/unmount is what closes the Profile sheet
-    // that opened it — that sheet's state lives in `AppShell`, so
-    // navigating away from `AppShell`'s subtree unmounts it for free
-    // rather than needing an explicit close callback threaded through
-    // `PreferencesSection` (specs.md §10.24).
     path: '/settings',
     element: (
       <RequireAuth>

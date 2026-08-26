@@ -13,32 +13,13 @@ import {
 
 export interface MovimientoRowProps {
   movimiento: Movimiento
-  /**
-   * `Config.categorias` — required, no default (same no-silent-fallback rule
-   * as `locale`/`dateFnsLocale` below): `movimiento.categoria` is an id
-   * (specs.md §10.22), and resolving it to a label/icon/color needs this to
-   * be in scope rather than read from a store this component doesn't touch.
-   */
   categorias: Categoria[]
   onClick?: () => void
-  /** "Estimado" badge — used for movements the History screen projects, not yet confirmed. */
   pending?: boolean
-  /** Overrides the default `fecha`-derived label (e.g. "Hoy · 09:00" once a screen has that context). */
   meta?: string
   className?: string
   ref?: Ref<HTMLDivElement>
-  /**
-   * BCP-47 locale for the amount's currency formatting (forwarded to
-   * `movimientoView.formatMonto`). Required, no default — this component
-   * stays i18n-agnostic, the same way it takes `pending`/`meta` rather than
-   * reading a store itself; the calling screen reads the active i18next
-   * locale (`useLocaleFormatting()`) and passes it down (mirrors
-   * `DateChipPicker`'s `firstDayOfWeek` prop, specs.md §10.5). A missing
-   * value is a compile error rather than a silently es-CO row
-   * (docs/wave-2/track-m.md).
-   */
   locale: string
-  /** date-fns `Locale` for the date label — same no-default rule as `locale` above. */
   dateFnsLocale: Locale
 }
 

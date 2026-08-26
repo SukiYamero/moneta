@@ -3,9 +3,6 @@ import { Skeleton, SkeletonGroup } from '@/components/shared'
 
 const SKELETON_ROW_KEYS = ['row-1', 'row-2', 'row-3'] as const
 
-/** Tier 2 (specs.md §10.9): only the breakdown card + movements list fill
- * in — the period nav, scope tabs and picker strip above it stay mounted
- * and interactive regardless of status (they resolve against defaults). */
 export const HistoryLoadingState = () => {
   const { t } = useTranslation('history')
 

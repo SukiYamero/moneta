@@ -8,26 +8,9 @@ import {
 } from '@/components/shared/useOverlay'
 
 export type FullScreenPanelProps = OverlayShellProps<HTMLDivElement> & {
-  /**
-   * Fixed chrome above the scrollable body — a back-button/title row
-   * (`LockSettings`) or a kicker/close row (`PinSetup`). A sibling of the
-   * body, never its child, so scrolling long body content never carries it
-   * away — the same shape `BottomSheet`'s grab handle needed (specs.md
-   * §10.35.1). The top safe-area inset travels with it so it clears the
-   * notch/status bar regardless of how tall the body grows; with no
-   * `header`, the body keeps that inset itself.
-   */
   header?: ReactNode
 }
 
-/**
- * The push-in full-screen shell behind the lock settings panel and PIN setup
- * (design export §4) — both open from inside the already-open Profile
- * `BottomSheet` (z-50), so this sits above it; both need `useOverlay`'s
- * focus-trap/Escape/scroll-lock/nesting behavior the same way every other
- * overlay in the app does. Not `src/components/shared/`: exactly two
- * consumers, both inside this feature.
- */
 export const FullScreenPanel = ({
   open,
   onClose,
@@ -60,10 +43,8 @@ export const FullScreenPanel = ({
       {header !== undefined && <div className="shrink-0 pt-(--overlay-inset-top)">{header}</div>}
       <div
         className={cn(
-          // overscroll-y-contain: keep a touch drag past this box's own
-          // scroll boundary from chaining into rubber-banding the (locked)
-          // page behind it on iOS Safari — same reasoning as BottomSheet's
-          // body (specs.md §10.35.1).
+          // overscroll-y-contain stops a touch drag past this box's scroll boundary from
+          // rubber-band-chaining into the locked page behind it on iOS Safari.
           'flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-y-contain pb-(--overlay-inset-bottom)',
           header === undefined && 'pt-(--overlay-inset-top)',
         )}

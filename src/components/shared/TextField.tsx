@@ -7,18 +7,12 @@ export interface TextFieldProps extends Omit<ComponentProps<'input'>, 'id' | 'on
   label: string
   value: string
   onChange: (value: string) => void
-  /** Rendered below the field as a `role="alert"` node, wired via `aria-describedby`. */
   error?: string
   id?: string
   containerClassName?: string
   ref?: Ref<HTMLInputElement>
 }
 
-/**
- * Labelled text input: label association via `htmlFor`/`id`, an
- * `aria-describedby` error message, and a 44px touch target — the a11y
- * this component exists for (`specs.md` §10.14).
- */
 export const TextField = ({
   label,
   value,

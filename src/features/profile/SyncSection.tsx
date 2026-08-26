@@ -26,24 +26,6 @@ const STATUS_ICON: Record<'offline' | SyncIndicator, typeof Check> = {
   offline: CloudOff,
 }
 
-/**
- * The Drive status row (specs.md §10.26 §4, `docs/pendientes-usuario.md`
- * item 3): last sync, pending count, offline/failed — all derived, never a
- * stored `isSynced` (`sync/status.ts`'s own reasoning). Renders nothing for
- * a guest or a signed-in user who never connected Drive — "no status row
- * promising sync" is an edge case in its own right, not just an empty
- * state.
- *
- * specs.md §10.31 §4: the switcher can bind a profile that isn't the
- * currently authenticated account's own (a Google profile signed out of,
- * or the local/guest one) — before the switcher existed the bound profile
- * and the authenticated account were always the same thing, so this row
- * could assume it. It can't anymore: "switching to a Google profile you
- * are not currently signed into shows its local data with sync off — this
- * must be said, not left to be inferred from a pill that never turns
- * green." `watermark` (the *bound* profile's own record) is compared
- * against the authenticated account, not just checked for existing.
- */
 export const SyncSection = () => {
   const { t } = useTranslation('profile')
   const { t: tSync } = useTranslation('sync')

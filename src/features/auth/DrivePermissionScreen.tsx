@@ -13,7 +13,6 @@ export const DrivePermissionScreen = () => {
   const dismissDrive = useAuthStore((s) => s.dismissDrive)
 
   return (
-    // `min-h-full`, not `min-h-dvh`: overflows body's safe-area padding (specs.md §10.39).
     <main className="relative flex min-h-full flex-col bg-background text-foreground">
       <div className="flex flex-1 flex-col overflow-y-auto px-7 pt-16">
         <div className="my-5 flex items-center justify-center gap-3.5">

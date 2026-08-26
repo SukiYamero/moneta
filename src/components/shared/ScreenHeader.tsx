@@ -8,15 +8,6 @@ export interface ScreenHeaderProps {
   subtitle?: string
 }
 
-/**
- * The back-button + title row a screen with a back-bar header renders as
- * the first thing inside its shared `--screen-inset-top` container
- * (specs.md §10.34) — the row owns its own height (the button's 44px touch
- * target plus its `pb-3.5`), so "where does content start" stays one
- * number (the token) with this as an element inside it, not a second
- * hand-typed inset. `SettingsScreen.tsx` and `LockSettings.tsx` (which
- * needs the optional `subtitle` line) are its two consumers.
- */
 export const ScreenHeader = ({
   title,
   onBack,

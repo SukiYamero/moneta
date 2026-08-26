@@ -1,10 +1,6 @@
 import type { LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { TINT_CLASSES } from '@/components/shared/tintClasses'
-// Re-exported (not declared here) so schema.ts can depend on the plain
-// tint-name union without depending on a component file — every existing
-// `@/components/shared/IconAvatar` import of `IconAvatarTint` keeps working
-// unchanged (specs.md §11, 2026-08-20).
 import type { IconAvatarTint } from '@/lib/iconAvatarTint'
 export type { IconAvatarTint } from '@/lib/iconAvatarTint'
 

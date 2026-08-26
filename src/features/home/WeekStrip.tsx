@@ -6,12 +6,6 @@ export interface WeekStripProps {
   days: WeekStripDay[]
 }
 
-/**
- * Read-only overview of the current week — no day-tap/prev-next navigation.
- * The design wires both to open History's day/week detail, but that would
- * make Home assume a shape of History's routing contract this track
- * doesn't own (Track E4, same stage). See docs/wave-2/track-e2.md.
- */
 export const WeekStrip = ({ monthLabel, days }: WeekStripProps) => {
   return (
     <div>

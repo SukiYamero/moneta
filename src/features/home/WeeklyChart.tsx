@@ -17,10 +17,6 @@ export interface WeeklyChartProps {
 
 type BarStatus = 'today' | 'zero' | 'value'
 
-// Existing tokens only (no new ones, AGENTS.md §1.3): today's bar reads as
-// --primary (the design's highlight), an empty day is nearly invisible
-// (--color-border-subtle, the same hairline-opacity token used for
-// barely-there surfaces elsewhere), any other day is --color-fg-disabled.
 const BAR_FILL: Record<BarStatus, string> = {
   today: 'var(--primary)',
   zero: 'var(--color-border-subtle)',

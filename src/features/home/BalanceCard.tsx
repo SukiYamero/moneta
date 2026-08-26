@@ -14,11 +14,6 @@ export interface BalanceCardProps {
 const HIDDEN_MASK = '••••••'
 const HIDDEN_MASK_SMALL = '••••'
 
-// The design's dark-green panel background (#1A4437) and its lighter mini-
-// card shade (#14372C) have no exact token — reused existing ones instead
-// of inventing new hex/tokens (AGENTS.md §1.3): `bg-success/10` for the
-// tinted panel, `bg-surface-sunken` (already the "recessed surface" token)
-// for the two mini stat cards.
 export const BalanceCard = ({ totals, moneda }: BalanceCardProps) => {
   const { t } = useTranslation('home')
   const { locale } = useLocaleFormatting()
@@ -30,10 +25,6 @@ export const BalanceCard = ({ totals, moneda }: BalanceCardProps) => {
         <span className="text-ms font-semibold tracking-wide text-success">
           {t('balance.title')}
         </span>
-        {/* Hit area (min-h/w-11, AGENTS.md's 44px floor) and visible pill are
-            split: the design's pill is 34px, growing it to 44px would resize
-            the badge itself, not just its tap target (same pattern as the
-            month-nav buttons in DateChipPicker.tsx). */}
         <button
           type="button"
           onClick={() => setHidden((v) => !v)}

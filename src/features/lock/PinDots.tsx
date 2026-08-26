@@ -6,7 +6,6 @@ export interface PinDotsProps {
   error?: boolean
 }
 
-/** The four dot indicators (filled/outline) from the lock screen and PIN setup artboards. */
 export const PinDots = ({ length, filled, error }: PinDotsProps) => {
   return (
     <div className="flex items-center gap-3" role="presentation">

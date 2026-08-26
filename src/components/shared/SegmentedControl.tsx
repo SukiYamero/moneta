@@ -15,14 +15,7 @@ export interface SegmentedControlProps<T extends string> {
   className?: string
 }
 
-/**
- * Generic pill-group toggle (history scope, gasto/ingreso, tag-breakdown
- * tabs, number-format prefs…) — no screen-specific assumptions baked in.
- * Follows the APG "radio group" pattern: one tab stop, arrow keys move
- * focus and selection together. The visible pill keeps its designed
- * height; each segment's button grows to the 44px touch-target floor via
- * invisible padding so the tap target doesn't inflate the pill.
- */
+// The WAI-ARIA APG radio-group pattern, not a list of buttons.
 export const SegmentedControl = <T extends string>({
   options,
   value,

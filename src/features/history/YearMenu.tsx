@@ -10,13 +10,6 @@ export interface YearMenuProps {
   onSelect: (year: number) => void
 }
 
-/**
- * Small inline popover, not a `BottomSheet`/`CenterModal` — this is a menu
- * anchored to its trigger button, not a modal that owns the whole screen, so
- * it only needs `useEscapeToClose` (the same lightweight hook
- * `DateChipPicker`'s month popover uses) plus outside-click-to-close, not
- * `useOverlay`'s full focus-trap/scroll-lock shell.
- */
 export const YearMenu = ({ years, selectedYear, onSelect }: YearMenuProps) => {
   const { t } = useTranslation('history')
   const [open, setOpen] = useState(false)

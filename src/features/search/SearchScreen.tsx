@@ -33,11 +33,6 @@ const EmptyState = ({ title, subtitle }: { title: string; subtitle: string }) =>
   </div>
 )
 
-/**
- * Search + Filter sheet. Reads exclusively through `useDataStore` (never its
- * own repo call) so its numbers can never disagree with Home/History —
- * filtering itself is client-side over the already-loaded `movimientos`.
- */
 export const SearchScreen = () => {
   const { t } = useTranslation(['search', 'tags'])
   const status = useDataStore((s) => s.status)
@@ -53,8 +48,6 @@ export const SearchScreen = () => {
     void load()
   }, [load])
 
-  // Technical detail stays in console (docs/error-handling.md §7); the
-  // screen itself only ever shows the translated, code-agnostic copy below.
   useEffect(() => {
     if (status === 'error') console.error('SearchScreen: dataStore load failed', error)
   }, [status, error])
@@ -62,14 +55,9 @@ export const SearchScreen = () => {
   const filters = useSearchFilters()
   const ready = status === 'ready'
   const isPending = status === 'idle' || status === 'loading'
-  // Anti-flash gate (specs.md §10.9) — same rule as Home, shared via usePendingDelay.
   const showLoading = usePendingDelay(isPending)
   const categories = config?.categorias ?? CONFIG_SEMILLA.categorias
 
-  // Keyed by id, not nombre: `Movimiento.categoria`/`filters.selectedTags`
-  // both hold category ids (specs.md §10.22) — a name-keyed map would silently
-  // stop matching the moment a user-created category's id isn't derived from
-  // its name (every id but the seed's is a crypto.randomUUID()).
   const categoriaById = useMemo(
     () => new Map(categories.map((category) => [category.id, category])),
     [categories],
@@ -84,10 +72,6 @@ export const SearchScreen = () => {
       result = result.filter((m) => tagSet.has(m.categoria))
     }
     if (filters.debouncedQuery) {
-      // Free-text search matches the category's display *name*, never the
-      // raw id — searching "sueldo" must still find a movement filed under
-      // cat_sueldo (and, unlike the seed, a user-created category's id
-      // shares nothing with its name at all).
       result = result.filter((m) =>
         matchesQuery(
           filters.debouncedQuery,
@@ -137,9 +121,6 @@ export const SearchScreen = () => {
       const tipo = category?.tipo ?? 'gasto'
       chips.push({
         key: `tag-${tag}`,
-        // Never the raw id (specs.md §10.22): a category not yet in Config
-        // (unsynced shard, deleted elsewhere) reads as "sin categoría", not
-        // as `cat_a1b2`.
         label: category?.nombre ?? t('tags:unknownCategory'),
         icon: getMovimientoVisual(category, tipo).icon,
         onRemove: () => filters.toggleTag(tag),

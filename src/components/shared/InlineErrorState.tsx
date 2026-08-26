@@ -4,13 +4,6 @@ export interface InlineErrorStateProps {
   onRetry: () => void
 }
 
-/**
- * The minimal inline error treatment Search and History share for a
- * mid-screen load failure — previously two byte-identical, independently
- * maintained copies. Deliberately lighter-weight than `HomeErrorState`'s
- * card+icon treatment; whether the two should also look the same is a
- * design call left open, not decided here.
- */
 export const InlineErrorState = ({ message, retryLabel, onRetry }: InlineErrorStateProps) => (
   <div className="flex flex-col items-center gap-3 pt-16 text-center">
     <p role="alert" className="text-sm font-medium text-destructive">

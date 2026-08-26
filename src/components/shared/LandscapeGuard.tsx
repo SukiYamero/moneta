@@ -3,20 +3,6 @@ import { useTranslation } from 'react-i18next'
 import { useIsLandscape } from '@/components/shared/useIsLandscape'
 import { skipLandscapeGateForSession, useLandscapeGateStore } from '@/lib/landscapeGateStore'
 
-/**
- * The one context with no real orientation lock available: a bare mobile
- * browser tab (specs.md §10.53 — see `useIsLandscape`'s own comment for why
- * neither the manifest's `orientation` member nor the Screen Orientation
- * API's `lock()` reach this case). `useIsLandscape` is the "when" (touch
- * device, landscape); this is only the "what" — the user's own design
- * (`docs/ui/landscape-gate.html`).
- *
- * The skip is a per-session dismissal (`landscapeGateStore.ts`), not a
- * per-device one: in-memory state, never persisted, so a reload or a fresh
- * app launch shows the gate once again. Nothing here waits on storage, so
- * the gate can render on the very first pass — no tri-state "not resolved
- * yet" needed to avoid a flash.
- */
 export const LandscapeGuard = () => {
   const isLandscape = useIsLandscape()
   const { t } = useTranslation('common')

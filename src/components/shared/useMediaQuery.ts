@@ -3,12 +3,7 @@ import { useCallback, useSyncExternalStore } from 'react'
 const supportsMatchMedia = (): boolean =>
   typeof window !== 'undefined' && typeof window.matchMedia === 'function'
 
-/**
- * Generic `matchMedia` query exposed to React via `useSyncExternalStore`;
- * degrades to `false` where `matchMedia` doesn't exist (jsdom, very old
- * browsers) rather than throwing. `useIsLandscape` and `useIsCoarsePointer`
- * both build on this rather than duplicating the subscribe/getSnapshot pair.
- */
+// Degrades to false where matchMedia doesn't exist (jsdom, very old browsers).
 export const useMediaQuery = (query: string): boolean => {
   const subscribe = useCallback(
     (callback: () => void): (() => void) => {

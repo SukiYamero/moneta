@@ -34,27 +34,6 @@ const CategoryRow = ({
   )
 }
 
-/**
- * `Config.categorias`, grouped by `Seccion` per specs.md §10.24. Tapping a
- * row opens `CategoryFormModal` in edit mode — the reused §10.22 editor,
- * never a second one.
- *
- * Archive/restore/delete follow §10.22 Decision 5, deliberately routed so
- * the destructive action is never the only option and never a dead one:
- * - **Active rows only ever offer Archive** — always safe
- *   (`dataStore.archiveCategoria` self-refuses via a toast if it would
- *   leave the picker empty), always one tap. This *is* "the archive path
- *   offered instead of a bare no" (§10.24's edge case): archiving an active,
- *   in-use category is never gated behind an attempted-and-refused delete.
- * - **Archived rows offer Delete only when this screen can already see the
- *   category has no referencing movement** (checked against `movimientos`,
- *   the same rule `dataStore.deleteCategoria` enforces server-side — this
- *   is a UI-level pre-check, not a second policy). A still-referenced
- *   archived category shows a plain note instead of a button that would
- *   always fail — the same "an inert control beats a dead one" rule
- *   `PreferencesSection`'s theme row already follows, reusing G1's own
- *   `tags:errors.categoryInUse` copy rather than minting a duplicate.
- */
 export const CategoriesSection = () => {
   const { t } = useTranslation(['settings', 'tags'])
   const secciones = useDataStore((s) => s.config?.secciones ?? [])

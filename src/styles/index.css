@@ -12,23 +12,16 @@ body,
 }
 
 body {
-  /* PWA: keep content clear of the device notch / home indicator */
   padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
     env(safe-area-inset-left);
 }
 
-/* Native-app feel, no visible tap highlight — see AGENTS.md § UI. */
 * {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Zoom is off everywhere (user decision, 2026-08-24; specs.md §10.34, §11):
-   this pairs with index.html's viewport `maximum-scale`/`user-scalable`
-   (which disables pinch-zoom) to also disable double-tap-to-zoom — the one
-   gesture the viewport meta alone doesn't reach. Accepted trade-off: this
-   also removes the user's own zoom as an accessibility fallback, justified
-   because the type scale is already rem-based and honors the system font
-   size instead. */
+/* touch-action: manipulation disables double-tap-to-zoom — the one zoom
+   gesture the viewport meta's maximum-scale/user-scalable doesn't reach. */
 html {
   touch-action: manipulation;
 }
@@ -78,15 +71,11 @@ html {
   --color-foreground: var(--foreground);
   --color-background: var(--background);
 
-  /* Text-hierarchy tiers beyond shadcn's single muted-foreground slot — the
-     design uses 5 distinct foreground tiers (see docs/ui/design-tokens.md). */
   --color-fg-secondary: var(--fg-secondary);
   --color-fg-tertiary: var(--fg-tertiary);
   --color-fg-faint: var(--fg-faint);
   --color-fg-disabled: var(--fg-disabled);
 
-  /* Status colors — income/expense/info/warning read directly off these,
-     never off a raw hex in a component. */
   --color-success: var(--success);
   --color-success-strong: var(--success-strong);
   --color-success-foreground: var(--success-foreground);
@@ -96,26 +85,15 @@ html {
   --color-info: var(--info);
   --color-warning: var(--warning);
 
-  /* Surface tiers — canvas (app bg) < card (default surface) < sunken
-     (inputs) < raised (menus/popovers, already --popover). */
   --color-canvas: var(--canvas);
   --color-surface-sunken: var(--surface-sunken);
 
-  /* What the page reads as behind an open overlay. Matches BottomSheet's
-     own bg-black/55 backdrop over the canvas, so the one region a fixed
-     backdrop cannot cover on iOS (see useOverlay.ts) is indistinguishable
-     from the rest of the dimmed screen instead of a black bar. Resolves
-     per theme through --canvas. */
   --overlay-dim: color-mix(in oklch, var(--canvas), black 55%);
 
-  /* Border/hairline opacity scale — pick the semantic step, never type a
-     raw rgba(255,255,255,.NN) in a component. */
   --color-border-subtle: var(--border-subtle);
   --color-border-strong: var(--border-strong);
   --color-border-hover: var(--border-hover);
 
-  /* Radius scale. Not a single-base multiplier: the design's steps aren't a
-     clean geometric progression, so each is explicit (see design-tokens.md). */
   --radius-xs: 8px;
   --radius-sm: 10px;
   --radius-md: 12px;
@@ -126,72 +104,37 @@ html {
   --radius-4xl: 26px;
   --radius-5xl: 30px;
 
-  /* Font-size scale. Overrides Tailwind's default type scale on purpose —
-     this is a dense mobile UI; consolidates the design's many near-duplicate
-     half-px sizes into one step where the difference isn't meaningful
-     (documented in design-tokens.md). Rare one-off display sizes (welcome
-     title, giant amount input) intentionally stay as arbitrary values. */
-  --text-2xs: 0.625rem; /* 10px */
-  --text-xs: 0.6875rem; /* 11px */
-  --text-sm: 0.75rem; /* 12px */
-  --text-ms: 0.8125rem; /* 13px */
-  --text-base: 0.875rem; /* 14px — dense mobile UI base, not Tailwind's 16px default */
-  --text-md: 0.9375rem; /* 15px */
-  --text-lg: 1rem; /* 16px */
-  --text-xl: 1.0625rem; /* 17px */
-  --text-2xl: 1.125rem; /* 18px */
-  --text-3xl: 1.1875rem; /* 19px */
-  --text-4xl: 1.25rem; /* 20px */
-  --text-5xl: 1.3125rem; /* 21px */
-  --text-6xl: 1.75rem; /* 28px */
-  --text-7xl: 1.875rem; /* 30px */
+  --text-2xs: 0.625rem;
+  --text-xs: 0.6875rem;
+  --text-sm: 0.75rem;
+  --text-ms: 0.8125rem;
+  --text-base: 0.875rem;
+  --text-md: 0.9375rem;
+  --text-lg: 1rem;
+  --text-xl: 1.0625rem;
+  --text-2xl: 1.125rem;
+  --text-3xl: 1.1875rem;
+  --text-4xl: 1.25rem;
+  --text-5xl: 1.3125rem;
+  --text-6xl: 1.75rem;
+  --text-7xl: 1.875rem;
 
-  /* The bottom nav's own height, and the clearance any screen under it
-     needs. Not a "spacing value" in the sense design-tokens.md leaves
-     untokenized — it is a layout constant BottomNav, Toaster and every
-     screen must agree on, so it lives in one place (AGENTS.md, single
-     source of truth). The safe-area inset is added to the bar's height
-     rather than eaten out of its padding, so an iPhone home indicator
-     grows the bar instead of squeezing its icons. */
   --bottom-nav-height: 6rem;
   --bottom-nav-clearance: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom));
 
-  /* The one top-inset every top-level screen shares (specs.md §10.34):
-     where a screen's content — or, for a screen with a header row, that
-     row itself — starts. `body`'s own padding (below) already contributes
-     `env(safe-area-inset-top)` once, unconditionally, to everything in
-     normal flow; this tops that up to a 1.5rem floor rather than adding
-     the same inset a second time, so it is correct both where the inset is
-     `0` (browser chrome) and where it's a real notch (a device where the
-     ambient inset already clears the floor contributes nothing more
-     here). A screen opts in with `pt-(--screen-inset-top)`. */
   --screen-inset-top: max(calc(1.5rem - env(safe-area-inset-top)), 0rem);
 
-  /* The same 1.5rem safe-top floor, but for a `fixed` overlay
-     (`FullScreenPanel`) instead of an in-flow screen: a `fixed` element
-     gets none of `body`'s ambient safe-area padding for free, so it must
-     add the full inset itself rather than topping one up like
-     `--screen-inset-top` does — using that token here would silently
-     undercount on a real notch. Named so the two "1.5rem clear of the
-     notch" expressions aren't just a coincidence of value between two
-     files (specs.md §10.34.1). */
+  /* A fixed element gets none of body's ambient safe-area padding for free,
+     so it must add the full inset itself. */
   --overlay-inset-top: max(1.5rem, env(safe-area-inset-top));
   --overlay-inset-bottom: max(1.5rem, env(safe-area-inset-bottom));
 
-  /* Easing — the "native sheet" curve used for every sheet/push/pop
-     transition in the design. This is what makes it feel native, not web. */
   --ease-ios: cubic-bezier(0.32, 0.72, 0, 1);
 
-  /* Screen/sheet/modal transitions, ported from the design's keyframes.
-     Respect prefers-reduced-motion (see @media block below). */
   --animate-fade-in: fade-in 0.2s ease;
   --animate-sheet-up: sheet-up 0.32s var(--ease-ios);
   --animate-pop-in: pop-in 0.22s var(--ease-ios);
   --animate-push-in: push-in 0.28s var(--ease-ios);
-  /* LandscapeGuard's rotate hint (docs/ui/landscape-gate.html) — rebalanced
-     from the design export's `lgRotateHint` so both the lying-down and
-     upright states hold long enough to register, and the return rotation
-     is a real rotation rather than an instant snap. */
   --animate-landscape-rotate-hint: landscape-rotate-hint 3s cubic-bezier(0.65, 0, 0.35, 1) infinite;
 
   @keyframes fade-in {
@@ -246,20 +189,6 @@ html {
   }
 }
 
-/* Light theme = the real palette, mapped from the design export's --mn-*
-   token table (docs/ui/moneta-theme.css, validated hex-by-hex against the
-   already-shipped .dark block — docs/ui/design-export-reference.md §1).
-   specs.md §10.30 records the four exceptions to a straight mapping: the
-   five chart-* tints are the design's own dark values pushed to the
-   minimum lightness that clears WCAG 3.0 on a white card (not the export's
-   raw light pair, which fails contrast outright); --destructive/
-   --danger-strong/--danger-foreground/--warning have no light source in
-   the export and are adapted from --mn-danger's own dark→light pair
-   (#FB8989 → #CF4B4B) and from --chart-3's already-fixed light value
-   (--warning shares --mn-danger's — and --chart-3's — literal dark hex);
-   --muted/--accent/--secondary collapsing to the same #FFFFFF as --card is
-   confirmed correct, not a bug — the design's own light palette reuses the
-   card slot the same way .dark already does. */
 :root {
   --background: #f4f3ef;
   --foreground: #1b1c19;
@@ -313,10 +242,6 @@ html {
   --border-hover: rgba(28, 28, 20, 0.16);
 }
 
-/* Dark theme = the real KuroBello palette, extracted from the Claude Design
-   canvas (project 18d93152-c2e6-4bde-8eff-f944b1537ad8, Moneta.dc.html,
-   2026-08-18). Unchanged by the light theme above (specs.md §10.30) — do
-   not touch this block for a light-theme change. */
 .dark {
   --background: #0c0d10;
   --foreground: #f4f4f5;

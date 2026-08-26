@@ -22,12 +22,6 @@ const VARIANT_TINT: Record<ToastVariant, IconAvatarTint> = {
   error: 'danger',
 }
 
-/**
- * A single card in the toast stack. Notification, not a dialog — it never
- * blocks, never traps focus, never asks a question (specs.md §10.6).
- * Swipe-to-dismiss mirrors BottomSheet's drag handling: Pointer Events with
- * capture, so one code path serves touch/mouse/pen (AGENTS.md § UI).
- */
 export const Toast = ({ item, onDismiss }: ToastProps) => {
   const { t } = useTranslation('toast')
   const [dragX, setDragX] = useState(0)
@@ -65,8 +59,6 @@ export const Toast = ({ item, onDismiss }: ToastProps) => {
     else setDragX(0)
   }
 
-  // A cancelled gesture never counts as intent to dismiss — same rule as
-  // BottomSheet's drag handling.
   const cancelDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
     releaseCapture(event)
     setDragging(false)
@@ -105,11 +97,6 @@ export const Toast = ({ item, onDismiss }: ToastProps) => {
         )}
       </p>
       {item.action && (
-        // item.action.labelKey is a namespace-prefixed ToastMessageKey
-        // (e.g. 'update:reload'), the same cross-namespace addressing
-        // toastStore.ts itself resolves the toast's own message with — not
-        // this card's own 'toast' namespace, so it goes through the shared
-        // i18next instance directly rather than this component's scoped `t`.
         <button
           type="button"
           onClick={() => {

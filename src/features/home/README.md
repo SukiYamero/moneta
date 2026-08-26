@@ -1,76 +1,32 @@
 # src/features/home
 
 The `/` dashboard's content (`src/routes/Home.tsx` composes these; the
-persistent nav/shell around it is `src/routes/AppShell.tsx`, owned by
-Track L).
+persistent nav/shell around it is `src/routes/AppShell.tsx`).
 
 - `useHomeDashboard.ts` — the only place Home reads data. Subscribes to
   `src/lib/dataStore.ts`, triggers `load()` on mount, and derives every
-  figure through `src/lib/movimientoStats.ts`'s pure functions (never a
-  local sum/aggregation). `totals`/`week.chart`/`week.totalGastos` are all
-  scoped to `Config.preferencias.monedaPrincipal` (`movimientoStats`'
-  `moneda` argument, `specs.md` §10.27) — never a raw sum over every
-  `Movimiento` regardless of currency. Also returns `otherCurrencies`
-  (`movimientoStats.otherCurrencies`), the currencies present besides
-  `monedaPrincipal`, empty in the common single-currency case — `Home.tsx`
-  (`src/routes/`) renders a note from it when non-empty, rather than
-  silently excluding those movements from the total with no explanation.
-  Returns render-ready data plus `status`/`error`/
-  `retry` for the three non-happy states, and `categorias` (`Config.categorias`,
-  falling back to `CONFIG_SEMILLA.categorias` before load) — `Movimiento.categoria`
-  is an id (`specs.md` §10.22), and `RecentMovimientos`/`MovimientoRow` need
-  this to resolve it.
+  figure through `src/lib/movimientoStats.ts`'s pure functions, scoped to
+  `Config.preferencias.monedaPrincipal`. Also returns `otherCurrencies`,
+  `status`/`error`/`retry`, and `categorias` for resolving movement
+  category ids.
 - `homeView.ts` — pure, data-free presentation helpers: greeting bucket
   (morning/afternoon/evening), weekday labels, and the week-strip's 7-day
-  scaffold (which days have a real movement — membership only, not a
-  total). `getInitials` used to live here too; moved to
-  `src/lib/initials.ts` once a third feature (`auth`) started importing it
-  — the other helpers below stay, since they all take a `Movimiento`/
-  date-fns `Locale` this file's `getInitials` never needed.
-  `shortDayLabel`/
-  `narrowDayLabel`/`monthYearLabel`/`buildWeekStripDays` take a required
-  `Locale` parameter (no default) — `useHomeDashboard.ts` supplies it via
-  `useLocaleFormatting()` (`docs/wave-2/track-m.md`).
+  scaffold.
 - `usePrefersReducedMotion.ts` — `matchMedia` via `useSyncExternalStore`,
-  degrading to `false` when `matchMedia` is unavailable (jsdom in tests).
-  Gates the weekly chart's recharts animation; every CSS transition
-  already respects reduced motion globally via `src/styles/index.css`.
-- `HomeHeader.tsx` — greeting + real Google profile name (`authStore.user`),
-  and an honest `home.guestName` label (never a blank name/avatar) when
-  `authStore.status === 'guest'` (specs.md §10.10) — the notifications bell,
-  rendered `disabled` (`// STUB(wave3)`, no unread dot — there is no
-  notification source to back one).
-- `WeekStrip.tsx` — read-only current-week overview (no prev/next, no
-  day-tap; see `docs/wave-2/track-e2.md` for why).
-- `BalanceCard.tsx` — all-time balance (not period-scoped — matches the
-  design), hide/show toggle (local state, not persisted), income/expense
-  mini-stats. Calls `useLocaleFormatting()` directly for `formatMonto`.
-- `WeeklyChart.tsx` — recharts bar chart of the current week's daily
-  `gastos`, from a single `series(...)` call. Calls `useLocaleFormatting()`
-  directly for `formatMonto`/day labels.
-- `AreasBanner.tsx` — `// STUB(trackH)`, rendered `disabled` and dimmed
-  like `BottomNav`'s own stub slots, not a full-color dead link.
+  degrading to `false` when unavailable. Gates the weekly chart's recharts
+  animation.
+- `HomeHeader.tsx` — greeting + Google profile name (`authStore.user`), or a
+  guest label when `authStore.status === 'guest'`.
+- `WeekStrip.tsx` — read-only current-week overview.
+- `BalanceCard.tsx` — all-time balance, a local (unpersisted) hide/show
+  toggle, and income/expense mini-stats.
+- `WeeklyChart.tsx` — recharts bar chart of the current week's daily gastos.
+- `AreasBanner.tsx` — disabled, dimmed stub slot.
 - `RecentMovimientos.tsx` — most recent movements via the shared
-  `MovimientoRow`, "Ver todo" linking to `/history`. Calls
-  `useLocaleFormatting()` directly and forwards `locale`/`dateFnsLocale`/
-  `categorias` to each `MovimientoRow`, plus an `onClick` that opens the
-  movement sheet for that row via `useMovimientoSheetStore().openMovimiento(id)`
-  from `@/features/movimientos` (`specs.md` §10.23).
-- `HomeLoadingState.tsx` / `HomeEmptyState.tsx` / `HomeErrorState.tsx` —
-  the three non-happy states `Home.tsx` switches on; the error state's
-  retry button calls `useHomeDashboard`'s `retry` (re-invokes
-  `dataStore.load()`). `HomeErrorState` maps its `RepoErrorCode` to copy via
-  `@/lib/errorCopy`'s `repoErrorCopyKey` — moved there from this directory
-  (`specs.md` §10.11) since the mapping was never Home-specific: Search and
-  History now use the same lookup, exhaustive over the closed union (a
-  missing case is a compile error, no drift-guard test needed, unlike the
-  message-keyed auth/lock copy tables). `HomeLoadingState` is built on the shared
-  `Skeleton`/`SkeletonGroup` primitives (`src/components/shared/Skeleton.tsx`)
-  rather than hand-rolled markup; `Home.tsx` gates it behind
-  `usePendingDelay` so a fast load shows nothing at all.
-
-See `docs/wave-2/track-e2.md` for the decisions behind the choices above
-(why "Áreas" is `disabled` and not just non-interactive, why the balance
-figure is all-time, the existing-token substitutions for colors the
-design used that had no token, and an open question for the operator
-about Track E4's month-total cross-check).
+  `MovimientoRow`, "Ver todo" linking to `/history`; row taps open the
+  movement sheet via `useMovimientoSheetStore().openMovimiento(id)`.
+- `HomeLoadingState.tsx` / `HomeEmptyState.tsx` / `HomeErrorState.tsx` — the
+  three non-happy states `Home.tsx` switches on. The error state's retry
+  calls `useHomeDashboard`'s `retry`; `HomeLoadingState` is built on the
+  shared `Skeleton`/`SkeletonGroup` primitives, gated behind
+  `usePendingDelay`.

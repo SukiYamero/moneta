@@ -13,12 +13,6 @@ export interface PeriodLabelStrings {
   summary: string
 }
 
-/**
- * Header title/subtitle for the currently viewed period. Pure formatting
- * over `range` (already resolved by `periodRange`) — never recomputes
- * boundaries itself. `today` is injectable so callers stay testable
- * (mirrors `repo.fake.ts`'s clock pattern).
- */
 export const getPeriodLabel = (
   scope: Periodo,
   range: DateRange,

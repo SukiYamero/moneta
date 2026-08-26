@@ -21,9 +21,6 @@ export const RecentMovimientos = ({ movimientos, categorias }: RecentMovimientos
         <h2 id="home-recent-heading" className="text-lg font-bold">
           {t('recent.title')}
         </h2>
-        {/* min-h-11 + flex/items-center: a real 44px touch target around a
-            small text link (AGENTS.md § UI) — the design draws it as bare
-            text with no reserved tap area. */}
         <Link
           to="/history"
           className="flex min-h-11 items-center text-ms font-semibold text-primary"

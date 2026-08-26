@@ -4,19 +4,6 @@ import { useAuthStore } from '@/lib/authStore'
 import { Button } from '@/components/ui/button'
 import { CenterModal } from '@/components/shared/CenterModal'
 
-/**
- * specs.md §10.32: a guest with local movements who signs in is asked,
- * once, whether to bring them into the account they just signed into.
- * There is no design for this screen (verified against the export — the
- * canvas's "Usar estos datos" belongs to the receipt-scan flow) — built
- * from `CenterModal` and the tokens, same posture as §10.2.1's biometric
- * row. Renders nothing when there is no pending offer; mounted alongside
- * `RequireAuth`'s normal children (a modal over the app, not a full-screen
- * gate that would block Home from settling underneath it) — `DrivePermissionScreen`
- * already owns the one full-screen "pending decision" treatment this app
- * has, and this isn't that: the person's data and the rest of the app are
- * already there and usable while they decide.
- */
 export const GuestAdoptionPrompt = () => {
   const { t } = useTranslation('auth')
   const pending = useAuthStore((s) => s.pendingAdoption)

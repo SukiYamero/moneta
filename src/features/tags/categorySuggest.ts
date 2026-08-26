@@ -1,11 +1,3 @@
-// Suggests an icon and color for a typed category name, offline and without
-// translating anything (specs.md §10.22 Decision 7). Translating the query
-// so it can be matched against a single-language keyword list was rejected —
-// it needs a network call to a translation API, which breaks §6 (no
-// backend), §3 (offline-first) and, decisively, sends the user's own
-// category names to an outside service. The problem is inverted instead:
-// each concept below carries one multilingual bag of keywords, so matching
-// never needs to know which language was typed.
 import type { Categoria } from '@/lib/schema'
 import type { IconAvatarTint } from '@/components/shared/IconAvatar'
 import { ICON_AVATAR_TINTS } from '@/components/shared/tintClasses'
@@ -18,10 +10,6 @@ interface CategoryConcept {
   keywords: string[]
 }
 
-// ~30 everyday spending/income concepts, each with icon + tint + a bag of
-// Spanish/English/Portuguese keywords in one list (not one list per locale)
-// — "academia" resolves whether the UI is es or pt-BR, and a user who mixes
-// languages is handled for free (specs.md §10.22).
 const CATEGORY_CONCEPTS: readonly CategoryConcept[] = [
   {
     icon: 'briefcase',
@@ -276,21 +264,16 @@ const CONCEPT_KEYWORD_INDEX: Map<string, CategoryConcept> = new Map(
   ),
 )
 
-// Splits on anything that isn't a letter/number, matching on whole
-// normalized words rather than bare substrings — "regalo" must not match
-// inside an unrelated word (specs.md §10.22).
 const wordsOf = (text: string): string[] =>
   normalizeForSearch(text)
     .split(/[^\p{L}\p{N}]+/u)
     .filter((word) => word.length > 0)
 
 export interface CategoryVisualSuggestion {
-  /** `undefined` when no concept matched — the caller uses the tipo-based icon fallback (specs.md §10.8), never a guessed icon. */
   icono: CategoryIconKey | undefined
   color: IconAvatarTint
 }
 
-/** Deterministic tie-break: the tint with the fewest current uses, first by `ICON_AVATAR_TINTS` order among ties — never colorless. */
 export const leastUsedTint = (categorias: readonly Pick<Categoria, 'color'>[]): IconAvatarTint => {
   const usage = new Map<IconAvatarTint, number>(ICON_AVATAR_TINTS.map((tint) => [tint, 0]))
   for (const { color } of categorias) {
@@ -301,15 +284,6 @@ export const leastUsedTint = (categorias: readonly Pick<Categoria, 'color'>[]): 
   )
 }
 
-/**
- * Suggests an icon and color for a typed category name. A concept match's
- * color is always its own semantic tint, even when it collides with a color
- * already in use (user decision, specs.md §10.22 Decision 7) — reading
- * "Comida is amber, Salud is green" correctly is worth more than guaranteed
- * distinguishability past nine categories. Only the no-match case falls
- * back to `leastUsedTint`, which is also the only place that guarantees an
- * unrecognized category is never colorless.
- */
 export const suggestCategoryVisual = (
   query: string,
   existingCategorias: readonly Pick<Categoria, 'color'>[],
