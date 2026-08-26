@@ -66,6 +66,18 @@ through `dateFnsLocale`, and labels each day with a full localised date for
 screen readers. `react-day-picker` takes a `date-fns` locale too; pass the
 one already resolved rather than letting it default.
 
+## Tests
+
+`src/components/shared/DateChipPicker.test.tsx` (120 lines) pins the
+hand-written grid and is replaced, not adapted — delete it and write a new one
+against the behaviour in Acceptance above. Cover at least: a five-row month
+renders five rows; a day cell meets the 44px floor; Escape closes the calendar
+and leaves the sheet open; `BottomNav` is hidden while it is open; the weekday
+initials and the first day of the week follow the locale.
+
+Every test must fail if its rule is broken — a case that differs only in an
+input value belongs in an `it.each` table.
+
 ## Acceptance
 
 - Opening the calendar floats it above the sheet and moves nothing underneath.

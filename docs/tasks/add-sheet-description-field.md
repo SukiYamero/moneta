@@ -48,6 +48,20 @@ _Most likely failure:_ only doing one of the two. The collapse handles what
 this form writes; the truncation also covers rows already in the database and
 anything a future writer produces.
 
+## Tests
+
+Twelve test files mention `nota`, but nearly all only use it as a fixture
+(`nota: 'Internet'`). **Leave those alone.** In scope are only the tests that
+assert on the field's own behaviour, plus a new `TextAreaField.test.tsx`.
+`TextField.test.tsx` stays untouched — that primitive does not change.
+
+New coverage: the field shows two rows; typing past the limit is refused; the
+counter appears before the limit; a note containing a newline is stored as one
+line; a movement row renders a long note on a single line.
+
+Every test must fail if its rule is broken — a case that differs only in an
+input value belongs in an `it.each` table.
+
 ## Acceptance
 
 - The field shows two lines of text without scrolling, and scrolls within
