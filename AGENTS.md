@@ -128,6 +128,16 @@ it there immediately rather than leaving it in a conversation that ends.
   component/store state).
 - **Comments only when truly necessary** — explain the _why_ (tradeoff, workaround),
   never the _what_. No conversational/changelog/restating comments.
+- **Four lines is the cap, and it is a hard one.** A comment states the one
+  thing a careful reader cannot deduce from the code in front of them, and
+  stops. It is not the place for the measurements you took, the alternatives
+  you rejected, the browser you verified in, or the arithmetic behind a
+  layout value — all of that goes in the commit message, which is attached
+  to the change, free to read, and findable with `git log -S`. If the why
+  genuinely needs more than four lines, the code is too clever: simplify the
+  code instead of explaining it harder. Long comments also make a false
+  promise — a paragraph defending a mechanism reads as certainty, and it is
+  worth nothing when the mechanism still does not work on the user's device.
 - Use the `@/` alias for imports from `src`.
 - **No namespace imports — `import * as React from 'react'` is banned.** Import only
   what you use, named: `import type { ComponentProps } from 'react'`,

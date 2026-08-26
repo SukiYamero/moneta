@@ -1118,6 +1118,10 @@ citation as pointing at the relevant §10 rule.
 - `config-<device>.json` never compacts — fine unless a real account's file is observed growing unreasonably.
 - The "most recently used" profile comparison only works within one device — revisit if profiles are ever synced cross-device (no such sync exists).
 
+### Code hygiene
+
+- **Comments in `src/features/movimientos/MovimientoAmountInput.tsx` and `src/components/shared/NumericKeypad.tsx` are far over the cap** — several run 8–20 lines narrating live-browser measurements, rejected alternatives and layout arithmetic. They belong in the commit messages that already carry them. Trimming them to the 3–4 line cap (`AGENTS.md`) is priority work, done as its own pass so it never rides along with a behavior change.
+
 ### Branding / polish
 
 - **Diff every remaining design-export artboard against its spec section** — a one-time audit, still not done for most of the 19 artboards in `docs/ui/Moneta_ Expense Manager UI.zip`.
