@@ -167,8 +167,8 @@ describe('listFiles', () => {
 describe('upsertJsonFile', () => {
   it('writes to the existing file when found, never creating a duplicate', async () => {
     fetchMock
-      .mockResolvedValueOnce(jsonResponse({ files: [{ id: 'existing' }] })) // findFile
-      .mockResolvedValueOnce(jsonResponse({ id: 'existing' })) // writeJsonFile
+      .mockResolvedValueOnce(jsonResponse({ files: [{ id: 'existing' }] }))
+      .mockResolvedValueOnce(jsonResponse({ id: 'existing' }))
 
     const id = await upsertJsonFile('tok', {
       name: 'act-dev1.json',
@@ -183,8 +183,8 @@ describe('upsertJsonFile', () => {
 
   it('creates the file when none exists', async () => {
     fetchMock
-      .mockResolvedValueOnce(jsonResponse({ files: [] })) // findFile: nothing
-      .mockResolvedValueOnce(jsonResponse({ id: 'new' })) // createJsonFile
+      .mockResolvedValueOnce(jsonResponse({ files: [] }))
+      .mockResolvedValueOnce(jsonResponse({ id: 'new' }))
 
     const id = await upsertJsonFile('tok', {
       name: 'act-dev1.json',
@@ -209,7 +209,7 @@ describe('text files', () => {
     expect(id).toBe('leeme')
     const body = (fetchMock.mock.calls[0]![1] as RequestInit).body as string
     expect(body).toContain('Hola, esto es tuyo.')
-    expect(body).not.toContain('"Hola, esto es tuyo."') // never JSON-quoted
+    expect(body).not.toContain('"Hola, esto es tuyo."')
     expect(body).toContain('Content-Type: text/plain; charset=utf-8')
   })
 

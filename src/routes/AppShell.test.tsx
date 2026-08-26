@@ -13,11 +13,6 @@ const Bomb = () => {
   throw new Error('boom')
 }
 
-// Mirrors src/router.tsx's shape — a pathless layout route (AppShell) with
-// absolute-path children — without RequireAuth or browser history, so
-// BottomNav mounts once instead of per-screen. Proves that nesting actually
-// resolves at runtime for all three tabs, which reading the router source
-// alone can't confirm.
 const renderAt = (initialPath: string) => {
   const router = createMemoryRouter(
     [
@@ -36,11 +31,6 @@ const renderAt = (initialPath: string) => {
 }
 
 describe('AppShell layout', () => {
-  // BottomNav and Toaster both size their clearance off --bottom-nav-clearance
-  // (src/styles/index.css) so a change to --bottom-nav-height propagates
-  // everywhere at once. The scroll pane reserving a hardcoded pb-30 instead
-  // would silently drift from that token (e.g. once safe-area-inset-bottom is
-  // non-zero, 120px static falls short of the nav's actual 96px + inset).
   it('reserves scroll-pane clearance via the --bottom-nav-clearance token, not a hardcoded value', () => {
     const router = createMemoryRouter(
       [{ element: <AppShell />, children: [{ index: true, element: <div>content</div> }] }],
@@ -51,10 +41,7 @@ describe('AppShell layout', () => {
     expect(scrollPane?.className).toMatch(/pb-\(--bottom-nav-clearance\)/)
   })
 
-  // jsdom doesn't run layout, so this can't prove the pixel-filling behavior
-  // — it pins the *shape* of the decision so a future "simplification" back
-  // to a floor can't reintroduce a leaf-route collapse: `h-full`, not
-  // `min-h-full`/`min-h-dvh`, leaves the flex-1 child's height definite.
+  // jsdom doesn't run layout, so this pins the class shape, not pixel behavior.
   it('roots the shell at a definite h-full, not a min-h-full floor or min-h-dvh', () => {
     const { container } = render(
       <RouterProvider
@@ -70,9 +57,6 @@ describe('AppShell layout', () => {
     expect(root?.className).not.toMatch(/min-h-dvh/)
   })
 
-  // Matches BottomSheet/FullScreenPanel's precedent: once the shell root is
-  // a definite height, this pane is the app's real (and only) scroll
-  // container, so an at-boundary drag shouldn't chain into it.
   it('contains overscroll on the scroll pane', () => {
     const { container } = render(
       <RouterProvider
@@ -88,12 +72,7 @@ describe('AppShell layout', () => {
 })
 
 describe('AppShell resilience', () => {
-  // src/router.tsx gives each child its own errorElement precisely so one
-  // screen's crash doesn't take the persistent nav down with it — this is
-  // the one part of that claim that reading router.tsx's source can't
-  // confirm actually holds at runtime (react-router error boundaries are
-  // per-segment, but that's a fact about react-router, not this codebase,
-  // and worth proving directly rather than trusting by inspection).
+  // react-router's error boundaries are per-segment.
   it('keeps BottomNav mounted when the active screen throws during render', () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
     const router = createMemoryRouter(
@@ -116,9 +95,6 @@ describe('AppShell resilience', () => {
 describe('AppShell routing', () => {
   it('resolves / to Home with BottomNav mounted', async () => {
     renderAt('/')
-    // Every route needs exactly one accessible heading — asserting *that*
-    // is the invariant worth protecting, not any specific text: Home's <h1>
-    // is a time/user-dependent greeting, not stable content to pin here.
     expect(await screen.findByRole('heading', { level: 1 })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /inicio/i })).toHaveAttribute('aria-current', 'page')
   })

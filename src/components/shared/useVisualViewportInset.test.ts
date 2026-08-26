@@ -2,7 +2,7 @@ import { act, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useVisualViewportInset } from '@/components/shared/useVisualViewportInset'
 
-/** A minimal, real `EventTarget` — close enough to `VisualViewport` for `addEventListener`/`dispatchEvent` to behave like the browser API this hook subscribes to. */
+// jsdom has no VisualViewport implementation.
 class FakeVisualViewport extends EventTarget {
   offsetTop = 0
   height = document.documentElement.clientHeight
@@ -41,10 +41,7 @@ describe('useVisualViewportInset', () => {
   })
 
   it('returns null for a sub-pixel mismatch (browser/page zoom rounding, no keyboard, no pan)', () => {
-    // `clientHeight` is always an integer; `visualViewport.height`/`offsetTop`
-    // come out fractional at ordinary non-100% zoom levels even with no
-    // keyboard and no pan — a strict `===` would misread that as a shrunk
-    // viewport and needlessly leave the static `dvh` fallback behind.
+    // `clientHeight` is always an integer; `visualViewport.height`/`offsetTop` can be fractional at non-100% zoom.
     const viewport = new FakeVisualViewport()
     viewport.height = document.documentElement.clientHeight - 0.4
     viewport.offsetTop = 0.4

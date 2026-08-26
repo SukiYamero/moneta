@@ -95,7 +95,7 @@ describe('getSyncContext', () => {
 
     expect(ctx?.token).toBe('fresh-tok')
     expect(ctx?.profile).toBe(profile)
-    expect(mRequestAccessToken).not.toHaveBeenCalled() // fresh — no reason to refresh
+    expect(mRequestAccessToken).not.toHaveBeenCalled()
   })
 
   it('reacquires a token near/past expiry and updates authStore so other readers see the fresh one too', async () => {
@@ -224,7 +224,7 @@ describe('the authStore subscription that drives start/stop', () => {
     })
     expect(mStartSyncTriggers).toHaveBeenCalledTimes(1)
 
-    useAuthStore.setState({ driveConnecting: true }) // unrelated field
+    useAuthStore.setState({ driveConnecting: true })
     useAuthStore.setState({ driveConnecting: false })
     expect(mStartSyncTriggers).toHaveBeenCalledTimes(1)
   })
@@ -288,7 +288,7 @@ describe('runInitialSync', () => {
 
     await runInitialSync()
     expect(mPull).toHaveBeenCalledWith('fresh-tok', profile, 'es')
-    expect(mPush).not.toHaveBeenCalled() // nothing pending — a reconnect must stay free of a no-op push
+    expect(mPush).not.toHaveBeenCalled()
 
     useOutboxStore.setState({ dirty: true })
     mPush.mockResolvedValue(undefined)

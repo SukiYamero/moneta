@@ -78,7 +78,7 @@ describe('ensureFolder', () => {
 
     expect(idA).toBe('NEW')
     expect(idB).toBe('NEW')
-    expect(mCreateFolder).toHaveBeenCalledTimes(1) // never two KuroBello folders
+    expect(mCreateFolder).toHaveBeenCalledTimes(1)
   })
 
   it("keys the coalescing by token — a concurrent call for a *different* account never receives the first account's folder id", async () => {
@@ -99,7 +99,7 @@ describe('ensureFolder', () => {
     mCreateFolder.mockResolvedValueOnce('FIRST')
     await ensureFolder('tok')
 
-    mFindFile.mockResolvedValueOnce('FIRST') // now exists
+    mFindFile.mockResolvedValueOnce('FIRST')
     const second = await ensureFolder('tok')
 
     expect(second).toBe('FIRST')

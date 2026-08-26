@@ -8,9 +8,6 @@ import { CenterModal } from '@/components/shared/CenterModal'
 import { DateChipPicker } from '@/components/shared/DateChipPicker'
 import { OVERLAY_BODY_DIM_BACKGROUND, useHasOpenOverlay } from '@/components/shared/useOverlay'
 
-// These tests cover interaction *between* two open overlay instances — a
-// real, reachable flow (a delete-confirm CenterModal opening from inside a
-// BottomSheet) that BottomSheet.test.tsx/CenterModal.test.tsx don't reach.
 const Harness = ({ open, onClose }: { open: boolean; onClose: () => void }) => {
   return (
     <BottomSheet open={open} onClose={onClose} ariaLabel="Panel de prueba">
@@ -49,9 +46,6 @@ describe('useOverlay — inline onClose identity must not steal focus', () => {
     screen.getByRole('button', { name: 'Segundo' }).focus()
     expect(screen.getByRole('button', { name: 'Segundo' })).toHaveFocus()
 
-    // A consumer typically writes onClose={() => setOpen(false)}, a fresh
-    // function identity on every parent re-render even though `open` itself
-    // is unchanged; that must not re-steal focus.
     rerender(<Harness open onClose={() => {}} />)
     await new Promise((resolve) => requestAnimationFrame(resolve))
 
@@ -67,7 +61,6 @@ describe('useOverlay — nested overlays', () => {
       expect(screen.getByRole('button', { name: 'Cancelar' })).toHaveFocus()
     })
 
-    // give any stray RAF from the outer sheet a chance to run and steal focus back
     await new Promise((resolve) => requestAnimationFrame(resolve))
     expect(screen.getByRole('button', { name: 'Cancelar' })).toHaveFocus()
   })
@@ -237,10 +230,7 @@ describe('useOverlay — nested overlays', () => {
 })
 
 describe('useOverlay — initial focus lands in the same task as the trigger click', () => {
-  // Proves the mechanism only (zero scheduler yields between click and
-  // focus), not that iOS Safari raises its keyboard — that needs a real
-  // device. A raw `.click()` in `act`, not `user-event`, since `user-event`
-  // is itself async and so cannot prove the absence of a yield.
+  // user-event dispatches asynchronously and so can't prove the absence of a scheduler yield; a raw `.click()` in `act` can.
   it('focuses initialFocus synchronously when open flips true inside a click handler', () => {
     const Harness = () => {
       const [open, setOpen] = useState(false)
@@ -299,10 +289,6 @@ describe('useOverlay + useEscapeToClose — DateChipPicker inside a BottomSheet'
 })
 
 describe('useHasOpenOverlay — module-level overlay-stack exposed to React', () => {
-  // A consumer (BottomNav) reacting to "is *some* overlay open" must not
-  // special-case which overlay it is — this reads the same stack the
-  // Escape/Tab-trap logic above shares between BottomSheet, CenterModal and
-  // useEscapeToClose.
   const Probe = () => {
     const hasOpenOverlay = useHasOpenOverlay()
     return <span data-testid="probe">{String(hasOpenOverlay)}</span>
@@ -363,7 +349,6 @@ describe('useHasOpenOverlay — module-level overlay-stack exposed to React', ()
     await vi.waitFor(() => expect(screen.getByTestId('probe')).toHaveTextContent('true'))
 
     await user.click(screen.getByRole('button', { name: 'Cerrar modal' }))
-    // The outer sheet is still open — never expect this to read 'false'.
     expect(screen.getByTestId('probe')).toHaveTextContent('true')
   })
 })

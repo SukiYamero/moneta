@@ -19,9 +19,6 @@ interface FakeDataState {
 
 let state: FakeDataState
 
-// Cast at the boundary: this test double narrows `useDataStore`'s selector
-// to only the slice `AddMovimientoSheet`/`useMovimientoForm` actually read,
-// which is intentionally not the full `DataState` shape.
 vi.mocked(useDataStore).mockImplementation(((selector: (state: FakeDataState) => unknown) =>
   selector(state)) as typeof useDataStore)
 
@@ -45,7 +42,6 @@ describe('AddMovimientoSheet', () => {
     expect(screen.getByRole('dialog', { name: /agregar movimiento/i })).toBeInTheDocument()
     expect(screen.getByRole('radio', { name: /gasto/i })).toHaveAttribute('aria-checked', 'true')
     expect(screen.getByRole('textbox', { name: /monto/i })).toHaveValue('')
-    // Servicios (gasto) is a real category — visible without typing anything.
     expect(screen.getByRole('button', { name: 'Servicios' })).toBeInTheDocument()
   })
 
@@ -56,19 +52,14 @@ describe('AddMovimientoSheet', () => {
 
     await user.click(screen.getByRole('button', { name: /agregar gasto/i }))
 
-    // No category is selected either at this point, so both the amount
-    // and the category error show — distinct messages, not one shared alert.
     expect(await screen.findByText(/ingresa un monto/i)).toBeInTheDocument()
     expect(screen.getByText(/elige una categoría/i)).toBeInTheDocument()
     expect(mCreateMovimiento).not.toHaveBeenCalled()
   })
 
-  // jsdom can't reproduce a real phone's keyboard occlusion, but it can verify
-  // the two things that fix it: the blocking section is scrolled into view,
-  // and focus moves onto its first focusable control. jsdom's own
-  // `scrollIntoView` is unimplemented, hence the stub.
   it('moves focus to the category picker and scrolls its section into view when a submit is blocked by a missing category', async () => {
     const user = userEvent.setup()
+    // jsdom's scrollIntoView is unimplemented, hence the stub.
     const scrollIntoView = vi.fn()
     HTMLElement.prototype.scrollIntoView = scrollIntoView
     useMovimientoSheetStore.setState({ addOpen: true })
@@ -81,14 +72,8 @@ describe('AddMovimientoSheet', () => {
     await user.click(screen.getByRole('button', { name: /agregar gasto/i }))
 
     const categoryError = await screen.findByText(/elige una categoría/i)
-    // The category section's first focusable control — not the amount
-    // input, not the submit button the click left focused, not nowhere.
     expect(screen.getByRole('button', { name: /ver todas las categorías/i })).toHaveFocus()
     expect(amountInput).not.toHaveFocus()
-    // `toHaveBeenCalled()` alone would pass even if the effect scrolled the
-    // wrong section — assert on `this` (the element `scrollIntoView` was
-    // actually called on) to prove it targeted the category section, not
-    // just that some element's `scrollIntoView` ran.
     expect(scrollIntoView).toHaveBeenCalledOnce()
     const scrolledTo = scrollIntoView.mock.contexts[0] as HTMLElement
     expect(scrolledTo.contains(categoryError)).toBe(true)
@@ -120,9 +105,6 @@ describe('AddMovimientoSheet', () => {
     await waitFor(() => expect(useMovimientoSheetStore.getState().addOpen).toBe(false))
   })
 
-  // The create sheet has no Cancel button — dismissal is backdrop-tap/
-  // Escape/drag-to-dismiss only, routed through `handleClose`. Simulated
-  // here via Escape, the keyboard-reachable path.
   it('dismissing without saving discards the draft — reopening starts blank again', async () => {
     const user = userEvent.setup()
     useMovimientoSheetStore.setState({ addOpen: true })
@@ -159,8 +141,6 @@ describe('AddMovimientoSheet', () => {
     await waitFor(() => expect(useMovimientoSheetStore.getState().addOpen).toBe(false))
   })
 
-  // Only create names the action taken — edit keeps a generic "Guardar"
-  // since its toggle changes an existing movement rather than naming a new one.
   it('the primary action names what it creates, following the type toggle', async () => {
     const user = userEvent.setup()
     useMovimientoSheetStore.setState({ addOpen: true })
@@ -174,8 +154,6 @@ describe('AddMovimientoSheet', () => {
     expect(screen.queryByRole('button', { name: /agregar gasto/i })).not.toBeInTheDocument()
   })
 
-  // Pins the export-sized CTA classes, distinct from `size="touch"`'s
-  // smaller 44px/12px/500 touch-target defaults.
   it('sizes the primary action to the design export, not the bare touch-target size', () => {
     useMovimientoSheetStore.setState({ addOpen: true })
     render(<AddMovimientoSheet />)
@@ -184,9 +162,6 @@ describe('AddMovimientoSheet', () => {
     expect(cta).toHaveClass('h-13.5', 'rounded-2xl', 'text-md', 'font-extrabold')
   })
 
-  // The count button opens `TagPickerSheet` as a second `BottomSheet` nested
-  // above this one — a real, reachable overlay-stack case, not just two
-  // sheets happening to both exist.
   describe('the nested TagPickerSheet (count button) stacks correctly above this sheet', () => {
     const openBoth = async (user: ReturnType<typeof userEvent.setup>) => {
       useMovimientoSheetStore.setState({ addOpen: true })

@@ -90,8 +90,7 @@ describe('parseAmountForInput', () => {
   })
 
   it('rejects a pasted 1e999 as malformed rather than letting it reach Infinity', () => {
-    // Number('1e999') is Infinity — the regex must reject exponent notation
-    // outright rather than relying on an Infinity check downstream.
+    // Number('1e999') is Infinity.
     expect(parseAmountForInput('1e999', 'en-US')).toEqual({ ok: false, reason: 'malformed' })
   })
 
@@ -134,16 +133,13 @@ describe('formatAmountLive', () => {
   })
 
   it('groups with a space for a locale that groups that way', () => {
-    // The exact space character (plain vs. narrow-no-break) is an ICU/runtime
-    // detail — assert it matches whatever Intl itself produces, don't hard-code it.
+    // The exact space character (narrow-no-break vs. plain) is an ICU/runtime detail.
     const expected = new Intl.NumberFormat('fr-FR').format(1234567)
     expect(formatAmountLive('1234567', 'fr-FR')).toBe(expected)
     expect(formatAmountLive('1234567', 'fr-FR')).not.toBe('1234567')
   })
 
   it('does not insert any grouping when the locale reports no group separator', () => {
-    // Simulates a locale whose formatToParts/format never emits a 'group'
-    // part — the same shape separatorsFor's '' fallback exists to handle.
     const RealNumberFormat = Intl.NumberFormat
     class NoGroupFormat {
       format = String
@@ -244,8 +240,6 @@ describe('indexAfterDigitCount', () => {
   })
 
   it('extends through a separator run right after the nth digit, landing before the next digit', () => {
-    // Wedging the caret before the separator instead is the exact bug that
-    // made "1,50" type as "150,".
     expect(indexAfterDigitCount('1.234.567', 1)).toBe(2)
     expect(indexAfterDigitCount('1.234.567', 7)).toBe(9)
   })

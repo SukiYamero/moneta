@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { resolveDateRange } from '@/features/search/dateRangePresets'
 
-const TODAY = new Date(2026, 7, 19) // 2026-08-19, a Wednesday — fixed so preset math isn't flaky
+const TODAY = new Date(2026, 7, 19)
 const NO_CUSTOM = { from: '2026-08-19', to: '2026-08-19' }
 
 describe('resolveDateRange()', () => {

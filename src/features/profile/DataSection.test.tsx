@@ -62,9 +62,6 @@ describe('DataSection', () => {
     toastSpy.mockRestore()
   })
 
-  // Shipped visibly inert: must read as unavailable, not merely
-  // unimplemented — a native `disabled` control, not a row that only
-  // looks tappable.
   describe('the delete-stored-data control', () => {
     it('renders visibly disabled and stays disabled after a click attempt', async () => {
       const user = userEvent.setup()
@@ -74,9 +71,6 @@ describe('DataSection', () => {
       expect(button).toBeDisabled()
       expect(button).toHaveAttribute('aria-disabled', 'true')
 
-      // A disabled native button never dispatches a click at all — there is
-      // no onClick here to even fire. This documents that a click attempt
-      // is a structural no-op rather than leaving it implicit.
       await user.click(button)
       expect(button).toBeDisabled()
     })

@@ -24,9 +24,6 @@ interface FakeDataState {
 
 let state: FakeDataState
 
-// Cast at the boundary: this test double narrows `useDataStore`'s selector
-// to only the slice `MovimientoSheet`/`useMovimientoForm` actually read,
-// which is intentionally not the full `DataState` shape.
 vi.mocked(useDataStore).mockImplementation(((selector: (state: FakeDataState) => unknown) =>
   selector(state)) as typeof useDataStore)
 
@@ -124,10 +121,6 @@ describe('MovimientoSheet — edit mode', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: /editar/i })).toBeInTheDocument())
   })
 
-  // Save is the same commit action as the Add sheet's own CTA, so it takes
-  // the same export sizing. Cancel matches height/radius only (row
-  // alignment), keeping its lighter touch-target typography since it isn't
-  // the commit action.
   it('sizes Save to the design export and matches Cancel to it in height only', async () => {
     const user = userEvent.setup()
     state.movimientos = [movimiento()]
@@ -144,8 +137,6 @@ describe('MovimientoSheet — edit mode', () => {
     expect(cancel).not.toHaveClass('font-extrabold')
   })
 
-  // `MovimientoFormFields` is the one shared field set, so a blocked Save
-  // here must get the same on-screen treatment as the create sheet's Add.
   it('moves focus back to the amount input and scrolls its section into view when Save is blocked by an invalid amount', async () => {
     const user = userEvent.setup()
     const scrollIntoView = vi.fn()
@@ -162,13 +153,7 @@ describe('MovimientoSheet — edit mode', () => {
     await user.click(screen.getByRole('button', { name: /guardar/i }))
 
     expect(await screen.findByText(/ingresa un monto/i)).toBeInTheDocument()
-    // Clicking Guardar left the button itself focused — an unconditional
-    // `blur()` here would leave focus nowhere for a keyboard user, so the
-    // fix moves focus back to the field that actually blocked the save.
     expect(amountInput).toHaveFocus()
-    // `toHaveBeenCalled()` alone would pass even if the effect scrolled the
-    // wrong section — assert on `this` (the element `scrollIntoView` was
-    // actually called on) to prove it targeted the amount section.
     expect(scrollIntoView).toHaveBeenCalledOnce()
     const scrolledTo = scrollIntoView.mock.contexts[0] as HTMLElement
     expect(scrolledTo.contains(amountInput)).toBe(true)
@@ -186,9 +171,6 @@ describe('MovimientoSheet — delete', () => {
     await user.click(screen.getByRole('button', { name: /eliminar/i }))
     expect(screen.getByRole('heading', { name: /eliminar este movimiento/i })).toBeInTheDocument()
 
-    // Two "Eliminar" buttons are on screen at once — the view's own trigger
-    // (behind the modal) and the confirm dialog's own confirm button, which
-    // renders after it in the tree.
     const confirmButtons = screen.getAllByRole('button', { name: /^eliminar$/i })
     await user.click(confirmButtons.at(-1)!)
 

@@ -63,8 +63,6 @@ describe('Home', () => {
     expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('Alex Rivera')
   })
 
-  // Anti-flash gate: a load fast enough to beat the ~150ms show-delay must
-  // render nothing, not the skeleton immediately.
   it('shows nothing yet immediately after mount, before the anti-flash delay elapses', () => {
     vi.useFakeTimers()
     mGetRepo.mockReturnValue(makeRepo({}))
@@ -111,9 +109,7 @@ describe('Home', () => {
     renderHome()
 
     const expected = totals(movimientos, CONFIG_SEMILLA.preferencias.monedaPrincipal)
-    // Intl inserts a non-breaking space after the currency symbol; RTL's
-    // default text normalizer collapses it to a regular one before
-    // matching, so the expectation needs the same normalization.
+    // Intl inserts a non-breaking space after the currency symbol; Testing Library's normalizer collapses it before matching.
     const balanceText = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP' })
       .format(expected.balance)
       .replaceAll(' ', ' ')
@@ -135,9 +131,6 @@ describe('Home', () => {
     expect(areas).toBeDisabled()
   })
 
-  // A user who switched monedaPrincipal after already recording COP
-  // movements must see the total say so, not silently exclude or mix in
-  // the other currency.
   it('names another currency present in the data, without folding it into the total', async () => {
     const config: Config = {
       ...CONFIG_SEMILLA,
@@ -151,9 +144,7 @@ describe('Home', () => {
     renderHome()
 
     expect(await screen.findByText(/COP/)).toBeInTheDocument()
-    // The balance itself must be the USD-only figure (100), never
-    // 500_000 + 100 folded into one number — narrowSymbol renders USD as
-    // "$" too, so match on the digits, not the symbol.
+    // Intl's narrowSymbol renders USD as "$" too, so this matches on the digits, not the symbol.
     expect(screen.getAllByText(/\$\s*100,00/).length).toBeGreaterThan(0)
   })
 

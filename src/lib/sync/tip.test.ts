@@ -19,7 +19,7 @@ describe('recordKnownTip / getKnownTip', () => {
 
   it('never moves a tip backward', async () => {
     await recordKnownTip('movimiento', 'm1', '000000005-0000-devicea')
-    await recordKnownTip('movimiento', 'm1', '000000001-0000-devicea') // older — must be ignored
+    await recordKnownTip('movimiento', 'm1', '000000001-0000-devicea')
 
     await expect(getKnownTip('movimiento', 'm1')).resolves.toBe('000000005-0000-devicea')
   })
