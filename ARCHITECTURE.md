@@ -7,10 +7,18 @@ file is just "where do I look", not "how does it work".
 
 - `src/lib/` — shared stores, the Drive/auth/lock logic layer, the data-model
   contract. See [src/lib/README.md](src/lib/README.md).
-- `src/features/auth/` — login screen + route guard. See
-  [src/features/auth/README.md](src/features/auth/README.md).
-- `src/features/lock/` — PIN/biometric lock UI. See
-  [src/features/lock/README.md](src/features/lock/README.md).
+- `src/features/` — one folder per screen/feature area, each with its own
+  `README.md`: [auth](src/features/auth/README.md) (login + route guard),
+  [boot](src/features/boot/README.md) (pre-content/boot UI),
+  [history](src/features/history/README.md) (`/history`),
+  [home](src/features/home/README.md) (`/` dashboard content),
+  [lock](src/features/lock/README.md) (PIN/biometric lock UI),
+  [movimientos](src/features/movimientos/README.md) (the movement sheet),
+  [profile](src/features/profile/README.md) (the profile/account sheet),
+  [search](src/features/search/README.md) (`/search` + filter sheet),
+  [settings](src/features/settings/README.md) (`/settings`),
+  [sync](src/features/sync/README.md) (first-run Drive download view),
+  [tags](src/features/tags/README.md) (category picker + taxonomy).
 - `src/components/ui/` — shadcn/ui primitives. See
   [src/components/ui/README.md](src/components/ui/README.md).
 - `src/components/shared/` — cross-feature composed components

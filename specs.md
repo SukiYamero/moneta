@@ -189,8 +189,8 @@ Do not add a backend unless one of those explicitly requires it.
 
 Design/architecture decisions are resolved **before** coding, not improvised
 between commands. If a decision gets stuck or something not covered here appears,
-**stop** and resolve it cold instead of choosing on the fly. Record the outcome
-in §11.
+**stop** and resolve it cold instead of choosing on the fly, then record the
+outcome as a rule in the relevant §10 entry.
 
 ## 10. Feature specs
 
@@ -206,7 +206,7 @@ in §11.
 - The access token is never persisted unencrypted.
 - `RequireAuth` blocks the rest of the app until authenticated.
 
-**Implementation.** `src/lib/auth.ts` (scopes), `src/lib/bootstrap.ts` (provisioning), `src/features/auth/RequireAuth.tsx` (guard). Note: §10.19 replaced the fixed three-file Drive layout with the per-device op-log format — `bootstrap.ts` and this section's file list describe the superseded shape; see §10.19 for what is actually written today.
+**Implementation.** `src/lib/auth.ts` (scopes), `src/lib/bootstrap.ts` (provisioning), `src/features/auth/RequireAuth.tsx` (guard). §10.19 is authoritative for the actual Drive file layout `bootstrap.ts` provisions; this section's file list predates the per-device op-log format.
 
 ### 10.2 PIN lock + biometric unlock
 
@@ -289,7 +289,7 @@ in §11.
 
 **Implementation.** `src/features/auth/WelcomeScreen.tsx`, `src/features/auth/DrivePermissionScreen.tsx`, `RequireAuth.tsx`, `authStore.ts` (`driveOptIn`, `driveConnecting`, `driveError`).
 
-**Watch out.** This section states `driveOptIn` is in-memory only, reset to `'pending'` on every fresh `login()`, and never persisted. That is no longer true — see Divergences below.
+**Watch out.** `driveOptIn` resets to `'pending'` on every fresh `login()`/`restore()`/`hydrate()`/unlock, but `resolveDriveOptIn()` immediately re-resolves a `'pending'` value from a persisted device-level decision before the first render — a returning user's earlier choice is honored without a visible re-prompt.
 
 ### 10.5 Shared UI kit + fake repo
 
@@ -387,7 +387,7 @@ in §11.
 
 **Implementation.** `ScreenLoading.tsx`, `Skeleton.tsx`/`SkeletonGroup`, `usePendingDelay.ts` (`src/components/shared`). `WelcomeScreen`/`DrivePermissionScreen` are the sole exception allowed to block the whole screen on their one action — no content underneath to protect, and the OAuth flow is genuinely modal.
 
-**Watch out.** Boot renders no full-screen loading treatment at all (§10.29 superseded the earlier brand-screen idea) — `RequireAuth` composes `PreContentSkeleton` directly.
+**Watch out.** Boot renders no full-screen loading treatment at all — `RequireAuth` composes `PreContentSkeleton` directly (§10.29).
 
 ### 10.10 Guest entry
 
@@ -584,9 +584,7 @@ in §11.
 
 ### 10.23 The movement sheet — creating, viewing, editing and deleting
 
-Its original "UI" subsection is superseded by §10.41 below (which also folds in §10.41's own edit-mode divergences); only the non-UI decisions survive here.
-
-**Goal.** One way to write a `Movimiento`, shared by every entry point, so create and edit can never validate differently from each other.
+**Goal.** One way to write a `Movimiento`, shared by every entry point, so create and edit can never validate differently from each other. §10.41 is authoritative for the sheet's layout; this entry covers only the non-UI behavior (state ownership, the write contract, parsing).
 
 **Rules.**
 
@@ -682,7 +680,7 @@ Its original "UI" subsection is superseded by §10.41 below (which also folds in
 
 **Implementation.** `src/lib/boot.ts`, `src/main.tsx`, `src/lib/repoProvider.ts`.
 
-**Watch out.** An earlier fixed-duration "brand moment" boot screen described under this section was withdrawn and replaced by an inline sync pill plus the app's own skeleton (§10.29, outside this slice) — the boot _sequence_ above (lock → resolve → bind → load → render) still stands; only the screen that used to cover it is gone.
+**Watch out.** There is no full-screen boot screen — §10.29 has the loading treatment (a sync pill plus the app's own skeleton). The sequence above (lock → resolve → bind → load → render) is unaffected by what covers it visually.
 
 ### 10.29 One loading moment, not two
 
@@ -781,24 +779,16 @@ Its original "UI" subsection is superseded by §10.41 below (which also folds in
 
 ### 10.34.1 The zoom rule does not hold uniformly across platforms
 
-**Goal.** Record the true per-platform effect of the zoom-off attributes.
+**Goal.** The zoom-off attributes stay unified at the markup level even though their real effect differs per platform.
 
 **Rules.**
 
-- `user-scalable=no`/`maximum-scale=1.0` is honored by Android Chrome (pinch-zoom off) but has been deliberately ignored by iOS Safari since iOS 10, as a WebKit accessibility override authors cannot opt out of — pinch-zoom stays available on a real iPhone regardless of this markup.
+- `user-scalable=no`/`maximum-scale=1.0` is honored by Android Chrome (pinch-zoom off) but ignored by iOS Safari since iOS 10, as a WebKit accessibility override authors cannot opt out of — pinch-zoom stays available on a real iPhone regardless of this markup. iOS keeping pinch-zoom available despite it is accepted, not something to work around.
 - `touch-action: manipulation` (double-tap-to-zoom off) is honored on both platforms.
 - The attributes stay in `index.html` even though iOS ignores half of them — they still suppress pinch-zoom on Android, and there is no way to defeat iOS's override without intercepting gesture events, which the app's Pointer-Events/accessibility posture rules out.
+- The lost zoom-as-accessibility-fallback trade-off is justified because the type scale is `rem`-based throughout and already honors the system font size — no component sizes text in raw `px`.
 
 **Implementation.** `index.html`'s viewport meta; `touch-action: manipulation` on `html` in `src/styles/index.css`.
-
-### 10.34.2 The zoom decision, reaffirmed
-
-**Goal.** State the standing decision now that the platform split above is known.
-
-**Rules.**
-
-- Zoom stays unified "off" at the markup level; iOS keeping pinch-zoom available despite it is accepted, not something to work around.
-- The lost zoom-as-accessibility-fallback trade-off is justified because the type scale is `rem`-based throughout and already honors the system font size — no component sizes text in raw `px`.
 
 **Implementation.** Same files as §10.34.1; this entry is the decision, the previous one is the fact it rests on.
 
@@ -829,32 +819,21 @@ Its original "UI" subsection is superseded by §10.41 below (which also folds in
 
 **Implementation.** `src/features/lock/FullScreenPanel.tsx`; both consumers (`LockSettings.tsx`, `PinSetup.tsx`) pass their header row via `header=`.
 
-### 10.36 The returning-user screen's second action — removed, not replaced with guest
+### 10.36 The returning-user screen's second action — guest, behind a gate
 
-**Goal.** `ReturningUserScreen`'s second button must not be a redundant duplicate of the primary Google action.
-
-**Rules.**
-
-- The screen only ever renders for a device that already resolves a most-recently-used Google profile with real data under it — routing a second button into guest mode would drop that exact person into an empty, unrelated profile while their real data sits one profile over. Guest is not a valid second action on this screen.
-- Where both actions on a screen call the identical underlying function with identical arguments, that is one control duplicated under two labels — remove the duplicate rather than relabel it.
-- A genuinely distinct second action here (if ever added) is Google's own account chooser (`prompt: 'select_account'`), never a guest route.
-
-**Implementation.** `src/features/auth/ReturningUserScreen.tsx` — a single, honest primary action satisfies the spec; no invented second destination.
-
-### 10.37 The returning-user screen's second action, take two — guest, behind a gate
-
-**Goal.** Give someone who does not want to sign in again a real way out of `ReturningUserScreen`, without turning it back into a first-run pitch.
+**Goal.** `ReturningUserScreen` gives someone who does not want to sign in again a real way out, without turning back into a first-run pitch.
 
 **Rules.**
 
-- §10.21's "no guest option on this screen" is narrowed, not reversed: a **gated escape hatch** — a secondary, visually distinct "Continuar como invitado" button that opens a confirm dialog before calling `continueAsGuest()` — is a materially different object from re-showing the welcome pitch, as long as the dialog stays a one-sentence warning about the consequence and never grows a value proposition or legal copy.
+- A secondary, visually distinct "Continuar como invitado" button opens a confirm dialog before calling `continueAsGuest()` — a materially different object from re-showing the welcome pitch, as long as the dialog stays a one-sentence warning about the consequence and never grows a value proposition or legal copy.
 - The dialog's copy must be exactly what happens, no more: this is a separate, device-only profile; the Google account's data is untouched; the way back is the profile switcher (§10.31) — never a false claim like "your data will be deleted."
 - Confirming calls `continueAsGuest()` once; cancelling calls it never.
-- Nobody is left stranded by this: within the same session the profile switcher (§10.31) already lists the lapsed Google profile and lets the user tap back to it with no PIN; across a cold restart, the login marker takes precedence on retry (§10.33's own accepted tradeoff), so guest is always one tap away again, never a dead end.
+- Nobody is left stranded by this: within the same session the profile switcher (§10.31) already lists the lapsed Google profile and lets the user tap back to it with no PIN; across a cold restart, the login marker takes precedence on retry (§10.33), so guest is always one tap away again, never a dead end.
+- Where two actions on a screen would call the identical underlying function with identical arguments, that is one control duplicated under two labels, not two actions — the primary and this gated guest path must stay genuinely distinct calls.
 
 **Implementation.** `src/features/auth/ReturningUserScreen.tsx` (second button + `ConfirmDialog`), `auth.return.guestConfirm.*` i18n keys across all four locales.
 
-### 10.38 "Olvidé mi PIN" copy — fixing two false claims
+### 10.38 "Olvidé mi PIN" copy — what resetting the vault actually does
 
 **Goal.** The forgot-PIN confirmation dialog must say only things that are true.
 
@@ -911,7 +890,7 @@ Its original "UI" subsection is superseded by §10.41 below (which also folds in
 
 **Implementation.** `src/features/movimientos/MovimientoAmountInput.tsx`, `MovimientoFormFields.tsx`, `AddMovimientoSheet.tsx`, `MovimientoSheet.tsx`; `src/features/tags/TagPickerSheet.tsx`, `categoryOrder.ts`, `CategoryPicker.tsx`.
 
-**Watch out.** `field-sizing: content` combined with an explicit Tailwind width utility (e.g. `w-40`) pins the box at that width in a supporting browser — it does **not** gracefully fall back the way blog posts imply. The correct pattern is `@supports`-gated: keep `w-40` as the fallback and add `supports-[field-sizing:content]:w-auto` so a supporting browser's own `@supports` evaluation hands width back to content-sizing. Verified live in Chrome; not verified in Firefox (no `field-sizing` support there at time of writing).
+**Watch out.** `field-sizing: content` combined with an explicit Tailwind width utility (e.g. `w-40`) pins the box at that width in a supporting browser — it does **not** gracefully fall back the way blog posts imply. The correct pattern is `@supports`-gated: keep `w-40` as the fallback and add `supports-[field-sizing:content]:w-auto` so a supporting browser's own `@supports` evaluation hands width back to content-sizing. Confirmed in Chrome; Firefox has no `field-sizing` support, unconfirmed there.
 
 ### 10.42 A transient owner-marker read failure must not read as "this profile's data is gone"
 
@@ -957,7 +936,7 @@ Its original "UI" subsection is superseded by §10.41 below (which also folds in
 
 **Implementation.** `src/lib/i18n/amountFormat.ts` (`formatAmountLive`, `digitsBeforeIndex`, `indexAfterDigitCount`, `isAmountInputInvalid`); `src/features/movimientos/MovimientoAmountInput.tsx` (the row/centering/caret logic).
 
-**Watch out.** IME composition is a known, unverified risk: the caret-rewrite `onChange` handler doesn't check `event.nativeEvent.isComposing`, and forcibly rewriting `.value`/selection while a real IME owns an active composition range is a documented-risky pattern on real devices — could not be confirmed or ruled out without a physical device with an active IME. A defensive `isComposing` guard was considered but not applied, since an untested guard could itself misbehave. Needs verification on a real Android IME keyboard.
+**Watch out.** IME composition is unverified risk: the caret-rewrite `onChange` handler doesn't check `event.nativeEvent.isComposing`, and rewriting `.value`/selection while a real IME owns an active composition range is documented-risky on real devices. Needs verification on a real Android IME keyboard.
 
 ### 10.46 The `+` FAB raises the keyboard; the primary CTA is export-sized
 
@@ -987,7 +966,7 @@ Its original "UI" subsection is superseded by §10.41 below (which also folds in
 
 **Implementation.** `useMovimientoForm.ts` (`submitAttempts`), `MovimientoFormFields.tsx` (the `useEffect` keyed on `submitAttempts`, one ref per section).
 
-**Watch out.** `AmountField.tsx` (the older bordered/labelled amount input) has been deleted entirely — it has zero production call sites since `MovimientoAmountInput` (§10.41) replaced it. `src/lib/i18n/amountFormat.ts`'s `parseAmountForInput`/`formatAmountForInput`/`isAmountInputInvalid` are still used, now only by `useMovimientoForm.ts` and `MovimientoAmountInput.tsx`.
+**Watch out.** `AmountField.tsx` no longer exists — `MovimientoAmountInput` (§10.41) is the only amount input. `src/lib/i18n/amountFormat.ts`'s `parseAmountForInput`/`formatAmountForInput`/`isAmountInputInvalid` are used only by `useMovimientoForm.ts` and `MovimientoAmountInput.tsx`.
 
 ### 10.49 Overlays stay inside the visible area under the keyboard
 
@@ -1038,7 +1017,7 @@ Its original "UI" subsection is superseded by §10.41 below (which also folds in
 
 **Rules.**
 
-- The backdrop is unconditionally oversized: it overscans a plain `inset-0` by `OVERLAY_BACKDROP_OVERSCAN_BLOCK`/`_INLINE` (`-50dvh`/`-50dvw`) on every edge, never derived from the viewport-inset correction at all — robust to the _class_ of error (a `fixed` element's rendered box coming out smaller/offset than reasoned) rather than to one specific geometry, after two narrower geometry-based fixes for the same symptom were each wrong or incomplete.
+- The backdrop is unconditionally oversized: it overscans a plain `inset-0` by `OVERLAY_BACKDROP_OVERSCAN_BLOCK`/`_INLINE` (`-50dvh`/`-50dvw`) on every edge, never derived from the viewport-inset correction at all — robust to the _class_ of error (a `fixed` element's rendered box coming out smaller/offset than reasoned) rather than to one specific geometry.
 - `useHasOpenOverlay()` (`useOverlay.ts`, via `useSyncExternalStore` over the same stack §10.5.1 describes) is true whenever any overlay anywhere is open. `BottomNav` reads it directly, not a prop threaded from `AppShell`, so it reacts to every overlay app-wide, not just the sheets `AppShell` happens to own.
 - `BottomNav` hides via `opacity-0 pointer-events-none` while any overlay is open — never unmount, `display: none`, or `inert`. `useOverlay` restores focus to the trigger element (often `BottomNav`'s own Add FAB) synchronously on close, one render tick before this hook's own state update repaints the bar visible again; `opacity`/`pointer-events` don't affect scriptable focusability, so the restore still lands.
 - No orientation lock is called via the Screen Orientation API anywhere (`screen.orientation.lock()` is unimplemented on iOS Safari and redundant with the manifest where it would work) — the manifest's `orientation: 'portrait'` is the only lock for an installed PWA/TWA; a bare mobile browser tab has no real platform lock available at all.
@@ -1068,17 +1047,7 @@ Its original "UI" subsection is superseded by §10.41 below (which also folds in
 
 **Watch out.** A `click` is re-hit-tested against the post-collapse DOM on touch in Blink, so deferring to `pointerup` protects that gesture's own `pointerup` and not its `click` — §10.35's backdrop rule is what covers the rest.
 
-## 11. Decisions
-
-Deliberately not a log. A decision that still governs behavior is written as a
-**rule** in its §10 entry, with no story attached; a decision that no longer
-governs anything is not worth a line. The reasoning behind any change lives in
-the commit that made it — `git log -S'<term>' -- <path>` finds it.
-
-This section exists only because code comments cite `§11`. Treat such a
-citation as pointing at the relevant §10 rule.
-
-## 12. Backlog (pending verification / deferred work)
+## 11. Backlog (pending verification / deferred work)
 
 ### Sync & outbox correctness
 
@@ -1121,10 +1090,6 @@ citation as pointing at the relevant §10 rule.
 - `config-<device>.json` never compacts — fine unless a real account's file is observed growing unreasonably.
 - The "most recently used" profile comparison only works within one device — revisit if profiles are ever synced cross-device (no such sync exists).
 
-### Code hygiene
-
-- **Comments in `src/features/movimientos/MovimientoAmountInput.tsx` and `src/components/shared/NumericKeypad.tsx` are far over the cap** — several run 8–20 lines narrating live-browser measurements, rejected alternatives and layout arithmetic. They belong in the commit messages that already carry them. Trimming them to the 3–4 line cap (`AGENTS.md`) is priority work, done as its own pass so it never rides along with a behavior change.
-
 ### Branding / polish
 
 - **Diff every remaining design-export artboard against its spec section** — a one-time audit, still not done for most of the 19 artboards in `docs/ui/Moneta_ Expense Manager UI.zip`.
@@ -1132,8 +1097,6 @@ citation as pointing at the relevant §10 rule.
 
 ### Waiting on the user
 
-The real list lives in `docs/pendientes-usuario.md` — ask about every open item there each session. It already covers several concerns this backlog used to duplicate: verifying `connectDrive` against real Drive (item 4), the guest-cliff profile switcher (item 6), the brand/PWA icon (item 8), where the biometric option lives (item 11), the Add sheet's gear button (item 12), and the portrait-lock device check (item 19).
-
-**Flag for the operator:** item 19's own text still says `LandscapeGuard` "currently only covers the three bottom-nav tabs" — that's now stale. `src/main.tsx:6,34` mounts `<LandscapeGuard />` at the real app root, above `AppShell`, covering the pre-auth/lock screens and `/settings` too. Worth a one-line correction there.
+The real list lives in `docs/pendientes-usuario.md` — ask about every open item there each session: verifying `connectDrive` against real Drive (item 4), the guest-cliff profile switcher (item 6), the brand/PWA icon (item 8), where the biometric option lives (item 11), the Add sheet's gear button (item 12), and the portrait-lock device check (item 19).
 
 ---

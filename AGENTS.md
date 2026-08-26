@@ -17,13 +17,10 @@ meant to be implemented, and the traps worth knowing about.
 2. If code and `specs.md` disagree, `specs.md` wins — update the code or update
    the spec, never let them silently drift.
 3. Changing behavior or data shape ⇒ update the §10 entry in the same change.
-4. The backlog lives in §12: genuinely open work only, one or two sentences per
+4. The backlog lives in §11: genuinely open work only, one or two sentences per
    item. An item that is done gets **deleted**, not annotated as done.
 
 ### `specs.md` is not a log, and this is enforced
-
-The file reached 13,000 lines because every track wrote its reasoning into it.
-It is now ~1,100. Keeping it there is a rule, not an aspiration:
 
 - **Never write history into it.** No dates, no track or agent names, no batch
   names, no commit hashes, no "was changed to" / "previously" / "take two".
@@ -32,8 +29,7 @@ It is now ~1,100. Keeping it there is a rule, not an aspiration:
   learned about how the project works.
 - **Never write a decisions log.** A decision that still governs behavior is a
   **rule** in its §10 entry, stated flatly with no story. A decision that
-  governs nothing is not worth a line. §11 is a stub kept only because old code
-  comments cite it.
+  governs nothing is not worth a line.
 - **The reasoning goes in the commit message**, which already captures it, is
   free to read, and is attached to the change it explains.
   `git log -S'<term>' -- <path>` finds it later.
@@ -43,7 +39,10 @@ It is now ~1,100. Keeping it there is a rule, not an aspiration:
   to tell the file has a history.
 
 If you find yourself writing "this was found by" or "the user decided on", stop
-— that sentence belongs in your commit or your report to the operator.
+— that sentence belongs in your commit or your report to the operator. This
+no-history rule applies to every doc in the repo, not just `specs.md` — no
+dates, no anecdotes, no process write-ups in a `README.md` or `docs/*.md`
+either.
 
 ## Open items that need the user — `docs/pendientes-usuario.md`
 
@@ -126,18 +125,15 @@ it there immediately rather than leaving it in a conversation that ends.
   already the rule for the data model: `specs.md` §4 derives totals/history
   from `Movimiento[]`, never stores them; apply the same instinct to
   component/store state).
-- **Comments only when truly necessary** — explain the _why_ (tradeoff, workaround),
-  never the _what_. No conversational/changelog/restating comments.
-- **Four lines is the cap, and it is a hard one.** A comment states the one
-  thing a careful reader cannot deduce from the code in front of them, and
-  stops. It is not the place for the measurements you took, the alternatives
-  you rejected, the browser you verified in, or the arithmetic behind a
-  layout value — all of that goes in the commit message, which is attached
-  to the change, free to read, and findable with `git log -S`. If the why
-  genuinely needs more than four lines, the code is too clever: simplify the
-  code instead of explaining it harder. Long comments also make a false
-  promise — a paragraph defending a mechanism reads as certainty, and it is
-  worth nothing when the mechanism still does not work on the user's device.
+- **Comments are almost never needed.** A comment survives only if it states a
+  fact that does not exist anywhere in this repository and that no amount of
+  reading the code, grepping, or checking a type would recover — in practice,
+  a fact about the outside world (a browser engine behavior, an OS quirk, a
+  third-party API violating its documented contract). It is one line and
+  cites nothing — no module headers, no decisions, no past bugs, no
+  measurements, no references to `specs.md`, `docs/*`, waves or tracks. If a
+  comment doesn't clear that bar, delete it; the reasoning belongs in the
+  commit message, findable later with `git log -S`.
 - Use the `@/` alias for imports from `src`.
 - **No namespace imports — `import * as React from 'react'` is banned.** Import only
   what you use, named: `import type { ComponentProps } from 'react'`,
@@ -159,8 +155,8 @@ it there immediately rather than leaving it in a conversation that ends.
   pure style preferences with no modernization or correctness payoff
   (`prefer-query-selector`, `no-negated-condition`,
   `consistent-function-scoping`). The `promise`, `node`, and `jsdoc`
-  plugins are available but unused — see `specs.md` §11, 2026-08-19, for
-  why. When a rule produces a genuine false positive against this
+  plugins are available but unused — don't assume they're enforced.
+  When a rule produces a genuine false positive against this
   codebase (e.g. Dexie's `Collection#reverse()`, which shares a name with
   but isn't `Array#reverse()`), suppress that one site with
   `// oxlint-disable-next-line <rule>` and a comment explaining why —
@@ -222,8 +218,7 @@ it there immediately rather than leaving it in a conversation that ends.
   sit below the UI; when a `src/lib/` module needs a value the UI also uses,
   **move the value down into `src/lib/`** — never import upward. Also enforced
   by `bun run lint:units` (`scripts/no-ui-imports-in-lib.sh`); tests are
-  exempt. This exists because the inversion appeared twice in Wave 4 alone
-  from two independent tracks — see `specs.md` §11, 2026-08-20.
+  exempt.
 - **Touch/swipe is the primary interaction model, not click/hover.** This
   app should feel like a native app, not a website with touch support
   bolted on. Concretely:
@@ -251,9 +246,7 @@ it there immediately rather than leaving it in a conversation that ends.
   `bunx shadcn@latest add <name>`. Compose with the `cn()` helper from `@/lib/utils`.
 - Icons: `lucide-react` (not Phosphor, even though the design canvas
   prototype uses Phosphor via a CDN — see `docs/ui/design-tokens.md` for
-  why). Fonts: Manrope (`@fontsource-variable/manrope`), matching the
-  design — supersedes the earlier Geist/Nova-preset default, see `specs.md`
-  §11, 2026-08-18.
+  why). Fonts: Manrope (`@fontsource-variable/manrope`), matching the design.
 - **No CDN dependencies, ever — self-host everything.** Fonts, icon sets,
   any library: install it as a real package (`bun add`) and bundle it,
   never load it from a third-party CDN (`unpkg`, `cdnjs`, a Google Fonts
@@ -312,11 +305,9 @@ These apply to any agent on this project, whatever it was asked to do.
 - **Fix the shape, not the instance.** When you fix a defect, sweep your whole
   area for other occurrences of the _same shape_ before calling it done, and
   report what the sweep found — including "nothing else" when that is the
-  honest answer. This is the single most expensive lesson this project has
-  learned: an unguarded storage read was fixed in one function while its twin
-  sat unfixed in a sibling function, and a read-modify-write race was fixed in
-  one module and never ported to the identical pattern in another. Both
-  shipped past a fully green test suite and were later found as CRITICAL.
+  honest answer. A fix that stops at the one call site that happened to be
+  reported, leaving an identical unguarded pattern in a sibling function, is
+  not done.
 - **Question the framing you were given.** Whoever dispatched you has blind
   spots, and a brief is an argument, not a specification of reality. If the
   task is scoped wrongly, if a stated assumption is false, or if the real
@@ -345,10 +336,10 @@ These apply to any agent on this project, whatever it was asked to do.
   revert real work; assuming the code wins can silently drop a change the user
   wanted. **Ask which is authoritative for that specific section**, naming what
   already exists and in what form. The exception, so this doesn't fire
-  constantly: divergences already recorded in `docs/ui/design-tokens.md` or
-  `specs.md` §11 (fluid layout over the fixed frame, Lucide over CDN Phosphor,
-  tokens over inline styles, ≥44px targets) are settled decisions — proceed.
-  Full rule in `docs/ui/implementation-plan.md`.
+  constantly: divergences already recorded in `docs/ui/design-tokens.md`
+  (fluid layout over the fixed frame, Lucide over CDN Phosphor, tokens over
+  inline styles, ≥44px targets) are settled decisions — proceed. Full rule in
+  `docs/ui/implementation-plan.md`.
 - **Read the project's own rules before applying generic best practice.**
   This file, `specs.md` (the source of truth), `docs/error-handling.md`,
   `docs/waves.md`, `ARCHITECTURE.md`, and the per-directory `README.md`s.
@@ -359,7 +350,7 @@ These apply to any agent on this project, whatever it was asked to do.
   outside what you own. Report it and let the operator decide; do not edit
   another track's files, and do not silently widen your scope.
 
-## Review protocol (operator-owned, user-mandated 2026-08-19)
+## Review protocol (operator-owned)
 
 This is not optional and not per-wave — it applies to every track, in every
 session, and the operator/orchestrator owns running it.
@@ -370,10 +361,9 @@ session, and the operator/orchestrator owns running it.
    rewrites.
 2. **The reviewer looks for four things, not one:** bugs, **redundancy**,
    **optimization**, and **better approaches** than the one taken. A review
-   that only hunts correctness bugs is doing a quarter of the job — the
-   most valuable Wave 2 findings were a duplicated color table and a
-   defaulted parameter nobody passed, neither of which is a bug in the
-   "it crashes" sense.
+   that only hunts correctness bugs is doing a quarter of the job — a
+   duplicated lookup table or a defaulted parameter nobody passes is a real
+   finding even though neither is a bug in the "it crashes" sense.
 3. **The reviewer applies what it finds** when the fix is clearly correct
    and in scope. It does not merely report a list for someone else.
 4. **Anything delicate — a judgment call, a product decision, a
@@ -386,14 +376,11 @@ session, and the operator/orchestrator owns running it.
    never a section describing the review itself. Everything else goes in the
    commit message and the report.
 6. **A track's doc lines land in the same commit as its merge, never in a
-   batch at the end.** A track hands its `README.md` edits to the operator
-   (§1.2 of a wave plan makes those files operator-owned so parallel tracks
-   don't clobber each other) — and those drafts **rot**. Measured, not
-   feared: five sets sat unapplied at once on 2026-08-19 and two were
-   already wrong about the code they described, because later commits moved
-   it. A README that reads as trustworthy and is quietly wrong is worse than
-   one that was never written. If a draft is applied late anyway, **verify
-   every line against the current code first** rather than pasting it.
+   batch at the end.** An unapplied `README.md` draft rots — later commits
+   move the code it describes, and a README that reads as trustworthy but is
+   quietly wrong is worse than one that was never written. If a draft is
+   applied late anyway, **verify every line against the current code first**
+   rather than pasting it.
 7. **At the end of the whole batch, the operator launches a general review**
    across everything that landed, deliberately looking for what the
    per-track reviewers structurally _could not_ see: drift between tracks,
@@ -410,28 +397,19 @@ session, and the operator/orchestrator owns running it.
   operator applying a doc line. Concretely: **review passes get worktrees,
   and while any agent is running, the operator does not commit to `main`** —
   operator edits queue until every agent has returned. Never `git add -A` on
-  a shared checkout; stage named paths.
-  Measured, not feared. On 2026-08-25 the operator ran three review passes
-  directly on the `main` checkout while committing to it, and `git add -A`
-  swept a reviewer's uncommitted functional fix into an unrelated docs
-  commit (`specs.md` §10.49.2). Two of the three reviewers had to work
-  around it on their own and one refused to write its findings at all. The
-  lesson was then written down — **and the operator repeated it in the same
-  session**, committing to `main` while the cross-track review was live. A
-  rule that had just been recorded as the lesson was broken by the role
-  that recorded it, minutes later. That is why this is phrased as a
-  mechanical constraint ("no commits to `main` while an agent runs") and
-  not as advice to be careful.
+  a shared checkout; stage named paths. This is a mechanical constraint ("no
+  commits to `main` while an agent runs"), not advice to be careful — a
+  concurrent `git add -A` can silently sweep another agent's uncommitted
+  work into an unrelated commit.
 - Each task declares the files it owns (see the wave/track plan in
   `docs/waves.md`); do not edit files owned by another in-flight track.
 - `specs.md` edits from parallel tracks are **append-only**: add your own §10
-  subsection or §11/§12 lines, never rewrite someone else's. Same rule for
-  `docs/waves.md`'s worktree log.
+  subsection or §11 (backlog) lines, never rewrite someone else's. Same rule
+  for `docs/waves.md`'s worktree log.
 - Merge to `main` early and often (trunk-based, no `develop`); rebase your
   worktree on `main` before finishing.
 - Every agent in every track follows the Coding rules comment policy above
-  strictly: add a comment only when it is genuinely necessary to explain a
-  non-obvious _why_. No exceptions per-track.
+  strictly. No exceptions per-track.
 - **Log every worktree** you create in `docs/waves.md` "Worktree log" the
   moment you create it (path, branch, status `active`). When your track's
   branch merges to `main`, remove the worktree (`git worktree remove <path>`)
@@ -440,22 +418,19 @@ session, and the operator/orchestrator owns running it.
   `git worktree list` and prune anything stale (merged-but-not-removed, or
   present on disk but missing/finished in the log).
 - **A worktree under `.claude/worktrees/` is inside the repo, so it is inside
-  every default glob.** Neither `bun run test` nor `bun run lint` excluded it
-  until this bit: one active worktree turned the suite from 158 test
-  files into 472, running each in-flight branch's tests against `main`'s own
-  `node_modules` and failing 657 of them. `vite.config.ts`'s `test.exclude`
-  and the `lint` script's `--ignore-pattern` are what keep the done-gate
-  honest — a new tool that walks the tree needs the same exclusion, or
-  `bun run check` starts reporting another branch's state as this one's.
+  every default glob.** `vite.config.ts`'s `test.exclude` and the `lint`
+  script's `--ignore-pattern` are what keep an active worktree's own tests
+  from running against `main`'s `node_modules` as if they were this branch's
+  — a new tool that walks the tree needs the same exclusion, or `bun run
+check` starts reporting another branch's state as this one's.
 - **When drafting a wave's file-ownership table, hunt for the _unowned_ file
   two tracks will both want.** Assigning every file a track will edit is not
   enough: the expensive case is a shared file assigned to nobody, which each
-  track then correctly routes around by building its own copy of the thing.
-  Wave 3 stage 1 left `deviceStore.ts` unassigned and got three
-  device-scoped Dexie databases where one would do — no track was wrong, the
-  plan was. Ask explicitly which unassigned file two tracks in the same stage
-  will each want for different reasons, and resolve it at planning time
-  (`specs.md` §11, 2026-08-19).
+  track then correctly routes around by building its own copy of the thing —
+  two independent tracks each inventing their own version of the same store
+  is a planning failure, not a track failure. Ask explicitly which unassigned
+  file two tracks in the same stage will each want for different reasons, and
+  resolve it at planning time.
 - **Subagent model/effort:** always Sonnet 5, never downgrade to another
   model. Only two effort tiers — pick per task, don't default to `high` out
   of habit:

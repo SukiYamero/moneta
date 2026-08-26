@@ -8,13 +8,12 @@ user's Drive, the developer stores nothing.
 > The user-facing brand lives in `src/lib/branding.ts` (`APP_NAME`) and changes
 > freely — currently **KuroBello**. Storage identifiers (Drive folder, dexie DB,
 > lock HKDF info) are frozen at the 2026-08-18 baseline and do not follow later
-> renames ("Moneta", the old codename, survives only in git history and the
-> dated design docs).
+> renames.
 
 ## Where to start
 
 - **`specs.md`** — the source of truth: architecture, data model, security
-  model, feature specs, decisions log and backlog. Read it before touching code.
+  model, feature specs and backlog. Read it before touching code.
 - **`AGENTS.md`** — rules for AI coding agents (any model). `CLAUDE.md` just
   points there.
 - **`src/lib/schema.ts`** — the data contract. Import it, never redefine it.
