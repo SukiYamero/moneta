@@ -448,6 +448,22 @@ time. It goes away when you dismiss the pad. Do you want it suppressed on
 that field specifically, given our own keypad already makes it obvious where
 you are typing?
 
+### 23. Three more amount-field requests — `owner: user`
+
+Raised 2026-08-26, from your own three follow-up requests. All CONFIRMED in
+Chromium (real geometry/timers, not just jsdom); no iOS device is available
+here.
+
+1. Tapping the empty space beside the amount (or the currency symbol
+   itself) now hides the pad, for both a short and a long amount — not just
+   right at the phone's true edge.
+2. Holding the delete key now keeps deleting until you lift your finger,
+   move off the key, or reach an empty field.
+3. As the amount grows past 9 and 12 characters, the digits shrink a step
+   (measured ~28px and ~67px narrower than they'd otherwise be) so more of
+   a large number stays visible — the largest amounts still look the same
+   as before.
+
 ---
 
 ## Closed

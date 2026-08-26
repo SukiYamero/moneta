@@ -1,5 +1,13 @@
+import { useEffect, useRef, type Ref } from 'react'
 import { Delete } from 'lucide-react'
 import { cn } from '@/lib/utils'
+
+// Press-and-hold repeat timing for the delete key (amount field only, via
+// `deleteAutoRepeat` — see that prop). Values are the standard "OS key
+// repeat" shape: a longer initial delay so a normal tap never engages it,
+// then a much shorter interval while held.
+const DELETE_REPEAT_INITIAL_DELAY_MS = 450
+const DELETE_REPEAT_INTERVAL_MS = 80
 
 type PadKey =
   | { kind: 'digit'; digit: number }
@@ -63,9 +71,12 @@ export interface NumericKeypadProps {
   deleteDisabled?: boolean
   /** Disables every key, regardless of the per-key flags above (e.g. a submitting form). */
   disabled?: boolean
+  /** Press-and-hold repeat on the delete key. Opt-in: `PinPad` (4-digit PIN) never passes it, so its behavior is unchanged. */
+  deleteAutoRepeat?: boolean
   className?: string
   /** Key height — `'default'` (PIN-shaped callers) or `'compact'` (the amount field). */
   size?: NumericKeypadSize
+  ref?: Ref<HTMLDivElement>
 }
 
 /**
@@ -87,14 +98,74 @@ export const NumericKeypad = ({
   decimalDisabled,
   deleteDisabled,
   disabled,
+  deleteAutoRepeat,
   className,
   size = 'default',
+  ref,
 }: NumericKeypadProps) => {
   const keys = buildKeys(decimalLabel !== undefined)
   const keyShapeClass = cn(KEY_SHAPE_CLASS, KEY_HEIGHT_CLASS[size])
 
+  const isDeleteDisabled = disabled || deleteDisabled
+  // Read by the timers below, which outlive the render that scheduled them
+  // and must always act on the latest `onDelete`/disabled state, not a
+  // stale closure from the render at press-time.
+  const isDeleteDisabledRef = useRef(isDeleteDisabled)
+  isDeleteDisabledRef.current = isDeleteDisabled
+  const onDeleteRef = useRef(onDelete)
+  onDeleteRef.current = onDelete
+
+  const deleteRepeatTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const deleteRepeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  // Set once the hold has actually started repeating, so the `click` that
+  // still fires on release isn't read as a second, duplicate delete on
+  // top of what the hold itself already did.
+  const repeatEngagedRef = useRef(false)
+
+  const stopDeleteRepeat = () => {
+    if (deleteRepeatTimeoutRef.current !== null) {
+      clearTimeout(deleteRepeatTimeoutRef.current)
+      deleteRepeatTimeoutRef.current = null
+    }
+    if (deleteRepeatIntervalRef.current !== null) {
+      clearInterval(deleteRepeatIntervalRef.current)
+      deleteRepeatIntervalRef.current = null
+    }
+  }
+
+  useEffect(() => stopDeleteRepeat, [])
+
+  const handleDeletePointerDown = () => {
+    if (!deleteAutoRepeat || isDeleteDisabledRef.current) return
+    repeatEngagedRef.current = false
+    deleteRepeatTimeoutRef.current = setTimeout(() => {
+      if (isDeleteDisabledRef.current) return
+      repeatEngagedRef.current = true
+      onDeleteRef.current()
+      deleteRepeatIntervalRef.current = setInterval(() => {
+        if (isDeleteDisabledRef.current) {
+          stopDeleteRepeat()
+          return
+        }
+        onDeleteRef.current()
+      }, DELETE_REPEAT_INTERVAL_MS)
+    }, DELETE_REPEAT_INITIAL_DELAY_MS)
+  }
+
+  const handleDeleteClick = () => {
+    if (isDeleteDisabled) return
+    // The hold already deleted through this same tick's own `onDelete()`
+    // call — the release's `click` is not a second, fresh tap.
+    if (deleteAutoRepeat && repeatEngagedRef.current) {
+      repeatEngagedRef.current = false
+      return
+    }
+    onDelete()
+  }
+
   return (
     <div
+      ref={ref}
       className={cn('grid w-full grid-cols-3 gap-3', className)}
       // A key is activated with a tap/click, not by holding focus — but a
       // button's own default pointerdown action focuses it regardless,
@@ -109,15 +180,16 @@ export const NumericKeypad = ({
         if (key.kind === 'blank') return <div key={`blank-${i}`} aria-hidden="true" />
 
         if (key.kind === 'delete') {
-          const isDisabled = disabled || deleteDisabled
           return (
             <button
               key="delete"
               type="button"
-              aria-disabled={isDisabled}
-              onClick={() => {
-                if (!isDisabled) onDelete()
-              }}
+              aria-disabled={isDeleteDisabled}
+              onPointerDown={handleDeletePointerDown}
+              onPointerUp={stopDeleteRepeat}
+              onPointerLeave={stopDeleteRepeat}
+              onPointerCancel={stopDeleteRepeat}
+              onClick={handleDeleteClick}
               aria-label={deleteAriaLabel}
               className={cn(keyShapeClass, 'bg-border-subtle text-foreground')}
             >

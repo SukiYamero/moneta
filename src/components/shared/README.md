@@ -209,7 +209,9 @@ Categoria[]` prop (no default, same no-silent-fallback rule as
   a caller passes `decimalLabel`/`onDecimal`, otherwise a blank PIN-shaped
   cell. `size` (`'default'` | `'compact'`) picks the key height —
   `MovimientoAmountInput` passes `'compact'`, `PinPad` passes neither and
-  renders unaffected (specs.md §10.54).
+  renders unaffected (specs.md §10.54). `deleteAutoRepeat` opts the delete
+  key into press-and-hold repeat (`MovimientoAmountInput` only; `PinPad`
+  never passes it).
 - `TextField.tsx` — labelled text input: `Label`/`Input` association via
   `useId()` (or a caller-supplied `id`), `aria-invalid`/`aria-describedby`
   wired to an optional `error` rendered as `role="alert"`, 44px touch

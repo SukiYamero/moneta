@@ -263,6 +263,59 @@ describe('MovimientoAmountInput', () => {
     })
   })
 
+  describe('the digits shrink a step as the formatted amount grows', () => {
+    it('keeps the current largest size for a short amount', async () => {
+      const user = userEvent.setup()
+      render(<ControlledHarness locale="es-CO" moneda="COP" tipo="gasto" />)
+      const input = screen.getByLabelText('Monto')
+
+      await user.type(input, '1234567')
+
+      expect(input).toHaveValue('1.234.567')
+      expect(input).toHaveClass('text-[2.875rem]')
+    })
+
+    it('steps down once the formatted string passes 9 characters', async () => {
+      const user = userEvent.setup()
+      render(<ControlledHarness locale="es-CO" moneda="COP" tipo="gasto" />)
+      const input = screen.getByLabelText('Monto')
+
+      await user.type(input, '12345678')
+
+      expect(input).toHaveValue('12.345.678')
+      expect(input).toHaveClass('text-[2.5rem]')
+      expect(input).not.toHaveClass('text-[2.875rem]')
+    })
+
+    it('steps down a second time once the formatted string passes 12 characters', async () => {
+      const user = userEvent.setup()
+      render(<ControlledHarness locale="es-CO" moneda="COP" tipo="gasto" />)
+      const input = screen.getByLabelText('Monto')
+
+      await user.type(input, '1234567890')
+
+      expect(input).toHaveValue('1.234.567.890')
+      expect(input).toHaveClass('text-[2.1875rem]')
+      expect(input).not.toHaveClass('text-[2.5rem]')
+      expect(input).not.toHaveClass('text-[2.875rem]')
+    })
+
+    it('steps back up once digits are removed back below a threshold', async () => {
+      const user = userEvent.setup()
+      render(<ControlledHarness locale="es-CO" moneda="COP" tipo="gasto" />)
+      const input = screen.getByLabelText('Monto')
+
+      await user.type(input, '12345678')
+      expect(input).toHaveClass('text-[2.5rem]')
+
+      await user.clear(input)
+      await user.type(input, '123456')
+
+      expect(input).toHaveValue('123.456')
+      expect(input).toHaveClass('text-[2.875rem]')
+    })
+  })
+
   describe('caret placement across a live reformat', () => {
     it('does not send the caret to the end when a separator is inserted ahead of it', async () => {
       const user = userEvent.setup()
@@ -795,6 +848,52 @@ describe('MovimientoAmountInput', () => {
       dialogPanel.focus()
 
       expect(screen.getByRole('button', { name: '1' })).toBeInTheDocument()
+    })
+  })
+
+  describe('the dismiss-free zone is the input and the pad, not the whole field column', () => {
+    // Before this fix, the visible symbol/label sat inside the same
+    // `wrapperRef` column as the pad, so a tap there was read as "inside" —
+    // not just ignored, but actively refocusing the input to undo jsdom's
+    // own default blur-to-body, keeping the pad open (the user's report:
+    // the empty flanks beside a short amount never dismissed it either).
+    it('dismisses the pad on a tap on the visible currency symbol beside the input', async () => {
+      const user = userEvent.setup()
+      render(<ControlledHarness initialValue="7" locale="es-CO" moneda="COP" tipo="gasto" />)
+      const input = screen.getByLabelText('Monto')
+      await user.click(input)
+      expect(screen.getByRole('button', { name: '1' })).toBeInTheDocument()
+
+      await user.click(screen.getAllByText('$')[0]!)
+
+      expect(screen.queryByRole('button', { name: '1' })).not.toBeInTheDocument()
+      expect(input).not.toHaveFocus()
+    })
+
+    it('dismisses the pad on a tap on the label above the field', async () => {
+      const user = userEvent.setup()
+      render(<ControlledHarness locale="es-CO" moneda="COP" tipo="gasto" />)
+      const input = screen.getByLabelText('Monto')
+      await user.click(input)
+      expect(screen.getByRole('button', { name: '1' })).toBeInTheDocument()
+
+      await user.click(screen.getByText('Monto'))
+
+      expect(screen.queryByRole('button', { name: '1' })).not.toBeInTheDocument()
+      expect(input).not.toHaveFocus()
+    })
+
+    it('never dismisses on a tap that lands back on the input itself', async () => {
+      const user = userEvent.setup()
+      render(<ControlledHarness locale="es-CO" moneda="COP" tipo="gasto" />)
+      const input = screen.getByLabelText('Monto')
+      await user.click(input)
+      expect(screen.getByRole('button', { name: '1' })).toBeInTheDocument()
+
+      await user.click(input)
+
+      expect(screen.getByRole('button', { name: '1' })).toBeInTheDocument()
+      expect(input).toHaveFocus()
     })
   })
 

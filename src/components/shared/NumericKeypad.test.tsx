@@ -1,7 +1,10 @@
-import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest'
+import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { NumericKeypad } from '@/components/shared/NumericKeypad'
+
+const DELETE_REPEAT_INITIAL_DELAY_MS = 450
+const DELETE_REPEAT_INTERVAL_MS = 80
 
 describe('NumericKeypad', () => {
   it('renders digit buttons 0-9 and calls onDigit with the pressed digit', async () => {
@@ -194,6 +197,207 @@ describe('NumericKeypad', () => {
       const key = screen.getByRole('button', { name: '1' })
       expect(key).toHaveClass('min-h-13.25')
       expect(key).not.toHaveClass('min-h-15.5')
+    })
+  })
+
+  describe('press-and-hold auto-repeat on delete (deleteAutoRepeat)', () => {
+    // Raw Pointer Events, dispatched directly on the key — the same
+    // technique `MovimientoAmountInput.test.tsx` already uses for gesture
+    // sequencing — rather than `user.pointer()`: `userEvent`'s own internal
+    // waiting does not resolve once fake timers replace `setTimeout`.
+    const press = (key: HTMLElement) =>
+      key.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }))
+    const release = (key: HTMLElement) => {
+      key.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true }))
+      key.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    }
+
+    beforeEach(() => {
+      vi.useFakeTimers()
+    })
+
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('is off by default — holding the key still only calls onDelete once, the PIN pads’ own shape', () => {
+      const onDelete = vi.fn()
+      render(<NumericKeypad onDigit={() => {}} onDelete={onDelete} deleteAriaLabel="Delete" />)
+      const key = screen.getByRole('button', { name: 'Delete' })
+
+      press(key)
+      act(() =>
+        vi.advanceTimersByTime(DELETE_REPEAT_INITIAL_DELAY_MS + DELETE_REPEAT_INTERVAL_MS * 3),
+      )
+      release(key)
+
+      expect(onDelete).toHaveBeenCalledOnce()
+    })
+
+    it('calls onDelete once for a quick tap, below the initial delay', () => {
+      const onDelete = vi.fn()
+      render(
+        <NumericKeypad
+          onDigit={() => {}}
+          onDelete={onDelete}
+          deleteAriaLabel="Delete"
+          deleteAutoRepeat
+        />,
+      )
+      const key = screen.getByRole('button', { name: 'Delete' })
+
+      press(key)
+      act(() => vi.advanceTimersByTime(DELETE_REPEAT_INITIAL_DELAY_MS - 50))
+      release(key)
+
+      expect(onDelete).toHaveBeenCalledOnce()
+    })
+
+    it('keeps calling onDelete on an interval once the key has been held past the initial delay', () => {
+      const onDelete = vi.fn()
+      render(
+        <NumericKeypad
+          onDigit={() => {}}
+          onDelete={onDelete}
+          deleteAriaLabel="Delete"
+          deleteAutoRepeat
+        />,
+      )
+      const key = screen.getByRole('button', { name: 'Delete' })
+
+      press(key)
+      act(() => vi.advanceTimersByTime(DELETE_REPEAT_INITIAL_DELAY_MS))
+      expect(onDelete).toHaveBeenCalledTimes(1)
+
+      act(() => vi.advanceTimersByTime(DELETE_REPEAT_INTERVAL_MS * 3))
+      expect(onDelete).toHaveBeenCalledTimes(4)
+
+      // The release's own `click` is not a second, fresh tap on top of the hold.
+      release(key)
+      expect(onDelete).toHaveBeenCalledTimes(4)
+    })
+
+    it('stops repeating on pointercancel', () => {
+      const onDelete = vi.fn()
+      render(
+        <NumericKeypad
+          onDigit={() => {}}
+          onDelete={onDelete}
+          deleteAriaLabel="Delete"
+          deleteAutoRepeat
+        />,
+      )
+      const key = screen.getByRole('button', { name: 'Delete' })
+
+      press(key)
+      act(() => vi.advanceTimersByTime(DELETE_REPEAT_INITIAL_DELAY_MS))
+      const callsBeforeCancel = onDelete.mock.calls.length
+
+      key.dispatchEvent(new PointerEvent('pointercancel', { bubbles: true }))
+      act(() => vi.advanceTimersByTime(DELETE_REPEAT_INTERVAL_MS * 5))
+
+      expect(onDelete).toHaveBeenCalledTimes(callsBeforeCancel)
+    })
+
+    it('stops repeating once the pointer leaves the key', () => {
+      const onDelete = vi.fn()
+      render(
+        <NumericKeypad
+          onDigit={() => {}}
+          onDelete={onDelete}
+          deleteAriaLabel="Delete"
+          deleteAutoRepeat
+        />,
+      )
+      const key = screen.getByRole('button', { name: 'Delete' })
+
+      press(key)
+      act(() => vi.advanceTimersByTime(DELETE_REPEAT_INITIAL_DELAY_MS))
+      const callsBeforeLeaving = onDelete.mock.calls.length
+
+      // `pointerleave` doesn't bubble, so React implements `onPointerLeave`
+      // off `pointerout` + `relatedTarget` instead — a raw `pointerleave`
+      // dispatch never reaches it.
+      key.dispatchEvent(
+        new PointerEvent('pointerout', { bubbles: true, relatedTarget: document.body }),
+      )
+      act(() => vi.advanceTimersByTime(DELETE_REPEAT_INTERVAL_MS * 5))
+
+      expect(onDelete).toHaveBeenCalledTimes(callsBeforeLeaving)
+    })
+
+    it('stops repeating once there is nothing left to delete (deleteDisabled flips true mid-hold)', () => {
+      const onDelete = vi.fn()
+      const { rerender } = render(
+        <NumericKeypad
+          onDigit={() => {}}
+          onDelete={onDelete}
+          deleteAriaLabel="Delete"
+          deleteAutoRepeat
+        />,
+      )
+      const key = screen.getByRole('button', { name: 'Delete' })
+
+      press(key)
+      act(() => vi.advanceTimersByTime(DELETE_REPEAT_INITIAL_DELAY_MS))
+      const callsBeforeEmpty = onDelete.mock.calls.length
+
+      rerender(
+        <NumericKeypad
+          onDigit={() => {}}
+          onDelete={onDelete}
+          deleteAriaLabel="Delete"
+          deleteAutoRepeat
+          deleteDisabled
+        />,
+      )
+      act(() => vi.advanceTimersByTime(DELETE_REPEAT_INTERVAL_MS * 5))
+
+      expect(onDelete).toHaveBeenCalledTimes(callsBeforeEmpty)
+    })
+
+    it('never leaves a repeat timer running after unmount', () => {
+      const onDelete = vi.fn()
+      const { unmount } = render(
+        <NumericKeypad
+          onDigit={() => {}}
+          onDelete={onDelete}
+          deleteAriaLabel="Delete"
+          deleteAutoRepeat
+        />,
+      )
+      const key = screen.getByRole('button', { name: 'Delete' })
+
+      press(key)
+      act(() => vi.advanceTimersByTime(DELETE_REPEAT_INITIAL_DELAY_MS))
+      const callsBeforeUnmount = onDelete.mock.calls.length
+
+      unmount()
+
+      expect(() => act(() => vi.advanceTimersByTime(DELETE_REPEAT_INTERVAL_MS * 5))).not.toThrow()
+      expect(onDelete).toHaveBeenCalledTimes(callsBeforeUnmount)
+    })
+
+    it('never engages while the delete key is disabled', () => {
+      const onDelete = vi.fn()
+      render(
+        <NumericKeypad
+          onDigit={() => {}}
+          onDelete={onDelete}
+          deleteAriaLabel="Delete"
+          deleteAutoRepeat
+          deleteDisabled
+        />,
+      )
+      const key = screen.getByRole('button', { name: 'Delete' })
+
+      press(key)
+      act(() =>
+        vi.advanceTimersByTime(DELETE_REPEAT_INITIAL_DELAY_MS + DELETE_REPEAT_INTERVAL_MS * 3),
+      )
+      release(key)
+
+      expect(onDelete).not.toHaveBeenCalled()
     })
   })
 })
