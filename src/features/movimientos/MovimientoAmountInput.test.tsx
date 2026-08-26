@@ -321,22 +321,27 @@ describe('MovimientoAmountInput', () => {
       expect(screen.getByLabelText('Monto')).toHaveAttribute('inputMode', 'none')
     })
 
-    it("renders a decimal key labeled with the locale's own separator", () => {
+    it("renders a decimal key labeled with the locale's own separator, once the input is focused", async () => {
+      const user = userEvent.setup()
       render(<ControlledHarness locale="es-CO" moneda="COP" tipo="gasto" />)
+      await user.click(screen.getByLabelText('Monto'))
       expect(screen.getByRole('button', { name: 'Separador decimal' })).toHaveTextContent(',')
     })
 
-    it('renders the dot as the decimal key under a dot-decimal locale', () => {
+    it('renders the dot as the decimal key under a dot-decimal locale', async () => {
       // `locale` drives `Intl`-based number formatting; the UI copy (aria-label)
       // stays whatever `i18next`'s language is — forced to `es` in tests
       // (`src/test/setup.ts`) independently of the `locale` prop here.
+      const user = userEvent.setup()
       render(<ControlledHarness locale="en-US" moneda="USD" tipo="gasto" />)
+      await user.click(screen.getByLabelText('Monto'))
       expect(screen.getByRole('button', { name: 'Separador decimal' })).toHaveTextContent('.')
     })
 
     it('tapping digit keys appends through the same live-grouping pipeline as typing', async () => {
       const user = userEvent.setup()
       render(<ControlledHarness locale="es-CO" moneda="COP" tipo="gasto" />)
+      await user.click(screen.getByLabelText('Monto'))
 
       for (const digit of ['1', '2', '3', '4', '5', '6', '7']) {
         await user.click(screen.getByRole('button', { name: digit }))
@@ -348,6 +353,7 @@ describe('MovimientoAmountInput', () => {
     it('tapping the decimal key inserts the locale separator', async () => {
       const user = userEvent.setup()
       render(<ControlledHarness initialValue="12" locale="es-CO" moneda="COP" tipo="gasto" />)
+      await user.click(screen.getByLabelText('Monto'))
 
       await user.click(screen.getByRole('button', { name: 'Separador decimal' }))
       await user.click(screen.getByRole('button', { name: '5' }))
@@ -355,14 +361,18 @@ describe('MovimientoAmountInput', () => {
       expect(screen.getByLabelText('Monto')).toHaveValue('12,5')
     })
 
-    it('disables the decimal key once the value already has a separator', () => {
+    it('disables the decimal key once the value already has a separator', async () => {
+      const user = userEvent.setup()
       render(<ControlledHarness initialValue="12,5" locale="es-CO" moneda="COP" tipo="gasto" />)
+      await user.click(screen.getByLabelText('Monto'))
 
       expect(screen.getByRole('button', { name: 'Separador decimal' })).toBeDisabled()
     })
 
-    it('disables delete when the value is empty', () => {
+    it('disables delete when the value is empty', async () => {
+      const user = userEvent.setup()
       render(<ControlledHarness locale="es-CO" moneda="COP" tipo="gasto" />)
+      await user.click(screen.getByLabelText('Monto'))
 
       expect(screen.getByRole('button', { name: 'Borrar' })).toBeDisabled()
     })
@@ -370,6 +380,7 @@ describe('MovimientoAmountInput', () => {
     it('tapping delete removes the last digit through the same reformat pipeline as backspace', async () => {
       const user = userEvent.setup()
       render(<ControlledHarness initialValue="1.234" locale="es-CO" moneda="COP" tipo="gasto" />)
+      await user.click(screen.getByLabelText('Monto'))
 
       await user.click(screen.getByRole('button', { name: 'Borrar' }))
 
@@ -382,7 +393,7 @@ describe('MovimientoAmountInput', () => {
       const input = screen.getByLabelText('Monto') as HTMLInputElement
 
       // select "345" (indices 3 to 6) then tap delete
-      input.focus()
+      await user.click(input)
       input.setSelectionRange(3, 6)
       await user.click(screen.getByRole('button', { name: 'Borrar' }))
 
@@ -395,11 +406,70 @@ describe('MovimientoAmountInput', () => {
       const input = screen.getByLabelText('Monto') as HTMLInputElement
 
       // caret right after "1.2" (index 3, before "34")
-      input.focus()
+      await user.click(input)
       input.setSelectionRange(3, 3)
       await user.click(screen.getByRole('button', { name: '9' }))
 
       expect(input.value).toBe('12.934')
+    })
+  })
+
+  describe('keypad shows only while the amount field is focused', () => {
+    it('renders no keypad at all before the input is focused', () => {
+      render(<ControlledHarness locale="es-CO" moneda="COP" tipo="gasto" />)
+      expect(screen.queryByRole('button', { name: '1' })).not.toBeInTheDocument()
+    })
+
+    it('shows the keypad once the input is focused', async () => {
+      const user = userEvent.setup()
+      render(<ControlledHarness locale="es-CO" moneda="COP" tipo="gasto" />)
+
+      await user.click(screen.getByLabelText('Monto'))
+
+      expect(screen.getByRole('button', { name: '1' })).toBeInTheDocument()
+    })
+
+    it('hides the keypad once focus moves to an unrelated element entirely', async () => {
+      const user = userEvent.setup()
+      render(
+        <div>
+          <ControlledHarness locale="es-CO" moneda="COP" tipo="gasto" />
+          <input aria-label="Nota" />
+        </div>,
+      )
+      await user.click(screen.getByLabelText('Monto'))
+      expect(screen.getByRole('button', { name: '1' })).toBeInTheDocument()
+
+      await user.click(screen.getByLabelText('Nota'))
+
+      expect(screen.queryByRole('button', { name: '1' })).not.toBeInTheDocument()
+    })
+
+    it(
+      'keeps the keypad open — and the tap still registers — across a tap on one of its own keys: a naive ' +
+        'implementation that hides the pad on the input’s bare blur would unmount the very button being tapped ' +
+        'before its click fires',
+      async () => {
+        const user = userEvent.setup()
+        render(<ControlledHarness locale="es-CO" moneda="COP" tipo="gasto" />)
+        await user.click(screen.getByLabelText('Monto'))
+
+        await user.click(screen.getByRole('button', { name: '7' }))
+        await user.click(screen.getByRole('button', { name: '7' }))
+
+        expect(screen.getByRole('button', { name: '7' })).toBeInTheDocument()
+        expect(screen.getByLabelText('Monto')).toHaveValue('77')
+      },
+    )
+
+    it('keeps the keypad open when focus tabs from the input onto one of the pad’s own keys', async () => {
+      const user = userEvent.setup()
+      render(<ControlledHarness locale="es-CO" moneda="COP" tipo="gasto" />)
+      await user.click(screen.getByLabelText('Monto'))
+
+      await user.tab()
+
+      expect(screen.getByRole('button', { name: '1' })).toBeInTheDocument()
     })
   })
 })

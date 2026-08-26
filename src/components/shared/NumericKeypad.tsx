@@ -26,6 +26,18 @@ const buildKeys = (hasDecimal: boolean): PadKey[] => [
   { kind: 'delete' },
 ]
 
+// Shared shape for every key: the design export's own PIN padKeys grid
+// (docs/ui/design-export-add-sheet.md, `export/Moneta-standalone.html`) —
+// 62px-tall keys, 20px radius, a visible press state — ported to this app's
+// own overlay-tint tokens rather than the export's raw `--mn-f*` values.
+const KEY_SHAPE_CLASS =
+  'flex min-h-15.5 items-center justify-center rounded-3xl transition-colors active:bg-border-hover disabled:opacity-40'
+// Digit/decimal keys get the stronger of the two overlay tints (the
+// export's `--mn-f6`, this app's `--border`); delete gets the fainter one
+// (`--mn-f3`/`--border-subtle`) — the same two-tier weighting the export
+// itself uses, not an arbitrary choice.
+const NUMERAL_KEY_CLASS = 'bg-border text-[1.5rem] font-semibold text-foreground'
+
 export interface NumericKeypadProps {
   onDigit: (digit: number) => void
   onDelete: () => void
@@ -67,7 +79,17 @@ export const NumericKeypad = ({
   const keys = buildKeys(decimalLabel !== undefined)
 
   return (
-    <div className={cn('grid w-full grid-cols-3 gap-3', className)}>
+    <div
+      className={cn('grid w-full grid-cols-3 gap-3', className)}
+      // A key is activated with a tap/click, not by holding focus — but a
+      // button's own default pointerdown action focuses it regardless,
+      // which would blur whatever the caller actually wants focus to stay
+      // on (the amount input, so a focus-gated keypad doesn't unmount
+      // itself mid-tap). preventDefault here cancels only that default
+      // focus-shift; `click` still fires per the Pointer Events spec, so
+      // every key keeps working exactly as before.
+      onPointerDown={(event) => event.preventDefault()}
+    >
       {keys.map((key, i) => {
         if (key.kind === 'blank') return <div key={`blank-${i}`} aria-hidden="true" />
 
@@ -79,9 +101,9 @@ export const NumericKeypad = ({
               disabled={disabled || deleteDisabled}
               onClick={onDelete}
               aria-label={deleteAriaLabel}
-              className="flex min-h-14 items-center justify-center rounded-2xl text-foreground transition-colors active:bg-muted disabled:opacity-40"
+              className={cn(KEY_SHAPE_CLASS, 'bg-border-subtle text-foreground')}
             >
-              <Delete aria-hidden="true" className="size-5" />
+              <Delete aria-hidden="true" className="size-5.5 text-fg-tertiary" />
             </button>
           )
         }
@@ -94,7 +116,7 @@ export const NumericKeypad = ({
               disabled={disabled || decimalDisabled}
               onClick={onDecimal}
               aria-label={decimalAriaLabel}
-              className="flex min-h-14 items-center justify-center rounded-2xl bg-card text-xl font-semibold text-foreground transition-colors active:bg-muted disabled:opacity-40"
+              className={cn(KEY_SHAPE_CLASS, NUMERAL_KEY_CLASS)}
             >
               {decimalLabel}
             </button>
@@ -107,7 +129,7 @@ export const NumericKeypad = ({
             type="button"
             disabled={disabled || digitsDisabled}
             onClick={() => onDigit(key.digit)}
-            className="flex min-h-14 items-center justify-center rounded-2xl bg-card text-xl font-semibold text-foreground transition-colors active:bg-muted disabled:opacity-40"
+            className={cn(KEY_SHAPE_CLASS, NUMERAL_KEY_CLASS)}
           >
             {key.digit}
           </button>
