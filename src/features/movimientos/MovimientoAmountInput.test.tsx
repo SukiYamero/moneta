@@ -414,24 +414,6 @@ describe('MovimientoAmountInput', () => {
     })
   })
 
-  describe('the dismiss bar reuses the same close-and-blur mechanism as an outside tap', () => {
-    it('tapping the bar hides the pad and blurs the input, and a subsequent tap on the field reopens it', async () => {
-      const user = userEvent.setup()
-      render(<ControlledHarness locale="es-CO" moneda="COP" tipo="gasto" />)
-      const input = screen.getByLabelText('Monto')
-      await user.click(input)
-      expect(screen.getByRole('button', { name: '1' })).toBeInTheDocument()
-
-      await user.click(screen.getByRole('button', { name: 'Cerrar teclado' }))
-
-      expect(screen.queryByRole('button', { name: '1' })).not.toBeInTheDocument()
-      expect(input).not.toHaveFocus()
-
-      await user.click(input)
-      expect(screen.getByRole('button', { name: '1' })).toBeInTheDocument()
-    })
-  })
-
   describe("the keypad bleeds past the sheet's own side padding to the true screen edges", () => {
     // `BottomSheet`'s scrollable body applies `px-5.5` — the pad's wrapper
     // stops at that padded content edge, so without this, the ~22px strip
@@ -442,48 +424,22 @@ describe('MovimientoAmountInput', () => {
     // "the category picker" — nothing else lives there), so the fix moves
     // the pad's own DOM box to match what is visually there, via the
     // standard viewport-relative full-bleed technique, rather than
-    // widening the "outside" check with hand-measured geometry: jsdom has
-    // no layout engine to prove the resulting box reaches the true edges,
-    // so this only asserts the classes that produce that box are present.
-    it('renders with the full-bleed width/margin classes once open', async () => {
-      const user = userEvent.setup()
-      render(<ControlledHarness locale="es-CO" moneda="COP" tipo="gasto" />)
-      await user.click(screen.getByLabelText('Monto'))
-
-      // The bleed classes land on the outer container the dismiss bar and
-      // the grid share (`NumericKeypad`'s `onDismiss`-gated wrapper), one
-      // level up from the grid itself — not the grid's own `className`.
-      const grid = screen.getByRole('button', { name: '1' }).parentElement
-      const outer = grid?.parentElement
-      expect(outer?.className).toContain('w-[100dvw]')
-      expect(outer?.className).toContain('mx-[calc(50%-50dvw)]')
-    })
-
-    // jsdom has no layout engine — `getBoundingClientRect()` always returns
-    // zeros here, so a real pixel assertion ("the outer box reaches x=0/390
-    // while the keys sit at x=22/368") is not expressible in this suite; it
-    // would need a real browser (Playwright e2e), which this project has no
-    // infrastructure for yet (`bun run test` is vitest/jsdom only). This
-    // asserts the CSS mechanism that *produces* that geometry instead: the
-    // bleed lives on the outer box alone, and the grid — the direct parent
-    // of the keys — carries its own `px-5.5`, the same inset the rest of
-    // the sheet uses, so the keys render exactly where they did before the
-    // outer box ever moved. Regression coverage for the bug this guards
-    // against (the keys rendering flush against both screen edges, with
-    // zero margin, once the outer box went full-bleed) is genuinely a class
-    // assertion or nothing, given the constraint above.
-    it("insets the grid with the sheet's own padding, so bleeding the outer box to the edges doesn't also push the keys there", async () => {
+    // widening the "outside" check with hand-measured geometry. The grid
+    // itself — `NumericKeypad`'s only rendered element, once the dismiss
+    // bar is gone — carries both the bleed classes and the sheet's own
+    // `px-5.5` at once (`twMerge` resolves `w-full` vs `w-[100dvw]`, no
+    // separate wrapping box needed): jsdom has no layout engine to prove the
+    // resulting box reaches the true edges, so this only asserts the
+    // classes that produce that box are present.
+    it('renders with the full-bleed width/margin classes, and the same padding the rest of the sheet uses, on the one grid element', async () => {
       const user = userEvent.setup()
       render(<ControlledHarness locale="es-CO" moneda="COP" tipo="gasto" />)
       await user.click(screen.getByLabelText('Monto'))
 
       const grid = screen.getByRole('button', { name: '1' }).parentElement
-      const outer = grid?.parentElement
+      expect(grid?.className).toContain('w-[100dvw]')
+      expect(grid?.className).toContain('mx-[calc(50%-50dvw)]')
       expect(grid?.className).toContain('px-5.5')
-      // The inset lives on the grid, not duplicated onto the outer box —
-      // one and only one element bleeds to the edges.
-      expect(outer?.className).not.toContain('px-5.5')
-      expect(grid?.className).not.toContain('w-[100dvw]')
     })
   })
 
@@ -685,6 +641,71 @@ describe('MovimientoAmountInput', () => {
       expect(screen.getByRole('button', { name: '1' })).toBeInTheDocument()
 
       await user.pointer('[/MouseLeft]')
+      expect(screen.queryByRole('button', { name: '1' })).not.toBeInTheDocument()
+    })
+  })
+
+  describe('a gesture that starts on the pad never dismisses it, whatever the browser did with focus in between', () => {
+    // A tap that starts inside the pad's own wrapper — a key, the dead
+    // space between keys, the full-bleed side gutters — must never be read
+    // as "outside", even if focus drifts to some other focusable ancestor
+    // mid-gesture (e.g. a dialog panel this field is nested inside, via
+    // `tabIndex={-1}`) before the pointer lifts. Deciding from the
+    // gesture's own origin, captured once at `pointerdown`, rather than
+    // from whatever the DOM's focus state happens to be by `pointerup`,
+    // makes the pad robust to that class of in-between focus change
+    // without needing to know its exact cause.
+    it('stays open and restores focus to the input when a mid-gesture blur lands on a focusable ancestor outside the wrapper', async () => {
+      const user = userEvent.setup()
+      render(
+        // Stands in for `BottomSheet`'s own `role="dialog"` panel, which carries `tabIndex={-1}` for the same reason.
+        <div tabIndex={-1} data-testid="dialog-panel">
+          <ControlledHarness locale="es-CO" moneda="COP" tipo="gasto" />
+        </div>,
+      )
+      const input = screen.getByLabelText('Monto')
+      await user.click(input)
+      expect(screen.getByRole('button', { name: '1' })).toBeInTheDocument()
+
+      // The pad's own grid — the origin of a tap that lands in the dead
+      // space between keys rather than on any one of them.
+      const gridContainer = screen.getByRole('button', { name: '1' }).parentElement as HTMLElement
+      const dialogPanel = screen.getByTestId('dialog-panel')
+
+      gridContainer.dispatchEvent(
+        new PointerEvent('pointerdown', { bubbles: true, cancelable: true, pointerId: 1 }),
+      )
+      // Focus landing on an ancestor mid-gesture fires a genuine native
+      // `blur` on the input with `relatedTarget` set to that ancestor —
+      // exactly the DOM state a platform-driven focus shift would produce.
+      dialogPanel.focus()
+      gridContainer.dispatchEvent(
+        new PointerEvent('pointerup', { bubbles: true, cancelable: true, pointerId: 1 }),
+      )
+
+      expect(screen.getByRole('button', { name: '1' })).toBeInTheDocument()
+      expect(input).toHaveFocus()
+    })
+  })
+
+  describe('a keyboard user can still leave the pad', () => {
+    it('closes the pad when Tab moves focus past its last key with no pointer gesture involved', async () => {
+      const user = userEvent.setup()
+      render(
+        <div>
+          <ControlledHarness locale="es-CO" moneda="COP" tipo="gasto" />
+          <button type="button">After</button>
+        </div>,
+      )
+      const input = screen.getByLabelText('Monto')
+      await user.click(input)
+      expect(screen.getByRole('button', { name: '1' })).toBeInTheDocument()
+
+      // 9 digits + decimal + 0 = 11 tabbable keys (delete starts disabled,
+      // the value is empty) between the input and "After".
+      for (let i = 0; i < 12; i += 1) await user.tab()
+
+      expect(screen.getByRole('button', { name: 'After' })).toHaveFocus()
       expect(screen.queryByRole('button', { name: '1' })).not.toBeInTheDocument()
     })
   })

@@ -403,8 +403,7 @@
         },
         "keypad": {
           "deleteCta": "Borrar",
-          "decimalCta": "Separador decimal",
-          "dismissCta": "Cerrar teclado"
+          "decimalCta": "Separador decimal"
         }
       },
       "categoryError": "Elige una categoría",
