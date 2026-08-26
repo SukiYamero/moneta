@@ -2,11 +2,7 @@ import { useSyncExternalStore } from 'react'
 
 const QUERY = '(prefers-reduced-motion: reduce)'
 
-// jsdom (the test environment) has no matchMedia, and it's plausible on a
-// very old browser too — the global CSS override in index.css handles
-// every CSS transition/animation regardless, so this guard only needs to
-// cover recharts' JS-driven bar animation degrading gracefully to "not
-// reduced" rather than throwing.
+// jsdom has no matchMedia; also plausible on very old browsers.
 const supportsMatchMedia = (): boolean =>
   typeof window !== 'undefined' && typeof window.matchMedia === 'function'
 

@@ -11,13 +11,6 @@ import { GuestSignInButton } from '@/features/auth/GuestSignInButton'
 
 const firstNameOf = (fullName: string): string => fullName.trim().split(/\s+/)[0] ?? ''
 
-// Only a `'google'` profile can have a lapsed session to resume — a guest
-// reopening the app never sets the login marker that gates this screen in
-// the first place (specs.md §10.10), but a device that signed into Google
-// and *later* also used guest mode would otherwise resolve to the more
-// recently touched local profile via plain recency (`getActiveProfile()`),
-// misnaming the account on screen. Most-recently-used among `'google'`
-// profiles only.
 const mostRecentGoogleProfile = (profiles: ProfileRecord[]): ProfileRecord | null =>
   profiles
     .filter((p) => p.kind === 'google')
@@ -27,21 +20,6 @@ const mostRecentGoogleProfile = (profiles: ProfileRecord[]): ProfileRecord | nul
       null,
     )
 
-/**
- * specs.md §10.21: a returning user whose silent re-auth failed sees their
- * own name and a primary "continue with Google" action, never the first-run
- * pitch. Rendered by `RequireAuth` once the boot-time restore has settled
- * without reaching `'authenticated'`, for a device the login marker already
- * proves has signed in before.
- *
- * specs.md §10.37: a second action, "continue as guest," was added back
- * after §10.36 removed the redundant "use another account" — gated behind
- * a confirm dialog rather than a bare button, since tapping it rebinds the
- * app to a different, empty local profile (specs.md §10.15) while this
- * profile's real data stays untouched one profile over. The dialog is the
- * one place that says so; it does not repeat §10.21's forbidden first-run
- * pitch or legal copy.
- */
 export const ReturningUserScreen = () => {
   const { t } = useTranslation('auth')
   const status = useAuthStore((s) => s.status)
@@ -51,12 +29,6 @@ export const ReturningUserScreen = () => {
   const busy = status === 'authenticating'
   const [guestConfirmOpen, setGuestConfirmOpen] = useState(false)
 
-  // Device-local only (specs.md §11, 2026-08-19: `authStore.user` is empty
-  // here — there is no live session to have populated it from). Degrades to
-  // the generic copy while resolving or if the registry has nothing,
-  // instead of a blank name (§10.21's own edge case) — cosmetic-only, so
-  // showing the generic variant first and upgrading in place once resolved
-  // is not the class of flash §10.29 guards against.
   const [profile, setProfile] = useState<ProfileRecord | null>(null)
   useEffect(() => {
     void listProfiles().then((profiles) => setProfile(mostRecentGoogleProfile(profiles)))
@@ -64,14 +36,9 @@ export const ReturningUserScreen = () => {
 
   const name = profile?.label ?? ''
   const firstName = name ? firstNameOf(name) : ''
-  // `accountKey` is the OIDC `sub` on every live session (authStore.ts) —
-  // shown only when it happens to look like an email (a legacy/cached
-  // profile keyed on one) rather than ever displaying a raw numeric id as
-  // if it were one.
   const email = profile?.accountKey?.includes('@') ? profile.accountKey : null
 
   return (
-    // `min-h-full`, not `min-h-dvh`: overflows body's safe-area padding (specs.md §10.39).
     <main className="relative flex min-h-full flex-col overflow-hidden bg-background text-foreground">
       <div
         aria-hidden="true"

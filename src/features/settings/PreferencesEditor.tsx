@@ -15,31 +15,10 @@ export interface PreferencesEditorProps {
 
 const MONEDAS: Moneda[] = ['COP', 'USD', 'MXN', 'ARS', 'BRL', 'PEN']
 
-// Matches `PreferencesSection.tsx`'s own row order (Tema first) — its
-// `claro`/`oscuro`/`sistema` labels already existed in `profile`'s locale
-// block, unused until now (Prerequisite 3, specs.md §10.24/§10.30).
 const THEMES: Theme[] = ['claro', 'oscuro', 'sistema']
 
-// "Seguir el dispositivo" isn't a `SupportedLocale` — it's the choice that
-// writes `idioma` back to `undefined` (specs.md §10.24's "absence means
-// follow the device"). Modeled as its own member of the picker's value
-// type rather than overloading `undefined` as an `OptionList` value, which
-// `OptionList<T extends string>` can't represent anyway.
 type LocaleChoice = SupportedLocale | 'device'
 
-/**
- * The four writable preferences: `tema` (specs.md §10.30 — the picker
- * Prerequisite 3 withheld until a real light theme existed),
- * `primerDiaSemana` as a two-option `SegmentedControl` (matches the
- * design's ask exactly — this is the one preference that genuinely fits a
- * pill toggle), `idioma` and `monedaPrincipal` as `OptionList`s. Purely
- * controlled: `SettingsScreen` owns the write (`dataStore.updateConfig`),
- * this component only ever calls `onChange` with the patch — no store
- * import here, so it stays testable with a plain prop in/callback out
- * contract. Applying `tema` to the document is `syncStoredTheme.ts`'s job
- * (a `dataStore` subscription), not this component's — same division as
- * `idioma`/`syncStoredLocale.ts`.
- */
 export const PreferencesEditor = ({ preferencias, onChange }: PreferencesEditorProps) => {
   const { t } = useTranslation(['settings', 'profile'])
 

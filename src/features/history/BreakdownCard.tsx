@@ -19,18 +19,7 @@ export interface BreakdownCardProps {
   bdType: TipoMovimiento
   onBdTypeChange: (tipo: TipoMovimiento) => void
   moneda: Moneda
-  /**
-   * `Config.categorias` — required, no default: `entry.key` is a category id
-   * when `breakdown` was grouped by `'categoria'` (specs.md §10.22), so
-   * resolving it to a name/icon/color needs this in scope from the caller.
-   */
   categorias: Categoria[]
-  /**
-   * Currencies present in the viewed period other than `moneda`
-   * (`movimientoStats.otherCurrencies`, specs.md §10.27) — `totals`/
-   * `breakdown` above already exclude these; empty in the common case
-   * where nothing needs to render.
-   */
   otherCurrencies: Moneda[]
 }
 
@@ -65,10 +54,6 @@ export const BreakdownCard = ({
   const emptyMessage =
     bdType === 'ingreso' ? t('breakdown.emptyIngreso') : t('breakdown.emptyGasto')
 
-  // `Intl.ListFormat`, not a hand-joined string: "USD and MXN" vs "USD, MXN
-  // y BRL" is locale-specific punctuation/conjunction data, the same reason
-  // `formatMonto` builds off `formatToParts` rather than string-prepending
-  // (specs.md §10.7).
   const otherCurrenciesLabel =
     otherCurrencies.length > 0
       ? new Intl.ListFormat(locale, { style: 'short', type: 'conjunction' }).format(otherCurrencies)

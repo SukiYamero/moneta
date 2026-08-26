@@ -8,12 +8,6 @@ export interface PeriodPickerRowProps {
   'aria-label': string
 }
 
-/**
- * Horizontally scrollable chip strip shared by the day/week/month pickers
- * (`historyPeriodOptions.ts` builds the options; `year` has no strip of its
- * own, only the year menu). Auto-centers the selected chip like the design's
- * own scroll-to-selection behavior.
- */
 export const PeriodPickerRow = ({
   options,
   onSelect,
@@ -22,11 +16,8 @@ export const PeriodPickerRow = ({
   const selectedRef = useRef<HTMLButtonElement | null>(null)
 
   useEffect(() => {
-    // jsdom (tests) has no scrollIntoView implementation at all — guard
-    // rather than assume every environment has it.
+    // jsdom has no scrollIntoView implementation.
     selectedRef.current?.scrollIntoView?.({ inline: 'center', block: 'nearest' })
-    // Re-center only when the picker's own option set changes shape (e.g. a
-    // different month/year of chips), not on every unrelated re-render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [options])
 

@@ -8,19 +8,6 @@ import { loginErrorCopy } from '@/features/auth/errorCopy'
 import { ProfileSectionHeading } from '@/features/profile/ProfileSectionHeading'
 import { useSignOutConfirm } from '@/features/profile/useSignOutConfirm'
 
-/**
- * The door §10.18 exists for: a signed-in Google account with a real
- * sign-out, or an honest "Invitado" state with the sign-in row that is
- * guest mode's only exit (specs.md §10.10). Both the CTA and its error
- * copy are read from the `auth` namespace, not duplicated into `profile`
- * — it's the exact same `login()` action `WelcomeScreen` already exposes,
- * just reachable from a second place.
- *
- * Sign-out itself goes through `useSignOutConfirm` (specs.md §10.20): with
- * Drive connected, or with nothing unsynced, it signs out directly — the
- * confirm dialog only interrupts when local data would otherwise be left
- * feeling stranded.
- */
 export const IdentitySection = () => {
   const { t } = useTranslation('profile')
   const { t: tAuth } = useTranslation('auth')

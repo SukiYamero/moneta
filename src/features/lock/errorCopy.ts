@@ -1,28 +1,12 @@
 import { LOCKED_OUT_ERROR, NO_SESSION_ERROR, SESSION_RESTORE_ERROR } from '@/lib/lockStore'
 import type es from '@/lib/i18n/locales/es.json'
 
-// Maps a raw pinLock.ts/lockStore.ts error message (English, developer-
-// facing) to a translation key in the `lock` namespace's `errors` group —
-// never Spanish copy directly, the same pattern `src/features/auth/errorCopy.ts`
-// already established. docs/error-handling.md §7: never render `.message`
-// raw in the DOM. Keyed by message, not a `code`:
-// `WrongPinError`/`LockedOutError`/`BiometricUnavailableError` don't carry
-// one (each is checked with `instanceof` at its one call site,
-// `lockStore.resume` — docs/error-handling.md §1), and `useLockStore.error`
-// collapses them to fixed message strings before a component ever sees them.
 type LockErrorKey = `errors.${keyof typeof es.lock.errors}`
 
 const UNLOCK_ERROR_KEY: Record<string, LockErrorKey> = {
-  // Not LockedOutError's own message ('lock: too many attempts') —
-  // lockStore.resume() substitutes its own string, so key off the exported
-  // constant: a rename there is a compile error, not silent drift.
   [LOCKED_OUT_ERROR]: 'errors.lockedOut',
   'lock: wrong pin': 'errors.wrongPin',
   'lock: biometric unavailable': 'errors.biometricUnavailable',
-  // GuestBiometricUnavailableError's own message (pinLock.ts) — the guest
-  // path (specs.md §10.2.1) has no PIN to fall back to, so this reuses the
-  // account path's "biometrics aren't available" copy rather than adding a
-  // near-duplicate locale key for the same meaning.
   'lock: guest biometric unavailable': 'errors.biometricUnavailable',
   [SESSION_RESTORE_ERROR]: 'errors.sessionRestoreFailed',
 }

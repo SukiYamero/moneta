@@ -7,9 +7,6 @@ import { useHasOpenOverlay } from '@/components/shared/useOverlay'
 const ACTIVE_STROKE = 2.5
 const INACTIVE_STROKE = 2
 
-// Lucide has no filled variant (design uses ph vs ph-fill for active/inactive,
-// docs/ui/design-tokens.md) — active state is expressed with the primary
-// token color plus a heavier strokeWidth instead.
 const NavTab = ({ to, icon: Icon, label }: { to: string; icon: LucideIcon; label: string }) => {
   return (
     <NavLink
@@ -36,34 +33,14 @@ const NavTab = ({ to, icon: Icon, label }: { to: string; icon: LucideIcon; label
 }
 
 export interface BottomNavProps {
-  /** Whether the profile sheet the Profile slot opens is currently open — drives its active-tab styling. */
   profileOpen: boolean
   onOpenProfile: () => void
-  /** Whether the Add-movimiento sheet the centre slot opens is currently open — drives its active-tab styling, same as Profile. */
   addOpen: boolean
   onOpenAdd: () => void
 }
 
-/**
- * Persistent tab bar for '/', '/search' and '/history' (mounted once by
- * AppShell, never remounted on tab change — see docs/wave-2/track-l.md for
- * why that persistence matters for the push/fade transitions to read as
- * native). Five design slots: Home/History/Search are real NavLinks
- * (`aria-current="page"` comes from NavLink itself); Profile and the centre
- * Add button both open a sheet that lives in `AppShell.tsx`/
- * `src/features/**`, not here — `src/components/shared/**` is
- * feature-agnostic building blocks that features/routes compose, so this
- * file takes callbacks rather than importing the feature and inverting
- * that dependency direction (specs.md §10.18, §10.23).
- */
 export const BottomNav = ({ profileOpen, onOpenProfile, addOpen, onOpenAdd }: BottomNavProps) => {
   const { t } = useTranslation('nav')
-  // specs.md §10.53: a modal overlay must never let this show through —
-  // hidden via opacity/pointer-events, not unmounted, so `useOverlay`'s
-  // close-time focus restore (e.g. back to this file's own Add FAB) still
-  // has a real, focusable element to land on the instant the overlay closes,
-  // before this hook's own re-render has caught up and made it visible
-  // again.
   const hasOpenOverlay = useHasOpenOverlay()
 
   return (

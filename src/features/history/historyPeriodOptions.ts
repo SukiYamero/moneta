@@ -15,7 +15,6 @@ import type { Movimiento, Periodo } from '@/lib/schema'
 import { type DateRange, filterByRange, periodRange, toIsoDate } from '@/lib/movimientoStats'
 
 export interface PeriodOption {
-  /** ISO `yyyy-mm-dd` — any date that resolves back to this option's own period via `periodRange`. */
   iso: string
   label: string
   caption?: string
@@ -26,14 +25,12 @@ export interface PeriodOption {
 const hasMovements = (movimientos: Movimiento[], range: DateRange): boolean =>
   filterByRange(movimientos, range).length > 0
 
-/** Years present in the data, plus the current year so the menu is never empty, newest first. */
 export const buildYearOptions = (movimientos: Movimiento[], today: Date): number[] => {
   const years = new Set(movimientos.map((m) => Number(m.fecha.slice(0, 4))))
   years.add(getYear(today))
   return [...years].toSorted((a, b) => b - a)
 }
 
-/** Every day of `anchor`'s month, for the `dia` scope's picker strip. */
 export const buildDayOptions = (
   movimientos: Movimiento[],
   anchor: string,
@@ -53,12 +50,6 @@ export const buildDayOptions = (
   })
 }
 
-/**
- * Every calendar week overlapping `anchor`'s month (honouring
- * `primerDiaSemana`), for the `semana` scope's picker strip. Each option's
- * own bounds come from `periodRange`, never hand-rolled, so a picker chip
- * can never disagree with the range it jumps to.
- */
 export const buildWeekOptions = (
   movimientos: Movimiento[],
   anchor: string,
@@ -82,7 +73,6 @@ export const buildWeekOptions = (
   })
 }
 
-/** Every month of `anchor`'s year, for the `mes` scope's picker strip. */
 export const buildMonthOptions = (
   movimientos: Movimiento[],
   anchor: string,

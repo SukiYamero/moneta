@@ -11,13 +11,6 @@ const KIND_ICON: Record<ProfileKind, LucideIcon> = {
   google: Cloud,
 }
 
-/**
- * The device-scoped registry (specs.md §10.15), now with a real switcher
- * (specs.md §10.31): tapping any non-active profile rebinds the app to it —
- * no PIN (decided by the user: the PIN gates opening the app, not moving
- * inside it), no confirmation for an ordinary switch. Renders even for a
- * single profile — this is how the user learns the concept exists.
- */
 export const ProfilesSection = () => {
   const { t } = useTranslation('profile')
   const {
@@ -30,11 +23,6 @@ export const ProfilesSection = () => {
     dismissGoneProfile,
     removeGoneProfile,
   } = useProfiles()
-  // Tier 2, gated by the same anti-flash rule every other section's loading
-  // state uses (specs.md §10.9) — `status` was already read from the
-  // registry but nothing consumed it, so a slow read (a cold IndexedDB open
-  // on a throttled device) rendered a bare, item-less list instead of the
-  // shared Skeleton treatment `HomeLoadingState` already models.
   const showSkeleton = usePendingDelay(status === 'loading')
 
   const ownerLabel = (profile: ProfileRecord): string =>

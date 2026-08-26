@@ -1,11 +1,8 @@
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
-// Official "Sign in with Google" button surface: fixed white/near-black per
-// Google's own brand guidelines, not our app palette — deliberate exception
-// (docs/ui/design-tokens.md), shared by `WelcomeScreen` and
-// `ReturningUserScreen` so the two never drift into two different-looking
-// "Google" buttons.
+// Google's Sign-In brand guidelines require this fixed white/near-black
+// surface, not the app palette.
 const GoogleGlyph = () => (
   <svg width="22" height="22" viewBox="0 0 48 48" aria-hidden="true">
     <path
@@ -33,7 +30,6 @@ interface GoogleSignInButtonProps {
   children: ReactNode
 }
 
-/** Shared "Continue/Sign in with Google" button: the fixed white surface plus the G mark, swapped for a busy label mid-flight. */
 export const GoogleSignInButton = ({ onClick, busy, children }: GoogleSignInButtonProps) => {
   const { t } = useTranslation('auth')
 

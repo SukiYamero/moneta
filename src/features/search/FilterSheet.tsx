@@ -25,12 +25,6 @@ const SectionHeading = ({ children }: { children: string }) => (
   <h3 className="mb-2.5 text-xs font-bold tracking-wide text-fg-tertiary uppercase">{children}</h3>
 )
 
-/**
- * The Filter sheet: date-range presets + calendar, type, tags. No separate
- * "apply" — every tap commits straight into `useSearchFilters`'s shared
- * state, so `SearchScreen`'s result list (and this sheet's own "Ver N"
- * button) update live as the user filters, matching the source design.
- */
 export const FilterSheet = ({
   open,
   onClose,

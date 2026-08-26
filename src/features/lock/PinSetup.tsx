@@ -11,19 +11,11 @@ import { PIN_LENGTH, PinPad } from '@/features/lock/PinPad'
 export interface PinSetupProps {
   open: boolean
   onClose: () => void
-  /** Resolves `setup.kickerNew`/`setup.kickerChange` — the export's own `pinSetupKicker` (specs.md §10.2). */
   mode: 'new' | 'change'
 }
 
 type Step = 'create' | 'confirm'
 
-/**
- * Full-screen create/confirm PIN flow (design export §4) — same shell as
- * `LockScreen`, push-in animated, X-close. "Change PIN" reuses the same
- * `enable()` call as first-time setup: it always writes a brand-new vault
- * (fresh DEK, re-wrapped envelopes), which is already the correct behavior
- * for changing a PIN, not a distinct code path.
- */
 export const PinSetup = ({ open, onClose, mode }: PinSetupProps) => {
   const { t } = useTranslation('lock')
   const enable = useLockStore((s) => s.enable)
@@ -35,19 +27,7 @@ export const PinSetup = ({ open, onClose, mode }: PinSetupProps) => {
   const [mismatch, setMismatch] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
-  // Mirrors `LockScreen`'s `AccountLockScreen` guard: `submitting` alone
-  // disables the pad/input/toggle in the DOM, but the effect below still
-  // re-runs on every `biometric` change, and disabling every input that
-  // could flip a dependency is easy to miss (the toggle already did, once —
-  // see its own `disabled={submitting}`). A ref checked at the top of the
-  // effect is the one guard that can't be bypassed by a future input this
-  // effect gains a dependency on.
   const submittingRef = useRef(false)
-  // `useOverlay`'s default initial focus is the panel's first focusable
-  // descendant (the X-close button, which sits before the hidden PIN
-  // input in DOM order) — steered here instead, at the actual PIN input,
-  // so the one-rAF-later focus programmatically lands where PIN entry
-  // (keyboard/screen-reader) is expected, not one tab stop away from it.
   const inputRef = useRef<HTMLInputElement>(null)
 
   const resetLocal = () => {
@@ -98,10 +78,6 @@ export const PinSetup = ({ open, onClose, mode }: PinSetupProps) => {
         submittingRef.current = false
         setSubmitting(false)
       })
-    // resetLocal/onClose/enable are stable across a single setup session's
-    // re-renders in practice; re-running this effect only on the values that
-    // actually change (pin, step, firstPin, biometric) keeps a stray parent
-    // re-render from re-firing an already-submitted attempt.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pin, step, firstPin, biometric])
 
@@ -144,12 +120,7 @@ export const PinSetup = ({ open, onClose, mode }: PinSetupProps) => {
           <PinDots length={PIN_LENGTH} filled={pin.length} error={hasError} />
           <input
             ref={inputRef}
-            // `initialFocus` above lands here synchronously on open — see
-            // `useOverlay`'s own comment on why that timing exists at all.
-            // `sr-only` keeps the box real and focusable (not display:none),
-            // so without inputMode="none" that focus call raises the OS
-            // keyboard on top of `PinPad`, the keypad this screen actually
-            // shows; same fix shape as the amount field (specs.md §10.54).
+            // Without inputMode="none", focusing this input opens the OS on-screen keyboard.
             inputMode="none"
             pattern="\d*"
             maxLength={PIN_LENGTH}

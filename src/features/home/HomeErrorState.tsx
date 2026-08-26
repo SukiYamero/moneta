@@ -8,8 +8,6 @@ export interface HomeErrorStateProps {
   onRetry: () => void
 }
 
-/** Inline, on this screen — dataStore.load() owns Home's data, so its
- * failure lands here, not a toast (docs/error-handling.md §7). */
 export const HomeErrorState = ({ code, onRetry }: HomeErrorStateProps) => {
   const { t } = useTranslation('home')
 

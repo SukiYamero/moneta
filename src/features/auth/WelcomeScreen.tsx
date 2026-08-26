@@ -15,15 +15,6 @@ export const WelcomeScreen = () => {
   const busy = status === 'authenticating'
 
   return (
-    // `min-h-full`, not `min-h-dvh` (specs.md §10.34): `body` already pads
-    // by `env(safe-area-inset-top/bottom)`, so a `min-h-dvh` root here would
-    // be forced to at least the full viewport height while sitting inside a
-    // `body` content box already shrunk by that same inset — overflowing it,
-    // and forcing the whole page to scroll, by exactly the inset amount on
-    // any real notched/home-indicator device. `min-h-full` resolves against
-    // the real ancestor chain (`html`/`body`/`#root` are all `height: 100%`)
-    // instead of the raw viewport, so it can never demand more room than
-    // `body`'s own padded content box actually has.
     <main className="relative flex min-h-full flex-col overflow-hidden bg-background text-foreground">
       <div
         aria-hidden="true"
@@ -46,14 +37,6 @@ export const WelcomeScreen = () => {
         <GoogleSignInButton onClick={() => void login()} busy={busy}>
           {t('welcome.googleCta')}
         </GoogleSignInButton>
-        {/* Generous separation (specs.md §10.10): the divider's own my-3
-            margin stacks on top of the container's gap-4, so the guest
-            choice reads as a second, distinct zone rather than one more
-            item in the button stack above it — tighter than an earlier
-            my-6 (specs.md §10.34), because guaranteeing zero scroll on a
-            ~360×640 viewport with an inline error showing now outranks
-            the widest possible gap; it stays visibly more separated than
-            the plain gap-4 between every other item in the stack. */}
         <div className="my-3 flex items-center gap-3" aria-hidden="true">
           <span className="h-px flex-1 bg-border-subtle" />
           <span className="text-xs font-semibold tracking-wide text-fg-disabled uppercase">

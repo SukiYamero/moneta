@@ -13,15 +13,6 @@ export interface LockSettingsProps {
   onClose: () => void
 }
 
-/**
- * The account PIN lock's full-screen settings panel (design export §4),
- * reached by tapping the "Bloqueo con PIN" row in `SecuritySection`. Turning
- * the toggle off reuses `lockStore.reset()` — the same vault-wipe +
- * forced-relogin action "Olvidé mi PIN" offers on `LockScreen` — matching
- * the behavior the prior `/kit`-only harness already shipped and tested:
- * this is a PIN-lock feature, not a general app setting, so removing it
- * removes the one thing the vault exists to cache (specs.md §10.2).
- */
 export const LockSettings = ({ open, onClose }: LockSettingsProps) => {
   const { t } = useTranslation('lock')
   const titleId = useId()

@@ -11,15 +11,6 @@ export type MovimientoFormMode = 'create' | 'edit'
 
 export type AmountErrorReason = Exclude<ParsedAmount, { ok: true }>['reason']
 
-/**
- * The seam stage 3 (voice) wires a parser into (specs.md §10.23 Decision
- * 5) — a single entry point that sets already-typed field values, so a
- * future voice-command parser adds a button and a parser without
- * restructuring this hook. `categoriaId` must already be a real category
- * id (matching a spoken name against the taxonomy is the parser's job,
- * not this hook's); `seccionId` is derived from it via `categorias`, the
- * same as `selectCategoria`.
- */
 export interface MovimientoFormPatch {
   tipo?: TipoMovimiento
   monto?: number
@@ -30,14 +21,10 @@ export interface MovimientoFormPatch {
 
 export interface UseMovimientoFormArgs {
   mode: MovimientoFormMode
-  /** The movement being edited — required (and read) only when `mode === 'edit'`. */
   initial?: Movimiento
-  /** BCP-47, from `useLocaleFormatting()` — no default, same convention as `MovimientoRow`. */
   locale: string
   monedaPrincipal: Moneda
-  /** Every category (archived or not) — resolves `applyParsedFields`'s `categoriaId` to a `seccionId`. */
   categorias: Categoria[]
-  /** Called once the write has actually committed (specs.md §10.23 Decision 3) — never on a refused or failed write, so the caller only closes/returns to view when there is really nothing left to lose. */
   onSaved: () => void
 }
 
@@ -46,22 +33,17 @@ export interface UseMovimientoFormResult {
   setTipo: (tipo: TipoMovimiento) => void
   amountRaw: string
   setAmountRaw: (raw: string) => void
-  /** `undefined` until a submit has actually been attempted — a blank field showing an error on first render is not the UX a validation exists for. */
   amountErrorReason?: AmountErrorReason
   fecha: string
   setFecha: (iso: string) => void
-  /** The id that will be written — kept even when it doesn't resolve against `categorias` (specs.md §10.22: edit never silently reassigns it). */
   categoriaId?: string
-  /** `CategoryPicker`'s `onSelect` hands back the full `Categoria` — this sets both `categoriaId` and the `seccionId` derived from it in one call, per specs.md §10.22 ("seccion is not picked, it is derived"). */
   selectCategoria: (categoria: Categoria) => void
   categoriaMissing: boolean
   nota: string
   setNota: (value: string) => void
   submitting: boolean
   submit: () => Promise<void>
-  /** Increments on every `submit()` call, blocked or not — unlike `amountErrorReason`/`categoriaMissing`, this changes even when the same invalid state is hit twice in a row, so a view can key an effect off it to react to a fresh tap rather than the (unchanged) derived error flags. */
   submitAttempts: number
-  /** Discards whatever is typed and returns to `mode`'s defaults — used when a create sheet is dismissed without saving. */
   reset: () => void
   applyParsedFields: (patch: MovimientoFormPatch) => void
 }
@@ -102,13 +84,6 @@ const defaultsFor = (
   }
 }
 
-/**
- * Field state, validation and submit — the only place either
- * `AddMovimientoSheet` or `MovimientoSheet`'s edit mode writes a movement
- * (specs.md §10.23 Decision 1). Money-adjacent (validates and writes
- * `Movimiento.monto`/`categoria`/`seccion`), so covered start-to-finish by
- * TDD per `AGENTS.md`.
- */
 export const useMovimientoForm = ({
   mode,
   initial,
@@ -122,11 +97,6 @@ export const useMovimientoForm = ({
 
   const [fields, setFields] = useState<FormFields>(() => defaultsFor(mode, initial, locale))
   const [submitting, setSubmitting] = useState(false)
-  // Only set once the user actually tries to save — an empty amount field
-  // showing "ingresá un monto" before a single keystroke is nagging, not
-  // validation (matches CategoryFormModal's own disabled-until-valid Save,
-  // just surfaced as an inline message instead since this form has more
-  // than one required field).
   const [attempted, setAttempted] = useState(false)
   const [submitAttempts, setSubmitAttempts] = useState(0)
 

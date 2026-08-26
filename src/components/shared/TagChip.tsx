@@ -7,13 +7,6 @@ import { TINT_CLASSES } from '@/components/shared/tintClasses'
 export interface TagChipProps {
   icon: LucideIcon
   label: string
-  /**
-   * The category's color family (`movimientoView.getMovimientoVisual`'s
-   * `tint`, or its type-based fallback) — TagChip only paints it, it never
-   * maps a category to a color itself. Required, not defaulted: a call
-   * site that forgets to pass it is a compile error rather than silently
-   * rendering the old uniform-primary look.
-   */
   tint: IconAvatarTint
   selected?: boolean
   disabled?: boolean
@@ -22,15 +15,6 @@ export interface TagChipProps {
   ref?: Ref<HTMLButtonElement>
 }
 
-/**
- * Icon + name pill, used for category/tag selection everywhere (Add sheet,
- * Filter sheet, Tag picker…). The visible pill stays at its designed size;
- * the button itself grows to the 44px touch-target floor via invisible
- * padding (same split used by Toggle/InfoButton) so the tap target doesn't
- * inflate the pill. The icon always carries the category's tint; selecting
- * tints the whole pill in that same family, replacing the old uniform
- * `primary` treatment.
- */
 export const TagChip = ({
   icon: Icon,
   label,

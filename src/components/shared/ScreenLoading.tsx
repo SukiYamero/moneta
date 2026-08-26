@@ -3,22 +3,13 @@ import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 
 export interface ScreenLoadingProps {
-  /** Overrides the default `min-h-full` — used by the `/kit` gallery to preview this at a bounded height. */
   className?: string
 }
 
-/**
- * Tier 1 (specs.md §10.9): full-screen, brand-consistent loading for boot
- * and lazy-route `Suspense` fallbacks — never for a tab change, which has
- * no data wait (`dataStore.load()` is once-per-session). No props required
- * for its real callers (boot's `RequireAuth`, `router.tsx`'s lazy `/kit`
- * `Suspense` boundary), so it drops in unchanged wherever Tier 1 is needed.
- */
 export const ScreenLoading = ({ className }: ScreenLoadingProps = {}) => {
   const { t } = useTranslation('common')
 
   return (
-    // `min-h-full`, not `min-h-dvh`: overflows body's safe-area padding (specs.md §10.39).
     <div
       className={cn(
         'flex min-h-full flex-col items-center justify-center gap-6 bg-background px-8 text-center text-foreground',

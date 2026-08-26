@@ -1,8 +1,6 @@
 import { Wallet } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
-/** No movements at all yet — a real screen (a brand-new user hits this
- * every time), not a fallback bolted onto the happy path. */
 export const HomeEmptyState = () => {
   const { t } = useTranslation('home')
 

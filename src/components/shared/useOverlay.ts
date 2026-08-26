@@ -12,51 +12,24 @@ import {
 export interface UseOverlayOptions<T extends HTMLElement> {
   open: boolean
   onClose: () => void
-  /** Focus this element on open instead of the panel's first focusable descendant (e.g. the amount input in the Add sheet). */
   initialFocus?: RefObject<HTMLElement | null>
-  /** Forwarded consumer ref (React 19: ordinary prop), merged with the internal panel ref. */
   ref?: Ref<T>
 }
 
-/** Exactly one of `labelledBy` (references a visible heading) or `ariaLabel` (standalone string) must label the overlay. */
 export type OverlayLabelProps =
   | { labelledBy: string; ariaLabel?: never }
   | { ariaLabel: string; labelledBy?: never }
 
-/** Shared prop surface for the overlay shells (`BottomSheet`, `CenterModal`) built on top of `useOverlay`. */
 export type OverlayShellProps<T extends HTMLElement = HTMLDivElement> = UseOverlayOptions<T> & {
   children: ReactNode
   className?: string
 } & OverlayLabelProps
 
-/** What counts as focusable for a panel's default initial focus and its Tab-trap — also the selector a form section uses to find its own first focusable control (`MovimientoFormFields`'s blocked-submit focus). */
 export const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])'
 
-/**
- * The overlay container itself is only ever focused programmatically
- * (`tabIndex={-1}`, never reached by Tab), but the global
- * `outline-ring/50` base style (src/styles/index.css) still paints its
- * `:focus-visible` ring on it once `useOverlay` calls `.focus()` — a
- * bright ring around the whole panel reads as a web modal, not a native
- * sheet (AGENTS.md § UI). Both BottomSheet and CenterModal apply this to
- * their panel so the fix lives in one place; focusable children keep
- * their own ring untouched.
- */
 export const OVERLAY_PANEL_CLASS = 'outline-hidden'
 
-/**
- * Module-level registry of every currently-open BottomSheet/CenterModal/
- * DateChipPicker-popover instance, ordered by nesting depth rather than
- * open/close timing. React renders parents before children, so an overlay
- * mounted deeper in the tree (e.g. the delete-confirm CenterModal nested
- * inside the Movement BottomSheet) always gets a higher `seq` than its
- * ancestor, regardless of which one's `open` flips true first or whether
- * both mount already open in the same commit. That makes "topmost" a
- * stable, race-free concept: only the entry with the highest `seq` among
- * the currently-open ones handles Escape/Tab-trap/initial-focus, so a
- * nested overlay always wins over the one it opened from.
- */
 interface OverlayHandle {
   readonly seq: number
 }
@@ -69,11 +42,6 @@ let scrollLockCount = 0
 let previousBodyOverflow = ''
 let previousBodyBackground = ''
 
-// Subscribers to "the overlay stack changed at all" — currently just
-// whether it's empty, for `useHasOpenOverlay` below. Kept separate from
-// `stack` itself (an ordinary module variable, not React state): the
-// Escape/Tab-trap logic reads `stack` directly and synchronously inside a
-// `keydown` handler, which must never go through React's render cycle.
 type StackListener = () => void
 const stackListeners = new Set<StackListener>()
 
@@ -113,16 +81,6 @@ const releaseScrollLock = () => {
   }
 }
 
-/**
- * Shared a11y/behavior plumbing for BottomSheet and CenterModal: Escape to
- * close, Tab-trapped focus inside the panel, body scroll lock while open,
- * and focus restored to whatever triggered the overlay once it closes.
- *
- * Nesting-aware via the module-level stack above: only the topmost overlay
- * reacts to Escape/Tab, only the topmost claims initial focus, and the
- * scroll lock is refcounted against the stack so a nested modal closing
- * doesn't unlock the page while the sheet behind it is still open.
- */
 export const useOverlay = <T extends HTMLElement>({
   open,
   onClose,
@@ -131,16 +89,9 @@ export const useOverlay = <T extends HTMLElement>({
 }: UseOverlayOptions<T>) => {
   const panelRef = useRef<T | null>(null)
 
-  // Keeping the latest onClose in a ref (instead of an effect dependency)
-  // means an inline `onClose={() => setOpen(false)}` — the natural way
-  // every consumer writes it — never forces the effect below to re-run on
-  // an unrelated parent re-render, which used to steal focus back.
   const onCloseRef = useRef(onClose)
   onCloseRef.current = onClose
 
-  // Assigned once per instance, at first render. React renders ancestors
-  // before descendants, so a nested overlay's seq is always greater than
-  // the overlay it's nested inside — see the stack comment above.
   const seqRef = useRef<number | null>(null)
   if (seqRef.current === null) seqRef.current = nextSeq++
 
@@ -162,16 +113,9 @@ export const useOverlay = <T extends HTMLElement>({
 
     const triggerElement = document.activeElement as HTMLElement | null
 
-    // Focus synchronously, in the same commit (and so the same browser task)
-    // as the click/tap that opened this overlay: iOS Safari only raises the
-    // software keyboard for a `.focus()` call made inside the task that
-    // still carries user activation. A passive `useEffect` — let alone one
-    // that then deferred another frame via `requestAnimationFrame` — runs
-    // after that task has already ended, so focus landed but no keyboard
-    // followed. `useLayoutEffect` runs synchronously during the commit that
-    // mounts this panel, and refs are attached during the mutation phase
-    // that precedes layout effects, so `panelRef.current` is already the
-    // mounted node here — no frame to wait out.
+    // iOS Safari only raises the software keyboard for a `.focus()` call made
+    // synchronously within the task that still carries user activation; a
+    // passive `useEffect` runs after that task has ended.
     if (isTopOverlay(handle)) {
       const panel = panelRef.current
       const target =
@@ -213,30 +157,12 @@ export const useOverlay = <T extends HTMLElement>({
       releaseScrollLock()
       triggerElement?.focus()
     }
-    // `onClose` and `initialFocus` are intentionally excluded: keeping this
-    // effect scoped to [open] is the bug-1 fix — an inline
-    // onClose={() => setOpen(false)} must never re-run the effect (and
-    // re-steal focus) on an unrelated parent re-render. `onCloseRef` covers
-    // onClose; `initialFocus` is a ref, whose object identity is stable by
-    // React convention, so it needs no entry here either.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
   return setPanelRef
 }
 
-/**
- * Whether any BottomSheet/CenterModal/FullScreenPanel — or the lighter
- * `useEscapeToClose` popover, which shares the same module-level `stack` —
- * is currently open anywhere in the app. A real iPhone showed `BottomNav`
- * (specs.md §10.53) painting through the strip above the keyboard while the
- * Add sheet was open; the fix is "hide while *any* overlay is open," which
- * only this shared stack can answer correctly. A consumer checking its own
- * local `addOpen`/`profileOpen` state instead would miss every other sheet
- * — the filter sheet, the tag picker, the category modal, and anything
- * added later — so `BottomNav` reads this hook directly rather than a prop
- * threaded down from `AppShell`.
- */
 export const useHasOpenOverlay = (): boolean =>
   useSyncExternalStore(
     (onStoreChange) => {
@@ -251,14 +177,6 @@ export interface UseEscapeToCloseOptions {
   onClose: () => void
 }
 
-/**
- * Lightweight sibling of `useOverlay` for surfaces that aren't a full
- * portal/scroll-lock/focus-trap shell (e.g. `DateChipPicker`'s inline
- * month-grid popover): Escape-to-close only, participating in the same
- * nesting-aware stack so it correctly outranks an ancestor BottomSheet/
- * CenterModal — pressing Escape closes the popover first, not the sheet
- * behind it.
- */
 export const useEscapeToClose = ({ open, onClose }: UseEscapeToCloseOptions) => {
   const onCloseRef = useRef(onClose)
   onCloseRef.current = onClose
@@ -288,19 +206,9 @@ export const useEscapeToClose = ({ open, onClose }: UseEscapeToCloseOptions) => 
   }, [open])
 }
 
-/**
- * A backdrop closes its overlay only when the gesture that produced the
- * `click` actually started on the backdrop itself — not whenever a click
- * merely lands there. On a touch device, dismissing content in-flow above
- * the backdrop (`MovimientoAmountInput`'s pad, for one) can shrink the
- * panel between `pointerdown` and the browser's `click`, sliding the
- * backdrop under a finger that never intended to leave the sheet; the
- * `click` then retargets there even though `pointerdown`/`pointerup` both
- * hit the panel. A document-level `pointerdown` listener — not the
- * backdrop's own — is what lets this catch that case: it fires for every
- * gesture regardless of where it starts, so a `pointerdown` on the panel
- * still clears a `true` left over from an earlier backdrop-originated one.
- */
+// On touch, a click can retarget to whatever element ends up under the
+// finger if content in-flow above it shrinks between pointerdown and the
+// click — so dismissal must check where the pointerdown itself landed.
 export const useBackdropDismiss = <T extends HTMLElement>(open: boolean, onClose: () => void) => {
   const backdropRef = useRef<T | null>(null)
   const gestureStartedOnBackdropRef = useRef(false)
@@ -313,8 +221,7 @@ export const useBackdropDismiss = <T extends HTMLElement>(open: boolean, onClose
     const handlePointerDown = (event: PointerEvent) => {
       gestureStartedOnBackdropRef.current = event.target === backdropRef.current
     }
-    // No click follows a cancelled gesture in practice, but this keeps the
-    // flag from ever outliving the gesture that set it.
+    // pointercancel never produces a following click.
     const handlePointerCancel = () => {
       gestureStartedOnBackdropRef.current = false
     }

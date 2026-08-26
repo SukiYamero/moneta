@@ -7,7 +7,6 @@ import { resolveActiveLocale } from '@/lib/i18n/localeResolution'
 import { WEEK_START_KEY } from '@/lib/weekStart'
 import { ProfileSectionHeading } from '@/features/profile/ProfileSectionHeading'
 
-/** A row that is the way into `/settings` — real link semantics, not a dead tap target. */
 const LinkedRow = ({ label, value }: { label: string; value: string }) => (
   <Link
     to="/settings"
@@ -21,14 +20,6 @@ const LinkedRow = ({ label, value }: { label: string; value: string }) => (
   </Link>
 )
 
-/**
- * The entry point into `/settings` (specs.md §10.24): all four writable
- * preferences (`tema`, `primerDiaSemana`, `idioma`, `monedaPrincipal`) are
- * real `Link`s carrying the current value. `tema` joined the other three
- * once Track AE shipped the real light theme and the `/settings` picker
- * (specs.md §10.30) — before that it was `index.html`'s hardcoded dark that
- * left it with nowhere to send the tap.
- */
 export const PreferencesSection = () => {
   const { t } = useTranslation('profile')
   const preferencias = useDataStore((s) => s.config?.preferencias)

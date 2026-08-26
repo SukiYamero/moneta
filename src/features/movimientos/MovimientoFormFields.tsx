@@ -12,9 +12,6 @@ import { CategoryPicker, CategoryFormModal } from '@/features/tags'
 import { MovimientoAmountInput } from '@/features/movimientos/MovimientoAmountInput'
 import type { AmountErrorReason } from '@/features/movimientos/useMovimientoForm'
 
-// `as const` (not `Record<AmountErrorReason, string>`) so each value keeps
-// its literal type — `t()`'s typed keys only accept a real resource path,
-// not a widened `string` (mirrors `CategoryFormModal`'s `COLOR_NAME_KEY`).
 const AMOUNT_ERROR_KEY = {
   empty: 'form.amount.errors.empty',
   malformed: 'form.amount.errors.malformed',
@@ -28,7 +25,6 @@ export interface MovimientoFormFieldsProps {
   onAmountChange: (raw: string) => void
   amountErrorReason?: AmountErrorReason
   amountInputRef?: Ref<HTMLInputElement>
-  /** Increments on every submit tap, blocked or not (`useMovimientoForm`'s `submitAttempts`) — drives bringing whichever field blocked the save on screen, since `amountErrorReason`/`categoriaMissing` alone don't change on a repeated tap in the same invalid state. */
   submitAttempts: number
   moneda: Moneda
   fecha: string
@@ -48,19 +44,6 @@ export interface MovimientoFormFieldsProps {
 
 const NOTE_MAX_LENGTH = 40
 
-/**
- * The field set shared by the create sheet and the edit form (specs.md
- * §10.23 Decision 1, §10.41) — presentational, driven entirely by
- * `useMovimientoForm`'s return value. Field order and layout follow
- * `docs/ui/design-export-add-sheet.md` §2: type toggle, a centered date
- * chip, the centered amount display, categories (fixed column + carousel),
- * then the note field behind a "ver más" disclosure. The only local state
- * this owns is that disclosure's open flag and the "create category from
- * query" modal's open/prefill — both UI concerns, not form validation.
- *
- * Deliberately renders no scan/voice button (Decision 5) — the seam for
- * stage 3 is `useMovimientoForm`'s `applyParsedFields`, not a stub here.
- */
 export const MovimientoFormFields = ({
   tipo,
   onTipoChange,
@@ -92,29 +75,8 @@ export const MovimientoFormFields = ({
   const amountSectionRef = useRef<HTMLDivElement>(null)
   const categorySectionRef = useRef<HTMLDivElement>(null)
 
-  // A blocked submit (item 3, docs/ajustes-3-plan.md §2/§4) previously left
-  // its only feedback wherever the field it belongs to happens to sit —
-  // fine on a screen with no keyboard up, invisible on a phone where the
-  // focused amount field's software keyboard covers everything below it.
-  // Keyed on `submitAttempts` (not `amountErrorReason`/`categoriaMissing`
-  // themselves), which changes on every tap including a repeated one that
-  // hits the same already-invalid state — those two flags wouldn't.
-  //
-  // Moves focus to the control that actually blocked the save (the amount
-  // input, or the category section's first focusable control), rather than
-  // an earlier version that blurred whatever held focus unconditionally
-  // (specs.md §10.51): tapping/Tab-and-Enter-ing the submit button leaves
-  // *it* as `document.activeElement` in every browser that focuses a
-  // clicked/activated button (Chrome, keyboard-driven Safari) — blurring
-  // that dropped a keyboard user's focus to `<body>` with no way back short
-  // of tabbing from the top of the document. Focusing the real target
-  // fixes that directly, and still dismisses an iOS software keyboard as a
-  // side effect whenever the target isn't the already-focused amount input
-  // (moving focus off a text input closes the keyboard on its own — no
-  // explicit `blur()` needed for that). When the amount itself is invalid,
-  // this refocuses the amount input, which is exactly where an iOS user
-  // still needs to type — AJ3-B's viewport fix (specs.md §10.49) keeps it
-  // visible above the keyboard rather than fighting to dismiss it.
+  // A clicked button becomes document.activeElement, and moving focus off a
+  // text input dismisses the iOS software keyboard without an explicit blur().
   useEffect(() => {
     if (submitAttempts === 0) return
     const target = amountErrorReason

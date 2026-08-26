@@ -54,11 +54,6 @@ const MovimientoView = ({
   return (
     <div className="flex flex-col gap-5 pb-1">
       <h2 className="sr-only">{t('movimientos:view.heading')}</h2>
-      {/* No extra top padding here (specs.md §10.35/§10.41): every other
-          sheet opens directly on its first visible content with no added
-          `pt`, so this one shouldn't either — the `pt-2` this used to carry
-          was compensating for having no *visible* heading, not a real
-          spacing need, and started this sheet ~8px lower than the rest. */}
       <div className="flex flex-col items-center gap-3 text-center">
         <IconAvatar icon={icon} tint={tint} size="lg" />
         <div className={`text-3xl font-extrabold ${amount.colorClass}`}>{amount.text}</div>
@@ -146,11 +141,6 @@ const MovimientoEditForm = ({
         disabled={form.submitting}
       />
       <div className="flex gap-2.5">
-        {/* Height/radius match the Save button so the row reads as one
-            control, not two mismatched heights — but typography stays
-            `size="touch"`'s default (12px/500) rather than picking up
-            `MOVIMIENTO_PRIMARY_CTA_CLASS`'s weight: Cancel is secondary,
-            not the commit action the bigger type calls out. */}
         <Button
           type="button"
           variant="secondary"
@@ -174,14 +164,6 @@ const MovimientoEditForm = ({
   )
 }
 
-/**
- * View ⇄ edit for an existing movement (specs.md §10.23 Decision 1). One
- * instance, mounted once in `AppShell`, driven by `movimientoSheetStore`'s
- * `viewId`. **Derives the record from `dataStore` on every render — never
- * caches a snapshot** (Decision 2): if the id it's showing stops resolving
- * (deleted elsewhere), the sheet closes itself and says so via a toast
- * rather than rendering a blank panel.
- */
 export const MovimientoSheet = () => {
   const viewId = useMovimientoSheetStore((s) => s.viewId)
   const closeMovimiento = useMovimientoSheetStore((s) => s.closeMovimiento)
@@ -196,16 +178,11 @@ export const MovimientoSheet = () => {
   const isOpen = viewId !== null
   const movimiento = viewId ? movimientos.find((m) => m.id === viewId) : undefined
 
-  // A fresh id (including the null -> id transition on open) always starts
-  // in view mode — reopening the sheet must never resume a stale edit.
   useEffect(() => {
     setMode('view')
     setConfirmOpen(false)
   }, [viewId])
 
-  // The movement vanishing underneath an open sheet (specs.md §10.23
-  // Decision 2) — deleted on another device once sync exists, or by a
-  // concurrent action on this one. Close and say so, never render blank.
   useEffect(() => {
     if (isOpen && movimiento === undefined) {
       closeMovimiento()
@@ -256,9 +233,6 @@ export const MovimientoSheet = () => {
           />
         )}
       </BottomSheet>
-      {/* Rendered outside BottomSheet's children so it stacks as a nested
-          overlay (useOverlay's own docs cite this exact case) rather than
-          fighting the sheet's own scroll/drag container. */}
       <ConfirmDialog
         open={confirmOpen}
         onClose={() => setConfirmOpen(false)}

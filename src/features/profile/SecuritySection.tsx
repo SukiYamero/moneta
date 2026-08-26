@@ -8,13 +8,6 @@ import { enableLockErrorCopy } from '@/features/lock/errorCopy'
 import { LockSettings } from '@/features/lock/LockSettings'
 import { ProfileSectionHeading } from '@/features/profile/ProfileSectionHeading'
 
-/**
- * A guest's biometric lock (specs.md §10.2.1) — session-less, so there is
- * no full settings panel to open (no PIN to change, no vault to manually
- * lock): a single row with a toggle is the whole surface. Absent entirely
- * when `!biometricAvailable` (checked by the caller) — never a disabled
- * control, per §10.2.1's "no lock option at all."
- */
 const GuestLockRow = () => {
   const { t } = useTranslation('lock')
   const guestLockEnabled = useLockStore((s) => s.guestLockEnabled)
@@ -57,21 +50,6 @@ const GuestLockRow = () => {
   )
 }
 
-/**
- * The real production home for the PIN lock's entry point (specs.md
- * §10.18) — moved off the dev-only `/kit` route. Tapping the row opens
- * `LockSettings`, the full-screen panel from the design export (§4); the
- * row itself only carries the label and the `lockStateLabel` status chip
- * the export's own JS resolves as "Activado"/"Desactivado".
- *
- * §10.2.1 (user, 2026-08-20): a signed-in account gets the PIN (with
- * biometrics as the fast path). A guest gets biometrics or nothing — never
- * a PIN. Where the device has no biometric capability, a guest sees no
- * lock option at all — not a disabled control, absent — and this section
- * renders nothing for `idle`/`authenticating`/`error` either (there is no
- * session yet to protect). This closes the backlog item where a guest was
- * shown a lock control that could only fail (specs.md §12, §11 2026-08-20).
- */
 export const SecuritySection = () => {
   const { t } = useTranslation('profile')
   const { t: tLock } = useTranslation('lock')

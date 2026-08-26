@@ -19,34 +19,10 @@ import { cn } from '@/lib/utils'
 import { useEscapeToClose } from '@/components/shared/useOverlay'
 
 export interface DateChipPickerProps {
-  /** ISO `yyyy-mm-dd`, per schema.ts. */
   value: string
   onChange: (value: string) => void
-  /**
-   * Mirrors `Config.preferencias.primerDiaSemana`. This component stays
-   * repo-agnostic (pure/presentational, per AGENTS.md) — the calling screen
-   * reads the preference via the repo and passes it down.
-   */
   firstDayOfWeek?: 0 | 1
-  /**
-   * BCP-47 locale for the chip's day+month label. Built with
-   * `Intl.DateTimeFormat` rather than date-fns: date-fns' `'d MMMM'`-style
-   * patterns only localize the month name, not the connector word between
-   * day and month (Spanish/Portuguese "10 de agosto" vs English "August
-   * 10") — a literal `"d 'de' MMMM"` pattern under an `enUS` `dateFnsLocale`
-   * renders the mixed-language "10 de August" (docs/wave-2/track-m.md).
-   * `Intl.DateTimeFormat`'s `{ day, month }` options localize the whole
-   * phrase correctly. Same no-default rule as `MovimientoRow`'s `locale`.
-   */
   locale: string
-  /**
-   * date-fns `Locale` for the popover's month/weekday names, where the
-   * pattern has no embedded literal words (`'MMMM yyyy'`, `'EEEEE'`) so
-   * date-fns' own localization is correct. Same no-default rule as
-   * `MovimientoRow`'s `dateFnsLocale` (docs/wave-2/track-m.md): the calling
-   * screen reads the active locale (`useLocaleFormatting()`) and passes it
-   * down so this component stays i18n-agnostic.
-   */
   dateFnsLocale: Locale
   className?: string
   ref?: Ref<HTMLDivElement>
@@ -54,15 +30,8 @@ export interface DateChipPickerProps {
 
 const WEEKDAY_SLOTS = [0, 1, 2, 3, 4, 5, 6]
 
-// A fixed 6-week (42-cell) grid, not the 4-6 weeks a month's real span
-// needs: the same convention Apple Calendar and Google Calendar's month
-// view use, because 6 is the maximum any month can ever require (a 31-day
-// month starting on the week's last couple of days spans 6 rows) — so it's
-// the only constant that never has to truncate a real day, and the grid's
-// height stops changing when the user pages between months.
 const WEEK_ROWS = 6
 
-/** A chip showing the selected date that expands into an inline month grid (Add/Edit/Filter sheets). */
 export const DateChipPicker = ({
   value,
   onChange,
@@ -87,9 +56,6 @@ export const DateChipPicker = ({
     return () => document.removeEventListener('pointerdown', handlePointerDown)
   }, [open])
 
-  // Shares the overlay stack with BottomSheet/CenterModal so this popover
-  // correctly outranks an ancestor sheet: Escape closes the picker first,
-  // not the sheet behind it.
   useEscapeToClose({ open, onClose: () => setOpen(false) })
 
   const weekStartsOn = firstDayOfWeek
@@ -98,11 +64,6 @@ export const DateChipPicker = ({
   const weekdayLabels = WEEKDAY_SLOTS.map((offset) =>
     format(addDays(gridStart, offset), 'EEEEE', { locale: dateFnsLocale }),
   )
-  // Constructing an Intl.DateTimeFormat is the same non-trivial cost
-  // movimientoView.ts's Intl.NumberFormat cache exists to avoid — memoized
-  // per locale here rather than a module-level Map (the pure-module cache
-  // pattern) because this instance is scoped to one component's props, not
-  // shared across unrelated call sites.
   const dayMonthFormatter = useMemo(
     () => new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long' }),
     [locale],
