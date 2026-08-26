@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { BottomSheet } from '@/components/shared/BottomSheet'
 import {
   MovimientoAmountInput,
   type MovimientoAmountInputProps,
@@ -422,13 +423,14 @@ describe('MovimientoAmountInput', () => {
     // strip closed it). A user perceives that strip as part of the
     // full-width pad, not "outside" it (it is not "the note field" or
     // "the category picker" — nothing else lives there), so the fix moves
-    // the pad's own DOM box to match what is visually there, via the
-    // standard viewport-relative full-bleed technique, rather than
-    // widening the "outside" check with hand-measured geometry. The grid
-    // itself — `NumericKeypad`'s only rendered element, once the dismiss
-    // bar is gone — carries both the bleed classes and the sheet's own
-    // `px-5.5` at once (`twMerge` resolves `w-full` vs `w-[100dvw]`, no
-    // separate wrapping box needed): jsdom has no layout engine to prove the
+    // the pad's own DOM box to match what is visually there — expressed as
+    // an explicit width plus a matching negative margin, both resolved
+    // against this element's own parent alone (never the viewport), so a
+    // reserved-space scrollbar narrowing that parent narrows the bleed
+    // right along with it instead of leaving it centered on stale geometry
+    // (specs.md §10.54). The grid itself — `NumericKeypad`'s only rendered
+    // element, once the dismiss bar is gone — carries the bleed and the
+    // sheet's own `px-5.5` at once: jsdom has no layout engine to prove the
     // resulting box reaches the true edges, so this only asserts the
     // classes that produce that box are present.
     it('renders with the full-bleed width/margin classes, and the same padding the rest of the sheet uses, on the one grid element', async () => {
@@ -437,9 +439,51 @@ describe('MovimientoAmountInput', () => {
       await user.click(screen.getByLabelText('Monto'))
 
       const grid = screen.getByRole('button', { name: '1' }).parentElement
-      expect(grid?.className).toContain('w-[100dvw]')
-      expect(grid?.className).toContain('mx-[calc(50%-50dvw)]')
+      expect(grid?.className).toContain('w-[calc(100%+2.75rem)]')
+      expect(grid?.className).toContain('-mx-5.5')
       expect(grid?.className).toContain('px-5.5')
+    })
+
+    // The bleed's three numbers — this element's own `px-5.5`, its
+    // `-mx-5.5`, and the `2.75rem` inside its `calc()` width (twice the
+    // padding it bleeds past) — must each track `BottomSheet`'s own
+    // `px-5.5` on the scrollable body. Nothing in the type system enforces
+    // that; this test does, so a change to either side breaks the build
+    // instead of a user's thumb finding it.
+    it("keeps its bleed numbers locked to BottomSheet's own scrollable-body padding", async () => {
+      render(
+        <BottomSheet open onClose={() => {}} ariaLabel="Sheet de prueba">
+          <p>contenido</p>
+        </BottomSheet>,
+      )
+      const sheetBody = document.querySelector('.overflow-y-auto') as HTMLElement
+      const sheetPaddingMatch = [...sheetBody.classList]
+        .map((c) => /^px-(\d+(?:\.\d+)?)$/.exec(c))
+        .find((m) => m !== null)
+      const sheetPaddingUnits = Number(sheetPaddingMatch?.[1])
+      expect(sheetPaddingUnits).toBeGreaterThan(0)
+
+      const user = userEvent.setup()
+      render(<ControlledHarness locale="es-CO" moneda="COP" tipo="gasto" />)
+      await user.click(screen.getByLabelText('Monto'))
+      const grid = screen.getByRole('button', { name: '1' }).parentElement as HTMLElement
+
+      const gridPaddingMatch = [...grid.classList]
+        .map((c) => /^px-(\d+(?:\.\d+)?)$/.exec(c))
+        .find((m) => m !== null)
+      const gridMarginMatch = [...grid.classList]
+        .map((c) => /^-mx-(\d+(?:\.\d+)?)$/.exec(c))
+        .find((m) => m !== null)
+      const gridWidthMatch = [...grid.classList]
+        .map((c) => /^w-\[calc\(100%\+(\d+(?:\.\d+)?)rem\)\]$/.exec(c))
+        .find((m) => m !== null)
+
+      expect(Number(gridPaddingMatch?.[1])).toBe(sheetPaddingUnits)
+      expect(Number(gridMarginMatch?.[1])).toBe(sheetPaddingUnits)
+      // Tailwind's spacing scale is 0.25rem per unit; the calc's rem value
+      // must equal two of this element's own paddings (one bled past on
+      // each side).
+      expect(Number(gridWidthMatch?.[1])).toBe(sheetPaddingUnits * 0.25 * 2)
     })
   })
 
