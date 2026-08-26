@@ -26,8 +26,6 @@ describe('BottomSheet', () => {
   })
 
   it('keeps the grab handle outside the scrollable content box', () => {
-    // The handle is fixed chrome, a sibling of the scrolling body — never
-    // inside it, or scrolling the body drags the handle away with it.
     render(<Harness open onClose={() => {}} />)
     const dialog = screen.getByRole('dialog')
     const handle = dialog.firstElementChild as HTMLElement
@@ -39,9 +37,6 @@ describe('BottomSheet', () => {
   })
 
   it('never draws a focus ring on the panel itself, even when it has no focusable children', async () => {
-    // With no focusable content, useOverlay's fallback focuses the panel
-    // (tabIndex={-1}) itself, which would otherwise paint the global
-    // :focus-visible ring around the whole sheet.
     render(
       <BottomSheet open onClose={() => {}} ariaLabel="Sheet sin contenido enfocable">
         <p>Solo texto, sin controles.</p>
@@ -60,7 +55,6 @@ describe('BottomSheet', () => {
     const onClose = vi.fn()
     render(<Harness open onClose={onClose} />)
 
-    // the backdrop is the sibling before the dialog panel, marked aria-hidden
     const backdrop = document.querySelector('[aria-hidden="true"]')
     expect(backdrop).not.toBeNull()
     await user.click(backdrop as Element)
@@ -69,9 +63,7 @@ describe('BottomSheet', () => {
   })
 
   it('does not close when a click retargets onto the backdrop after the gesture began on the panel', () => {
-    // Content shrinking under a tap (e.g. the amount pad collapsing) can
-    // move a `click` onto the backdrop even though pointerdown/pointerup
-    // both hit the panel; dismissal must key off where the gesture began.
+    // A layout shift between pointerdown and pointerup can land the resulting click on a different element than either.
     const onClose = vi.fn()
     render(<Harness open onClose={onClose} />)
     const panelButton = screen.getByRole('button', { name: 'Primero' })
@@ -132,9 +124,7 @@ describe('BottomSheet', () => {
   })
 
   describe('viewport-safe positioning', () => {
-    // A minimal, real `EventTarget` — close enough to `VisualViewport` for
-    // `addEventListener`/`dispatchEvent` to behave like the browser API
-    // `useVisualViewportInset` subscribes to.
+    // jsdom has no VisualViewport implementation.
     class FakeVisualViewport extends EventTarget {
       offsetTop = 0
       height = document.documentElement.clientHeight
@@ -176,8 +166,6 @@ describe('BottomSheet', () => {
     })
 
     it('never shrinks the backdrop along with the keyboard-safe wrapper', () => {
-      // The backdrop must stay outside the wrapper's subtree, or it shrinks
-      // along with it and lets BottomNav show through the uncovered strip.
       const viewport = new FakeVisualViewport()
       vi.stubGlobal('visualViewport', viewport)
       render(<Harness open onClose={() => {}} />)
@@ -193,8 +181,6 @@ describe('BottomSheet', () => {
         viewport.dispatchEvent(new Event('resize'))
       })
 
-      // The backdrop's own inline `top` (its static overscan) is never
-      // touched by the viewport-inset hook.
       expect(wrapper.contains(backdrop)).toBe(false)
       expect(backdrop.style.top).toBe(backdropTopBeforeResize)
       expect(backdrop.style.height).toBe('')
@@ -235,8 +221,6 @@ describe('BottomSheet', () => {
   })
 
   describe('drag-to-dismiss', () => {
-    // The handle has no accessible role (purely decorative for touch/mouse
-    // drag) — it's the panel's first child, ahead of `children`.
     const getHandle = () => {
       const dialog = screen.getByRole('dialog')
       return dialog.firstElementChild as HTMLElement
@@ -278,9 +262,7 @@ describe('BottomSheet', () => {
       render(<Harness open onClose={onClose} />)
       const handle = getHandle()
 
-      // pointercancel is browser/OS-generated (a system gesture, multi-touch
-      // conflict…); user-event's pointer API has no equivalent, so it's
-      // dispatched as a raw native event.
+      // user-event's pointer API has no pointercancel equivalent, so it's dispatched as a raw native event.
       await user.pointer({ keys: '[MouseLeft>]', target: handle, coords: { clientY: 0 } })
       await user.pointer({ coords: { clientY: 300 } })
       handle.dispatchEvent(

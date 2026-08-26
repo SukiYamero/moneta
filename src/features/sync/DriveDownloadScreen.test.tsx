@@ -54,7 +54,7 @@ describe('DriveDownloadScreen', () => {
   })
 
   it('shows real progress from the sync store while the pull is in flight', () => {
-    mGetSyncContext.mockReturnValue(new Promise(() => {})) // never resolves — stays "in flight"
+    mGetSyncContext.mockReturnValue(new Promise(() => {}))
     useSyncStore.setState({ pullProgress: { done: 2, total: 5 } })
 
     render(<DriveDownloadScreen onDone={vi.fn()} />)

@@ -10,28 +10,15 @@ import { formatMonto, formatMontoWithSign } from '@/components/shared/movimiento
 import { i18next } from '@/lib/i18n'
 import { useMovimientoSheetStore } from '@/features/movimientos'
 
-// The fake repo's seed data is pinned to a fixed clock, independent of the
-// system clock, so pinning the system clock here to the same moment is what
-// makes "today"'s dia scope show real seed data. Read the seed's own "day 0"
-// fecha rather than assuming a literal date string: `repo.fake.ts` derives
-// it via a *local*-calendar-day format of a UTC-midnight instant, which
-// lands on the previous calendar day under a negative-UTC-offset TZ —
-// asserting against the real value keeps this suite TZ-independent.
+// A UTC-midnight date string parses as the previous calendar day under a
+// negative-UTC-offset TZ, so this reads the seed's real date rather than hardcoding one.
 let seedTodayIso: string
 
-// `getByText`'s default normalizer collapses whitespace runs (including
-// Intl's U+00A0 between currency symbol and amount) to a plain space on the
-// DOM side only, never on the query string — so a query built from
-// `formatMonto` (which contains a raw NBSP) needs the same collapse or it
-// can never match.
+// Testing Library's default text normalizer collapses whitespace on the DOM side only, never the query string.
 const money = (text: string): string => text.replaceAll(' ', ' ')
 
 describe('HistoryScreen', () => {
   beforeEach(async () => {
-    // getRepo() throws unless the boot sequence has bound a profile — this
-    // suite exercises the real dataStore.load() against the real fakeRepo
-    // (unlike the other screens' tests, which mock repoProvider outright),
-    // so it needs to establish that binding itself.
     bindActiveProfile({ profile: {} as never, database: {} as ProfileDb, repo: fakeRepo })
     const movimientos = (await fakeRepo.movimientos.list()).items
     seedTodayIso = movimientos.find((m) => m.nota === 'Café de la mañana')!.fecha
@@ -64,11 +51,6 @@ describe('HistoryScreen', () => {
     expect(screen.getByText('No hay registros en este periodo')).toBeInTheDocument()
   })
 
-  // The seed's latest movement is 120 days out from "today" (repo.fake.ts);
-  // each scope steps far enough past that to guarantee a genuinely empty
-  // period — a day, a week, a month and a year are four distinct rendering
-  // paths (HistoryScreen.tsx's empty branch is scope-agnostic, but nothing
-  // upstream of it should be assumed to be without checking each one).
   it.each([
     ['Semana', 30],
     ['Mes', 6],
@@ -87,10 +69,6 @@ describe('HistoryScreen', () => {
     expect(screen.getByText('No hay registros en este periodo')).toBeInTheDocument()
   })
 
-  // Every figure on screen must trace to movimientoStats called with the
-  // screen's own scope/anchor — never a second aggregation path inside the
-  // component. Each expected value is computed independently here rather
-  // than read back out of the component, so a local shortcut would fail.
   it.each([
     ['dia', 'Día'],
     ['semana', 'Semana'],
@@ -111,10 +89,6 @@ describe('HistoryScreen', () => {
       const moneda = config.preferencias.monedaPrincipal
       const expected = totals(filterByRange(movimientos, range), moneda)
 
-      // getAllByText, not getByText: when ingresos is 0 the balance figure
-      // and the gasto mini-total render the identical "$ -X" text, which is
-      // correct (balance == -gastos) rather than a bug to avoid — a single
-      // occurrence is still enough to prove the number reached the screen.
       expect(
         await screen.findAllByText(money(formatMontoWithSign(expected.ingresos, moneda, 'es-CO'))),
       ).not.toHaveLength(0)
@@ -145,8 +119,6 @@ describe('HistoryScreen', () => {
 
     await user.click(await screen.findByRole('radio', { name: 'Ingresos' }))
 
-    // `topIngreso.key` is a category id — the screen must render its
-    // resolved *name*, never the raw id.
     const topIngresoName = config.categorias.find((c) => c.id === topIngreso!.key)?.nombre
     expect(topIngresoName).toBeDefined()
     expect(await screen.findByText(topIngresoName!)).toBeInTheDocument()
@@ -171,9 +143,6 @@ describe('HistoryScreen', () => {
     )
   })
 
-  // Switching locale must change the period's month name AND the currency
-  // formatting together — a half-translated screen is worse than an
-  // all-Spanish one.
   it('renders the period month name and totals together in the locale passed by the caller', async () => {
     const user = userEvent.setup()
     await i18next.changeLanguage('en')
@@ -189,9 +158,6 @@ describe('HistoryScreen', () => {
     const expected = totals(filterByRange(movimientos, range), moneda)
 
     expect(screen.getByText(new RegExp(`^[A-Z][a-z]+ \\d{4}$`))).toBeInTheDocument()
-    // Device region is stubbed to CO (src/test/setup.ts); it's independent
-    // of the copy locale, so switching copy to `en` formats as en-CO here,
-    // not en-US.
     expect(
       await screen.findAllByText(money(formatMontoWithSign(expected.ingresos, moneda, 'en-CO'))),
     ).not.toHaveLength(0)

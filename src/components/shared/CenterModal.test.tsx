@@ -28,9 +28,6 @@ describe('CenterModal', () => {
   })
 
   it('never draws a focus ring on the panel itself, even when it has no focusable children', async () => {
-    // With no focusable content, useOverlay's fallback focuses the panel
-    // (tabIndex={-1}) itself, which would otherwise paint the global
-    // :focus-visible ring around the whole modal.
     render(
       <CenterModal open onClose={() => {}} ariaLabel="Modal sin contenido enfocable">
         <p>Solo texto, sin controles.</p>
@@ -56,9 +53,7 @@ describe('CenterModal', () => {
   })
 
   it('does not close when a click retargets onto the backdrop after the gesture began on the panel', () => {
-    // A layout shift between pointerup and the browser's click dispatch can
-    // land the click on the backdrop even though the gesture began on the
-    // panel; dismissal must key off where the gesture began.
+    // A layout shift between pointerup and the browser's click dispatch can land the click on a different element than either.
     const onClose = vi.fn()
     render(<Harness open onClose={onClose} />)
     const panelButton = screen.getByRole('button', { name: 'Cancelar' })
@@ -109,9 +104,7 @@ describe('CenterModal', () => {
   })
 
   describe('viewport-safe positioning', () => {
-    // A minimal, real `EventTarget` — close enough to `VisualViewport` for
-    // `addEventListener`/`dispatchEvent` to behave like the browser API
-    // `useVisualViewportInset` subscribes to.
+    // jsdom has no VisualViewport implementation.
     class FakeVisualViewport extends EventTarget {
       offsetTop = 0
       height = document.documentElement.clientHeight
@@ -154,9 +147,6 @@ describe('CenterModal', () => {
     })
 
     it('never shrinks the backdrop along with the keyboard-safe wrapper', () => {
-      // The backdrop must stay outside the wrapper's subtree, or it shrinks
-      // along with it and lets whatever sits behind (BottomNav included)
-      // show through the uncovered strip.
       const viewport = new FakeVisualViewport()
       vi.stubGlobal('visualViewport', viewport)
       render(<Harness open onClose={() => {}} />)
@@ -172,8 +162,6 @@ describe('CenterModal', () => {
         viewport.dispatchEvent(new Event('resize'))
       })
 
-      // The backdrop's own inline `top` (its static overscan) is never
-      // touched by the viewport-inset hook.
       expect(wrapper.contains(backdrop)).toBe(false)
       expect(backdrop.style.top).toBe(backdropTopBeforeResize)
       expect(backdrop.style.height).toBe('')

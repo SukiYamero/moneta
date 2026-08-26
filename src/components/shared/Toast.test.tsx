@@ -111,8 +111,6 @@ describe('Toast', () => {
   describe('action', () => {
     it('renders no action button when the item carries none', () => {
       render(<Toast item={item()} onDismiss={() => {}} />)
-      // Only the dismiss button exists — this asserts there is exactly one
-      // button, not merely that some particular label is absent.
       expect(screen.getAllByRole('button')).toHaveLength(1)
     })
 

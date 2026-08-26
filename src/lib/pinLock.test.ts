@@ -50,10 +50,6 @@ test('enable caches the profile alongside the session, and unlock returns both',
   expect(unlocked).toEqual({ session, user })
 })
 
-// A v1 vault stores the bare AuthSession as its whole plaintext, no
-// { v: 2, session, user } wrapper. Built here with the real WebCrypto
-// primitives directly (not via enableLock, which only ever writes v2 now)
-// so this is a genuine legacy fixture, not a restatement of the encoder.
 test('unlockWithPin decodes a legacy v1 vault (bare AuthSession, no envelope) backward-compatibly', async () => {
   await resetVault()
   const enc = new TextEncoder()
@@ -125,10 +121,6 @@ test('a correct PIN resets the failed-attempt counter', async () => {
 })
 
 test('concurrent wrong PINs each count exactly once — no lost updates', async () => {
-  // Three concurrent wrong guesses must each land as a distinct increment,
-  // not all read-and-write the same stale failedAttempts — the PIN throttle
-  // is this app's whole brute-force defense, and a lost update would let an
-  // attacker fire concurrent guesses to bypass it silently.
   await enableLock({ pin: '1234', session })
   await Promise.allSettled([unlockWithPin('0000'), unlockWithPin('0001'), unlockWithPin('0002')])
   const after = await db.vault.get(1)
@@ -147,8 +139,6 @@ test('four wrong PINs then a correct PIN still unlocks and resets the counter', 
 })
 
 test('enableLock leaves the vault unlocked in this tab, no separate unlock needed', async () => {
-  // Start from a known no-vault, no-activeDek state — activeDek is module-level
-  // and otherwise could carry over from a DEK a previous test unlocked with.
   await resetVault()
   await enableLock({ pin: '1234', session })
 
@@ -202,9 +192,6 @@ test("resetVault also clears this device's login marker, forcing a real re-login
   expect(await hasLoggedInBefore()).toBe(false)
 })
 
-// A lockout-forced or manual vault reset must not hand whoever unlocks next
-// (possibly a different Google account, same device) the previous account's
-// Drive decision.
 test("resetVault also clears this device's persisted Drive decision", async () => {
   const { getDriveDecision, setDriveDecision } = await import('@/lib/deviceStore')
   await setDriveDecision('connected')
@@ -245,8 +232,7 @@ test('updateSession re-encrypts a refreshed token under the same DEK', async () 
 
   const refreshed: AuthSession = { accessToken: 'tok-new', expiresAt: 1_111_111_111_000 }
 
-  // A partial vault.update round-trips untouched binary fields as plain
-  // numeric-keyed objects, so compare byte content, not the representation.
+  // IndexedDB round-trips binary fields as plain numeric-keyed objects, not typed arrays.
   const bytes = (v: unknown) => Uint8Array.from(Object.values(v as Record<string, number>))
   const dekBefore = bytes((await db.vault.get(1))!.dekWrappedByPin)
   await updateSession(refreshed, null)
@@ -258,7 +244,6 @@ test('updateSession re-encrypts a refreshed token under the same DEK', async () 
   expect(dekAfter).toEqual(dekBefore)
 })
 
-// Deterministic 32-byte PRF secret returned by both create and get.
 const PRF_SECRET = new Uint8Array(32).fill(7).buffer
 
 const mockWebAuthn = (prf: ArrayBuffer | undefined) => {
@@ -298,11 +283,10 @@ test('enable with biometric then unlock via PRF returns the session', async () =
   expect(unlocked).toEqual({ session, user: null })
 
   const getSpy = navigator.credentials.get as ReturnType<typeof vi.fn>
-  // enableLock's registration also calls get; the LAST call is the unlock ceremony.
   const getArg = getSpy.mock.calls.at(-1)![0] as { publicKey: PublicKeyCredentialRequestOptions }
   const passedSalt = new Uint8Array(getArg.publicKey.extensions!.prf!.eval!.first as ArrayBuffer)
   const storedSalt = (await db.vault.get(1))!.biometric!.prfSalt
-  // vault binary fields round-trip as plain numeric-keyed objects:
+  // IndexedDB round-trips binary fields as plain numeric-keyed objects, not typed arrays.
   const toBytes = (v: unknown) => Uint8Array.from(Object.values(v as Record<string, number>))
   expect(passedSalt).toEqual(toBytes(storedSalt))
 })
@@ -341,9 +325,6 @@ test('no vault is never background-expired', async () => {
   expect(await isBackgroundExpired(Date.now())).toBe(false)
 })
 
-// A guest's biometric lock is session-less — no AuthSession, no DEK, no
-// envelope. WebAuthn mints a device-scoped credential whose *assertion
-// succeeding* is the whole signal; nothing here wraps or decrypts anything.
 describe('guest biometric lock (session-less)', () => {
   afterEach(async () => {
     await disableGuestLock()
@@ -373,10 +354,6 @@ describe('guest biometric lock (session-less)', () => {
     expect(await hasGuestLock()).toBe(false)
   })
 
-  // deviceStore.ts's setGuestLock() self-catches a storage failure, so a
-  // silently-failed persist must still surface as a throw here — otherwise
-  // guestLockEnabled reads `true` while isGuestLockBackgroundExpired() reads
-  // "no row" as "never expired" and never re-locks.
   test('a credential that registers but silently fails to persist throws, not a false success', async () => {
     mockWebAuthn(undefined)
     const putSpy = vi.spyOn(deviceDb.guestLock, 'put').mockRejectedValue(new Error('IDB blocked'))

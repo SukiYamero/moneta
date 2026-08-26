@@ -202,7 +202,7 @@ describe('parseMovOpFile', () => {
     const { file, skipped } = parseMovOpFile(raw)
     expect(file?.ops).toHaveLength(1)
     expect(file?.ops[0]).toEqual({ op: 'put', hlc: good, basedOn: null, mov: movimiento })
-    expect(skipped).toBe(3) // the caller is who logs this (validate.ts stays silent by design)
+    expect(skipped).toBe(3)
   })
 
   it('rejects the whole file when it is not even the right shape — 0 skipped, since there is nothing to salvage a per-entry count from', () => {

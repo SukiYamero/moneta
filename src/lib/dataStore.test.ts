@@ -764,7 +764,6 @@ describe('useDataStore.deleteCategoria', () => {
   })
 })
 
-/** `makeFakeRepo`'s write mocks are bare `vi.fn()`s — echo the written value back. */
 const withEchoingWrites = (repo: Repo): Repo => {
   vi.mocked(repo.movimientos.add).mockImplementation(async (m) => m)
   vi.mocked(repo.movimientos.update).mockImplementation(async (id, patch) => ({

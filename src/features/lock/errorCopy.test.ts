@@ -7,26 +7,16 @@ import {
 import { LOCKED_OUT_ERROR, NO_SESSION_ERROR, SESSION_RESTORE_ERROR } from '@/lib/lockStore'
 import { enableLockErrorCopy, unlockErrorCopy } from '@/features/lock/errorCopy'
 
-// Derived from the real error classes/exported constants, not restated as
-// literals — a message-template change in pinLock.ts, or a rename of one
-// of lockStore.ts's hand-thrown literals, fails these tests instead of
-// silently degrading to the generic fallback. The expected output is a
-// translation key, not Spanish copy.
 describe('unlockErrorCopy', () => {
   it.each([
     ['a wrong PIN', new WrongPinError().message, 'errors.wrongPin'],
     ['unavailable biometrics', new BiometricUnavailableError().message, 'errors.biometricUnavailable'],
-    // The guest path has no PIN fallback, so its own unavailable-biometrics
-    // error reuses the account path's copy.
     [
       'an unavailable guest biometric',
       new GuestBiometricUnavailableError().message,
       'errors.biometricUnavailable',
     ],
     ['a lockout', LOCKED_OUT_ERROR, 'errors.lockedOut'],
-    // resume() checking hydrate()'s actual outcome, instead of assuming
-    // success, needs its own actionable copy distinct from a wrong PIN or a
-    // lockout — the PIN itself was correct.
     ['a failed session restore', SESSION_RESTORE_ERROR, 'errors.sessionRestoreFailed'],
   ])('maps %s to its translation key', (_desc, message, key) => {
     expect(unlockErrorCopy(message)).toBe(key)

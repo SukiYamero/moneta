@@ -18,9 +18,6 @@ describe('localeFormatting', () => {
   })
 
   it("prefers the given region over the copy locale's own default region", () => {
-    // Region is the device's, independent of what the copy locale would
-    // default to on its own — a neutral `es` copy locale on a device in
-    // Mexico must format as es-MX, not es-CO.
     expect(localeFormatting('es', 'MX')).toEqual({ locale: 'es-MX', dateFnsLocale: es })
     expect(localeFormatting('es', 'AR')).toEqual({ locale: 'es-AR', dateFnsLocale: es })
   })
@@ -31,14 +28,12 @@ describe('localeFormatting', () => {
   })
 
   it('reads the active i18next copy locale and the device region, and follows a language change', async () => {
-    // Device region is stubbed to CO by src/test/setup.ts (jsdom defaults to en-US).
+    // jsdom defaults navigator's region to en-US; this suite stubs it to CO.
     const { result, rerender } = renderHook(() => useLocaleFormatting())
     expect(result.current).toEqual({ locale: 'es-CO', dateFnsLocale: es })
 
     await i18next.changeLanguage('en')
     rerender()
-    // Copy language changed; the device region (CO) did not — they are
-    // independent axes.
     expect(result.current).toEqual({ locale: 'en-CO', dateFnsLocale: enUS })
   })
 

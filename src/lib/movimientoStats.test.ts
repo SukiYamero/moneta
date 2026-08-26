@@ -30,16 +30,14 @@ afterEach(() => {
 })
 
 describe('totals()', () => {
-  // The float-drift bug: naive `+=` on `monto` produces 0.30000000000000004,
-  // not 0.3. This must fail against a naive implementation and pass against
-  // one that accumulates in integer minor units (cents) and divides once.
+  // IEEE-754: `0.1 + 0.2` is 0.30000000000000004, not 0.3.
   it('sums 0.1 and 0.2 ingresos to exactly 0.3, not the float-drift result', () => {
     const movimientos = [
       movimiento({ tipo: 'ingreso', monto: 0.1 }),
       movimiento({ tipo: 'ingreso', monto: 0.2 }),
     ]
     expect(totals(movimientos, 'COP').ingresos).toBe(0.3)
-    expect(0.1 + 0.2).not.toBe(0.3) // sanity: the naive sum really does drift
+    expect(0.1 + 0.2).not.toBe(0.3)
   })
 
   it('sums a realistic COP set without drift', () => {
@@ -67,9 +65,6 @@ describe('totals()', () => {
     expect(totals(movimientos, 'COP')).toEqual({ ingresos: 0, gastos: 100, balance: -100 })
   })
 
-  // A total is never the sum of two different currencies — `moneda` is a
-  // required argument precisely so a call site cannot forget to scope it
-  // and silently add COP to USD.
   describe('currency scoping', () => {
     it('sums only movements matching the given moneda, ignoring the rest', () => {
       const movimientos = [
@@ -82,9 +77,6 @@ describe('totals()', () => {
       expect(totals(movimientos, 'USD')).toEqual({ ingresos: 300, gastos: 50, balance: 250 })
     })
 
-    // The "just switched currency" edge case: the principal currency has no
-    // movements yet. The total must be an honest zero, not a mix of
-    // whatever else exists.
     it('returns all zeros for a currency with no movements, even when other currencies have plenty', () => {
       const movimientos = [
         movimiento({ tipo: 'ingreso', monto: 500, moneda: 'COP' }),
@@ -96,10 +88,7 @@ describe('totals()', () => {
 })
 
 describe('periodRange() — timezone safety', () => {
-  // `new Date('2026-09-01')` parses as UTC midnight, which under a
-  // negative-offset TZ (e.g. America/Bogota, UTC-5) is Aug 31 local — a
-  // naive `new Date(anchor)` would compute the 'mes' range as Aug 1–31
-  // instead of Sep 1–30.
+  // `new Date('2026-09-01')` parses as UTC midnight, which is Aug 31 local under a negative-offset TZ.
   it('does not shift a month-boundary anchor under a negative-offset TZ', () => {
     vi.stubEnv('TZ', 'America/Bogota')
     const range = periodRange('mes', '2026-09-01', 1)
@@ -125,7 +114,6 @@ describe('periodRange() — timezone safety', () => {
 
   it('week range starts on Monday when primerDiaSemana is 1', () => {
     vi.stubEnv('TZ', 'America/Bogota')
-    // 2026-08-19 is a Wednesday.
     const range = periodRange('semana', '2026-08-19', 1)
     expect(range).toEqual({ from: '2026-08-17', to: '2026-08-23' })
   })
@@ -161,9 +149,6 @@ describe('filterByRange()', () => {
 })
 
 describe('breakdownBy()', () => {
-  // `tipo` is required: omitting it mixes ingresos and gastos minor units
-  // into one `grandTotalMinor`, so `share` becomes a fraction of "income
-  // plus spending" — a quantity with no meaning a screen can present.
   it('groups by seccion, sorted by total desc, shares summing to 1', () => {
     const movimientos = [
       movimiento({ seccion: 'sec_personal', tipo: 'gasto', monto: 100 }),
@@ -200,8 +185,6 @@ describe('breakdownBy()', () => {
     expect(result.reduce((sum, entry) => sum + entry.share, 0)).toBe(1)
   })
 
-  // Same currency-scoping guarantee as totals() — a breakdown that folded a
-  // USD row into a COP share would misreport that category's real weight.
   it('only groups movements matching the given moneda', () => {
     const movimientos = [
       movimiento({ seccion: 'sec_personal', tipo: 'gasto', monto: 100, moneda: 'COP' }),
@@ -240,16 +223,10 @@ describe('series()', () => {
   it('produces weekly buckets for a mes period, clamped to the month (not the natural week)', () => {
     const range = periodRange('mes', '2026-08-01', 1)
     const result = series([], 'mes', range, 1, 'COP')
-    // August 2026: the natural first week is Mon 2026-07-27–Sun 2026-08-02,
-    // but its bucketStart must be clamped to the month's own start (2026-08-01),
-    // not the true week start (2026-07-27) — a label claiming to cover July
-    // 27–31 when nothing from those days was counted would be a lie.
     expect(result.at(0)?.bucketStart).toBe('2026-08-01')
     expect(result.every((bucket) => bucket.ingresos === 0 && bucket.gastos === 0)).toBe(true)
   })
 
-  // Same currency-scoping guarantee as totals() — a bucket that counted a
-  // USD movement into a COP-scoped chart would misreport that day's spend.
   it('only counts movements matching the given moneda in each bucket', () => {
     vi.stubEnv('TZ', 'America/Bogota')
     const range = periodRange('semana', '2026-08-19', 1)
@@ -261,16 +238,10 @@ describe('series()', () => {
     expect(result[0]).toEqual({ bucketStart: '2026-08-17', ingresos: 100, gastos: 0 })
   })
 
-  // The invariant every screen depends on: a chart's bars must sum to the
-  // same total printed on that screen's own summary card — a naive
-  // `eachWeekOfInterval`/`eachMonthOfInterval` grid snap lets the first/last
-  // bucket pull in movements from the adjacent period, past `range`.
+  // date-fns's eachWeekOfInterval/eachMonthOfInterval grid-snap to natural boundaries, which can pull in movements from outside `range`.
   describe('bucket-range invariant: sum(series) === totals(filterByRange)', () => {
     const periods: Periodo[] = ['dia', 'semana', 'mes', 'anio']
     const primerDiaSemanaValues: (0 | 1)[] = [0, 1]
-    // Cross product: the clamp bug this invariant guards against is rooted
-    // in eachWeekOfInterval's grid snap, keyed off weekStartsOn — a fix
-    // proven only under one primerDiaSemana says nothing about the other.
     const cases = periods.flatMap((periodo) =>
       primerDiaSemanaValues.map((primerDiaSemana) => [periodo, primerDiaSemana] as const),
     )
@@ -293,15 +264,11 @@ describe('series()', () => {
 
         expect(seriesIngresos).toBe(expected.ingresos)
         expect(seriesGastos).toBe(expected.gastos)
-        // The label itself must never claim to start before the range does.
         expect((result.at(0)?.bucketStart ?? '') >= range.from).toBe(true)
       },
     )
 
-    // Two movements of the same tipo in different buckets can drift:
-    // `0.01 + 0.05` sums to 0.060000000000000005, not 0.06 — it rounds to
-    // the cent for display, so this invariant holds to that rounding here,
-    // not bit-exactly via `toBe`.
+    // IEEE-754: `0.01 + 0.05` is 0.060000000000000005, not 0.06.
     it('holds to the cent (not necessarily bit-exact) with multiple same-tipo fractional buckets', () => {
       const primerDiaSemana = 1
       const range = periodRange('semana', '2026-08-19', primerDiaSemana)
@@ -318,8 +285,6 @@ describe('series()', () => {
 })
 
 describe('otherCurrencies()', () => {
-  // The common case: nothing extra should ever need to render, so this
-  // must come back empty, not just falsy.
   it('returns an empty array when every movement matches the principal currency', () => {
     const movimientos = [movimiento({ moneda: 'COP' }), movimiento({ moneda: 'COP' })]
     expect(otherCurrencies(movimientos, 'COP')).toEqual([])

@@ -24,9 +24,6 @@ describe('FullScreenPanel', () => {
   })
 
   it('keeps a header outside the scrollable body', () => {
-    // `header` must be fixed chrome — a sibling of the `overflow-y-auto`
-    // body, never inside it — or scrolling long body content would carry
-    // the header away with it.
     render(
       <FullScreenPanel
         open

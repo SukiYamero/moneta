@@ -22,10 +22,6 @@ beforeEach(() => {
     createObjectURL: createObjectURLSpy,
     revokeObjectURL: revokeObjectURLSpy,
   })
-  // The anchor is removed from the DOM synchronously right after click(), so
-  // the only place to observe its attributes is from inside the click spy
-  // itself, while it's still attached — querying via the DOM (not `this`,
-  // which an arrow function can't bind) keeps this an arrow function.
   vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {
     const anchor = document.querySelector('a[download]')
     if (anchor) {
