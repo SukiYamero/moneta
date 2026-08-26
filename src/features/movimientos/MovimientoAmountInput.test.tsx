@@ -263,56 +263,20 @@ describe('MovimientoAmountInput', () => {
     })
   })
 
-  describe('the digits shrink a step as the formatted amount grows', () => {
-    it('keeps the current largest size for a short amount', async () => {
+  describe('the digits render at one fixed size', () => {
+    it('uses the same size for a short amount and a long one', async () => {
       const user = userEvent.setup()
       render(<ControlledHarness locale="es-CO" moneda="COP" tipo="gasto" />)
       const input = screen.getByLabelText('Monto')
 
-      await user.type(input, '1234567')
+      await user.type(input, '1234')
+      expect(input).toHaveValue('1.234')
+      expect(input).toHaveClass('text-[2.625rem]')
 
-      expect(input).toHaveValue('1.234.567')
-      expect(input).toHaveClass('text-[2.875rem]')
-    })
+      await user.type(input, '567890123')
 
-    it('steps down once the formatted string passes 9 characters', async () => {
-      const user = userEvent.setup()
-      render(<ControlledHarness locale="es-CO" moneda="COP" tipo="gasto" />)
-      const input = screen.getByLabelText('Monto')
-
-      await user.type(input, '12345678')
-
-      expect(input).toHaveValue('12.345.678')
-      expect(input).toHaveClass('text-[2.5rem]')
-      expect(input).not.toHaveClass('text-[2.875rem]')
-    })
-
-    it('steps down a second time once the formatted string passes 12 characters', async () => {
-      const user = userEvent.setup()
-      render(<ControlledHarness locale="es-CO" moneda="COP" tipo="gasto" />)
-      const input = screen.getByLabelText('Monto')
-
-      await user.type(input, '1234567890')
-
-      expect(input).toHaveValue('1.234.567.890')
-      expect(input).toHaveClass('text-[2.1875rem]')
-      expect(input).not.toHaveClass('text-[2.5rem]')
-      expect(input).not.toHaveClass('text-[2.875rem]')
-    })
-
-    it('steps back up once digits are removed back below a threshold', async () => {
-      const user = userEvent.setup()
-      render(<ControlledHarness locale="es-CO" moneda="COP" tipo="gasto" />)
-      const input = screen.getByLabelText('Monto')
-
-      await user.type(input, '12345678')
-      expect(input).toHaveClass('text-[2.5rem]')
-
-      await user.clear(input)
-      await user.type(input, '123456')
-
-      expect(input).toHaveValue('123.456')
-      expect(input).toHaveClass('text-[2.875rem]')
+      expect(input).toHaveValue('1.234.567.890.123')
+      expect(input).toHaveClass('text-[2.625rem]')
     })
   })
 

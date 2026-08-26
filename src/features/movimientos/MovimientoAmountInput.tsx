@@ -43,30 +43,6 @@ const AMOUNT_COLOR_CLASS: Record<TipoMovimiento, string> = {
   gasto: 'text-foreground',
 }
 
-type AmountFontSizeStep = 'lg' | 'md' | 'sm'
-
-// This hero size is deliberately not a design-system token
-// (docs/ui/design-tokens.md) — the smaller steps below are new one-off
-// arbitrary values in that same spirit, picked by the formatted string's
-// own length (grouping separators included, since they occupy width too).
-const AMOUNT_FONT_SIZE_CLASS: Record<AmountFontSizeStep, string> = {
-  lg: 'text-[2.875rem]',
-  md: 'text-[2.5rem]',
-  sm: 'text-[2.1875rem]',
-}
-
-const AMOUNT_FONT_SIZE_THRESHOLDS: readonly { maxLength: number; step: AmountFontSizeStep }[] = [
-  { maxLength: 9, step: 'lg' },
-  { maxLength: 12, step: 'md' },
-  { maxLength: Number.POSITIVE_INFINITY, step: 'sm' },
-]
-
-const amountFontSizeClassFor = (formatted: string): string => {
-  const step =
-    AMOUNT_FONT_SIZE_THRESHOLDS.find(({ maxLength }) => formatted.length <= maxLength)?.step ?? 'sm'
-  return AMOUNT_FONT_SIZE_CLASS[step]
-}
-
 const currencySymbolFor = (moneda: Moneda, locale: string): string => {
   const parts = new Intl.NumberFormat(locale, {
     style: 'currency',
@@ -344,8 +320,7 @@ export const MovimientoAmountInput = ({
           aria-invalid={invalid}
           aria-describedby={error !== undefined ? errorId : undefined}
           className={cn(
-            'h-auto w-40 min-w-12 max-w-[calc(100%-3rem)] border-none bg-transparent p-0 text-center leading-none font-extrabold tracking-tight shadow-none transition-[font-size] duration-150',
-            amountFontSizeClassFor(value),
+            'h-auto w-40 min-w-12 max-w-[calc(100%-3rem)] border-none bg-transparent p-0 text-center text-[2.625rem] leading-none font-extrabold tracking-tight shadow-none',
             AMOUNT_COLOR_CLASS[tipo],
             // `field-sizing: content` does NOT override an explicit `width`
             // the way a fixed fallback width might suggest it would
