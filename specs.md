@@ -813,6 +813,7 @@ Its original "UI" subsection is superseded by §10.41 below (which also folds in
 - `className` merges onto the outer panel only, the same contract as `CenterModal` — it never targets the padded/scrollable body.
 - The scrollable body carries `overscroll-y-contain` — without it, a drag past the body's own scroll boundary chains into rubber-banding the scroll-locked page behind it on iOS.
 - A CSS transform on the flex container (the drag) never touches a scrolling descendant's own scroll state — dragging mid-scroll and scrolling mid-drag don't corrupt each other.
+- The backdrop closes the overlay only when the gesture's own `pointerdown` landed on it (`useBackdropDismiss`, shared with `CenterModal`). A `click` is a fresh hit-test against the DOM as it stands when it fires, not a replay of the `pointerdown` target: content shrinking under a finger — the amount pad collapsing (§10.54) — otherwise slides the backdrop beneath a tap that began inside the sheet and dismisses it.
 
 **Implementation.** `src/components/shared/BottomSheet.tsx`. The identical fixed-chrome/scrolling-body split exists in `FullScreenPanel.tsx` (§10.35.1).
 
@@ -1048,23 +1049,24 @@ Its original "UI" subsection is superseded by §10.41 below (which also folds in
 
 **Watch out.** iOS has no documented equivalent to the manifest orientation lock even when installed to the home screen — the portrait guarantee on iOS rests entirely on `LandscapeGuard`, not a platform-level lock.
 
-### 10.54 The amount keypad: what "outside" means, when it may act, and what delete deletes
+### 10.54 The amount keypad: where it exists, what dismisses it, what its keys do
 
-**Goal.** `MovimientoAmountInput`'s on-screen `NumericKeypad` (§10.41, `SUPPRESS_NATIVE_KEYBOARD_FOR_AMOUNT`) shows while the field is in use and dismisses reliably on a genuine outside tap, on every platform — without ever deriving that decision from focus, and without swallowing a tap on whatever the collapse uncovers.
+**Goal.** `MovimientoAmountInput`'s on-screen `NumericKeypad` (§10.41) replaces the OS keyboard on a touch device, and dismisses on a genuine outside tap — never on a focus change, which no platform agrees about.
 
 **Rules.**
 
-- Visibility is never derived from `focus`/`blur`. A real iOS device log shows WebKit walking focus from a tapped pad key to `BottomSheet`'s own `tabIndex={-1}` panel _after_ `pointerup` already resolved the gesture — a blur on that timeline is not evidence of an outside tap.
-- The sole dismissal signal is a pointer gesture whose own `pointerdown` landed outside `wrapperRef` (the input plus the whole pad), decided on `pointerup` (never `pointerdown`, so an in-flight tap on whatever the collapse uncovers still hits its own target). A gesture that starts inside never dismisses, whatever focus does mid-gesture; a `pointercancel` never dismisses either.
-- The one keyboard-driven close — Tab off the pad's last key — is gated behind an explicit forward `Tab` keydown, never a bare `focusout`, so a touch-driven focus walk can never trigger it; the close itself runs on the following `focusout`, so Tab's own default action still has a live element to move focus from.
-- "Outside" is DOM containment, and the pad's own box spans the sheet's true edges including its `px-5.5` gutters — bled and re-inset, computed against this element's own parent, never a viewport unit, so a reserved-space scrollbar narrowing that parent narrows the bleed with it.
-- The delete key removes the digit (or the decimal separator) immediately before the caret, skipping back over an auto-inserted grouping separator first — a caret a real tap can leave sitting right after one, where deleting "the character before it" would silently remove formatting rather than content.
-- `NumericKeypad`'s keys are `aria-disabled`, never natively `disabled`: a native `disabled` control dispatches no pointer events at all, which defeated the container-level `pointerdown` bookkeeping above for exactly the disabled key. The key stays in the tab order; its `onClick` is a no-op while disabled.
-- `NumericKeypad` renders at `size="compact"` for this caller only; `PinPad`/`LockScreen` pass no `size`, keep the default height, and are unaffected by any rule above.
-- Escape still closes the whole sheet (`useOverlay`'s cross-cutting keydown handler), not just the pad.
-- `?debugKeypad=1` arms `keypadDebugLog.ts`, a read-only mirror of pointer/touch/focus activity that never feeds a decision — the tool that produced the device log above.
+- It exists only on a coarse-pointer device (`useIsCoarsePointer`); a desktop gets an ordinary `inputMode="decimal"` field with no pad and none of its gesture wiring mounted.
+- Visibility is never derived from `focus`/`blur`. The sole dismissal is a gesture whose own `pointerdown` landed outside, committed on `pointerup` — never on `pointerdown`, so the collapse can't move the layout out from under a tap still in flight. `pointercancel` never dismisses.
+- "Outside" is the input and the pad; the label, the currency symbol and the empty flanks beside the digits all dismiss. The pad's box spans the sheet's true edges including its `px-5.5` gutters, so the strip beside the outer keys belongs to it — computed against this element's own parent, never a viewport unit.
+- Tab off the pad's last key is the one keyboard-driven close, gated on an explicit forward `Tab` keydown and run on the following `focusout` — never a bare `focusout`, which a touch-driven focus walk also produces.
+- Keys are `aria-disabled`, never natively `disabled`: a native `disabled` control dispatches no pointer events at all, which blinds the gesture bookkeeping above for exactly the disabled key.
+- Delete removes the digit or decimal separator before the caret, skipping back over an auto-inserted grouping separator so it takes content rather than formatting, and auto-repeats while held (this caller only).
+- The digits render at one size for every amount; `NumericKeypad` renders `size="compact"` here. `PinPad`/`LockScreen` pass neither and are unaffected by every rule above.
+- `?debugKeypad=1` arms `keypadDebugLog.ts`, a read-only mirror of pointer/touch/focus activity that never feeds a decision.
 
-**Implementation.** `src/features/movimientos/MovimientoAmountInput.tsx`, `keypadDebugLog.ts`; `src/components/shared/NumericKeypad.tsx`'s `size` prop (`'default'` | `'compact'`) is the only per-caller variance it exposes.
+**Implementation.** `src/features/movimientos/MovimientoAmountInput.tsx`, `keypadDebugLog.ts`, `src/components/shared/useIsCoarsePointer.ts` (on `useMediaQuery`, shared with `useIsLandscape`).
+
+**Watch out.** A `click` is re-hit-tested against the post-collapse DOM on touch in Blink, so deferring to `pointerup` protects that gesture's own `pointerup` and not its `click` — §10.35's backdrop rule is what covers the rest.
 
 ## 11. Decisions
 

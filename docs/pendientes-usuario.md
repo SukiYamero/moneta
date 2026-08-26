@@ -454,12 +454,21 @@ Raised 2026-08-26, from your own three follow-up requests. All CONFIRMED in
 Chromium (real geometry/timers, not just jsdom); no iOS device is available
 here.
 
+**Confirmed 2026-08-26 (user), all three.** What remains open here is the
+Android half, which is not the same question:
+
+4. On Android, tapping inside the Add sheet **above** the pad closed the whole
+   sheet. Reproduced in Chromium with real touch and fixed at the source: a
+   backdrop now closes only when the gesture began on it (§10.35). CONFIRMED
+   by the operator on the same engine Android runs, so this one does not need
+   an iOS pass — but it does need yours on the device.
+
 1. Tapping the empty space beside the amount (or the currency symbol
    itself) now hides the pad, for both a short and a long amount — not just
    right at the phone's true edge.
-2. Holding the delete key now keeps deleting until you lift your finger,
+1. Holding the delete key now keeps deleting until you lift your finger,
    move off the key, or reach an empty field.
-3. As the amount grows past 9 and 12 characters, the digits shrink a step
+1. As the amount grows past 9 and 12 characters, the digits shrink a step
    (measured ~28px and ~67px narrower than they'd otherwise be) so more of
    a large number stays visible — short amounts render at exactly the size
    they always did.
