@@ -61,10 +61,13 @@ interface OverlayHandle {
   readonly seq: number
 }
 
+export const OVERLAY_BODY_DIM_BACKGROUND = 'rgb(0, 0, 0)'
+
 let nextSeq = 0
 let stack: OverlayHandle[] = []
 let scrollLockCount = 0
 let previousBodyOverflow = ''
+let previousBodyBackground = ''
 
 // Subscribers to "the overlay stack changed at all" — currently just
 // whether it's empty, for `useHasOpenOverlay` below. Kept separate from
@@ -96,6 +99,8 @@ const acquireScrollLock = () => {
   if (scrollLockCount === 0) {
     previousBodyOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
+    previousBodyBackground = document.body.style.backgroundColor
+    document.body.style.backgroundColor = OVERLAY_BODY_DIM_BACKGROUND
   }
   scrollLockCount += 1
 }
@@ -104,6 +109,7 @@ const releaseScrollLock = () => {
   scrollLockCount = Math.max(0, scrollLockCount - 1)
   if (scrollLockCount === 0) {
     document.body.style.overflow = previousBodyOverflow
+    document.body.style.backgroundColor = previousBodyBackground
   }
 }
 

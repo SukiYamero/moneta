@@ -6,7 +6,7 @@ import { es } from 'date-fns/locale'
 import { BottomSheet } from '@/components/shared/BottomSheet'
 import { CenterModal } from '@/components/shared/CenterModal'
 import { DateChipPicker } from '@/components/shared/DateChipPicker'
-import { useHasOpenOverlay } from '@/components/shared/useOverlay'
+import { OVERLAY_BODY_DIM_BACKGROUND, useHasOpenOverlay } from '@/components/shared/useOverlay'
 
 /**
  * These tests cover the interaction *between* two overlay instances — the
@@ -186,6 +186,58 @@ describe('useOverlay — nested overlays (bugs 2 & 3)', () => {
     rerender(<ClosedHarness />)
 
     expect(document.body.style.overflow).toBe(previousOverflow)
+  })
+
+  it('dims the body background while any overlay is open and restores it once the last one closes', async () => {
+    const previousBackground = document.body.style.backgroundColor
+
+    const Wrapper = () => {
+      const [open, setOpen] = useState(true)
+      return (
+        <BottomSheet open={open} onClose={() => setOpen(false)} ariaLabel="Sheet único">
+          <button type="button">Único</button>
+        </BottomSheet>
+      )
+    }
+
+    const { rerender } = render(<Wrapper />)
+    await vi.waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Único' })).toHaveFocus()
+    })
+    expect(document.body.style.backgroundColor).toBe(OVERLAY_BODY_DIM_BACKGROUND)
+
+    const ClosedHarness = () => {
+      return <Harness open={false} onClose={() => {}} />
+    }
+    rerender(<ClosedHarness />)
+
+    expect(document.body.style.backgroundColor).toBe(previousBackground)
+  })
+
+  it('keeps the body background dimmed while a nested modal closes but the outer sheet stays open', async () => {
+    const user = userEvent.setup()
+
+    const Wrapper = () => {
+      const [modalOpen, setModalOpen] = useState(true)
+      return (
+        <BottomSheet open onClose={() => {}} ariaLabel="Sheet exterior">
+          <button type="button">Eliminar</button>
+          <CenterModal open={modalOpen} onClose={() => setModalOpen(false)} ariaLabel="Confirmar">
+            <button type="button">Cancelar</button>
+          </CenterModal>
+        </BottomSheet>
+      )
+    }
+
+    render(<Wrapper />)
+    await vi.waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Cancelar' })).toHaveFocus()
+    })
+    expect(document.body.style.backgroundColor).toBe(OVERLAY_BODY_DIM_BACKGROUND)
+
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('dialog', { name: 'Confirmar' })).not.toBeInTheDocument()
+    expect(document.body.style.backgroundColor).toBe(OVERLAY_BODY_DIM_BACKGROUND)
   })
 })
 
