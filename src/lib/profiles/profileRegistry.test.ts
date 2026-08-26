@@ -56,7 +56,7 @@ test('makeProfileDatabaseName suffixes the frozen kurobello base, never renames 
 })
 
 test('getActiveProfile returns the most recently used profile among several', async () => {
-  await getActiveProfile() // adopts the default first
+  await getActiveProfile()
   await registerProfile({
     id: 'p2',
     label: 'Cuenta de Google',
@@ -86,7 +86,6 @@ test('a guest profile and a signed-in profile stay side by side: nothing is ever
   expect(all.map((p) => p.id).toSorted()).toEqual([DEFAULT_PROFILE_ID, 'google-1'].toSorted())
 })
 
-// Same posture as deviceStore.ts: storage trouble degrades to "no signal", never blocks boot.
 test('listProfiles degrades to an empty array on a storage read failure', async () => {
   const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
   const spy = vi.spyOn(deviceDb.profiles, 'toArray').mockRejectedValue(new Error('IDB blocked'))
@@ -120,8 +119,6 @@ test('touchLastUsed is safe to fire-and-forget: a write failure is caught and lo
   warn.mockRestore()
 })
 
-// resolveGoogleProfile keys a profile by account, not just kind, so two Google
-// accounts on one device resolve to two distinct profiles instead of one.
 test('resolveGoogleProfile registers a new profile keyed by account on first sign-in', async () => {
   const profile = await resolveGoogleProfile({ accountKey: 'ana@example.com', label: 'Ana' })
 
@@ -148,9 +145,6 @@ test('resolveGoogleProfile gives two different accounts on the same device two d
   expect(ana.databaseName).not.toBe(beto.databaseName)
 })
 
-// resolveGoogleProfile touches the matched profile's lastUsedAt, so
-// getActiveProfile()'s pure-recency resolution tracks the account that most
-// recently established a session.
 test('signing back into a previously-used account makes it the active profile again', async () => {
   const ana = await resolveGoogleProfile({ accountKey: 'ana@example.com', label: 'Ana' })
   await resolveGoogleProfile({ accountKey: 'beto@example.com', label: 'Beto' })
@@ -162,10 +156,6 @@ test('signing back into a previously-used account makes it the active profile ag
   expect((await getActiveProfile()).id).toBe(ana.id)
 })
 
-// resolveGoogleProfile's read-then-write (listProfiles(), then either
-// touchLastUsed or registerProfile, each its own transaction) is racy: login()
-// and restore()/hydrate() can resolve the same account in the same tick, and
-// two calls that both read "no existing profile" before either writes mint two.
 test('two concurrent resolveGoogleProfile calls for the same account resolve to one profile, not two', async () => {
   const [a, b] = await Promise.all([
     resolveGoogleProfile({ accountKey: 'ana@example.com', label: 'Ana' }),
@@ -190,9 +180,8 @@ test('getActiveProfile still returns a usable default record when persisting it 
   warn.mockRestore()
 })
 
-// The watermark that answers every sync question instead of a stale isSynced boolean.
 test('setDriveFolderId / recordSuccessfulPush / recordSuccessfulPull each patch just their own field', async () => {
-  await getActiveProfile() // ensures the default profile row exists to update
+  await getActiveProfile()
 
   await setDriveFolderId(DEFAULT_PROFILE_ID, 'FOLDER123')
   expect((await getProfile(DEFAULT_PROFILE_ID))?.driveFolderId).toBe('FOLDER123')
@@ -203,7 +192,6 @@ test('setDriveFolderId / recordSuccessfulPush / recordSuccessfulPull each patch 
   await recordSuccessfulPull(DEFAULT_PROFILE_ID, '2026-08-19T13:00:00.000Z')
   const after = await getProfile(DEFAULT_PROFILE_ID)
   expect(after?.lastPullAt).toBe('2026-08-19T13:00:00.000Z')
-  // Earlier writes are untouched by a later, different field.
   expect(after?.driveFolderId).toBe('FOLDER123')
   expect(after?.lastPushAt).toBe('2026-08-19T12:00:00.000Z')
 })
@@ -215,22 +203,18 @@ test('a profile with no watermark yet has undefined driveFolderId/lastPushAt/las
   expect(active.lastPullAt).toBeUndefined()
 })
 
-// Recency stays only as the fallback for a device that has never made an
-// explicit choice — this lets a user who switches to an *older* profile and
-// closes the app land back in the one they chose, not the one used most recently.
 test('getActiveProfileId is undefined on a device that has never set the pointer', async () => {
   expect(await getActiveProfileId()).toBeUndefined()
 })
 
 test('the explicit pointer wins over recency once set', async () => {
-  await getActiveProfile() // adopts the default first
+  await getActiveProfile()
   await registerProfile({
     id: 'p2',
     label: 'Cuenta de Google',
     kind: 'google',
     databaseName: makeProfileDatabaseName('p2'),
   })
-  // p2 is now the most recently *touched* — but the pointer says otherwise.
   await touchLastUsed('p2')
   await setActiveProfileId(DEFAULT_PROFILE_ID)
 
@@ -240,7 +224,7 @@ test('the explicit pointer wins over recency once set', async () => {
 })
 
 test('a pointer naming a since-removed profile falls back to recency, not a throw', async () => {
-  await getActiveProfile() // adopts the default first
+  await getActiveProfile()
   await setActiveProfileId('a-profile-that-was-never-registered')
 
   const active = await getActiveProfile()
@@ -284,7 +268,7 @@ test('removeProfile deletes the profile from the registry', async () => {
 })
 
 test('removeProfile refuses to remove the frozen default profile', async () => {
-  await getActiveProfile() // adopts the default profile
+  await getActiveProfile()
   const { removeProfile } = await import('@/lib/profiles/profileRegistry')
 
   await removeProfile(DEFAULT_PROFILE_ID)

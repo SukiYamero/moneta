@@ -6,9 +6,6 @@ import type { Movimiento } from '@/lib/schema'
 
 const TODAY = new Date('2026-08-18T12:00:00.000Z')
 
-// The contract suite expects an empty store (repo.contract.ts's own
-// precondition doc); createFakeRepo() always seeds demo data, so strip it
-// before handing the repo to the shared suite.
 const emptyFakeRepo = async (): Promise<Repo> => {
   const repo = createFakeRepo({ today: TODAY })
   const [movs, acts] = await Promise.all([repo.movimientos.list(), repo.activos.list()])
@@ -19,9 +16,6 @@ const emptyFakeRepo = async (): Promise<Repo> => {
   return repo
 }
 
-// Behavior every Repo implementation must agree on — the same suite runs in
-// repo.local.test.ts. Anything below this point is implementation-specific
-// to the fake (seed determinism, timezone safety, singleton behavior).
 testRepoContract(emptyFakeRepo)
 
 describe('createFakeRepo', () => {
@@ -138,9 +132,6 @@ describe('createFakeRepo — parity with the real (dexie) repo contract', () => 
   })
 
   it('the shared singleton seeds from a pinned clock, reproducible across different boot days', async () => {
-    // The singleton's seed must not depend on the real wall-clock date it happens
-    // to be imported on — re-import it under two different mocked "todays" and
-    // confirm the seed comes out identical either way.
     vi.resetModules()
     vi.useFakeTimers()
     try {
@@ -170,9 +161,6 @@ describe('createFakeRepo — parity with the real (dexie) repo contract', () => 
 })
 
 describe('seed dates are timezone-safe', () => {
-  // FAKE_REPO_SEED_DATE is evaluated at import time, so only the process TZ
-  // exercises it (vi.stubEnv can't) — assert on the singleton itself, not a
-  // locally-constructed repo, which would silently bypass the constant.
   it('anchors the seed on its intended calendar day', async () => {
     const { items } = await fakeRepo.movimientos.list()
     expect(

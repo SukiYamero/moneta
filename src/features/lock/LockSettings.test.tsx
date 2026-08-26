@@ -4,9 +4,6 @@ import userEvent from '@testing-library/user-event'
 import { i18next } from '@/lib/i18n'
 import type { ToastMessageKey } from '@/lib/toastStore'
 
-// Resolved through the real i18next instance ('es', forced by
-// src/test/setup.ts) rather than restated as a literal — same split
-// `AppLock.test.tsx`'s own `T` helper already uses for toast copy.
 const T = (key: Extract<ToastMessageKey, `lock:${string}`>): string => i18next.t(key)
 
 const lockFn = vi.fn()

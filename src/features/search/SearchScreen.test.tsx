@@ -44,9 +44,6 @@ const setReady = (movimientos: Movimiento[], config: Config = CONFIG) => {
   useDataStore.setState({ movimientos, activos: [], config, status: 'ready', error: null })
 }
 
-// Only needed by the "error" test — every other test presets status:'ready'
-// (or a guard-blocking status), so the mount effect's own load() call never
-// reaches getRepo() and this stub is irrelevant to them.
 const makeRepo = ({ readyError }: { readyError?: unknown } = {}): Repo => ({
   ready: vi
     .fn()
@@ -91,17 +88,12 @@ describe('SearchScreen', () => {
     expect(screen.getByRole('heading', { name: /buscar/i })).toBeInTheDocument()
   })
 
-  // AppShell's scroll pane already reserves --bottom-nav-clearance for
-  // every routed screen — a second copy here would double the clearance
-  // under the nav on this one screen.
   it("does not duplicate the shell's --bottom-nav-clearance padding on its own <main>", () => {
     setReady([])
     const { container } = render(<SearchScreen />)
     expect(container.querySelector('main')?.className).not.toMatch(/bottom-nav-clearance/)
   })
 
-  // Anti-flash gate: a load fast enough to beat the ~150ms show-delay must
-  // render nothing, not the skeleton immediately.
   it('shows nothing yet immediately while the data store is not ready, before the anti-flash delay elapses', () => {
     vi.useFakeTimers()
     useDataStore.setState({ status: 'loading' })
@@ -121,16 +113,9 @@ describe('SearchScreen', () => {
 
   it('shows an inline error with a retry action when the load failed', async () => {
     const user = userEvent.setup()
-    // SearchScreen calls dataStore.load() unconditionally on mount, and the
-    // store retries whenever status isn't already 'loading'/'ready' — so a
-    // real (mocked) repo failure is what actually drives the error state,
-    // not a directly-set 'error' status (which the mount effect would
-    // immediately overwrite by retrying for real).
     mGetRepo.mockReturnValue(makeRepo({ readyError: new Error('boom') }))
     render(<SearchScreen />)
 
-    // A plain (non-RepoError) failure lands as dataStore's 'unknown' code,
-    // named via the shared repoErrorCopyKey table.
     await waitFor(() => {
       expect(screen.getByRole('alert')).toHaveTextContent(/error inesperado/i)
     })
@@ -211,8 +196,6 @@ describe('SearchScreen', () => {
     expect(screen.getByText('Viaje en camión')).toBeInTheDocument()
   })
 
-  // `Movimiento.categoria` is a category id — free-text search must match
-  // the category's resolved *name*, not the id, and never the raw id.
   it('matches a movement by its resolved category name, not the raw category id', async () => {
     const user = userEvent.setup()
     setReady([
@@ -240,10 +223,6 @@ describe('SearchScreen', () => {
       expect(screen.getByText('No encontramos "zzz"')).toBeInTheDocument()
     })
 
-    // Typed further immediately after, with no await in between: the
-    // committed (debounced) query driving the actual filter is still
-    // "zzz" for at least this tick, so the message must keep naming "zzz"
-    // — not "zzzq", which was never actually searched yet.
     await user.type(input, 'q')
     expect(screen.getByText('No encontramos "zzz"')).toBeInTheDocument()
     expect(screen.queryByText('No encontramos "zzzq"')).not.toBeInTheDocument()
@@ -264,7 +243,6 @@ describe('SearchScreen', () => {
 
     await user.click(screen.getByRole('button', { name: /borrar búsqueda/i }))
 
-    // Clearing bypasses the debounce entirely (useDebouncedQuery) — no wait needed.
     expect(screen.getByText('Café de la mañana')).toBeInTheDocument()
   })
 
@@ -289,8 +267,6 @@ describe('SearchScreen', () => {
     expect(screen.queryByText('Sueldo de agosto')).not.toBeInTheDocument()
   })
 
-  // `filters.selectedTags` holds category ids; the active chip rendered
-  // above the results must show the resolved *name*, never the raw id.
   it('the active tag chip shows the category name, never the raw category id', async () => {
     const user = userEvent.setup()
     setReady([movimiento({ nota: 'Café de la mañana', categoria: 'cat_comida' })])
@@ -342,8 +318,6 @@ describe('SearchScreen', () => {
     expect(screen.getByText('Café de la mañana')).toBeInTheDocument()
   })
 
-  // Touch targets stay ≥44px via an invisible hit-area padding wrapper,
-  // never by inflating the small visible icon/pill itself.
   it('the clear-search button meets the 44px touch-target floor without inflating the visible circle', async () => {
     const user = userEvent.setup()
     setReady([movimiento({ nota: 'Café de la mañana' })])
@@ -354,8 +328,6 @@ describe('SearchScreen', () => {
     const button = screen.getByRole('button', { name: /borrar búsqueda/i })
     expect(button).toHaveClass('min-h-11')
     expect(button).toHaveClass('min-w-11')
-    // the visible circle (background) lives on an inner element at its
-    // original, smaller designed size — only the button's hit area grows.
     expect(button.firstElementChild).toHaveClass('size-6')
   })
 
@@ -392,16 +364,12 @@ describe('SearchScreen', () => {
     expect(screen.getByText('Sueldo de agosto')).toBeInTheDocument()
   })
 
-  // Switching locale must change currency formatting AND date labels
-  // together — a half-translated screen is worse than an all-Spanish one.
   it('renders money and date labels together in the locale passed by the caller', async () => {
     await i18next.changeLanguage('en')
     setReady([movimiento({ nota: 'Coffee', monto: 1999, moneda: 'USD', fecha: '2026-08-10' })])
     render(<SearchScreen />)
 
     expect(screen.getByText('10 Aug')).toBeInTheDocument()
-    // The sign attaches to the number, not the currency: "$-1,999.00",
-    // not "-$1,999.00".
     expect(screen.getByText('$-1,999.00')).toBeInTheDocument()
 
     await i18next.changeLanguage('es')

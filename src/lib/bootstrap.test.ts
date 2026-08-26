@@ -17,9 +17,6 @@ const mFindFile = vi.mocked(findFile)
 const mCreateFolder = vi.mocked(createFolder)
 const mUpsertTextFile = vi.mocked(upsertTextFile)
 
-// Call order inside bootstrap(): ensureFolder() (one findFile, maybe
-// createFolder) -> writeLeeme() (one upsertTextFile, unconditionally) ->
-// ensureSeedConfigQueued() (one findFile for config-<device>.json).
 const mockFolderExists = (): void => {
   mFindFile.mockResolvedValueOnce('FOLD')
 }
@@ -42,7 +39,7 @@ afterEach(async () => {
 
 describe('bootstrap', () => {
   it('creates the KuroBello folder when it does not exist yet', async () => {
-    mFindFile.mockResolvedValueOnce(null) // folder lookup
+    mFindFile.mockResolvedValueOnce(null)
     mCreateFolder.mockResolvedValue('FOLD')
     mockConfigOnDrive(false)
 
@@ -114,10 +111,10 @@ describe('bootstrap', () => {
       expect(await listPendingOperations()).toHaveLength(1)
 
       mockFolderExists()
-      mockConfigOnDrive(false) // still not on Drive — hasn't pushed yet
+      mockConfigOnDrive(false)
       await bootstrap('tok')
 
-      expect(await listPendingOperations()).toHaveLength(1) // still just one
+      expect(await listPendingOperations()).toHaveLength(1)
     })
   })
 

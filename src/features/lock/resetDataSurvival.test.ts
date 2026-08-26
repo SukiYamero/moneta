@@ -1,9 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-// The lock store starts a real sync session on unlock; nothing here unlocks,
-// but `logout()` runs inside `reset()` and this keeps that path network-free
-// regardless, matching the mocking posture `switchProfile.test.ts` already
-// uses for the same reason.
 vi.mock('@/lib/sync/syncSession', () => ({
   startSyncSession: vi.fn(),
   stopSyncSession: vi.fn(),
@@ -50,11 +46,6 @@ afterEach(async () => {
   await __clearRegistryForTests()
 })
 
-// "Olvidé mi PIN" runs the same destructive action as the 5-failed-attempts
-// lockout — lockStore.reset() (resetVault() + logout()). This proves,
-// against the real stores (not the mocked ones lockStore.test.ts uses),
-// what that action actually destroys: the vault and the device's login
-// markers, never the profile's own financial data.
 describe('lockStore.reset() — what "Olvidé mi PIN" actually destroys', () => {
   it("deletes the vault but leaves the profile's movements untouched", async () => {
     await db.movimientos.put(movimiento)
@@ -74,9 +65,6 @@ describe('lockStore.reset() — what "Olvidé mi PIN" actually destroys', () => 
 
     await useLockStore.getState().reset()
 
-    // This is the mechanism `login()`'s syncProfileForAccount() rides on
-    // (authStore.ts) — reset() never touches deviceDb's `profiles` table, so
-    // the same accountKey resolves back to the same profile id afterward.
     const resolvedAgain = await resolveGoogleProfile({ accountKey: 'sub-ana', label: 'Ana' })
     expect(resolvedAgain.id).toBe(original.id)
     expect(resolvedAgain.databaseName).toBe(original.databaseName)
@@ -90,10 +78,6 @@ describe('lockStore.reset() — what "Olvidé mi PIN" actually destroys', () => 
 
     await useLockStore.getState().reset()
 
-    // authStore.restore()'s *silent* re-auth is the only thing this marker
-    // gates — login()'s explicit "Sign in with Google" path (the one
-    // WelcomeScreen offers) never reads it, so clearing it changes which
-    // screen greets a returning user, not whether their data is reachable.
     expect(await hasLoggedInBefore()).toBe(false)
   })
 })

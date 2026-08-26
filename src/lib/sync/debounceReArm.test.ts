@@ -47,8 +47,6 @@ beforeEach(async () => {
   })
   await setDriveFolderId(reg.id, 'FOLD')
   profile = (await getProfile('pDebounce'))!
-  // push() reads/writes the pushing profile's own database explicitly, so
-  // the outbox redirect must target that same database, matching boot.ts.
   setOutboxDatabase(getProfileDatabase('kurobello-debounce-test'))
 })
 
@@ -92,13 +90,8 @@ describe('trigger wiring: re-arming the debounce', () => {
       },
     })
 
-    // Let the debounce timer fire and the first push actually start
-    // (blocked on findFile).
     await vi.waitFor(() => expect(findResolvers).toHaveLength(1))
 
-    // A second write arrives while the first push is still in flight —
-    // `dirty` was already true and stays true, so the plain edge-triggered
-    // subscription alone would never schedule a follow-up for this one.
     await enqueueOperation({
       entity: 'movimiento',
       op: 'put',
@@ -114,10 +107,8 @@ describe('trigger wiring: re-arming the debounce', () => {
       },
     })
 
-    findResolvers[0]?.(null) // let the first push resolve, draining only op1
+    findResolvers[0]?.(null)
 
-    // The re-armed debounce round should pick op2 up on its own — no
-    // online/visibility/pagehide event fires here.
     await vi.waitFor(() => expect(findResolvers).toHaveLength(2))
     findResolvers[1]?.(null)
 

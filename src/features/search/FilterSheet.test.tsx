@@ -22,7 +22,6 @@ const categories: Categoria[] = [
     icono: 'briefcase',
     color: 'emerald',
   },
-  // No icono/color: exercises the tipo-based fallback.
   { id: 'cat_custom', nombre: 'Etiqueta inventada', seccionId: 'sec_personal', tipo: 'gasto' },
 ]
 
@@ -64,10 +63,8 @@ describe('FilterSheet tag chips', () => {
 
     const dialog = screen.getByRole('dialog')
     const chip = within(dialog).getByRole('button', { name: 'Comida' })
-    // Comida's own color: 'amber' -> chart-3.
     expect(chip.firstElementChild).toHaveClass('border-chart-3/40', 'bg-chart-3/15', 'text-chart-3')
     expect(chip.querySelector('svg')).toHaveClass('text-chart-3')
-    // never the old uniform-primary selected treatment.
     expect(chip.firstElementChild).not.toHaveClass('border-primary/40')
   })
 
@@ -87,7 +84,6 @@ describe('FilterSheet tag chips', () => {
 
     const dialog = screen.getByRole('dialog')
     const chip = within(dialog).getByRole('button', { name: 'Etiqueta inventada' })
-    // no color set, tipo: 'gasto' -> FALLBACK_TINT.gasto -> 'neutral'.
     expect(chip.firstElementChild).toHaveClass(
       'border-border-strong',
       'bg-muted',
@@ -111,7 +107,6 @@ describe('FilterSheet tag chips', () => {
 
     const dialog = screen.getByRole('dialog')
     const chip = within(dialog).getByRole('button', { name: 'Sueldo' })
-    // Sueldo's own color: 'emerald' -> chart-1, unselected pill stays neutral.
     expect(chip.querySelector('svg')).toHaveClass('text-chart-1')
     expect(chip.firstElementChild).toHaveClass(
       'border-border-subtle',

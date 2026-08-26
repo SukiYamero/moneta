@@ -79,10 +79,6 @@ describe('BottomNav', () => {
   })
 })
 
-// BottomNav must not paint while *any* overlay is open — read from the
-// shared `useOverlay` stack (`useHasOpenOverlay`), not a local
-// `addOpen || profileOpen` check that would miss every other sheet (filter,
-// tag picker, category modal, anything future).
 describe('BottomNav — hides while any overlay is open, without unmounting', () => {
   it('applies opacity-0/pointer-events-none while an unrelated BottomSheet elsewhere is open, and stays interactive again once it closes — never unmounting', async () => {
     const user = userEvent.setup()
@@ -116,8 +112,6 @@ describe('BottomNav — hides while any overlay is open, without unmounting', ()
     await user.click(screen.getByRole('button', { name: 'Abrir otro sheet' }))
     await vi.waitFor(() => expect(nav.className).toMatch(/opacity-0/))
     expect(nav.className).toMatch(/pointer-events-none/)
-    // Still mounted — not conditionally rendered away — so it can still
-    // receive focus back once the overlay that hid it closes.
     expect(screen.getByRole('button', { name: /agregar/i })).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Cerrar' }))

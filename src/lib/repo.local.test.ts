@@ -14,10 +14,6 @@ afterEach(async () => {
   await db.movimientos.clear()
   await db.activos.clear()
   await db.config.clear()
-  // `ready()`'s memo now runs once per database connection (not once per
-  // call) — `db` is a singleton reused across this whole file, so without
-  // this reset a resolved memo from an earlier test would leak into the
-  // next one and skip performReady() against config just cleared above.
   __resetReadyMemoForTests()
 })
 
@@ -47,11 +43,6 @@ const activo = (overrides: Partial<Activo> = {}): Activo => {
   }
 }
 
-// Behavior every Repo implementation must agree on — run here and in
-// repo.fake.test.ts against the same suite. Anything
-// below this point in the file is implementation-specific to the dexie-
-// backed repo (fast path, ready()/migration mechanics, cursor identity
-// binding, message-text regressions, concurrency mechanics).
 testRepoContract(() => createLocalRepo())
 
 describe('migrateSchema (dispatch registry)', () => {
@@ -76,7 +67,6 @@ describe('migrateSchema (dispatch registry)', () => {
 
   it('throws schema_mismatch when a migration is missing in the range', async () => {
     const registry: Record<number, Migration> = { 2: async () => {} }
-    // needs 2 and 3, only 2 is registered
     await expect(migrateSchema(1, 3, registry)).rejects.toMatchObject({
       code: 'schema_mismatch',
     })
@@ -100,8 +90,6 @@ describe('ready() / schemaVersion gate', () => {
     vi.unstubAllGlobals()
   })
 
-  // A stored Config always wins — this is a first-run default, never a
-  // reassignment of a currency the user already has.
   it('never re-derives monedaPrincipal for an already-seeded store, even if the device region changes', async () => {
     await db.config.put({ ...CONFIG_SEMILLA, id: 1 })
     vi.stubGlobal('navigator', { ...navigator, languages: ['es-MX'] })
@@ -142,9 +130,6 @@ describe('ready() / schemaVersion gate', () => {
   })
 
   it('memoizes the in-flight ready() across different repo instances backed by the same database', async () => {
-    // Two separate createLocalRepo() calls share the same underlying `db`
-    // singleton — the memo must dedupe across them too, not just within one
-    // instance, or two concurrent instances could double-run a migration.
     const repoA = createLocalRepo()
     const repoB = createLocalRepo()
     const putSpy = vi.spyOn(db.config, 'put')
@@ -154,9 +139,6 @@ describe('ready() / schemaVersion gate', () => {
   })
 
   it('ready() runs performReady() exactly once per database connection, not once per call', async () => {
-    // Regression pin for the run-once guarantee: performReady() must not
-    // re-run on every subsequent repo operation just because the in-flight
-    // memo was cleared once the first call settled successfully.
     const repo = createLocalRepo()
     const getSpy = vi.spyOn(db.config, 'get')
     await repo.ready()
@@ -172,7 +154,6 @@ describe('ready() / schemaVersion gate', () => {
     await db.config.put({ ...CONFIG_SEMILLA, schemaVersion: SCHEMA_VERSION + 1, id: 1 })
     const repo = createLocalRepo()
     await expect(repo.ready()).rejects.toMatchObject({ code: 'schema_mismatch' })
-    // Fix the stored data out-of-band, as a migration landing later would.
     await db.config.put({ ...CONFIG_SEMILLA, id: 1 })
     await expect(repo.ready()).resolves.toBeUndefined()
   })
@@ -181,7 +162,6 @@ describe('ready() / schemaVersion gate', () => {
 describe('movimientos CRUD', () => {
   it('update() not_found error names the entity, not the date field it happens to sort by', async () => {
     const repo = createLocalRepo()
-    // The error must name the entity, not the internal field it sorts by.
     await expect(repo.movimientos.update('missing', { monto: 1 })).rejects.toThrow(
       /movimiento with id/i,
     )
@@ -198,9 +178,6 @@ describe('movimientos CRUD', () => {
   it('add() with a duplicate id rejects as invalid_input, naming the id, not unknown', async () => {
     const repo = createLocalRepo()
     const m = await repo.movimientos.add(movimiento())
-    // A duplicate id is bad caller input (id must be unique), not a
-    // storage-layer failure — Dexie's ConstraintError must not fall through
-    // to the generic 'unknown' code.
     await expect(repo.movimientos.add({ ...m })).rejects.toMatchObject({ code: 'invalid_input' })
     await expect(repo.movimientos.add({ ...m })).rejects.toThrow(new RegExp(m.id))
   })
@@ -210,8 +187,6 @@ describe('movimientos CRUD — update()/remove() atomicity', () => {
   it('update() is atomic: two concurrent patches on the same id never lose a write', async () => {
     const repo = createLocalRepo()
     const m = await repo.movimientos.add(movimiento({ monto: 100, categoria: 'cat_sueldo' }))
-    // Both read-merge-write cycles must be serialized against each other, or
-    // the second `put` silently clobbers the first's patch with no error.
     await Promise.all([
       repo.movimientos.update(m.id, { monto: 200 }),
       repo.movimientos.update(m.id, { categoria: 'cat_otro' }),
@@ -246,11 +221,6 @@ describe('movimientos bulk paths (addMany / removeMany)', () => {
   })
 
   it('addMany() wraps a failure in the post-conflict duplicate-id lookup (bulkGet) as RepoError too', async () => {
-    // The ConstraintError handler in addMany()'s catch block awaits
-    // findDuplicateId() (a second storage call, table.bulkGet) to name the
-    // offending id. If THAT call itself rejects — a second, unrelated
-    // storage failure racing the first — the raw rejection must not escape
-    // addMany() unwrapped; same guarantee as the primary bulkAdd failure.
     const repo = createLocalRepo()
     const existing = await repo.movimientos.add(movimiento())
     const bulkGetSpy = vi.spyOn(db.movimientos, 'bulkGet').mockRejectedValueOnce(new Error('boom'))
@@ -267,8 +237,8 @@ describe('list() — filtering', () => {
     const repo = createLocalRepo()
     await repo.movimientos.addMany([
       movimiento({ seccion: 'sec_trabajo', fecha: '2026-01-01' }),
-      movimiento({ seccion: 'sec_trabajo', fecha: '2026-06-01' }), // out of range
-      movimiento({ seccion: 'sec_personal', fecha: '2026-01-15' }), // wrong section
+      movimiento({ seccion: 'sec_trabajo', fecha: '2026-06-01' }),
+      movimiento({ seccion: 'sec_personal', fecha: '2026-01-15' }),
     ])
     const { items } = await repo.movimientos.list({
       seccion: 'sec_trabajo',
@@ -337,9 +307,6 @@ describe('list() — keyset pagination', () => {
     expect(page1.items.map((m) => m.fecha)).toEqual(['2026-01-04', '2026-01-03'])
     expect(page1.nextCursor).toBeDefined()
 
-    // Inserted between page fetches, tied on fecha with the page1 cursor but
-    // with an earlier createdAt — under desc (tiebreak desc too), an earlier
-    // createdAt sorts strictly after the cursor, i.e. lands on the next page.
     const inserted = await repo.movimientos.add(
       movimiento({ fecha: '2026-01-03', createdAt: '2020-01-01T00:00:00.000Z' }),
     )
@@ -350,7 +317,7 @@ describe('list() — keyset pagination', () => {
 
     const page3 = await repo.movimientos.list({ limit: 2, cursor: page2.nextCursor })
     const allIds = [...page1.items, ...page2.items, ...page3.items].map((m) => m.id)
-    expect(new Set(allIds).size).toBe(allIds.length) // no duplicates anywhere
+    expect(new Set(allIds).size).toBe(allIds.length)
   })
 
   it('an insert sorting before the cursor is not retroactively injected into the next page', async () => {
@@ -361,8 +328,7 @@ describe('list() — keyset pagination', () => {
       movimiento({ fecha: '2026-01-02' }),
     ])
 
-    const page1 = await repo.movimientos.list({ limit: 2 }) // [04, 03]
-    // Sorts before the cursor (newer than everything already fetched).
+    const page1 = await repo.movimientos.list({ limit: 2 })
     await repo.movimientos.add(movimiento({ fecha: '2026-01-05' }))
 
     const page2 = await repo.movimientos.list({ limit: 2, cursor: page1.nextCursor })
@@ -382,7 +348,6 @@ describe('list() — keyset pagination', () => {
       limit: 2,
     })
     expect(mintedUnderMontoAsc.nextCursor).toBeDefined()
-    // Default sortBy/sortDir (fecha desc) differs from what minted the cursor.
     await expect(
       repo.movimientos.list({ limit: 2, cursor: mintedUnderMontoAsc.nextCursor }),
     ).rejects.toMatchObject({ code: 'invalid_input' })
@@ -416,10 +381,6 @@ describe('Config', () => {
 })
 
 describe('Config — error normalization', () => {
-  // getConfig()/updateConfig() sit outside createCrudRepo's factory and must
-  // funnel a raw storage failure through the same wrapUnknown() normalization
-  // every CrudRepo method uses, or a caller's `instanceof RepoError` check
-  // silently falls through to an unhandled bare Error.
   it.each([
     [
       'getConfig() wraps an unexpected db.config.get() failure',
@@ -447,8 +408,6 @@ describe('Config — error normalization', () => {
   })
 
   it('updateConfig() still rejects a caller-supplied schemaVersion as invalid_input, not unknown', async () => {
-    // Regression guard: the schemaVersion guard must stay outside the
-    // wrapping try/catch's "everything unexpected is unknown" umbrella.
     const repo = createLocalRepo()
     await repo.ready()
     await expect(repo.updateConfig({ schemaVersion: 999 })).rejects.toMatchObject({
@@ -469,8 +428,6 @@ describe('list() — fast path is a bounded read, not a full scan', () => {
       rows.push(
         movimiento({
           fecha,
-          // Distinct createdAt per row (millisecond-unique), matching real
-          // writes — keeps ties on the fast-path compound index rare, as documented.
           createdAt: new Date(Date.UTC(2020, 0, 1, 0, 0, 0, i)).toISOString(),
         }),
       )
@@ -486,20 +443,13 @@ describe('list() — fast path is a bounded read, not a full scan', () => {
     const seeded = await seedManyMovimientos(3000, 200)
     const repo = createLocalRepo()
 
-    // `Table.prototype.toArray()` is the unbounded, whole-store read the bug
-    // report was about — the fast path must never call it directly.
     const tableToArraySpy = vi.spyOn(db.movimientos, 'toArray')
-    // `Table.toArray()` itself delegates to `Collection.prototype.toArray()`
-    // internally, so spying at this shared layer measures exactly how many
-    // rows any underlying read actually materialized, regardless of which
-    // call issued it.
     const collectionToArraySpy = vi.spyOn(db.Collection.prototype, 'toArray')
 
     const page = await repo.movimientos.list({ limit: 20 })
 
     expect(page.items).toHaveLength(20)
     expect(page.nextCursor).toBeDefined()
-    // Sanity: it's really the top 20 by fecha desc, not an arbitrary slice.
     const expectedTopFecha = seeded.toSorted((a, b) => (a.fecha < b.fecha ? 1 : -1))[0]?.fecha
     expect(page.items[0]?.fecha).toBe(expectedTopFecha)
 
@@ -514,8 +464,6 @@ describe('list() — fast path is a bounded read, not a full scan', () => {
     )
     const maxMaterialized = resolvedLengths.length ? Math.max(...resolvedLengths) : 0
 
-    // Bounded by limit + TIE_SAFETY_MARGIN (20 + 1 + 32 = 53), nowhere near
-    // the 3000 seeded rows — this is the actual proof, not just "same page".
     expect(maxMaterialized).toBeGreaterThan(0)
     expect(maxMaterialized).toBeLessThan(100)
 
@@ -548,7 +496,6 @@ describe('list() — fast path is a bounded read, not a full scan', () => {
     }
 
     expect(seenIds.size).toBe(seeded.length)
-    // No page's underlying read scaled anywhere near the 2000-row table.
     expect(Math.max(...perPageMax)).toBeLessThan(100)
 
     collectionToArraySpy.mockRestore()
@@ -571,9 +518,6 @@ describe('list() — fast path correctness at the exact-tie boundary', () => {
     return seen
   }
 
-  // TIE_SAFETY_MARGIN is 32: a tie cluster under it stays on the fast path;
-  // over it forces `tryFastPath` to bail (it can't prove it's seen
-  // everything within its bounded window) and fall back to `listSlow`.
   it.each([
     ['smaller than TIE_SAFETY_MARGIN (fast path)', 10],
     ['larger than TIE_SAFETY_MARGIN (listSlow fallback)', 50],
@@ -610,9 +554,6 @@ describe('list() — fast path correctness at the exact-tie boundary', () => {
   })
 })
 
-// createLocalRepo() must be able to open against any ProfileDb, not just the
-// frozen module-level `db` — this is what lets a guest and a signed-in
-// account read/write entirely separate stores on the same device.
 describe('createLocalRepo(database) — per-profile isolation', () => {
   it('defaults to the frozen module-level db when no database is passed', async () => {
     const repo = createLocalRepo()

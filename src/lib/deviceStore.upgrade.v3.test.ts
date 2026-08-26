@@ -1,15 +1,6 @@
 import Dexie, { type EntityTable } from 'dexie'
 import { afterEach, beforeEach, expect, test } from 'vitest'
 
-// Deliberately does NOT statically import '@/lib/deviceStore', for the same
-// reason deviceStore.upgrade.test.ts doesn't: importing it opens the real
-// `kurobello-device` connection and upgrades it to v3 as a side effect,
-// which would make it impossible to seed a v2-only database first.
-//
-// v3 folds `anchor` and `profiles` into this database. Neither table had
-// ever shipped elsewhere, so there is no data to carry over, but a v2
-// device (marker + driveDecision only) must still upgrade to v3 without
-// losing either of its own two tables.
 type MarkerRow = { id: number; loggedInBefore: boolean }
 type DriveDecisionRow = { id: number; decision: 'connected' | 'dismissed' }
 
@@ -35,9 +26,6 @@ test('an existing v2 device upgrades to v3 without losing its marker or Drive de
 
   expect(await hasLoggedInBefore()).toBe(true)
   expect(await getDriveDecision()).toBe('dismissed')
-  // A device that never wrote a network anchor or a profile row resolves to
-  // "no signal" — the same fail-open posture every other read here has, not
-  // a crash from the new tables simply not existing yet on this device.
   expect(await deviceDb.anchor.get(1)).toBeUndefined()
   expect(await deviceDb.profiles.toArray()).toEqual([])
 })

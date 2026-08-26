@@ -10,8 +10,6 @@ import {
 
 const items = () => useToastStore.getState().items
 
-// Must stay a function, not a module-scope const: i18next.language isn't
-// forced to 'es' until setup.ts's beforeAll runs, after this module evaluates.
 const T = (key: ToastMessageKey, values?: Record<string, unknown>): string => i18next.t(key, values)
 
 beforeEach(() => {
@@ -65,7 +63,6 @@ describe('toast.success / toast.error', () => {
     vi.advanceTimersByTime(3000)
     toast.success('toast:demo.two')
     vi.advanceTimersByTime(1000)
-    // 'one' is now at its full 4000ms and must be gone; 'two' still has 3000ms left.
     expect(items().map((item) => item.message)).toEqual([T('toast:demo.two')])
   })
 
@@ -79,9 +76,9 @@ describe('toast.success / toast.error', () => {
   it("collapsing a duplicate resets that one card's own timer", () => {
     toast.success('toast:demo.saved')
     vi.advanceTimersByTime(3000)
-    toast.success('toast:demo.saved') // re-raised with 1000ms left on the original timer
+    toast.success('toast:demo.saved')
     vi.advanceTimersByTime(3999)
-    expect(items()).toHaveLength(1) // would be gone already if the timer hadn't reset
+    expect(items()).toHaveLength(1)
     vi.advanceTimersByTime(1)
     expect(items()).toHaveLength(0)
   })
@@ -132,9 +129,6 @@ describe('setToastsSuppressed', () => {
     setToastsSuppressed(true)
     setToastsSuppressed(false)
 
-    // If the original 4s timer had survived, it would still fire here and
-    // try to remove an id no longer in the (already-empty) stack — this
-    // just proves nothing resurrects in the meantime.
     vi.advanceTimersByTime(4000)
     expect(items()).toHaveLength(0)
   })
@@ -147,8 +141,6 @@ describe('dismissToast', () => {
     dismissToast(item!.id)
     expect(items()).toHaveLength(0)
 
-    // If the timer weren't cancelled, this would try to filter an id that's
-    // already gone — harmless either way, but proves no leftover timer fires.
     vi.advanceTimersByTime(10_000)
     expect(items()).toHaveLength(0)
   })

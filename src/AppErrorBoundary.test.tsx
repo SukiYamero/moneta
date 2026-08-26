@@ -21,8 +21,6 @@ describe('AppErrorBoundary', () => {
   })
 
   it('renders a Spanish fallback with role="alert" instead of crashing the tree', () => {
-    // React logs the caught error to console.error on its own (on top of our
-    // componentDidCatch log) — expected noise for this test, not a signal.
     vi.spyOn(console, 'error').mockImplementation(() => {})
     render(
       <AppErrorBoundary>

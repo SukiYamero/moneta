@@ -91,7 +91,6 @@ describe('FirstSyncGate', () => {
     )
     expect(screen.queryByText('app')).not.toBeInTheDocument()
     expect(screen.getByText('fake-download-done')).toBeInTheDocument()
-    // The gate itself never calls runInitialSync — DriveDownloadScreen owns its own attempt.
     expect(mRunInitialSync).not.toHaveBeenCalled()
   })
 
@@ -117,14 +116,9 @@ describe('FirstSyncGate', () => {
     loadSpy.mockRestore()
   })
 
-  // router.tsx mounts a fresh FirstSyncGate on every top-level route
-  // (/settings is a sibling of /, not nested), so this remounts the
-  // component with no boot rebind in between.
   it('a profile dismissed via "continue without Drive" does not re-show the gate on the next remount', async () => {
     const user = userEvent.setup()
     useAuthStore.setState({ status: 'authenticated', drive: { folderId: 'F' } })
-    // The profile never gets a lastPullAt in this test — simulating a pull that
-    // keeps failing (e.g. persistently offline) even after the user dismisses.
     mGetActiveProfileBinding.mockReturnValue({ profile, database: {} as never, repo: {} as never })
 
     const first = render(
@@ -132,14 +126,10 @@ describe('FirstSyncGate', () => {
         <div>app</div>
       </FirstSyncGate>,
     )
-    // Simulate the "continue without Drive for now" dismissal (DriveDownloadScreen
-    // calls the same onDone prop for both a real success and this explicit skip).
     await user.click(first.getByText('fake-download-done'))
     expect(first.getByText('app')).toBeInTheDocument()
     first.unmount()
 
-    // Remount with the identical (still-unsynced) profile state — this is what
-    // happens when the user taps the settings gear right after dismissing.
     const second = render(
       <FirstSyncGate>
         <div>app</div>

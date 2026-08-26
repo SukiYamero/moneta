@@ -52,7 +52,6 @@ describe('PinPad', () => {
   it('renders no decimal key — the PIN pad never groups by locale', () => {
     render(<PinPad value="" onChange={() => {}} />)
 
-    // 10 digits + delete, no decimal key
     expect(screen.getAllByRole('button')).toHaveLength(11)
   })
 

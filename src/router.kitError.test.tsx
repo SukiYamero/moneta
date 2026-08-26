@@ -2,17 +2,10 @@ import { describe, expect, it, vi } from 'vitest'
 import { act, render, screen } from '@testing-library/react'
 import { RouterProvider } from 'react-router'
 
-// A dedicated file: `vi.mock` is hoisted and file-scoped, so mocking
-// `@/routes/Kit` here can't leak into router.kit.test.tsx's real-import
-// success-path test.
 vi.mock('@/routes/Kit', () => {
   throw new Error('chunk failed to load')
 })
 
-// The dynamic `import('@/router')` below transforms the whole route module
-// graph inside the test itself, which can exceed the 5s default under load;
-// the assertion is event-based (`findByRole`), so this only widens the
-// budget, it doesn't turn the assertion into a race.
 const CHUNK_FAILURE_TIMEOUT_MS = 30_000
 
 describe('router — /kit dev route, lazy chunk failure', () => {

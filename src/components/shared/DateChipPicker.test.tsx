@@ -82,8 +82,6 @@ describe('DateChipPicker', () => {
     expect(prevMonth.firstElementChild).toHaveClass('size-7')
   })
 
-  // March 2026 spans 6 real weeks, February 2027 spans 4 (both weekStartsOn:1)
-  // — the grid must render the same 42-cell size for both regardless.
   it('renders the same 42-cell grid for two real months with different week counts', async () => {
     const user = userEvent.setup()
 
@@ -107,9 +105,6 @@ describe('DateChipPicker', () => {
     expect(februaryCells).toHaveLength(42)
   })
 
-  // A hand-rolled `"d 'de' MMMM"` format would bake the Spanish connector
-  // "de" into every locale ("10 de August") — the label must localize the
-  // whole phrase via Intl.DateTimeFormat, not just the month name.
   it('renders the day+month label and the month header in the locale passed by the caller', async () => {
     const user = userEvent.setup()
     render(

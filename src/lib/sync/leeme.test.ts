@@ -14,23 +14,17 @@ describe('buildLeemeContent', () => {
   it.each(LOCALES)('covers every required point, in order, for %s', (locale) => {
     const content = buildLeemeContent(locale, 'TestApp')
 
-    // 1. what these files are, and that they are theirs — the app name and
-    // "yours"/"tuyos"/"seus" appear together up front.
     expect(content).toContain('TestApp')
 
-    // 2. the .csv files are the easy path
     const csvIdx = content.indexOf('.csv')
     expect(csvIdx).toBeGreaterThan(-1)
 
-    // 3. the .json files are the complete record, current year has none yet
     const jsonIdx = content.indexOf('.json')
     expect(jsonIdx).toBeGreaterThan(csvIdx)
 
-    // 4. the one-sentence rule for turning JSON into a table
     const delIdx = content.indexOf('del')
     expect(delIdx).toBeGreaterThan(jsonIdx)
 
-    // 5. nothing here is encrypted or locked — comes after the rule
     const encryptedMarkers = ['cifrado', 'encrypted', 'criptografado']
     const encryptedIdx = encryptedMarkers.map((m) => content.indexOf(m)).find((i) => i > -1)
     expect(encryptedIdx).toBeGreaterThan(delIdx)

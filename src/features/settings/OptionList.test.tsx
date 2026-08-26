@@ -28,9 +28,6 @@ describe('OptionList', () => {
     for (const radio of screen.getAllByRole('radio')) expect(radio).toHaveClass('min-h-11')
   })
 
-  // `role="radiogroup"`/`role="radio"` promises one tab stop with roving
-  // `tabIndex` and arrow keys moving focus — the same contract
-  // `SegmentedControl` implements.
   describe('roving tabIndex + arrow-key contract (APG radiogroup, vertical)', () => {
     it('gives only the selected option tabIndex 0, every other -1', () => {
       render(<OptionList items={items} value="b" onChange={vi.fn()} aria-label="Options" />)

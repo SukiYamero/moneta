@@ -5,8 +5,6 @@ import { MemoryRouter } from 'react-router'
 import { useBootStore } from '@/lib/boot'
 import { BootGate } from '@/features/boot/BootGate'
 
-// PreContentSkeleton uses the real BottomNav, which needs a Router context —
-// every real call site (router.tsx) already provides one; test-harness only.
 const render = (ui: ReactElement) => rtlRender(ui, { wrapper: MemoryRouter })
 
 beforeEach(() => {
@@ -25,8 +23,6 @@ describe('BootGate', () => {
     expect(run).toHaveBeenCalledOnce()
   })
 
-  // No full-screen loading treatment at all — the same shell+skeleton
-  // cover RequireAuth uses, never a distinct brand screen.
   it('shows the shell+skeleton cover while status is idle/running, never the children', () => {
     render(
       <BootGate>
@@ -88,11 +84,6 @@ describe('BootGate', () => {
     expect(screen.queryByRole('navigation')).not.toBeInTheDocument()
   })
 
-  // `status` is a module-global store, not scoped to "ready for the profile
-  // currently bound". A `BootGate` mounted while `status` is still 'ready'
-  // from a previous boot session must not render `children` instantly off
-  // that stale value — `authStore.ts`'s `logout()` resets it via
-  // `invalidateBootForSignOut()` before a next sign-in can remount this.
   it('after an invalidated boot, a fresh mount stays covered through run() rather than assuming stale readiness', () => {
     let flipToRunning: () => void = () => {}
     const run = vi.fn().mockImplementation(
@@ -104,7 +95,6 @@ describe('BootGate', () => {
           }
         }),
     )
-    // The post-logout starting state invalidateBootForSignOut() produces.
     useBootStore.setState({ status: 'idle', error: null, run })
 
     render(
@@ -117,7 +107,6 @@ describe('BootGate', () => {
     act(() => {
       flipToRunning()
     })
-    // Mid-boot for this mount (a rebind's reset+reload window) — must stay covered.
     expect(screen.queryByText('app')).not.toBeInTheDocument()
 
     act(() => {

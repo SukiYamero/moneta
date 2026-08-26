@@ -5,10 +5,6 @@ import { MemoryRouter } from 'react-router'
 import { useDataStore } from '@/lib/dataStore'
 import { CONFIG_SEMILLA } from '@/lib/schema'
 
-// A dedicated mock, same shape HistoryScreen.status.test.tsx uses — this
-// file is about SettingsScreen's own orchestration (loading/error/back),
-// not CategoriesSection's/PreferencesEditor's own behavior, which each
-// have their own test file.
 vi.mock('@/lib/dataStore', () => ({ useDataStore: vi.fn() }))
 vi.mock('@/features/settings/CategoriesSection', () => ({
   CategoriesSection: () => <div>categories section</div>,
@@ -83,11 +79,6 @@ describe('SettingsScreen', () => {
     expect(mockNavigate).toHaveBeenCalledWith(-1)
   })
 
-  // `CategoriesSection`/`PreferencesEditor` reuse `ProfileSectionHeading`
-  // (a hardcoded `<h3>` built for `ProfileSheet.tsx`'s own `<h2>`), which
-  // would skip a level under this screen's `<h1>` without an `<h2>` of its
-  // own here. Both sections are mocked away in this file, so their `<h3>`
-  // is covered by their own test files instead.
   it('supplies an <h2> for each section, so the real heading below never skips a level', () => {
     mockStore({ status: 'ready', config: CONFIG_SEMILLA })
     renderScreen()

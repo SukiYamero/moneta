@@ -20,8 +20,6 @@ describe('syncStoredLocale', () => {
   })
 
   it('falls back to the detected locale once idioma is written back to undefined', async () => {
-    // Choosing "seguir el dispositivo" writes idioma: undefined, and the
-    // very next resolution must fall back live, not just on the next boot.
     syncStoredLocale()
     useDataStore.setState({
       config: { ...CONFIG_SEMILLA, preferencias: { ...CONFIG_SEMILLA.preferencias, idioma: 'en' } },
@@ -36,7 +34,6 @@ describe('syncStoredLocale', () => {
       },
     }))
     await Promise.resolve()
-    // navigator.language is forced to 'es-CO' by src/test/setup.ts.
     expect(i18next.resolvedLanguage).toBe('es')
   })
 

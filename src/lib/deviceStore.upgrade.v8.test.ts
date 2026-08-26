@@ -1,11 +1,6 @@
 import Dexie, { type EntityTable } from 'dexie'
 import { afterEach, beforeEach, expect, test } from 'vitest'
 
-// Deliberately does NOT statically import '@/lib/deviceStore' — same reason
-// as the v3/v4/v5/v7 upgrade tests: importing it opens the real
-// `kurobello-device` connection and upgrades it immediately, which would
-// make it impossible to seed a v7-only database first. A v7 device must
-// upgrade to v8 (adds `guestMarker`) without losing any of its eight tables, and hasUsedGuestBefore must answer false rather than treat the missing table as an error.
 type MarkerRow = { id: number; loggedInBefore: boolean }
 type DriveDecisionRow = { id: number; decision: 'connected' | 'dismissed' }
 type AnchorRow = { id: number; lastOnlineAt: number }

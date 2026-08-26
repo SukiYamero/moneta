@@ -59,7 +59,6 @@ describe('LandscapeGuard', () => {
     await user.click(screen.getByRole('button', { name: 'Omitir y continuar' }))
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
 
-    // Back to portrait, then landscape again — still the same session.
     stubMatchMedia(false)
     rerender(<LandscapeGuard />)
     stubMatchMedia(true)
@@ -74,7 +73,6 @@ describe('LandscapeGuard', () => {
     const { rerender } = render(<LandscapeGuard />)
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
 
-    // Simulate a new session starting: fresh session state, same as a reload.
     useLandscapeGateStore.setState({ skippedThisSession: false })
     rerender(<LandscapeGuard />)
     expect(screen.getByRole('status')).toBeInTheDocument()

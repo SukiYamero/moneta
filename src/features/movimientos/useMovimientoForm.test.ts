@@ -42,7 +42,6 @@ const categoria = (overrides: Partial<Categoria> = {}): Categoria => ({
   ...overrides,
 })
 
-// Only the methods dataStore's mutations actually call.
 const makeRepo = (): Repo =>
   ({
     ready: vi.fn().mockResolvedValue(undefined),
@@ -262,8 +261,6 @@ describe('useMovimientoForm — successful create', () => {
       nota: 'Pesas',
     })
 
-    // A create-mode sheet stays mounted across opens, so a save must clear
-    // the draft rather than leave it for next time.
     expect(result.current.amountRaw).toBe('')
     expect(result.current.nota).toBe('')
     expect(result.current.categoriaId).toBeUndefined()
@@ -397,9 +394,6 @@ describe('useMovimientoForm — editing a movement whose category no longer reso
       }),
     )
 
-    // The picker can't highlight it (it's not in `categorias`), but it must
-    // not be silently reassigned to something else either — the id is kept
-    // as-is and the user can still save an unrelated field change.
     expect(result.current.categoriaId).toBe('cat_unresolved')
     expect(result.current.categoriaMissing).toBe(false)
 

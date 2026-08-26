@@ -53,7 +53,6 @@ describe('buildDayOptions', () => {
     const movimientos = [movimiento({ fecha: '2026-08-15' })]
     const anchor = '2026-08-19'
     const range = periodRange('dia', anchor, 1)
-    // 2026-08-17 is a Monday: "L" in Spanish, "M" in English.
     const esOption = buildDayOptions(movimientos, anchor, range, es).find(
       (o) => o.iso === '2026-08-17',
     )
@@ -75,7 +74,6 @@ describe('buildWeekOptions', () => {
       const options = buildWeekOptions(movimientos, anchor, range, primerDiaSemana, es)
       const selected = options.find((o) => o.selected)
       expect(selected?.iso).toBe(range.from)
-      // Every option's own range must round-trip through periodRange identically.
       for (const option of options) {
         expect(periodRange('semana', option.iso, primerDiaSemana).from).toBe(option.iso)
       }

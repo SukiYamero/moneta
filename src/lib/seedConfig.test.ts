@@ -27,23 +27,15 @@ describe('buildSeedConfig', () => {
   })
 
   it('detects the region from the device when called with no argument', () => {
-    // Test-env navigator is stubbed to es-CO (src/test/setup.ts) — the
-    // region axis has no persisted state, so calling with no args must
-    // resolve through detectRegion() the same way the seeding paths do.
     expect(buildSeedConfig().preferencias.monedaPrincipal).toBe('COP')
   })
 })
 
-// Seed taxonomy names are chosen once, at seed time, off the active i18next
-// language — not the device region, which stays monedaPrincipal's own axis.
-// Ids never change across locales; a Movimiento references a category by id.
 describe('buildSeedConfig — seed taxonomy localization', () => {
   it('keeps ids stable and only localizes nombre, regardless of locale', () => {
     const seed = buildSeedConfig('CO', 'pt-BR')
     expect(seed.secciones.map((s) => s.id)).toEqual(CONFIG_SEMILLA.secciones.map((s) => s.id))
     expect(seed.categorias.map((c) => c.id)).toEqual(CONFIG_SEMILLA.categorias.map((c) => c.id))
-    // Every other field on a categoria (icono, color, tipo, seccionId)
-    // carries over untouched — only nombre varies by locale.
     expect(seed.categorias.map((c) => ({ ...c, nombre: undefined }))).toEqual(
       CONFIG_SEMILLA.categorias.map((c) => ({ ...c, nombre: undefined })),
     )
@@ -78,14 +70,12 @@ describe('buildSeedConfig — seed taxonomy localization', () => {
   )
 
   it('the currency (region) and taxonomy (locale) axes vary independently', () => {
-    // A pt-BR reader in Mexico: taxonomy follows the language, currency follows the region.
     const seed = buildSeedConfig('MX', 'pt-BR')
     expect(seed.preferencias.monedaPrincipal).toBe('MXN')
     expect(seed.secciones.map((s) => s.nombre)).toEqual(['Pessoal', 'Trabalho', 'Negócio'])
   })
 
   it('detects the active locale from the device when called with no second argument', () => {
-    // Test-env navigator is stubbed to es-CO (src/test/setup.ts).
     expect(buildSeedConfig().secciones).toEqual(CONFIG_SEMILLA.secciones)
   })
 })

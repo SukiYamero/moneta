@@ -43,7 +43,6 @@ describe('ReturningUserScreen', () => {
       label: 'Alex Rivera',
       kind: 'google',
       databaseName: 'kurobello-g1',
-      // A real GoogleUser.sub, not an email — authStore.ts prefers sub.
       accountKey: '10983475619872341',
     })
     render(<ReturningUserScreen />)
@@ -90,10 +89,6 @@ describe('ReturningUserScreen', () => {
     expect(login).toHaveBeenCalledOnce()
   })
 
-  // The screen's second action is guest entry, gated behind a confirm
-  // dialog rather than a bare button calling the same login() as the
-  // primary CTA — the visible action count stays at two honest,
-  // differently-behaving controls.
   it('renders exactly two actions — the primary CTA and the gated guest entry', async () => {
     render(<ReturningUserScreen />)
     await waitFor(() => expect(screen.getByRole('heading')).toBeInTheDocument())
@@ -116,8 +111,6 @@ describe('ReturningUserScreen', () => {
     expect(screen.queryByText(/access_denied/i)).not.toBeInTheDocument()
   })
 
-  // The guest escape hatch must be honest about what it does — never a
-  // bare button that silently switches profiles.
   it('does not enter guest mode from a bare tap — it opens a confirm dialog first', async () => {
     const continueAsGuest = vi.fn()
     useAuthStore.setState({ continueAsGuest })
@@ -157,8 +150,6 @@ describe('ReturningUserScreen', () => {
     expect(continueAsGuest).not.toHaveBeenCalled()
   })
 
-  // The dialog is the one honest place left to say what guest mode does —
-  // this is a warning about a consequence, not a second welcome screen.
   it('the guest dialog explains the consequence without repeating first-run legal copy', async () => {
     render(<ReturningUserScreen />)
     await waitFor(() => expect(screen.getByRole('heading')).toBeInTheDocument())
@@ -170,9 +161,6 @@ describe('ReturningUserScreen', () => {
     expect(screen.queryByText(/política de privacidad/i)).not.toBeInTheDocument()
   })
 
-  // The reassurance line must be true whether or not local data actually
-  // survived — "if you had data, it's still here" is not safe wording, since
-  // the login marker only proves a session once existed.
   it('reassures with a claim that is true regardless of whether local data survived', async () => {
     render(<ReturningUserScreen />)
     await waitFor(() => expect(screen.getByRole('heading')).toBeInTheDocument())

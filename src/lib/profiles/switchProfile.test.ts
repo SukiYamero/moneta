@@ -57,7 +57,7 @@ afterEach(async () => {
 describe('switchToProfile', () => {
   it('is a no-op when the target is already the active profile', async () => {
     const { useBootStore } = await import('@/lib/boot')
-    await useBootStore.getState().run() // establishes the default profile as bound first
+    await useBootStore.getState().run()
     const active = getActiveProfileBinding()!.profile
 
     const result = await switchToProfile(active)
@@ -69,7 +69,7 @@ describe('switchToProfile', () => {
 
   it('rebinds the repo, the outbox and the data store to the target profile', async () => {
     const { useBootStore } = await import('@/lib/boot')
-    await useBootStore.getState().run() // binds the default local profile first
+    await useBootStore.getState().run()
     expect(getActiveProfileBinding()!.profile.id).toBe(DEFAULT_PROFILE_ID)
 
     await registerProfile({
@@ -78,8 +78,6 @@ describe('switchToProfile', () => {
       kind: 'google',
       databaseName: 'kurobello-switch-target',
     })
-    // The switcher's pre-check reads the target's owner marker, only ever
-    // populated by a prior bind — simulate that directly rather than a full sign-in.
     const targetDb = getProfileDatabase('kurobello-switch-target')
     await targetDb.profileOwner.put({ id: 1, kind: 'google', createdAt: 'T1' })
     const target = (await getProfile('switch-target'))!
@@ -90,7 +88,6 @@ describe('switchToProfile', () => {
     expect(getActiveProfileBinding()!.profile.id).toBe('switch-target')
     expect(await getActiveProfileId()).toBe('switch-target')
     expect(mStopSyncSession).toHaveBeenCalled()
-    // Guest/no-Drive default auth state (resetAuth above) is not eligible.
     expect(mStartSyncSession).not.toHaveBeenCalled()
   })
 
@@ -121,13 +118,9 @@ describe('switchToProfile', () => {
     expect(mStartSyncSession).toHaveBeenCalled()
   })
 
-  // useBootStore.run() never rejects — it swallows failures into status:'error' —
-  // so switchToProfile can't tell a failed rebind apart from a successful one
-  // just by awaiting it. Simulates run() "completing" without moving the repo
-  // binding away from the profile that was active before the switch.
   it('reports failure and reverts the pointer when run() completes without actually rebinding to the target', async () => {
     const { useBootStore } = await import('@/lib/boot')
-    await useBootStore.getState().run() // establishes the default profile as bound first
+    await useBootStore.getState().run()
     const before = getActiveProfileBinding()!.profile
 
     await registerProfile({
@@ -145,8 +138,6 @@ describe('switchToProfile', () => {
     const result = await switchToProfile(target)
 
     expect(result).toEqual({ outcome: 'switch-failed' })
-    // The pointer must not be left naming a profile the app never actually
-    // bound to — the repo is still on `before`, so the pointer must be too.
     expect(getActiveProfileBinding()!.profile.id).toBe(before.id)
     expect(await getActiveProfileId()).toBe(before.id)
     expect(mStopSyncSession).not.toHaveBeenCalled()
@@ -166,20 +157,15 @@ describe('switchToProfile', () => {
       databaseName: 'kurobello-switch-gone',
     })
     const target = (await getProfile('switch-gone'))!
-    // No owner marker written — simulates a database whose storage was
-    // cleared after the profile was registered.
 
     const result = await switchToProfile(target)
 
     expect(result).toEqual({ outcome: 'profile-database-gone' })
-    expect(getActiveProfileBinding()!.profile.id).toBe(DEFAULT_PROFILE_ID) // never rebound
+    expect(getActiveProfileBinding()!.profile.id).toBe(DEFAULT_PROFILE_ID)
     expect(await getActiveProfileId()).not.toBe('switch-gone')
     expect(mStopSyncSession).not.toHaveBeenCalled()
   })
 
-  // A transient read failure must not be reported the same way as a genuinely
-  // missing marker — 'profile-database-gone' drives an irreversible registry
-  // removal in the UI, and a thrown read is not evidence the database is gone.
   it('reports a check failure, distinct from profile-database-gone, when reading the target owner marker throws', async () => {
     const { useBootStore } = await import('@/lib/boot')
     await useBootStore.getState().run()
@@ -202,7 +188,7 @@ describe('switchToProfile', () => {
     const result = await switchToProfile(target)
 
     expect(result).toEqual({ outcome: 'switch-check-failed' })
-    expect(getActiveProfileBinding()!.profile.id).toBe(DEFAULT_PROFILE_ID) // never rebound
+    expect(getActiveProfileBinding()!.profile.id).toBe(DEFAULT_PROFILE_ID)
     expect(await getActiveProfileId()).not.toBe('switch-check-fails')
     expect(mStopSyncSession).not.toHaveBeenCalled()
     expect(mStartSyncSession).not.toHaveBeenCalled()
@@ -213,7 +199,7 @@ describe('switchToProfile', () => {
 
   it('removeProfile deletes the registry row for a gone profile, never the default profile', async () => {
     const { getActiveProfile } = await import('@/lib/profiles')
-    await getActiveProfile() // adopts the default profile so there is a row to (not) remove
+    await getActiveProfile()
     await registerProfile({
       id: 'switch-gone-2',
       label: 'Cuenta de Google',

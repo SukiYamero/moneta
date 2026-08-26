@@ -149,10 +149,6 @@ test('touchGuestLockActive updates only the last-active time', async () => {
 
   const row = await getGuestLock()
   expect(row?.lastActiveAt).toBe(2000)
-  // A partial Dexie `update()` round-trips the untouched binary field back
-  // as a plain numeric-keyed object, not a real Uint8Array (same quirk
-  // `pinLock.test.ts` documents for `db.vault.update()`) — compare byte
-  // content, not the representation.
   expect(
     Uint8Array.from(Object.values(row?.credentialId as unknown as Record<string, number>)),
   ).toEqual(credentialId)
@@ -170,8 +166,6 @@ test('getDeviceId returns the same id on every call within a session (cached)', 
   const second = await getDeviceId()
 
   expect(second).toBe(first)
-  // Concurrent callers before the first resolves must also converge on one
-  // id, not a race where two mint two different ids.
   expect(await Promise.all([getDeviceId(), getDeviceId()])).toEqual([first, first])
 })
 
@@ -243,9 +237,6 @@ test('clearAdoptionConsent on an already-clear consent is a no-op, not an error'
   expect(await getAdoptionConsent()).toBeUndefined()
 })
 
-// Every device-local marker below is a best-effort caching signal, never the
-// primary operation it rides on in authStore.ts — a storage failure must
-// degrade the read to its "unset" value and log, never throw.
 const READ_FAILURE_CASES = [
   {
     name: 'hasLoggedInBefore degrades to false',

@@ -3,12 +3,6 @@ import { AuthError } from '@/lib/auth'
 import { DriveError } from '@/lib/drive'
 import { driveErrorCopy, loginErrorCopy } from '@/features/auth/errorCopy'
 
-// Every mapped key below is derived from the real AuthError/DriveError
-// construction (`new AuthError(reason).message`), never restated as a
-// literal — if auth.ts/drive.ts ever change the "auth: "/"drive: " message
-// template, these tests fail instead of the copy table silently going stale.
-// The expected output is a stable translation key, not a Spanish sentence —
-// a copy reword doesn't break this suite, only a recognition change does.
 describe('loginErrorCopy', () => {
   it.each([
     ['access_denied', 'errors.accessDenied'],

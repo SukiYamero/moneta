@@ -114,9 +114,6 @@ describe('ConfirmDialog', () => {
     expect(onClose).toHaveBeenCalledOnce()
   })
 
-  // `destructive` maps directly to the confirm button's variant, with no
-  // default in either direction — a harmless confirmation (sign out, switch
-  // to guest) must never be painted the same as a real delete, or vice versa.
   it.each([
     [true, 'Eliminar', 'destructive'],
     [false, 'Cerrar sesión', 'default'],

@@ -14,9 +14,6 @@ const movimiento = (overrides: Partial<Movimiento> = {}): Movimiento => ({
   ...overrides,
 })
 
-// `seccion`/`categoria` are ids — most tests below only care about
-// separator/quoting/injection behavior, so these resolve the default
-// fixtures' ids to real names, matching real usage.
 const DEFAULT_SECCIONES: CsvExportOptions['secciones'] = [
   { id: 'sec_personal', nombre: 'Personal' },
 ]
@@ -84,8 +81,8 @@ describe('buildMovimientoCsvParts()', () => {
     const csv = buildCsv([movimiento({ metodo: undefined, nota: undefined })])
     const row = lines(csv)[2]
     const fields = row!.split(';')
-    expect(fields[7]).toBe('') // metodo
-    expect(fields[8]).toBe('') // nota
+    expect(fields[7]).toBe('')
+    expect(fields[8]).toBe('')
   })
 
   it('passes fecha and createdAt through as the stored ISO strings, unformatted', () => {
@@ -147,16 +144,14 @@ describe('buildMovimientoCsvParts()', () => {
     )
 
     it("escapes a category/section's resolved *name* the same way, since both are user-editable free text", () => {
-      // `categoria`/`seccion` are ids — the injection risk lives in the
-      // free-text `nombre` they resolve to, not the id itself.
       const csv = buildCsv([movimiento({ categoria: 'cat_x', seccion: 'sec_x' })], 'es-CO', {
         secciones: [{ id: 'sec_x', nombre: '@import' }],
         categorias: [{ id: 'cat_x', nombre: '=HYPERLINK("evil")' }],
       })
       const row = lines(csv)[2]
       const fields = row!.split(';')
-      expect(fields[2]).toBe("'@import") // seccion
-      expect(fields[3]).toBe('"\'=HYPERLINK(""evil"")"') // categoria: injection-prefixed, then quoted for the embedded "
+      expect(fields[2]).toBe("'@import")
+      expect(fields[3]).toBe('"\'=HYPERLINK(""evil"")"')
     })
 
     it('leaves an ordinary value beginning with a normal character untouched', () => {

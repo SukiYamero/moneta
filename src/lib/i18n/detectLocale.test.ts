@@ -35,8 +35,7 @@ describe('detectLocale', () => {
   })
 
   it('degrades to navigator.language, not straight to en, when navigator.languages is missing', () => {
-    // Some browsers/webviews expose navigator without a languages array —
-    // the default parameter must not assume it exists.
+    // Some browsers/webviews expose navigator without a languages array.
     vi.stubGlobal('navigator', { ...navigator, languages: undefined, language: 'es-AR' })
     expect(detectLocale()).toBe('es-AR')
   })
@@ -47,8 +46,6 @@ describe('detectLocale', () => {
   })
 })
 
-// Region is an axis independent of the copy locale above: a device can run
-// the app in neutral `es` copy while its region subtag is MX/AR/BR/etc.
 describe('detectRegion', () => {
   it.each([
     ['exact tag', ['es-MX'], 'MX'],

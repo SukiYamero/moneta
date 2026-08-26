@@ -56,9 +56,6 @@ beforeEach(() => {
   disableGuestLock.mockResolvedValue(undefined)
 })
 
-// idle/authenticating/error have no session to protect yet, so no lock
-// control at all. Guest's own absence rule is tested separately below,
-// since it depends on platform biometric capability, not status alone.
 describe.each(['idle', 'authenticating', 'error'])('when status is %s', (status) => {
   it('renders nothing', () => {
     authStatus = status
@@ -90,9 +87,6 @@ describe('when authenticated', () => {
   })
 })
 
-// A guest gets biometrics or nothing — never a PIN. Where the device has
-// no biometric capability, the whole section is absent, not a disabled
-// control.
 describe('when a guest', () => {
   beforeEach(() => {
     authStatus = 'guest'
@@ -108,7 +102,6 @@ describe('when a guest', () => {
     biometricAvailable = true
     render(<SecuritySection />)
     expect(screen.getByText(i18next.t('lock:settings.guestRowLabel'))).toBeInTheDocument()
-    // No account-only affordances leak into the guest row.
     expect(screen.queryByText(i18next.t('lock:settings.panelTitle'))).not.toBeInTheDocument()
   })
 

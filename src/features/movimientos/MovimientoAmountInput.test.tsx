@@ -24,9 +24,6 @@ type HarnessProps = Omit<MovimientoAmountInputProps, 'value' | 'onChange'> & {
   initialValue?: string
 }
 
-/** A real controlled parent — `useMovimientoForm`'s own shape — needed to
- * exercise live reformatting and caret placement across keystrokes; a
- * `value` prop that never updates can't accumulate typed input. */
 const ControlledHarness = ({ initialValue = '', ...props }: HarnessProps) => {
   const [value, setValue] = useState(initialValue)
   return <MovimientoAmountInput {...props} value={value} onChange={setValue} />

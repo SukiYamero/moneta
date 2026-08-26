@@ -30,11 +30,6 @@ beforeEach(() => {
   biometricAvailable = false
 })
 
-// Both steps label the hidden input with the fixed `screen.pinLabel` ("PIN")
-// rather than the dynamic step title — a step title reused as the input's
-// accessible name would collide with the visible `<h1>` carrying the exact
-// same text, an accessibility duplication bug the design's own two-step
-// copy would otherwise hide.
 const typePin = async (user: ReturnType<typeof userEvent.setup>, pin: string) => {
   await user.type(screen.getByLabelText(T('lock:screen.pinLabel')), pin)
 }
@@ -123,12 +118,6 @@ test('shows an actionable error when enable() fails, never the raw message', asy
   expect(screen.queryByText(/no session to protect/i)).not.toBeInTheDocument()
 })
 
-// The pad is already disabled during a pending enable() (`disabled={submitting}`
-// above); the biometric toggle shares the same dependency in the auto-submit
-// effect (`[pin, step, firstPin, biometric]`), so toggling it while a first
-// call is in flight re-fires the effect and calls enable() a second time,
-// concurrently, with a different biometric value — a real WebAuthn ceremony
-// leaves this window open for several seconds, not a contrived race.
 test('the biometric toggle is disabled while a submission is in flight, so it cannot double-submit enable()', async () => {
   biometricAvailable = true
   let resolveEnable: () => void = () => {}
@@ -168,10 +157,6 @@ test('renders nothing when closed', () => {
   expect(screen.queryByText(T('lock:setup.titleCreate'))).not.toBeInTheDocument()
 })
 
-// The hidden input backs `PinPad`, our own on-screen keypad, and is
-// programmatically focused via `initialFocus` the moment this panel opens —
-// without inputMode="none" that focus raises the OS keyboard on top of the
-// pad it is meant to replace.
 test('the hidden PIN input suppresses the native keyboard so only the on-screen pad shows', () => {
   render(<PinSetup open onClose={vi.fn()} mode="new" />)
   expect(screen.getByLabelText(T('lock:screen.pinLabel'))).toHaveAttribute('inputMode', 'none')

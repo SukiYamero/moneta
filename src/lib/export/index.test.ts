@@ -24,9 +24,6 @@ const movimiento = (overrides: Partial<Movimiento> = {}): Movimiento => ({
   ...overrides,
 })
 
-// A minimal Repo stub with a caller-supplied movimientos.list(); every other
-// method rejects, so a test fails loudly if the orchestrator calls one it
-// shouldn't.
 const repoStubWithList = (list: Repo['movimientos']['list']): Repo => {
   const notUsed = (): Promise<never> => Promise.reject(new Error('not used by this test'))
   return {
@@ -49,17 +46,11 @@ const repoStubWithList = (list: Repo['movimientos']['list']): Repo => {
       remove: notUsed,
       removeMany: notUsed,
     },
-    // exportMovimientosToCsv() resolves category/section names for the CSV,
-    // so every test needs a real Config, not `notUsed`.
     getConfig: () => Promise.resolve(CONFIG_SEMILLA),
     updateConfig: notUsed,
   }
 }
 
-// Deliberately not honouring the caller's `limit`, so the orchestrator's
-// pagination loop is genuinely exercised across several pages instead of
-// being satisfied by one call (the same reasoning index.ts itself gives for
-// not trusting a limit-less list() to return everything).
 const repoStubWithPages = (all: Movimiento[], maxPageSize: number): Repo =>
   repoStubWithList((query?: ListQuery<Movimiento>): Promise<ListResult<Movimiento>> => {
     const start = query?.cursor ? Number(query.cursor) : 0
@@ -107,9 +98,6 @@ describe('exportMovimientosToCsv()', () => {
     for (const item of all) {
       expect(csv).toContain(`${item.id};`)
     }
-    // Every page after the first was issued with the same sortBy/sortDir as
-    // the first — a cursor replayed under a different sort is rejected as
-    // invalid_input, not silently answered.
     for (const [query] of listSpy.mock.calls) {
       expect(query).toMatchObject({ sortBy: 'fecha', sortDir: 'asc' })
     }
@@ -132,8 +120,6 @@ describe('exportMovimientosToCsv()', () => {
 
   it('stops paging on an empty page even if the Repo keeps returning a nextCursor, rather than looping forever', async () => {
     const all = Array.from({ length: 3 }, (_, i) => movimiento({ id: `m${i}` }))
-    // A misbehaving Repo (the port makes no promise the last page's cursor
-    // is `undefined`) that returns an empty page but still sets nextCursor.
     const list = vi.fn((query?: ListQuery<Movimiento>): Promise<ListResult<Movimiento>> => {
       const start = query?.cursor ? Number(query.cursor) : 0
       const page = all.slice(start, start + 3)
@@ -158,7 +144,7 @@ describe('exportMovimientosToCsv()', () => {
 
     const csv = mDeliverCsv.mock.calls[0]![0].parts.join('')
     expect(csv).toContain('id;fecha;seccion;categoria;tipo;monto;moneda;metodo;nota;createdAt')
-    expect(csv.split('\r\n')).toHaveLength(3) // sep line, header, trailing empty
+    expect(csv.split('\r\n')).toHaveLength(3)
   })
 
   it('awaits repo.ready() before listing', async () => {

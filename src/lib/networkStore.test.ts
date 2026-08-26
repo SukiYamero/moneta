@@ -85,7 +85,6 @@ describe('useNetworkStore.canWrite', () => {
     }
   })
 
-  // A delete is terminal, so it commutes across devices the same way an append does.
   it('allows delete while offline, within the window', () => {
     useNetworkStore.setState({ online: false, lastOnlineAt: 1_000 })
 
@@ -123,8 +122,6 @@ describe('useNetworkStore.canWrite', () => {
 })
 
 describe('offline-window anchor persistence', () => {
-  // vi.resetModules() forces this module's top-level hydration to run again
-  // against the same fake-indexeddb store, standing in for a real cold boot.
   it('a fresh module instance hydrates the anchor persisted by a previous one', async () => {
     useNetworkStore.getState().reportOnlineSuccess(42_000)
     await Promise.resolve()
@@ -141,8 +138,6 @@ describe('offline-window anchor storage failures', () => {
   it('a read failure at module-load hydration leaves the anchor at its fail-open null default', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
-    // vi.resetModules() gives the next networkStore import a fresh deviceStore
-    // instance too — the spy must land on that instance before it's imported.
     vi.resetModules()
     const freshDeviceStore = await import('@/lib/deviceStore')
     const spy = vi
@@ -150,7 +145,6 @@ describe('offline-window anchor storage failures', () => {
       .mockRejectedValue(new Error('IDB blocked'))
 
     const fresh = await import('@/lib/networkStore')
-    // Give the fire-and-forget hydration a turn to run and fail.
     await Promise.resolve()
     await Promise.resolve()
 
@@ -169,7 +163,6 @@ describe('offline-window anchor storage failures', () => {
     await Promise.resolve()
     await Promise.resolve()
 
-    // The in-memory state still updates even though the persisted write failed.
     expect(useNetworkStore.getState().lastOnlineAt).toBe(9_000)
     expect(warn).toHaveBeenCalled()
 

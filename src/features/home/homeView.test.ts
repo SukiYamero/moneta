@@ -34,7 +34,6 @@ describe('getGreetingKey', () => {
 
 describe('shortDayLabel / narrowDayLabel', () => {
   it('formats a known Monday as LUN / L', () => {
-    // 2026-08-17 is a Monday.
     expect(shortDayLabel('2026-08-17', es)).toBe('LUN')
     expect(narrowDayLabel('2026-08-17', es)).toBe('L')
   })

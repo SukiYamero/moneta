@@ -100,8 +100,6 @@ describe('cross-profile push coalescing', () => {
 
     const pushA = push('tokA', profileA)
 
-    // Simulates the boot rebind to profile B happening while A's push is
-    // still in flight — boot.ts's runOnce() proceeds unconditionally.
     setOutboxDatabase(dbB)
     await enqueueOperation({
       entity: 'movimiento',
@@ -125,7 +123,7 @@ describe('cross-profile push coalescing', () => {
     await Promise.all([pushA, pushB])
 
     const bPending = await dbB.outbox.toArray()
-    expect(bPending).toEqual([]) // profile B's op was actually pushed, not left stranded
+    expect(bPending).toEqual([])
     expect(mUpsertJsonFile).toHaveBeenCalledWith(
       'tokA',
       expect.objectContaining({ parent: 'FOLD_A' }),

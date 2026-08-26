@@ -20,7 +20,6 @@ describe('createLogicalClock', () => {
     const second = clock.tick()
 
     expect(first < second).toBe(true)
-    // Same millis segment both times — only the counter moved.
     expect(first.split('-')[0]).toBe(second.split('-')[0])
     expect(first.split('-')[1]).not.toBe(second.split('-')[1])
   })
@@ -30,7 +29,7 @@ describe('createLogicalClock', () => {
     const clock = createLogicalClock('dev1', () => now)
 
     const first = clock.tick()
-    now = 1_000 // backward jump
+    now = 1_000
     const second = clock.tick()
     const third = clock.tick()
 
@@ -45,16 +44,15 @@ describe('createLogicalClock', () => {
     const tickA = a.tick()
     const tickB = b.tick()
 
-    // Same millis/counter, tie-broken by device id.
     expect(tickA.split('-')[0]).toBe(tickB.split('-')[0])
     expect(tickA.split('-')[1]).toBe(tickB.split('-')[1])
-    expect(tickA < tickB).toBe(true) // 'dev-a' < 'dev-b'
+    expect(tickA < tickB).toBe(true)
   })
 
   it('produces a total order identical to plain string comparison across many ticks', () => {
     let now = 0
     const clock = createLogicalClock('dev1', () => {
-      now += Math.floor(Math.random() * 3) // 0, 1, or 2 ms steps, including repeats
+      now += Math.floor(Math.random() * 3)
       return now
     })
 
@@ -67,12 +65,10 @@ describe('createLogicalClock', () => {
 
 describe('observe', () => {
   it('makes the next tick sort after a remote hlc that is ahead of this clock', () => {
-    // Two independent devices' clocks have no relation until one observes
-    // the other.
     const remoteClock = createLogicalClock('remote', () => 50_000)
     const remote = remoteClock.tick()
 
-    const local = createLogicalClock('local', () => 1_000) // far behind physically
+    const local = createLogicalClock('local', () => 1_000)
     local.observe(remote)
     const next = local.tick()
 
@@ -81,15 +77,15 @@ describe('observe', () => {
 
   it('carries the remote counter forward when millis match exactly', () => {
     const remote = createLogicalClock('remote', () => 5_000)
-    remote.tick() // counter 0
-    const remoteSecond = remote.tick() // counter 1, same millis
+    remote.tick()
+    const remoteSecond = remote.tick()
 
     const local = createLogicalClock('local', () => 5_000)
     local.observe(remoteSecond)
     const next = local.tick()
 
     expect(next > remoteSecond).toBe(true)
-    expect(next.split('-')[0]).toBe(remoteSecond.split('-')[0]) // same millis segment
+    expect(next.split('-')[0]).toBe(remoteSecond.split('-')[0])
   })
 
   it('is a no-op when the remote hlc is already behind this clock', () => {
@@ -101,37 +97,32 @@ describe('observe', () => {
     const next = local.tick()
 
     expect(next > ahead).toBe(true)
-    // Unaffected by the stale observe: still ticking from the same base millis.
     expect(next.split('-')[0]).toBe(ahead.split('-')[0])
   })
 })
 
 describe('clampToServer', () => {
   it('pulls a runaway local clock down to server time so a later, sane reading is not forced to append onto the poisoned base', () => {
-    // A stuck-clock reboot: the first reading is wildly wrong, then the
-    // system clock corrects itself — but this LogicalClock instance lives
-    // for the whole session, so without clamping, `lastMillis` stays
-    // pinned at the poisoned value forever.
-    let reading = 10_000_000_000 // implausibly far in the "future"
+    let reading = 10_000_000_000
     const clock = createLogicalClock('dev1', () => reading)
-    clock.tick() // lastMillis is now poisoned
+    clock.tick()
 
-    clock.clampToServer(1_000) // Drive's honest server time
-    reading = 2_000 // the system clock has since corrected itself
+    clock.clampToServer(1_000)
+    reading = 2_000
 
     const next = clock.tick()
     const decodedMillis = Number.parseInt(next.split('-')[0] ?? '0', 36)
-    expect(decodedMillis).toBe(2_000) // tracks the corrected reading, not stuck at 10_000_000_000
+    expect(decodedMillis).toBe(2_000)
   })
 
   it('leaves the clock alone when it is only off by a normal amount of drift', () => {
     const clock = createLogicalClock('dev1', () => 100_000)
     const before = clock.tick()
 
-    clock.clampToServer(99_000) // 1s of drift — well under the default tolerance
+    clock.clampToServer(99_000)
     const after = clock.tick()
 
     expect(after > before).toBe(true)
-    expect(after.split('-')[0]).toBe(before.split('-')[0]) // still ticking from 100_000
+    expect(after.split('-')[0]).toBe(before.split('-')[0])
   })
 })

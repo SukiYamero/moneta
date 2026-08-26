@@ -22,9 +22,6 @@ import { AppLock } from '@/features/lock/AppLock'
 import { i18next } from '@/lib/i18n'
 import { toast, useToastStore, type ToastMessageKey } from '@/lib/toastStore'
 
-// Resolved lazily, at call time — i18next.language isn't forced to 'es'
-// until src/test/setup.ts's `beforeAll` runs, which is after this module's
-// own top-level code already evaluated.
 const T = (key: ToastMessageKey): string => i18next.t(key)
 const TLock = (key: Extract<ToastMessageKey, `lock:${string}`>): string => i18next.t(key)
 
@@ -64,9 +61,6 @@ test('renders children once unlocked', () => {
   expect(screen.getByText('app')).toBeInTheDocument()
 })
 
-// resume()'s lockout branch sets phase: 'unlocked' and error: LOCKED_OUT_ERROR
-// in the same set() — LockScreen unmounts in that same instant, so it can't
-// be the one to show this. AppLock stays mounted across the transition.
 test('surfaces a lockout/session error above the app once the phase leaves "locked"', () => {
   state = { phase: 'unlocked', error: 'locked out' }
   render(
@@ -90,8 +84,6 @@ test('does not duplicate the error banner while still locked — LockScreen owns
       <div>app</div>
     </AppLock>,
   )
-  // LockScreen renders its own role="alert" for this message; AppLock must
-  // not render a second one on top of it.
   expect(screen.getAllByRole('alert')).toHaveLength(1)
 })
 
@@ -148,10 +140,6 @@ test('a toast raised while locked is dropped, not queued for after unlock', () =
   expect(screen.queryByText(T('toast:demo.syncFailed'))).not.toBeInTheDocument()
 })
 
-// The boot window: phase starts 'unknown' while lockStore.init() resolves,
-// and AppLock renders null for that whole stretch — no content is on
-// screen yet, so a toast raised then must be suppressed exactly like one
-// raised while locked, not just the two phases named in the spec prose.
 test('a toast raised during the "unknown" boot window is dropped, not shown once the phase resolves', () => {
   state = { phase: 'unknown', error: null }
   const { rerender } = render(
@@ -171,11 +159,6 @@ test('a toast raised during the "unknown" boot window is dropped, not shown once
   expect(screen.queryByText(T('toast:demo.syncFailed'))).not.toBeInTheDocument()
 })
 
-// Symmetric case: a toast already showing when the phase drops back to
-// 'locked' (e.g. the app backgrounds mid-toast) must not survive to
-// reappear on the next unlock — suppression clears the live stack, not
-// just future arrivals (toastStore.test.ts covers the store-level guarantee
-// this integration relies on).
 test('a toast visible when the app re-locks does not resurface on the next unlock', () => {
   state = { phase: 'unlocked', error: null }
   const { rerender } = render(

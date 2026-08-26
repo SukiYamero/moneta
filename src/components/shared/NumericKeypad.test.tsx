@@ -30,7 +30,6 @@ describe('NumericKeypad', () => {
   it('renders a blank cell (no decimal key) when decimalLabel is omitted — the PIN pad shape', () => {
     render(<NumericKeypad onDigit={() => {}} onDelete={() => {}} deleteAriaLabel="Delete" />)
 
-    // 10 digits + delete, no decimal key
     expect(screen.getAllByRole('button')).toHaveLength(11)
   })
 
@@ -201,10 +200,6 @@ describe('NumericKeypad', () => {
   })
 
   describe('press-and-hold auto-repeat on delete (deleteAutoRepeat)', () => {
-    // Raw Pointer Events, dispatched directly on the key — the same
-    // technique `MovimientoAmountInput.test.tsx` already uses for gesture
-    // sequencing — rather than `user.pointer()`: `userEvent`'s own internal
-    // waiting does not resolve once fake timers replace `setTimeout`.
     const press = (key: HTMLElement) =>
       key.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }))
     const release = (key: HTMLElement) => {
@@ -272,7 +267,6 @@ describe('NumericKeypad', () => {
       act(() => vi.advanceTimersByTime(DELETE_REPEAT_INTERVAL_MS * 3))
       expect(onDelete).toHaveBeenCalledTimes(4)
 
-      // The release's own `click` is not a second, fresh tap on top of the hold.
       release(key)
       expect(onDelete).toHaveBeenCalledTimes(4)
     })
@@ -315,9 +309,6 @@ describe('NumericKeypad', () => {
       act(() => vi.advanceTimersByTime(DELETE_REPEAT_INITIAL_DELAY_MS))
       const callsBeforeLeaving = onDelete.mock.calls.length
 
-      // `pointerleave` doesn't bubble, so React implements `onPointerLeave`
-      // off `pointerout` + `relatedTarget` instead — a raw `pointerleave`
-      // dispatch never reaches it.
       key.dispatchEvent(
         new PointerEvent('pointerout', { bubbles: true, relatedTarget: document.body }),
       )

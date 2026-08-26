@@ -10,11 +10,6 @@ type JsonRecord = Record<string, unknown>
 const isPlainObject = (value: unknown): value is JsonRecord =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
 
-// Flattens a locale resource to a sorted list of dotted leaf paths — e.g.
-// `{ auth: { welcome: { googleCta: '...' } } }` → `['auth.welcome.googleCta']`.
-// An empty object (`{}`) is its own leaf rather than recursed into and
-// dropped, so a namespace present-but-empty on one side and entirely
-// absent on the other don't flatten to the same (empty) set of paths.
 const flattenKeys = (value: JsonRecord, prefix = ''): string[] =>
   Object.entries(value).flatMap(([key, child]) => {
     const path = prefix ? `${prefix}.${key}` : key
@@ -41,10 +36,6 @@ describe('flattenKeys distinguishes an empty-object namespace from an absent one
   })
 })
 
-// `I18N_NAMESPACES` is the reserved list i18next is initialized with, and it
-// drifts silently: a namespace added to the locale files still resolves at
-// runtime (resources are loaded inline, no backend), so nothing else fails
-// when the array isn't updated to match.
 describe('I18N_NAMESPACES matches the locale files it declares', () => {
   it('lists exactly the top-level namespaces present in es', () => {
     expect([...I18N_NAMESPACES].toSorted()).toEqual(Object.keys(es).toSorted())

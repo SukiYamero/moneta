@@ -67,9 +67,6 @@ describe('enqueueOperation', () => {
   })
 
   it("chains basedOn to a tip learned from a pull, not just this device's own outbox history", async () => {
-    // A device that pulled a newer version it never queued locally must
-    // still base its next op on it, or a later delete looks falsely
-    // concurrent with an edit it saw.
     const m = movimiento()
     await recordKnownTip('movimiento', m.id, '000000005-0000-remotedev')
 
@@ -81,7 +78,7 @@ describe('enqueueOperation', () => {
 
   it("prefers this device's own more recent outbox history over a stale pulled tip", async () => {
     const m = movimiento()
-    await recordKnownTip('movimiento', m.id, '000000001-0000-remotedev') // stale — from before this device's own edit below
+    await recordKnownTip('movimiento', m.id, '000000001-0000-remotedev')
 
     await enqueueOperation({ entity: 'movimiento', op: 'put', payload: m })
     const [first] = await listPendingOperations()
@@ -204,10 +201,6 @@ describe('observeRemoteHlc / clampOutboxClockToServer', () => {
   })
 
   it('clampOutboxClockToServer pulls a poisoned clock down so future ticks track real time again', async () => {
-    // Mocking just Date.now (not vi.useFakeTimers, which also stalls the
-    // real timers dexie's IndexedDB transactions schedule on) mirrors
-    // hlc.test.ts's own clampToServer scenario: a wildly-ahead physical
-    // reading poisons the clock, then the real clock corrects itself.
     const dateNow = vi.spyOn(Date, 'now').mockReturnValue(10_000_000_000_000)
     await enqueueOperation({ entity: 'movimiento', op: 'put', payload: movimiento() })
     const [poisoned] = await listPendingOperations()
@@ -215,9 +208,6 @@ describe('observeRemoteHlc / clampOutboxClockToServer', () => {
     dateNow.mockReturnValue(1_000)
     await clampOutboxClockToServer(1_000)
     await enqueueOperation({ entity: 'movimiento', op: 'put', payload: movimiento() })
-    // listPendingOperations() sorts by hlc, not insertion order — the
-    // clamped (small) hlc now sorts *before* the poisoned one, so find it
-    // by exclusion rather than assuming array position.
     const entries = await listPendingOperations()
     const clamped = entries.find((e) => e.hlc !== poisoned!.hlc)
     const decodedMillis = Number.parseInt(clamped!.hlc.split('-')[0] ?? '0', 36)
@@ -227,8 +217,6 @@ describe('observeRemoteHlc / clampOutboxClockToServer', () => {
   })
 })
 
-// A guest's pending operations must never queue into a signed-in account's
-// outbox, or vice versa — the outbox must move with the active profile.
 describe('setOutboxDatabase', () => {
   const otherDbName = 'kurobello-outbox-redirect-test'
 
@@ -266,8 +254,6 @@ describe('setOutboxDatabase', () => {
     })
 
     setOutboxDatabase(other)
-    // refreshDirty() is fire-and-forget inside setOutboxDatabase — wait for
-    // the store to reflect it rather than asserting synchronously.
     await vi.waitFor(() => expect(useOutboxStore.getState().dirty).toBe(true))
   })
 })

@@ -38,8 +38,6 @@ test('ensureOwnerMarker degrades to a warning, never throws, on a storage failur
   warn.mockRestore()
 })
 
-// A genuinely absent marker lets the switcher offer an irreversible registry
-// removal, so a transient read failure must never be degraded to `undefined`.
 test('readOwnerMarker propagates a storage failure instead of degrading it to "absent"', async () => {
   const spy = vi.spyOn(db.profileOwner, 'get').mockRejectedValue(new Error('IDB blocked'))
 

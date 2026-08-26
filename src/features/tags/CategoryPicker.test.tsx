@@ -14,9 +14,6 @@ const categoria = (overrides: Partial<Categoria> = {}): Categoria => ({
   ...overrides,
 })
 
-// The inline picker is a fixed column (count button + dashed "Custom" chip)
-// beside a horizontally-scrolling carousel — no inline search box, that
-// lives in `TagPickerSheet` (its own test file).
 describe('CategoryPicker', () => {
   it('renders every non-archived category as a selectable chip in the carousel', () => {
     const categorias = [
@@ -157,8 +154,6 @@ describe('CategoryPicker', () => {
 
     expect(screen.getByRole('dialog')).toBeInTheDocument()
     expect(screen.getByRole('textbox')).toBeInTheDocument()
-    // Two "Transporte" buttons now on screen — the carousel's own chip
-    // (behind the picker) and the picker's grid row.
     expect(screen.getAllByRole('button', { name: /transporte/i }).length).toBeGreaterThan(0)
   })
 

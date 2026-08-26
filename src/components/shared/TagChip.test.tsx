@@ -38,8 +38,6 @@ describe('TagChip', () => {
 
     const button = screen.getByRole('button', { name: 'Comida' })
     expect(button).toHaveClass('min-h-11')
-    // the visible pill (border/background) lives on the inner span at its
-    // original, smaller designed size — only the button's hit area grows.
     expect(button.firstElementChild).toHaveClass('min-h-9')
   })
 
@@ -75,7 +73,6 @@ describe('TagChip', () => {
 
     const pill = screen.getByRole('button', { name: 'Sin categoría' }).firstElementChild
     expect(pill).toHaveClass('border-border-strong', 'bg-muted', 'text-foreground')
-    // the unselected pill's own classes must not all still be present.
     expect(pill).not.toHaveClass('border-border-subtle', 'bg-secondary', 'text-fg-secondary')
   })
 })

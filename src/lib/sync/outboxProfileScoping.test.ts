@@ -47,9 +47,6 @@ beforeEach(async () => {
   })
   await setDriveFolderId(regA.id, 'FOLD_A')
   profileA = (await getProfile('scopeA'))!
-  // Profile B exists on the same device only so the switch this test
-  // simulates has somewhere real to redirect to — the test never pushes on
-  // B's behalf, only asserts B's own outbox was never touched by A's push.
   const regB = await registerProfile({
     id: 'scopeB',
     label: 'B',
@@ -99,28 +96,19 @@ describe('push() removes its own operations from the pushing profile’s outbox,
     )
     mUpsertJsonFile.mockResolvedValue('file-id')
 
-    // A's push starts while the outbox module still points at A's table.
     const pushA = push('tokA', profileA)
 
-    // The switcher redirects the outbox to B mid-flight — boot.ts's rebind
-    // path proceeds unconditionally, never waiting for an in-flight push.
     setOutboxDatabase(dbB)
 
     await vi.waitFor(() => expect(findResolvers).toHaveLength(1))
     for (const resolve of findResolvers) resolve(null)
     await pushA
 
-    // A's op was genuinely uploaded (the Drive call targeted A's folder)...
     expect(mUpsertJsonFile).toHaveBeenCalledWith(
       'tokA',
       expect.objectContaining({ parent: 'FOLD_A' }),
     )
-    // ...so it must be gone from A's own outbox, not stuck there forever
-    // because removeOperations() ran against whatever table the module-level
-    // binding happened to point to by the time the Drive round-trip resolved.
     expect(await dbA.outbox.toArray()).toEqual([])
-    // And it must not have been mistakenly deleted from B's outbox either
-    // (ids are UUIDs — this is really just confirming B was never touched).
     expect(await dbB.outbox.toArray()).toEqual([])
   })
 })

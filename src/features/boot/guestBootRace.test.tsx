@@ -17,12 +17,6 @@ import {
   registerProfile,
 } from '@/lib/profiles'
 
-// Not module-mocked: this test runs the real profile registry (fake-
-// indexeddb), the real boot sequence, and the real repoProvider/outbox
-// bindings — it exists to answer one question empirically: does
-// `continueAsGuest()`'s unawaited `touchLastUsed()` reliably land before
-// `BootGate`'s effect-driven `run()` reads the profile registry?
-
 beforeEach(async () => {
   await __clearRegistryForTests()
   __resetRepoBindingForTests()
@@ -44,8 +38,6 @@ beforeEach(async () => {
     driveOptIn: 'pending',
     driveConnecting: false,
     driveError: null,
-    // RequireAuth attempts a silent restore() on mount when idle — stub it
-    // so this test exercises continueAsGuest()'s own path only.
     restore: vi.fn().mockResolvedValue(undefined),
   })
 })
@@ -56,8 +48,6 @@ afterEach(() => {
 
 describe('continueAsGuest() vs. the boot sequence — the recency race', () => {
   it('binds the guest profile, not a more-recently-touched Google profile that predates it, on the very next boot', async () => {
-    // Simulates a device that signed into a Google account (touched more
-    // recently than the untouched default profile) and later signed out.
     await registerProfile({
       id: DEFAULT_PROFILE_ID,
       label: 'Local',
@@ -88,10 +78,6 @@ describe('continueAsGuest() vs. the boot sequence — the recency race', () => {
       expect(useBootStore.getState().status).toBe('ready')
     })
 
-    // The claim under test: does the boot sequence's registry read see the
-    // guest touch, or does it still see the older, more-recent-by-the-old-
-    // clock Google profile because the touch's IndexedDB write hadn't
-    // landed yet when the read fired?
     expect(getActiveProfileBinding()?.profile.id).toBe(DEFAULT_PROFILE_ID)
   })
 })

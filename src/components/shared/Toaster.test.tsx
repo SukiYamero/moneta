@@ -5,22 +5,12 @@ import { Toaster } from '@/components/shared/Toaster'
 import { i18next } from '@/lib/i18n'
 import { setToastsSuppressed, toast, useToastStore, type ToastMessageKey } from '@/lib/toastStore'
 
-// Resolved lazily, at call time — i18next.language isn't forced to 'es'
-// until src/test/setup.ts's `beforeAll` runs, which is after this module's
-// own top-level code already evaluated.
 const T = (key: ToastMessageKey): string => i18next.t(key)
 
-// toast.success/error are plain functions called from outside React (a
-// store, an event handler) — wrapping them in act() here just mirrors what
-// React itself does automatically once a real caller triggers them from an
-// event handler.
 const raise = (fn: () => void) => act(fn)
 
 beforeEach(() => {
   useToastStore.setState({ items: [] })
-  // Toaster is a leaf that doesn't know about suppression policy itself
-  // (AppLock drives it) — this suite exercises the stack in isolation, so
-  // it opts in directly rather than rendering AppLock.
   setToastsSuppressed(false)
 })
 
@@ -57,9 +47,6 @@ describe('Toaster', () => {
     raise(() => toast.success('toast:demo.one'))
     raise(() => toast.success('toast:demo.two'))
 
-    // flex-col-reverse anchors the first DOM child at the bottom edge, so
-    // source order stays oldest-first even though it renders visually
-    // bottom-up.
     const cards = screen.getAllByRole('status')
     expect(cards.map((card) => card.textContent)).toEqual(
       expect.arrayContaining([

@@ -40,16 +40,12 @@ describe('useDebouncedQuery()', () => {
     act(() => vi.advanceTimersByTime(200))
     rerender({ query: 'com' })
     act(() => vi.advanceTimersByTime(200))
-    // 400ms have passed but no single keystroke ever sat still for the full 300ms
     expect(result.current).toBe('c')
 
     act(() => vi.advanceTimersByTime(100))
     expect(result.current).toBe('com')
   })
 
-  // The stale-result-set guard: clearing the query must never wait out the
-  // debounce window, or the previous filtered list stays on screen even
-  // though the input box already shows empty.
   it('clearing to an empty query commits immediately, without waiting for the delay', () => {
     const { result, rerender } = renderHook(({ query }) => useDebouncedQuery(query, 300), {
       initialProps: { query: 'comida' },

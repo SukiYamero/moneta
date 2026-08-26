@@ -177,8 +177,6 @@ describe('CategoryFormModal', () => {
       />,
     )
 
-    // Default section is sec_personal (lowest orden) — "Comida" only
-    // collides in sec_trabajo, so this must be allowed.
     await user.type(screen.getByRole('textbox', { name: /nombre/i }), 'Comida')
 
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()

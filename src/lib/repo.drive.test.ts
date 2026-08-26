@@ -4,10 +4,6 @@ import { testRepoContract } from '@/lib/repo.contract'
 import { __resetReadyMemoForTests } from '@/lib/repo.local'
 import { createDriveRepo } from '@/lib/repo.drive'
 
-// Its own isolated database, not the frozen default `db` — repo.local.ts's
-// own contract run already covers that connection; this proves the Drive
-// repo behaves identically on a profile-scoped one, which is what it will
-// actually be handed in production.
 const database = createProfileDb('kurobello-drive-repo-test')
 
 afterEach(async () => {

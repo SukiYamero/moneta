@@ -5,9 +5,6 @@ vi.mock('@/lib/toastStore', () => ({
   toast: { success: vi.fn(), error: vi.fn() },
 }))
 
-// Fake `registerSW`, shaped exactly like `virtual:pwa-register`'s real
-// export, that lets each test drive the SW lifecycle callbacks directly
-// instead of needing a real service worker or a mocked virtual module.
 interface FakeRegisterSWOptions {
   onNeedRefresh?: () => void
   onRegisteredSW?: (
@@ -116,9 +113,6 @@ describe('createSwUpdateController', () => {
     fake.options().onNeedRefresh?.()
     fake.options().onNeedRefresh?.()
 
-    // This module doesn't suppress the second call itself — toastStore's own
-    // duplicate-collapse (same variant + message) is what prevents nagging,
-    // so both calls reaching toast.success with the identical key is correct.
     expect(toast.success).toHaveBeenCalledTimes(2)
     const expectedAction = { labelKey: 'update:reload', onAction: expect.any(Function) }
     expect(toast.success).toHaveBeenNthCalledWith(1, 'update:available', undefined, expectedAction)

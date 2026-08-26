@@ -52,9 +52,6 @@ describe('zoom is disabled app-wide', () => {
 
 describe('WelcomeScreen never sizes itself against the raw viewport from inside the padded body', () => {
   it('uses min-h-full, not min-h-dvh, so it can never demand more room than body already allotted it', () => {
-    // Matched only inside a className attribute — the fix's own explanatory
-    // comment legitimately still says "min-h-dvh" in prose, to name what it
-    // replaced.
     expect(welcomeScreenSource).toMatch(/className="[^"]*\bmin-h-full\b[^"]*"/)
     expect(welcomeScreenSource).not.toMatch(/className="[^"]*\bmin-h-dvh\b[^"]*"/)
   })

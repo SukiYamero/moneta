@@ -30,7 +30,7 @@ describe('getMovimientoVisual', () => {
       { icono: 'not-a-real-key' as never, color: 'purple' },
       'gasto',
     )
-    expect(visual.tint).toBe('purple') // color still resolves — only icono was invalid
+    expect(visual.tint).toBe('purple')
   })
 })
 
@@ -67,15 +67,12 @@ describe('formatMonto', () => {
   )
 
   it('accepts an explicit locale and formats accordingly', () => {
-    // en-US groups thousands with a comma and uses a period as the decimal
-    // separator — the opposite of es-CO's convention — so this is a real
-    // behavioral difference, not just a different currency symbol.
     expect(formatMonto(1200, 'USD', 'en-US')).toContain('1,200')
     expect(formatMonto(1200, 'USD', 'en-US')).not.toContain('1.200')
   })
 
   it('reuses one Intl.NumberFormat per (locale, currency) pair, never building one per call', () => {
-    formatMonto(500, 'COP', 'pt-BR') // warm the cache before spying
+    formatMonto(500, 'COP', 'pt-BR')
     formatMonto(500, 'USD', 'pt-BR')
     const constructorSpy = vi.spyOn(Intl, 'NumberFormat')
 
@@ -86,10 +83,6 @@ describe('formatMonto', () => {
     constructorSpy.mockRestore()
   })
 
-  // A negative amount attaches its sign to the number, not to the currency
-  // — "$ -12.000,00", not "-$ 12.000,00" (Intl's own default) — checked
-  // across locales whose symbol placement differs (R$ leads in pt-BR,
-  // trails in es-CO/en-US) rather than via a single hardcoded string.
   it('attaches a negative sign to the number, not to the currency, across locales', () => {
     const cases: Array<[locale: string, moneda: 'COP' | 'USD' | 'BRL']> = [
       ['es-CO', 'COP'],
@@ -108,10 +101,6 @@ describe('formatMonto', () => {
     expect(formatMonto(12000, 'COP', 'es-CO')).not.toContain('+')
   })
 
-  // formatToParts has no "integer" part for a non-finite value (only a
-  // "nan"/"infinity" part) — attachSignToNumber's no-integer fallback must
-  // still land the sign next to the number, not reproduce the
-  // sign-before-currency bug this whole rework closes.
   it('attaches the sign to the number even when there is no integer part (Infinity)', () => {
     expect(formatMonto(-Infinity, 'COP', 'es-CO')).not.toMatch(/^-/)
     expect(formatMonto(-Infinity, 'COP', 'es-CO')).toMatch(/\$\s*-/)
@@ -119,9 +108,6 @@ describe('formatMonto', () => {
 })
 
 describe('getMovimientoAmountView', () => {
-  // Same formatToParts-attached-sign rule as formatMonto, but always shown
-  // (income always reads "+", expense always reads "-") — verified across
-  // locales with different symbol placement, not one hardcoded string.
   it('attaches + to the number for income, across locales, and colors it success', () => {
     const cases: Array<[locale: string, moneda: 'COP' | 'USD' | 'BRL']> = [
       ['es-CO', 'COP'],
@@ -157,7 +143,7 @@ describe('getMovimientoAmountView', () => {
   })
 
   it('reuses one signed Intl.NumberFormat per (locale, currency) pair across repeat calls', () => {
-    getMovimientoAmountView({ monto: 500, moneda: 'PEN', tipo: 'ingreso' }, 'es-CO') // warm the cache
+    getMovimientoAmountView({ monto: 500, moneda: 'PEN', tipo: 'ingreso' }, 'es-CO')
     const constructorSpy = vi.spyOn(Intl, 'NumberFormat')
 
     getMovimientoAmountView({ monto: 1000, moneda: 'PEN', tipo: 'ingreso' }, 'es-CO')

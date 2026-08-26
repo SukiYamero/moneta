@@ -105,8 +105,6 @@ describe('CategoriesSection', () => {
   it('archives an active category in one tap — no confirmation needed', async () => {
     const user = userEvent.setup()
     render(<CategoriesSection />)
-    // Two active categories, one "Archivar" button each — Comida (Personal,
-    // orden 0) renders first.
     await user.click(screen.getAllByRole('button', { name: /^archivar$/i })[0]!)
     expect(mArchiveCategoria).toHaveBeenCalledWith('cat_comida')
   })
@@ -128,8 +126,6 @@ describe('CategoriesSection', () => {
     await user.click(screen.getByRole('button', { name: /^eliminar$/i }))
     const dialog = screen.getByRole('dialog')
     expect(dialog).toBeInTheDocument()
-    // The dialog's own confirm button shares the "Eliminar" label with the
-    // row's trigger — scope the click to the dialog, not the row underneath.
     await user.click(within(dialog).getByRole('button', { name: /^eliminar$/i }))
     expect(mDeleteCategoria).toHaveBeenCalledWith('cat_vieja')
   })

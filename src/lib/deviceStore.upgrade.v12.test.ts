@@ -1,15 +1,6 @@
 import Dexie, { type EntityTable } from 'dexie'
 import { afterEach, beforeEach, expect, test } from 'vitest'
 
-// Deliberately does NOT statically import '@/lib/deviceStore' — same reason
-// as the v3/v4/v5/v7/v8 upgrade tests: importing it opens the real
-// `kurobello-device` connection and upgrades it immediately, which would
-// make it impossible to seed a v11-only database first.
-//
-// v12 drops the `landscapeGateSkipped` table: the landscape gate's dismissal
-// is now session-scoped, in-memory state, not a per-device Dexie row, so a
-// device that already dismissed it under the old scheme must upgrade to
-// v12 losing that row — and every other v11 table must survive untouched.
 type MarkerRow = { id: number; loggedInBefore: boolean }
 type DriveDecisionRow = { id: number; decision: 'connected' | 'dismissed' }
 type AnchorRow = { id: number; lastOnlineAt: number }

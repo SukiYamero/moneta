@@ -7,8 +7,6 @@ import type { Categoria } from '@/lib/schema'
 const totals: Totals = { ingresos: 12000, gastos: 5000, balance: 7000 }
 
 describe('BreakdownCard', () => {
-  // The sign attaches to the number, not the currency symbol:
-  // "$ -12.000,00", never "-$ 12.000,00".
   it('never renders a sign before the currency symbol', () => {
     render(
       <BreakdownCard
@@ -87,8 +85,6 @@ describe('BreakdownCard', () => {
     expect(screen.queryByText('cat_missing')).not.toBeInTheDocument()
   })
 
-  // A total scoped to monedaPrincipal must never look like the whole
-  // picture when the period actually has movements in other currencies.
   describe('other-currency note', () => {
     it('renders nothing when otherCurrencies is empty (the common case)', () => {
       render(

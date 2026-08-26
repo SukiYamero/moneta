@@ -59,16 +59,10 @@ beforeEach(() => {
   useDataStore.setState({ movimientos: [], activos: [], config: null, status: 'idle', error: null })
   useBootStore.setState({ status: 'idle', error: null })
   mGetActiveProfileBinding.mockReturnValue(null)
-  // Fire-and-forget in boot.ts (never awaited) — an unmocked rejection here
-  // would surface as a noisy unhandled-rejection warning in every test that
-  // doesn't care about this call, not a real assertion failure.
   mResumePendingAdoption.mockResolvedValue(undefined)
 })
 
 afterEach(() => {
-  // A leftover in-flight guard would make the next test's first run() a
-  // silent no-op — boot.ts's own module-level concurrency lock, not store
-  // state, so it needs its own reset the same way outbox.ts's clock does.
   __resetBootStoreForTests()
 })
 
@@ -82,13 +76,9 @@ describe('useBootStore.run()', () => {
     await useBootStore.getState().run()
 
     expect(mBindActiveProfile).toHaveBeenCalledWith(binding)
-    // The outbox must move with the repo, or a guest's pending operations
-    // queue into a signed-in account's outbox.
     expect(mSetOutboxDatabase).toHaveBeenCalledWith(binding.database)
     expect(useBootStore.getState().status).toBe('ready')
     expect(useDataStore.getState().status).toBe('ready')
-    // Every genuine (re)bind gives a consented-but-unfinished adoption
-    // another chance to finish, silently.
     expect(mResumePendingAdoption).toHaveBeenCalledWith(binding.profile)
   })
 
@@ -110,9 +100,6 @@ describe('useBootStore.run()', () => {
 
     expect(loadSpy).not.toHaveBeenCalled()
     expect(statusesSeen).not.toContain('running')
-    // No-op remount (e.g. navigating between top-level routes with the same
-    // profile already bound) must not re-check for a pending adoption on
-    // every render — only a genuine (re)bind does.
     expect(mResumePendingAdoption).not.toHaveBeenCalled()
   })
 
@@ -145,8 +132,6 @@ describe('useBootStore.run()', () => {
     await useBootStore.getState().run()
 
     expect(mBindActiveProfile).toHaveBeenLastCalledWith(bindingB)
-    // The previous profile's rows must not linger even transiently under
-    // the new binding — reset() runs before the new load, not after.
     expect(useDataStore.getState().movimientos).toEqual([])
     expect(useDataStore.getState().status).toBe('ready')
   })
@@ -172,9 +157,6 @@ describe('useBootStore.run()', () => {
     expect(mBindActiveProfile).not.toHaveBeenCalled()
   })
 
-  // React StrictMode double-invokes effects (dev) — two run() calls issued
-  // back-to-back, synchronously, before either's first await settles. Only
-  // one real resolution must happen, mirroring dataStore.load()'s own guard.
   it('is idempotent under two back-to-back calls before the first settles', async () => {
     const repo = makeRepo()
     const binding = makeBinding('kurobello', repo)
@@ -190,8 +172,6 @@ describe('useBootStore.run()', () => {
 })
 
 describe('invalidateBootForSignOut', () => {
-  // Called by authStore.ts's logout() so the next BootGate mount can't
-  // inherit this session's 'ready' and skip re-verifying the profile.
   it('resets status back to idle, so a later mount does not assume it is already ready', () => {
     useBootStore.setState({ status: 'ready', error: null })
 

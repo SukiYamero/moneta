@@ -12,9 +12,6 @@ beforeEach(() => {
 })
 
 describe('WelcomeScreen', () => {
-  // Also proves i18next's inline `resources` + `useSuspense: false` load
-  // synchronously (src/lib/i18n/index.ts): translated copy is present on
-  // first paint, not flashed empty before rendering a second time.
   it('shows the brand name and the Google sign-in CTA on first paint', () => {
     render(<WelcomeScreen />)
     expect(screen.getByText(APP_NAME)).toBeInTheDocument()

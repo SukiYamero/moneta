@@ -23,8 +23,6 @@ describe('HomeHeader', () => {
     expect(button.querySelector('span')).toHaveClass('size-10.5', 'bg-card')
   })
 
-  // A guest has no Google profile — `user` stays null past RequireAuth's
-  // guard. The header must show an honest guest label, not a blank name.
   it('shows an honest guest label instead of a blank name for a guest session', () => {
     useAuthStore.setState({ status: 'guest', user: null })
     render(<HomeHeader />)

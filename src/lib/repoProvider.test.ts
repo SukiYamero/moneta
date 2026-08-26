@@ -20,9 +20,6 @@ import {
 } from '@/lib/repoProvider'
 import type { Movimiento } from '@/lib/schema'
 
-// getRepo() serves the binding src/lib/boot.ts establishes, never the fake
-// repo, and never a silent fallback if a caller reaches it before the boot
-// sequence has run.
 describe('getRepo()', () => {
   afterEach(() => {
     __resetRepoBindingForTests()
@@ -79,13 +76,9 @@ describe("getActiveProfileRepo() — resolves fresh every call, independent of g
   })
 
   it('a guest (local) profile and a signed-in (google) profile read and write entirely separate stores', async () => {
-    // Establishes the default/local profile as the active one first, same
-    // as a guest using the app before ever signing in.
     const guestRepo = await getActiveProfileRepo()
     const guestMovimiento = await guestRepo.movimientos.add(movimiento())
 
-    // Signing in registers a second profile and makes it the most recently
-    // used — nothing is ever replaced, so the guest data above stays put.
     await registerProfile({
       id: GOOGLE_PROFILE_ID,
       label: 'Cuenta de Google',
@@ -102,16 +95,12 @@ describe("getActiveProfileRepo() — resolves fresh every call, independent of g
     expect(await db.movimientos.get(guestMovimiento.id)).toBeDefined()
     expect(await db.movimientos.get(googleMovimiento.id)).toBeUndefined()
 
-    // Switching back reaches the guest data untouched.
     await touchLastUsed(DEFAULT_PROFILE_ID)
     const guestRepoAgain = await getActiveProfileRepo()
     expect(await guestRepoAgain.movimientos.get(guestMovimiento.id)).toBeDefined()
   })
 })
 
-// The binding boot.ts establishes — separate from getActiveProfileRepo()
-// above, which resolves fresh every call and binds nothing. These tests
-// only cover the binding's own bookkeeping.
 describe('the active-profile binding — this is what getRepo() serves', () => {
   afterEach(async () => {
     __resetRepoBindingForTests()
@@ -139,9 +128,6 @@ describe('the active-profile binding — this is what getRepo() serves', () => {
     expect(getActiveProfileBinding()).toBe(binding)
   })
 
-  // Two tabs' boot sequences each call resolveActiveProfileBinding()
-  // independently (no shared in-memory state across tabs) and must both
-  // land on the same profile, through the binding both tabs actually call.
   it('two concurrent resolutions (two tabs) both resolve the same profile, neither losing the other’s touch', async () => {
     const [bindingA, bindingB] = await Promise.all([
       resolveActiveProfileBinding(),

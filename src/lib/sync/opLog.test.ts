@@ -21,9 +21,6 @@ import {
   type MovOpFile,
 } from '@/lib/sync/opLog'
 
-// Two clocks share one synthetic, ever-incrementing now() so their hlc
-// values sort in call order, modeling two devices whose physical clocks
-// agree — clock skew/merge logic is hlc.test.ts's job, not this file's.
 const makeClocks = (): {
   a: ReturnType<typeof createLogicalClock>
   b: ReturnType<typeof createLogicalClock>
@@ -100,8 +97,6 @@ describe('replayMovimientos', () => {
         mov: movimiento({ fecha: '2026-01-05', monto: 100 }),
       },
     ])
-    // The correcting op lives in August's file even though the movement's
-    // own `fecha` is January.
     const currentShard = movFile('devicea', '2026-08', [
       {
         op: 'put',
@@ -117,9 +112,7 @@ describe('replayMovimientos', () => {
   it('a concurrent delete-vs-edit revives the record with the edit content', () => {
     const { a: clockA, b: clockB } = makeClocks()
     const created = clockA.tick()
-    // Device B edits, based on the create — never having seen a delete.
     const edited = clockB.tick()
-    // Device A deletes, also based on the create — never having seen the edit.
     const deleted = clockA.tick()
     const editFile = movFile('deviceb', '2026-08', [
       { op: 'put', hlc: edited, basedOn: created, mov: movimiento({ monto: 300, nota: 'edited' }) },
@@ -136,7 +129,6 @@ describe('replayMovimientos', () => {
     const { a: clockA, b: clockB } = makeClocks()
     const created = clockA.tick()
     const edited = clockB.tick()
-    // Device A pulled B's edit before deleting: basedOn correctly chains to it.
     const deleted = clockA.tick()
     const editFile = movFile('deviceb', '2026-08', [
       { op: 'put', hlc: edited, basedOn: created, mov: movimiento({ monto: 300 }) },
@@ -164,8 +156,6 @@ describe('replayMovimientos', () => {
       ]),
     ]
     const { items } = replayMovimientos(files)
-    // Whichever hlc actually sorts last wins — assert against the real order
-    // rather than assuming which device's tick happened to be greater.
     const expected = editA > editB ? 111 : 222
     expect(items[0]?.monto).toBe(expected)
   })
@@ -284,13 +274,13 @@ describe('filenames', () => {
   it('an unrecognized name is "unknown", never thrown — edge case: ignored, never deleted', () => {
     expect(parseDriveFilename('some-users-random-file.txt').kind).toBe('unknown')
     expect(parseDriveFilename('mov-pj7k.json').kind).toBe('unknown')
-    expect(parseDriveFilename('config.json').kind).toBe('unknown') // the old fixed-file layout's own name
+    expect(parseDriveFilename('config.json').kind).toBe('unknown')
   })
 })
 
 describe('periodo helpers', () => {
   it('currentPeriodo/currentYear use local calendar time, zero-padded', () => {
-    const date = new Date(2026, 2, 5) // March 5 2026, local
+    const date = new Date(2026, 2, 5)
     expect(currentPeriodo(date)).toBe('2026-03')
     expect(currentYear(date)).toBe('2026')
   })

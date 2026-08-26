@@ -82,9 +82,6 @@ beforeEach(async () => {
   })
   await setDriveFolderId(registered.id, 'FOLD')
   profile = (await getProfile('p1'))!
-  // push()/pull() read/write the pushing profile's own outbox table via
-  // getProfileDatabase(), not outbox.ts's module-level redirect — matching
-  // real boot.ts behavior. Every enqueueOperation() below writes there.
   setOutboxDatabase(getProfileDatabase('kurobello-engine-test'))
 })
 
@@ -142,8 +139,6 @@ describe('pull', () => {
     const summary = await pull('tok', profile, 'en')
 
     expect(summary.skippedEntries).toBe(1)
-    // The good entry from the same file still replays — one bad line never
-    // takes the rest of a good file down.
     const database = getProfileDatabase('kurobello-engine-test')
     await expect(database.movimientos.toArray()).resolves.toEqual([movimiento()])
   })
@@ -170,8 +165,6 @@ describe('pull', () => {
     resolveList([listing('f1', 'mov-remdev-2026-08.json')])
     const [summaryA, summaryB] = await Promise.all([pullA, pullB])
 
-    // Two independent runs would each build their own PullSummary object;
-    // reference-equality only holds if the second call coalesced into the first's.
     expect(summaryA).toBe(summaryB)
   })
 
@@ -190,7 +183,7 @@ describe('pull', () => {
     expect(mReadJsonFile).toHaveBeenCalledTimes(1)
 
     await pull('tok', profile, 'en')
-    expect(mReadJsonFile).toHaveBeenCalledTimes(1) // still 1 — the cache answered the second pull
+    expect(mReadJsonFile).toHaveBeenCalledTimes(1)
   })
 
   it('degrades a malformed file to "skip it", never throwing and never blanking the rest', async () => {
@@ -224,7 +217,7 @@ describe('pull', () => {
   })
 
   it("folds in this device's own pending outbox ops, so a pull never clobbers a not-yet-pushed local write", async () => {
-    mListFiles.mockResolvedValue([]) // nothing on Drive at all yet
+    mListFiles.mockResolvedValue([])
     await enqueueOperation({
       entity: 'movimiento',
       op: 'put',
@@ -258,7 +251,7 @@ describe('pull', () => {
 
 describe('push', () => {
   it('creates a fresh shard when none exists yet', async () => {
-    mFindFile.mockResolvedValue(null) // no existing shard
+    mFindFile.mockResolvedValue(null)
     mUpsertJsonFile.mockResolvedValue('new-file-id')
     await enqueueOperation({ entity: 'movimiento', op: 'put', payload: movimiento() })
 
@@ -307,7 +300,7 @@ describe('push', () => {
     await push('tok', profile)
 
     expect(mUpsertJsonFile).not.toHaveBeenCalled()
-    await expect(listPendingOperations()).resolves.toHaveLength(1) // still queued, nothing lost
+    await expect(listPendingOperations()).resolves.toHaveLength(1)
     expect((await getProfile('p1'))?.lastPushAt).toBeUndefined()
   })
 
@@ -322,9 +315,6 @@ describe('push', () => {
     mUpsertJsonFile.mockResolvedValue('shard-id')
     await enqueueOperation({ entity: 'movimiento', op: 'put', payload: movimiento({ id: 'op1' }) })
 
-    // Two calls issued back-to-back, neither awaited before the second fires —
-    // the shape of two overlapping triggers (online pull-then-push and a
-    // debounced post-write push) in ordinary mobile use.
     const pushA = push('tok', profile)
     const pushB = push('tok', profile)
 
@@ -344,13 +334,8 @@ describe('push', () => {
     mUpsertJsonFile.mockResolvedValue('shard-id')
     await enqueueOperation({ entity: 'movimiento', op: 'put', payload: movimiento({ id: 'op1' }) })
 
-    // push A starts and blocks inside pushMovShard's findFile — it has
-    // already committed to its snapshot of "pending" (op1 only).
     const pushA = push('tok', profile)
 
-    // op2 arrives, and a second push is triggered, while A is still in
-    // flight — without a reentrancy guard, A's stale write could land after
-    // B's and silently drop op2 from both Drive and the outbox.
     await enqueueOperation({ entity: 'movimiento', op: 'put', payload: movimiento({ id: 'op2' }) })
     const pushB = push('tok', profile)
 
@@ -363,14 +348,12 @@ describe('push', () => {
       .map((o) => o.mov?.id)
     const accountedFor = new Set([...stillPending.map((e) => e.entityId), ...uploadedIds])
 
-    // op2 must be somewhere: either still queued (coalesced away, waiting
-    // for the next trigger) or already durably uploaded — never neither.
     expect(accountedFor.has('op2')).toBe(true)
-    expect(mUpsertJsonFile).toHaveBeenCalledTimes(1) // no second, racing write
+    expect(mUpsertJsonFile).toHaveBeenCalledTimes(1)
   })
 
   it('a failure pushing one entity type never causes the other, already-uploaded type to be re-pushed (and duplicated) on retry', async () => {
-    mFindFile.mockResolvedValue(null) // fresh shard/config, nothing to verify against
+    mFindFile.mockResolvedValue(null)
     mUpsertJsonFile.mockImplementation(async (_token, opts) => {
       const { name } = opts as { name: string }
       if (name.startsWith('mov-')) return 'mov-file-id'
@@ -381,7 +364,6 @@ describe('push', () => {
 
     await expect(push('tok', profile)).rejects.toThrow('network blip pushing config')
 
-    // The movimiento op already reached Drive — it must not still be queued.
     const stillPending = await listPendingOperations()
     expect(stillPending.map((e) => e.entity)).toEqual(['config'])
 
@@ -390,16 +372,13 @@ describe('push', () => {
     ).length
     expect(movCallsSoFar).toBe(1)
 
-    // Retry with the network now healthy: only the still-pending config op
-    // gets pushed. Re-pushing the movimiento shard would append a second,
-    // duplicate copy of the same op onto the file that already has it.
     mUpsertJsonFile.mockResolvedValue('config-file-id')
     await push('tok', profile)
 
     const movCallsAfterRetry = mUpsertJsonFile.mock.calls.filter((c) =>
       (c[1] as { name: string }).name.startsWith('mov-'),
     ).length
-    expect(movCallsAfterRetry).toBe(1) // unchanged — never pushed a second time
+    expect(movCallsAfterRetry).toBe(1)
     await expect(listPendingOperations()).resolves.toEqual([])
   })
 })
@@ -408,8 +387,6 @@ describe('compactYear', () => {
   const device = 'devicea'
 
   beforeEach(async () => {
-    // Pins getDeviceId() via the real device-id table so compactYear's
-    // "only this device's own files" filter has something real to match.
     __resetDeviceIdForTests()
     await deviceDb.deviceId.put({ id: 1, value: device })
   })
@@ -465,7 +442,6 @@ describe('compactYear', () => {
     expect(compacted).toBe(true)
     expect(mDeleteFile).toHaveBeenCalledWith('tok', 'm1')
     expect(mDeleteFile).toHaveBeenCalledWith('tok', 'm2')
-    // uploadMovShard + writeYearlyCsv + writeLeeme all go through upsert*File
     expect(mUpsertJsonFile).toHaveBeenCalled()
   })
 
@@ -483,12 +459,10 @@ describe('compactYear', () => {
     })
     mUpsertJsonFile.mockResolvedValue('yearly-id')
 
-    // The already-globally-merged set a pull would have computed, including
-    // a movement only *another* device ever created that year.
     const allMovimientos = [
       movimiento({ id: 'own', fecha: '2025-01-15' }),
       movimiento({ id: 'from-other-device', fecha: '2025-06-01' }),
-      movimiento({ id: 'different-year', fecha: '2024-01-01' }), // must be excluded
+      movimiento({ id: 'different-year', fecha: '2024-01-01' }),
     ]
 
     await compactYear('tok', profile, '2025', allMovimientos, EMPTY_TAXONOMY, 'en')
@@ -583,8 +557,8 @@ describe('startSyncTriggers', () => {
 
     handle = startSyncTriggers(() => ({ token: 'tok', profile, locale: 'en' }))
     window.dispatchEvent(new Event('online'))
-    await vi.waitFor(() => expect(mListFiles).toHaveBeenCalled()) // the pull
-    await vi.waitFor(() => expect(mUpsertJsonFile).toHaveBeenCalled()) // the push, since dirty
+    await vi.waitFor(() => expect(mListFiles).toHaveBeenCalled())
+    await vi.waitFor(() => expect(mUpsertJsonFile).toHaveBeenCalled())
   })
 
   it('does nothing when there is no sync context yet (e.g. no Drive-linked profile)', () => {
@@ -599,7 +573,7 @@ describe('startSyncTriggers', () => {
     handle = startSyncTriggers(() => ({ token: 'tok', profile, locale: 'en' }))
 
     window.dispatchEvent(new Event('pagehide'))
-    expect(mUpsertJsonFile).not.toHaveBeenCalled() // nothing pending yet
+    expect(mUpsertJsonFile).not.toHaveBeenCalled()
 
     await enqueueOperation({ entity: 'movimiento', op: 'put', payload: movimiento() })
     window.dispatchEvent(new Event('pagehide'))
@@ -612,7 +586,7 @@ describe('startSyncTriggers', () => {
     handle = startSyncTriggers(() => ({ token: 'tok', profile, locale: 'en' }), { debounceMs: 20 })
 
     await enqueueOperation({ entity: 'movimiento', op: 'put', payload: movimiento() })
-    expect(mUpsertJsonFile).not.toHaveBeenCalled() // not yet — still inside the debounce window
+    expect(mUpsertJsonFile).not.toHaveBeenCalled()
 
     await vi.waitFor(() => expect(mUpsertJsonFile).toHaveBeenCalled(), { timeout: 1000 })
   })
@@ -640,16 +614,13 @@ describe('startSyncTriggers', () => {
 
     handle = startSyncTriggers(() => ({ token: 'tok', profile, locale: 'en' }), { debounceMs: 1 })
     await enqueueOperation({ entity: 'movimiento', op: 'put', payload: movimiento() })
-    await vi.waitFor(() => expect(mFindFile).toHaveBeenCalled()) // the push is now in flight (blocked on findFile)
+    await vi.waitFor(() => expect(mFindFile).toHaveBeenCalled())
 
-    // The lock fires here in the real app (lockStore.ts's lock() calling
-    // stopSyncSession()) — the outbox's binding only changes on a boot
-    // rebind, never on lock, so this push's target table stays valid.
     handle.stop()
     handle = undefined
 
-    resolveFind(null) // let the already-in-flight push resolve
+    resolveFind(null)
     await vi.waitFor(() => expect(mUpsertJsonFile).toHaveBeenCalled())
-    await expect(listPendingOperations()).resolves.toEqual([]) // drained, not stranded
+    await expect(listPendingOperations()).resolves.toEqual([])
   })
 })

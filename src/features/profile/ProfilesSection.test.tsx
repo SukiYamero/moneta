@@ -2,10 +2,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
-// This file exercises the switcher's UI behavior, not the real sync
-// trigger wiring (`switchProfile.test.ts` already covers that in
-// isolation) — mocked so a switch here never registers real window
-// event listeners that could outlive one test.
 vi.mock('@/lib/sync/syncSession', () => ({
   startSyncSession: vi.fn(),
   stopSyncSession: vi.fn(),
@@ -22,10 +18,6 @@ import {
 import { ProfilesSection } from '@/features/profile/ProfilesSection'
 import { useProfiles, type UseProfilesResult } from '@/features/profile/useProfiles'
 
-// Defaults to the real hook so registry-backed tests are untouched; only the
-// anti-flash tests reassign to a fixed 'loading' return. Never
-// `mockReturnValueOnce`, which falls through to the real hook mid-render and
-// violates React's stable-hook-order rule.
 const { realUseProfiles } = vi.hoisted(() => ({ realUseProfiles: vi.fn() }))
 vi.mock('@/features/profile/useProfiles', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/features/profile/useProfiles')>()
@@ -70,29 +62,23 @@ describe('ProfilesSection', () => {
     render(<ProfilesSection />)
     expect(await screen.findByText('alex@example.com')).toBeInTheDocument()
     expect(screen.getByText('Este dispositivo')).toBeInTheDocument()
-    // Only the most-recently-registered profile (p2) is marked active.
     expect(screen.getAllByText('Activo')).toHaveLength(1)
   })
 
   it('switching to another profile rebinds the app and moves the active badge', async () => {
     const user = userEvent.setup()
-    await getActiveProfile() // adopts the default local profile first
+    await getActiveProfile()
     const registered = await registerProfile({
       id: 'p-switch',
       label: 'alex@example.com',
       kind: 'google',
       databaseName: 'kurobello-switch-ui-test',
     })
-    // The switcher's pre-check reads the target's owner marker, only ever
-    // present after a prior bind — simulate that bind directly.
     await getProfileDatabase(registered.databaseName).profileOwner.put({
       id: 1,
       kind: 'google',
       createdAt: registered.createdAt,
     })
-    // registerProfile() makes this the most-recently-touched profile, which
-    // would resolve as active by recency alone and disable its own row
-    // before the click — pin the default active explicitly first instead.
     const { setActiveProfileId, DEFAULT_PROFILE_ID } = await import('@/lib/profiles')
     await setActiveProfileId(DEFAULT_PROFILE_ID)
 
@@ -100,9 +86,6 @@ describe('ProfilesSection', () => {
     const row = await screen.findByText('alex@example.com')
     await user.click(row.closest('button')!)
 
-    // One condition over the whole settled state — three separate `waitFor`s
-    // would each pass individually mid-switch, before the badge has actually
-    // moved to the new row.
     await waitFor(() => {
       expect(screen.getAllByText('Activo')).toHaveLength(1)
       expect(screen.getByText('alex@example.com').closest('button')).toContainElement(
@@ -121,10 +104,6 @@ describe('ProfilesSection', () => {
       kind: 'google',
       databaseName: 'kurobello-gone-ui-test',
     })
-    // No owner marker written — the database looks freshly created/empty.
-    // Registering it makes it the most-recently-touched profile, which would
-    // resolve as active by recency alone and disable its own row before the
-    // click — pin the default active explicitly first instead.
     const { setActiveProfileId, DEFAULT_PROFILE_ID } = await import('@/lib/profiles')
     await setActiveProfileId(DEFAULT_PROFILE_ID)
 
@@ -138,8 +117,6 @@ describe('ProfilesSection', () => {
     await waitFor(async () => expect(await getProfile('p-gone')).toBeUndefined())
   })
 
-  // `useProfiles` is mocked because its real 'loading' window (an IndexedDB
-  // read) is too brief to hold open under fake timers.
   it('shows nothing yet immediately while the registry read is pending, before the anti-flash delay elapses', () => {
     mUseProfiles.mockImplementation(() => LOADING_STATE)
     vi.useFakeTimers()

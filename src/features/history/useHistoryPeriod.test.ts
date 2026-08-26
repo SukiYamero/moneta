@@ -62,8 +62,6 @@ describe('useHistoryPeriod', () => {
     const rangeSunday = periodRange('semana', result.current.anchor, 0)
     expect(rangeMonday.from <= rangeMonday.to).toBe(true)
     expect(rangeSunday.from <= rangeSunday.to).toBe(true)
-    // A week is exactly 7 days regardless of primerDiaSemana, so the step
-    // must land in the calendar week right after today's, for both settings.
     expect(rangeMonday.from > '2026-08-19').toBe(true)
     expect(rangeSunday.from > '2026-08-19').toBe(true)
   })
@@ -74,9 +72,6 @@ describe('useHistoryPeriod', () => {
     expect(result.current.anchor).toBe('2024-08-19')
   })
 
-  // date-fns's setYear doesn't clamp Feb 29 -> Feb 28 for a non-leap year the
-  // way addYears/addMonths do — it overflows into March 1 instead, so this
-  // guards against silently rolling the anchor into March on a leap-day pick.
   it('selectYear clamps Feb 29 to Feb 28 when the target year is not a leap year', () => {
     const { result } = renderHook(() =>
       useHistoryPeriod({ today: new Date('2028-02-29T12:00:00.000Z') }),

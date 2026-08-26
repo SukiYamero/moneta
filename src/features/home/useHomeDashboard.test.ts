@@ -26,8 +26,6 @@ const movimiento = (overrides: Partial<Movimiento> = {}): Movimiento => ({
   ...overrides,
 })
 
-// Only the methods dataStore.load() actually calls — cast rather than
-// implementing the full CrudRepo surface these tests never touch.
 const makeRepo = (opts: {
   movimientos?: Movimiento[]
   config?: Config
@@ -129,8 +127,6 @@ describe('useHomeDashboard', () => {
     expect(result.current.week.chart).toHaveLength(7)
   })
 
-  // A user switches monedaPrincipal after already having COP movements —
-  // the headline total must never add the two currencies together.
   describe('currency-correct totals', () => {
     it('excludes movements in a currency other than monedaPrincipal from the totals', async () => {
       const config: Config = {
@@ -149,9 +145,6 @@ describe('useHomeDashboard', () => {
       expect(result.current.totals).toEqual({ ingresos: 100, gastos: 0, balance: 100 })
     })
 
-    // The other edge case: the user just switched currencies and has no
-    // movements yet in the new one — zero is the correct, honest total,
-    // not a fallback to summing whatever else exists.
     it('totals zero, correctly, when nothing matches monedaPrincipal yet', async () => {
       const config: Config = {
         ...CONFIG_SEMILLA,

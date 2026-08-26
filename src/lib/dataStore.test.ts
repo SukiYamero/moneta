@@ -57,9 +57,6 @@ interface FakeRepoOptions {
   readyError?: unknown
 }
 
-// A stand-in `Repo`, not `repo.fake.ts`'s real one — dataStore must not care
-// which implementation `getRepo()` hands it, only call the port. `vi.fn()`
-// wrapping each method lets tests assert call counts (race-safety).
 const makeFakeRepo = ({
   movimientos = [],
   activos = [],
@@ -122,8 +119,6 @@ describe('useDataStore', () => {
     expect(s.error).toBeNull()
   })
 
-  // boot.ts calls this before rebinding to a new profile, so a previous
-  // profile's rows never linger — even transiently — under the newly-bound one.
   it('reset() clears loaded data and status back to idle', async () => {
     const repo = makeFakeRepo({ movimientos: [movimiento()], activos: [activo()] })
     mGetRepo.mockReturnValue(repo)
@@ -266,7 +261,6 @@ describe('useDataStore.createMovimiento', () => {
 
     await useDataStore.getState().createMovimiento(movimiento())
 
-    // The repo write succeeded — the record must still be there, not rolled back.
     expect(useDataStore.getState().movimientos).toHaveLength(1)
     expect(mToastError).toHaveBeenCalledWith('errors:sync.notQueued')
     expect(await listPendingOperations()).toEqual([])
@@ -587,9 +581,6 @@ describe('useDataStore.upsertCategoria', () => {
     expect(await listPendingOperations()).toEqual([])
   })
 
-  // The repo mock performs a real shallow merge (mirroring repo.fake.ts's
-  // updateConfig), so an implementation reading a stale `categorias` array
-  // captured before its own `await` would lose whichever write settles first.
   it('two categories created in the same tick both land: no lost update', async () => {
     useDataStore.setState({ config: CONFIG_SEMILLA })
     const repo = makeFakeRepo()
@@ -612,10 +603,6 @@ describe('useDataStore.upsertCategoria', () => {
     expect(ids).toHaveLength(CONFIG_SEMILLA.categorias.length + 2)
   })
 
-  // A same-tick Promise.all can't force B to fully settle before A's
-  // rejection arrives, so this test drives it manually: A stays pending
-  // while B resolves first, then A rejects. A's rollback must restore only
-  // its own pre-write snapshot, not erase B's already-committed category.
   it('a slow failing upsert rolling back must not erase a concurrent one that already succeeded', async () => {
     useDataStore.setState({ config: CONFIG_SEMILLA })
     const repo = makeFakeRepo()
@@ -866,9 +853,6 @@ describe('useDataStore.updateConfig — concurrent writes', () => {
 
     expect(useDataStore.getState().config?.categorias.map((c) => c.nombre)).toContain('Gimnasio')
 
-    // The repo settles the preferences write with the Config as it looked
-    // *before* the category landed — the real interleaving once network
-    // latency is involved.
     resolvePrefs({
       ...CONFIG_SEMILLA,
       preferencias: { ...CONFIG_SEMILLA.preferencias, primerDiaSemana: 0 },
@@ -888,9 +872,6 @@ describe('useDataStore.updateConfig — idioma round-trips through undefined', (
     })
     const repo = makeFakeRepo()
     mGetRepo.mockReturnValue(repo)
-    // A `Partial<Config>` patch whose value is `undefined` (not an absent
-    // key) must survive store → repo → store, mirroring repo.local.ts's
-    // `{ ...existing, ...patch }` merge contract.
     vi.mocked(repo.updateConfig).mockImplementation((patch) =>
       Promise.resolve({
         ...CONFIG_SEMILLA,

@@ -10,8 +10,6 @@ import { switchToProfile } from '@/lib/profiles/switchProfile'
 import { toast } from '@/lib/toastStore'
 import { useProfiles } from '@/features/profile/useProfiles'
 
-// Mocked only for the `switch-check-failed` test below — every other test in
-// this file drives the real registry/switcher end to end.
 vi.mock('@/lib/profiles/switchProfile', () => ({ switchToProfile: vi.fn() }))
 const mSwitchToProfile = vi.mocked(switchToProfile)
 
@@ -31,7 +29,7 @@ describe('useProfiles', () => {
   })
 
   it('lists every registered profile and marks the most recently used one active', async () => {
-    await getActiveProfile() // adopts the default first, same ordering profileRegistry.test.ts relies on
+    await getActiveProfile()
     await registerProfile({
       id: 'p2',
       label: 'Cuenta de Google',
@@ -45,17 +43,9 @@ describe('useProfiles', () => {
     expect(result.current.profiles.map((p) => p.id).toSorted()).toEqual(
       [DEFAULT_PROFILE_ID, 'p2'].toSorted(),
     )
-    // registerProfile() always mints a strictly later lastUsedAt than the
-    // lazily-adopted default (profileRegistry.ts), so the just-registered
-    // profile is the active one.
     expect(result.current.activeProfileId).toBe('p2')
   })
 
-  // A storage read failure while verifying the target's owner marker
-  // (`switchToProfile`'s own `'switch-check-failed'` outcome) must not be
-  // treated as "this profile's database is gone" — that premise drives an
-  // irreversible registry removal via `goneProfile`/`removeGoneProfile`, and
-  // a transient read failure is not evidence the database is gone.
   it('surfaces a check failure as a toast, never as the gone-profile removal dialog', async () => {
     mSwitchToProfile.mockResolvedValue({ outcome: 'switch-check-failed' })
     const toastSpy = vi.spyOn(toast, 'error').mockImplementation(() => {})

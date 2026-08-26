@@ -15,8 +15,6 @@ const renderAtBrokenRoute = () => {
         loader() {
           throw new Error('loader exploded')
         },
-        // A real page component is irrelevant here — the loader throws
-        // before it would ever render.
         Component: () => null,
         errorElement: <RouteErrorFallback />,
       },
@@ -28,8 +26,6 @@ const renderAtBrokenRoute = () => {
 
 describe('RouteErrorFallback', () => {
   it('renders a Spanish fallback with role="alert" instead of the crashed route', async () => {
-    // The data router resolves the throwing loader asynchronously, even in
-    // memory mode — findByRole waits for that transition to settle.
     vi.spyOn(console, 'error').mockImplementation(() => {})
     renderAtBrokenRoute()
     expect(await screen.findByRole('alert')).toHaveTextContent(/problema inesperado/i)
