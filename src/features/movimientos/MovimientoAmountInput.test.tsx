@@ -242,9 +242,7 @@ describe('MovimientoAmountInput', () => {
       expect(input).toHaveValue(expected)
     })
 
-    // fr-FR's group separator isn't a stable literal across ICU versions
-    // (may be a narrow no-break space), so the expectation is computed from
-    // `Intl` rather than hardcoded like the table above.
+    // fr-FR's group separator is not a stable literal across ICU versions.
     it('groups digits as the user types under a space-grouping locale', async () => {
       const user = userEvent.setup()
       render(<ControlledHarness locale="fr-FR" moneda="USD" tipo="gasto" />)
@@ -323,10 +321,6 @@ describe('MovimientoAmountInput', () => {
       render(<ControlledHarness initialValue="1.234" locale="es-CO" moneda="COP" tipo="gasto" />)
       const input = screen.getByLabelText('Monto') as HTMLInputElement
 
-      // "1.234" -> place caret at index 3 (right after "1.2", before "34")
-      // and type "9": the browser splices it in as "1.2934", which regroups
-      // to "12.934" — 3 digits now precede the caret ("1", "2", "9"), so the
-      // caret must land right after the "9", not at the string's end.
       await user.type(input, '9', { initialSelectionStart: 3, initialSelectionEnd: 3 })
 
       expect(input.value).toBe('12.934')
@@ -339,10 +333,6 @@ describe('MovimientoAmountInput', () => {
       render(<ControlledHarness initialValue="12.345" locale="es-CO" moneda="COP" tipo="gasto" />)
       const input = screen.getByLabelText('Monto') as HTMLInputElement
 
-      // caret right after the separator (index 3); backspace removes it,
-      // the separator is derived so it reappears, and the caret must land
-      // back in the same visual spot — still right after it, not wedged
-      // before it (which would misdirect the next keystroke).
       await user.type(input, '{backspace}', { initialSelectionStart: 3, initialSelectionEnd: 3 })
 
       expect(input.value).toBe('12.345')
@@ -354,7 +344,6 @@ describe('MovimientoAmountInput', () => {
       render(<ControlledHarness initialValue="12.345" locale="es-CO" moneda="COP" tipo="gasto" />)
       const input = screen.getByLabelText('Monto') as HTMLInputElement
 
-      // select just the "." (index 2 to 3) and delete it
       await user.type(input, '{delete}', { initialSelectionStart: 2, initialSelectionEnd: 3 })
 
       expect(input.value).toBe('12.345')
@@ -362,9 +351,6 @@ describe('MovimientoAmountInput', () => {
   })
 
   describe('on-screen keypad (native software keyboard suppressed)', () => {
-    // The decimal key's label follows `locale`'s own separator; the UI copy
-    // (aria-label) stays whatever i18next's language is, forced to `es` in
-    // tests independently of `locale`.
     it.each([
       { locale: 'es-CO', moneda: 'COP' as const, separator: ',' },
       { locale: 'en-US', moneda: 'USD' as const, separator: '.' },
@@ -440,7 +426,6 @@ describe('MovimientoAmountInput', () => {
       render(<ControlledHarness initialValue="12.345" locale="es-CO" moneda="COP" tipo="gasto" />)
       const input = screen.getByLabelText('Monto') as HTMLInputElement
 
-      // select "345" (indices 3 to 6) then tap delete
       await user.click(input)
       input.setSelectionRange(3, 6)
       await user.click(screen.getByRole('button', { name: 'Borrar' }))
@@ -453,7 +438,6 @@ describe('MovimientoAmountInput', () => {
       render(<ControlledHarness initialValue="1.234" locale="es-CO" moneda="COP" tipo="gasto" />)
       const input = screen.getByLabelText('Monto') as HTMLInputElement
 
-      // caret right after "1.2" (index 3, before "34")
       await user.click(input)
       input.setSelectionRange(3, 3)
       await user.click(screen.getByRole('button', { name: '9' }))
@@ -466,9 +450,6 @@ describe('MovimientoAmountInput', () => {
       render(<ControlledHarness initialValue="1.000" locale="es-CO" moneda="COP" tipo="gasto" />)
       const input = screen.getByLabelText('Monto') as HTMLInputElement
 
-      // caret right after the "." grouping separator, before "000" — a
-      // position a real tap can land on, not one the reformat itself ever
-      // produces.
       await user.click(input)
       input.setSelectionRange(2, 2)
       await user.click(screen.getByRole('button', { name: 'Borrar' }))
@@ -490,11 +471,7 @@ describe('MovimientoAmountInput', () => {
   })
 
   describe("the keypad bleeds past the sheet's own side padding to the true screen edges", () => {
-    // The pad's wrapper otherwise stops at `BottomSheet`'s own padded
-    // content edge, so the side gutters would sit outside `wrapperRef` and
-    // dismiss the pad on a tap that visually looks like it's still inside.
-    // jsdom has no layout engine, so this only asserts the classes that
-    // produce the bled box, not the resulting geometry.
+    // jsdom has no layout engine, so this asserts the classes, not the geometry.
     it("keeps its bleed numbers locked to BottomSheet's own scrollable-body padding", async () => {
       render(
         <BottomSheet open onClose={() => {}} ariaLabel="Sheet de prueba">
@@ -525,9 +502,6 @@ describe('MovimientoAmountInput', () => {
 
       expect(Number(gridPaddingMatch?.[1])).toBe(sheetPaddingUnits)
       expect(Number(gridMarginMatch?.[1])).toBe(sheetPaddingUnits)
-      // Tailwind's spacing scale is 0.25rem per unit; the calc's rem value
-      // must equal two of this element's own paddings (one bled past on
-      // each side).
       expect(Number(gridWidthMatch?.[1])).toBe(sheetPaddingUnits * 0.25 * 2)
     })
   })
@@ -587,11 +561,9 @@ describe('MovimientoAmountInput', () => {
   })
 
   describe('dismissing on an outside tap that never fires a native blur', () => {
-    // iOS Safari never shifts focus away from a focused input when the tap
-    // target itself isn't focusable, so a native blur/focusout can't be
-    // relied on to detect this dismissal. jsdom's own click moves focus to
-    // `<body>` regardless (Chromium behavior); `mousedown` + `preventDefault()`
-    // reproduces WebKit's actual DOM state instead.
+    // iOS Safari fires no blur when the tap target is not focusable; jsdom's own
+    // click moves focus to <body> regardless, so mousedown+preventDefault
+    // reproduces WebKit's DOM state.
     const OutsideNonFocusableTarget = ({ onMouseDown }: { onMouseDown?: () => void }) => (
       <div
         data-testid="outside"
@@ -652,11 +624,7 @@ describe('MovimientoAmountInput', () => {
       expect(input).toHaveValue('7')
     })
 
-    // Collapsing the pad on `pointerdown` shifts the layout up before the
-    // finger lifts, so the browser's later `pointerup`/`click` hit-tests
-    // against a different element than the one `pointerdown` actually hit —
-    // a tap on a control revealed behind the pad gets retargeted and never
-    // registers. Gating the collapse on `pointerup` avoids that.
+    // A click is re-hit-tested against the post-collapse DOM on touch in Blink.
     it('does not close the pad on pointerdown alone — only once the pointer lifts, so an in-flight tap on a control behind the pad cannot be retargeted by an early collapse', async () => {
       const user = userEvent.setup()
       render(
@@ -702,11 +670,8 @@ describe('MovimientoAmountInput', () => {
       expect(screen.getByRole('button', { name: '1' })).toBeInTheDocument()
     })
 
-    // A genuinely focusable outside control (a category chip, in the real
-    // sheet) never reaches the pointerup listener above: the browser's own
-    // mousedown default action focuses it directly, firing a real native
-    // `blur` on the amount input well before `pointerup`. That blur must
-    // defer the collapse the same way, or the tap still gets retargeted.
+    // The browser's own mousedown default action focuses an outside control
+    // before pointerup, firing a real native blur first.
     it('a native blur from tapping a genuinely focusable outside control is deferred the same way, so the pad does not collapse before the pointer lifts', async () => {
       const user = userEvent.setup()
       render(
@@ -729,19 +694,9 @@ describe('MovimientoAmountInput', () => {
   })
 
   describe('a gesture that starts on the pad never dismisses it, whatever the browser did with focus in between', () => {
-    // A tap that starts inside the pad's own wrapper — a key, the dead
-    // space between keys, the full-bleed side gutters — must never be read
-    // as "outside", even if focus drifts to some other focusable ancestor
-    // mid-gesture (e.g. a dialog panel this field is nested inside, via
-    // `tabIndex={-1}`) before the pointer lifts. Deciding from the
-    // gesture's own origin, captured once at `pointerdown`, rather than
-    // from whatever the DOM's focus state happens to be by `pointerup`,
-    // makes the pad robust to that class of in-between focus change
-    // without needing to know its exact cause.
     it('stays open and restores focus to the input when a mid-gesture blur lands on a focusable ancestor outside the wrapper', async () => {
       const user = userEvent.setup()
       render(
-        // Stands in for `BottomSheet`'s own `role="dialog"` panel, which carries `tabIndex={-1}` for the same reason.
         <div tabIndex={-1} data-testid="dialog-panel">
           <ControlledHarness locale="es-CO" moneda="COP" tipo="gasto" />
         </div>,
@@ -750,17 +705,12 @@ describe('MovimientoAmountInput', () => {
       await user.click(input)
       expect(screen.getByRole('button', { name: '1' })).toBeInTheDocument()
 
-      // The pad's own grid — the origin of a tap that lands in the dead
-      // space between keys rather than on any one of them.
       const gridContainer = screen.getByRole('button', { name: '1' }).parentElement as HTMLElement
       const dialogPanel = screen.getByTestId('dialog-panel')
 
       gridContainer.dispatchEvent(
         new PointerEvent('pointerdown', { bubbles: true, cancelable: true, pointerId: 1 }),
       )
-      // Focus landing on an ancestor mid-gesture fires a genuine native
-      // `blur` on the input with `relatedTarget` set to that ancestor —
-      // exactly the DOM state a platform-driven focus shift would produce.
       dialogPanel.focus()
       gridContainer.dispatchEvent(
         new PointerEvent('pointerup', { bubbles: true, cancelable: true, pointerId: 1 }),
@@ -770,11 +720,8 @@ describe('MovimientoAmountInput', () => {
       expect(input).toHaveFocus()
     })
 
-    // On WebKit, `pointerdown`/`pointerup` can both resolve inside with no
-    // focus change in between, and only *after* `pointerup` finishes does
-    // focus walk from the tapped grid to an ancestor panel. A blur/focusout
-    // listener has no "gesture in progress" window left to protect this by
-    // the time it fires — only ignoring focus state entirely survives it.
+    // On WebKit the platform-driven focus walk lands only after pointerup, so no
+    // blur listener has a gesture window left to protect this.
     it('stays open when the ancestor focus-walk happens only after pointerup has already resolved the gesture as inside', async () => {
       const user = userEvent.setup()
       render(
@@ -795,7 +742,6 @@ describe('MovimientoAmountInput', () => {
       gridContainer.dispatchEvent(
         new PointerEvent('pointerup', { bubbles: true, cancelable: true, pointerId: 1 }),
       )
-      // The late, platform-driven focus walk — after the gesture is over.
       dialogPanel.focus()
 
       expect(screen.getByRole('button', { name: '1' })).toBeInTheDocument()
@@ -803,9 +749,6 @@ describe('MovimientoAmountInput', () => {
   })
 
   describe('the dismiss-free zone is the input and the pad, not the whole field column', () => {
-    // "Outside" is scoped to the input and the pad, not the whole wrapper
-    // column — the visible symbol, the label, and the empty flanks beside a
-    // short amount all still dismiss.
     it('dismisses the pad on a tap on the visible currency symbol beside the input', async () => {
       const user = userEvent.setup()
       render(<ControlledHarness initialValue="7" locale="es-CO" moneda="COP" tipo="gasto" />)
@@ -859,9 +802,6 @@ describe('MovimientoAmountInput', () => {
       await user.click(input)
       expect(screen.getByRole('button', { name: '1' })).toBeInTheDocument()
 
-      // 9 digits + decimal + 0 + delete = 12 tabbable keys — `aria-disabled`
-      // keeps delete in the tab order even while it's a no-op — between the
-      // input and "After".
       for (let i = 0; i < 13; i += 1) await user.tab()
 
       expect(screen.getByRole('button', { name: 'After' })).toHaveFocus()
