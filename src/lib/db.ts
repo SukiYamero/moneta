@@ -1,8 +1,5 @@
 import Dexie, { type EntityTable } from 'dexie'
 import type { Activo, Config, Movimiento } from '@/lib/schema'
-// Type-only: outbox.ts imports the runtime `db`/`createProfileDb` below, so
-// only a type import here avoids a value-level import cycle between the two
-// modules (erased entirely by the TS compiler, never reaches the bundle).
 import type { OutboxEntry } from '@/lib/outbox'
 
 export const VAULT_ID = 1 as const
@@ -28,22 +25,8 @@ export type LockVault = {
 
 type VaultRow = LockVault & { id: number }
 
-// Config is one JSON file (appDataFolder), so it's cached as a single row
-// keyed by a fixed synthetic id — same pattern as VaultRow above.
 export type ConfigRow = Config & { id: number }
 
-// specs.md §10.31 §2: an owner marker written *inside* each profile's own
-// database, not only in the device-scoped registry (`profiles/
-// profileRegistry.ts`'s `ProfileRecord`). The registry is a single point of
-// truth — lose or corrupt it and every `kurobello-<id>` database becomes an
-// unattributable blob. This is the few bytes that let a database identify
-// itself without the registry. Describes the *container*, not the user's
-// data: kept off `schema.ts`'s `Config` and never becomes a synced field
-// (`sync/opLog.ts` has no envelope for it). A local copy of `ProfileKind`,
-// not an import from `profiles/profileRegistry.ts` — same reasoning
-// `deviceStore.ts`'s own `ProfileRow` gives for not importing it either:
-// this module stays the generic storage layer, the domain type lives where
-// its meaning is owned.
 export type ProfileOwnerRow = {
   id: number
   kind: 'local' | 'google'
@@ -60,34 +43,11 @@ export type ProfileDb = Dexie & {
   profileOwner: EntityTable<ProfileOwnerRow, 'id'>
 }
 
-// Builds one profile's local database against an arbitrary Dexie name
-// (specs.md §10.15: one database per profile, not a `profileId` column).
-// Every profile — the frozen `kurobello` instance below and every later
-// suffixed one built through `src/lib/profiles/` — gets this identical
-// schema, so isolation costs nothing at query time and a cross-profile read
-// is structurally impossible rather than merely discouraged.
 export const createProfileDb = (name: string): ProfileDb => {
   const database = new Dexie(name) as ProfileDb
 
   database.version(1).stores({ vault: 'id' })
 
-  // Additive: `vault` keeps its v1 definition unchanged (frozen, per AGENTS.md).
-  // Indexes are chosen to serve `ListQuery` (repo.ts §10.3), with a fast,
-  // bounded-read keyset-pagination path in mind (see repo.local.ts §10.3.1):
-  //  - `fecha` / `fechaActualizacion`, `seccion`, `[seccion+fecha]` /
-  //    `[seccion+fechaActualizacion]`: narrowing indexes for the general
-  //    in-memory fallback path (arbitrary `sortBy`, or `limit` omitted).
-  //  - `[fecha+createdAt]` / `[fechaActualizacion+id]` and
-  //    `[seccion+fecha+createdAt]` / `[seccion+fechaActualizacion+id]`: the
-  //    *ordering* indexes for the fast path. Compounding the date field with
-  //    the entity's own tiebreak field (`createdAt` for movimientos; `id`
-  //    itself for activos, which has no separate tiebreak field) means the
-  //    index's native lexicographic order already IS the full deterministic
-  //    sort order `list()` needs — a keyset page can be read directly off a
-  //    bounded `.limit()` cursor instead of materializing and sorting the
-  //    whole matching set in memory. `createdAt` alone is NOT indexed: it's
-  //    only ever consulted as part of that compound tiebreak, never queried
-  //    on its own.
   database.version(2).stores({
     vault: 'id',
     movimientos:
@@ -97,15 +57,6 @@ export const createProfileDb = (name: string): ProfileDb => {
     config: 'id',
   })
 
-  // Additive: `outbox` (specs.md §10.13/§10.19's local sync queue) is a
-  // new table on this same per-profile connection, not a database of its
-  // own (`kurobello-outbox`, as first built) — this is per-profile data
-  // (each profile's own pending operations), so it belongs beside
-  // `movimientos`/`config`, the same reasoning that folded the device-wide
-  // signals into `kurobello-device` (specs.md §11, 2026-08-19), applied to
-  // the per-profile side instead. Never shipped under the old name, so no
-  // migration is owed (verified, not assumed — same premise that
-  // consolidation checked). Every earlier table restated unchanged.
   database.version(3).stores({
     vault: 'id',
     movimientos:
@@ -116,8 +67,6 @@ export const createProfileDb = (name: string): ProfileDb => {
     outbox: 'id, hlc, [entity+entityId]',
   })
 
-  // Additive: `profileOwner` (specs.md §10.31 §2) — the in-database owner
-  // marker. Every earlier table restated unchanged.
   database.version(4).stores({
     vault: 'id',
     movimientos:
@@ -132,8 +81,4 @@ export const createProfileDb = (name: string): ProfileDb => {
   return database
 }
 
-// Storage id frozen at the 2026-08-18 brand: renaming it orphans the local
-// vault, so it must not track APP_NAME. Adopted as the first profile
-// (specs.md §10.15) rather than migrated — every additional profile is a
-// suffix on this name, minted by `src/lib/profiles/`, never a rename of it.
 export const db = createProfileDb('kurobello')

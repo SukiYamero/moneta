@@ -2,19 +2,6 @@ import { APP_NAME } from '@/lib/branding'
 import type { SupportedLocale } from '@/lib/i18n/resources'
 import { leemeFilename, OP_FORMAT_VERSION } from '@/lib/sync/opLog'
 
-// leeme.ts — the plain-language file bootstrap.ts writes into the Drive
-// folder (specs.md §10.19): "the data is the user's" is only true if a
-// person can use it the day the app stops existing. Deliberately its own
-// module, not the shared i18n JSON tables — this is prose written for a
-// Drive folder, not a UI string looked up by react-i18next, and those files
-// are key-parity-enforced and owned by a parallel track this wave (G1).
-//
-// Content order is fixed by the spec, not stylistic: what these files are →
-// the CSV is the easy path → the JSON is the complete record → the one
-// sentence that turns JSON into a table → nothing here is locked. No jargon,
-// no field-by-field schema dump — a person who has never opened a JSON file
-// should finish it knowing what to do.
-
 export { leemeFilename }
 
 const LEEME_CONTENT: Record<SupportedLocale, (appName: string) => string> = {
@@ -131,6 +118,5 @@ levar para outro lugar, quando quiser.
 `,
 }
 
-/** `bootstrap.ts` writes this into the KuroBello folder; the sync engine rewrites it whenever `OP_FORMAT_VERSION` changes, never leaving it describing an older shape. */
 export const buildLeemeContent = (locale: SupportedLocale, appName: string = APP_NAME): string =>
   LEEME_CONTENT[locale](appName)

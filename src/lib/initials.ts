@@ -1,4 +1,3 @@
-/** First letter of the first and last name, e.g. "Alex Rivera" -> "AR". */
 export const getInitials = (name: string): string => {
   const parts = name.trim().split(/\s+/).filter(Boolean)
   if (parts.length === 0) return ''

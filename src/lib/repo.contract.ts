@@ -29,26 +29,6 @@ const activo = (overrides: Partial<Activo> = {}): Activo => {
   }
 }
 
-// Shared behavior every `Repo` implementation must agree on — imported and
-// invoked from each implementation's own test file (repo.local.test.ts,
-// repo.fake.test.ts), inside that file's own `describe`. A plain module, not
-// a `*.test.ts` file: vitest would otherwise collect this as a standalone
-// test file with no top-level test of its own (error, or a silent double
-// run once the two callers also execute it).
-//
-// Scope: only behavior the `Repo`/`CrudRepo` port itself promises for every
-// implementation. Anything an implementation may legitimately do
-// differently — repo.local.ts's opaque cursor bound to the exact
-// sortBy/sortDir it was minted under vs. repo.fake.ts's simpler
-// index-encoded one (a deliberate divergence, specs.md §10.5/§11), or
-// ready()/migration mechanics, which need implementation-specific backdoor
-// setup to exercise — stays in that implementation's own test file, not
-// here. Error assertions check `.code` only, never message text: wording is
-// implementation-specific and not part of the contract (docs/error-handling.md §8).
-//
-// Precondition: `makeRepo()` must hand back a `Repo` whose `movimientos` and
-// `activos` stores are empty — repo.fake.ts's `createFakeRepo()` seeds demo
-// data by design, so its caller clears the seed first (see repo.fake.test.ts).
 export const testRepoContract = (makeRepo: () => Promise<Repo> | Repo): void => {
   describe('Repo contract', () => {
     describe('get()', () => {
@@ -159,7 +139,7 @@ export const testRepoContract = (makeRepo: () => Promise<Repo> | Repo): void => 
           repo.movimientos.addMany([movimiento(), { ...dup }, movimiento()]),
         ).rejects.toMatchObject({ code: 'invalid_input' })
         const { items } = await repo.movimientos.list()
-        expect(items).toHaveLength(1) // only the original `dup` — batch fully rolled back
+        expect(items).toHaveLength(1)
       })
 
       it('is all-or-nothing: a duplicate id within the batch itself rolls back the whole batch', async () => {
@@ -169,7 +149,7 @@ export const testRepoContract = (makeRepo: () => Promise<Repo> | Repo): void => 
           repo.movimientos.addMany([movimiento(), selfDup, { ...selfDup }]),
         ).rejects.toMatchObject({ code: 'invalid_input' })
         const { items } = await repo.movimientos.list()
-        expect(items).toHaveLength(0) // nothing committed, including the two non-conflicting rows
+        expect(items).toHaveLength(0)
       })
     })
 
@@ -190,7 +170,7 @@ export const testRepoContract = (makeRepo: () => Promise<Repo> | Repo): void => 
           code: 'not_found',
         })
         const { items } = await repo.movimientos.list()
-        expect(items).toHaveLength(1) // `a` was NOT removed despite being valid
+        expect(items).toHaveLength(1)
       })
     })
 
@@ -334,11 +314,6 @@ export const testRepoContract = (makeRepo: () => Promise<Repo> | Repo): void => 
         expect(items.map((m) => m.monto)).toEqual([300, 100])
       })
 
-      // sortDir applies to the whole key tuple (primary field, tiebreak field,
-      // final id fallback), not just the primary field — a real, reproduced
-      // bug when the two levels disagreed on direction (specs.md §11,
-      // 2026-08-18). The next two tests pin that contract for every
-      // implementation, not just the one it was first found in.
       it('breaks ties on the tiebreak field, following sortDir uniformly', async () => {
         const repo = await makeRepo()
         const older = movimiento({ fecha: '2026-01-01', createdAt: '2026-01-01T08:00:00.000Z' })

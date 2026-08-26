@@ -4,11 +4,6 @@ import { CONFIG_SEMILLA } from '@/lib/schema'
 import type { CrudRepo, EntityId, ListQuery, ListResult, Repo } from '@/lib/repo'
 import { RepoError } from '@/lib/repo'
 
-// Extends CONFIG_SEMILLA's categorias with the design's demo categories
-// (Comida, Transporte…) so screens built against either source render
-// consistent icon/tint via movimientoView.ts. Still the same 3 secciones.
-// icono/color port the pairings that used to live in movimientoView.ts's
-// deleted per-category-name icon/tint lookup tables (specs.md §10.22 Decision 2).
 const FAKE_CATEGORIAS: Categoria[] = [
   ...CONFIG_SEMILLA.categorias,
   {
@@ -92,8 +87,6 @@ interface MovimientoTemplate {
   nota?: string
 }
 
-// Several months of realistic Spanish sample data, offsets relative to the
-// injected "today" so the seed stays deterministic across runs/tests.
 const MOVIMIENTO_TEMPLATES: MovimientoTemplate[] = [
   {
     offsetDays: 0,
@@ -413,12 +406,6 @@ const seedActivos = (today: Date): Activo[] => {
   ]
 }
 
-// --- validation --------------------------------------------------------------
-// Mirrors repo.local.ts's validateMovimiento/validateActivo exactly (§10.3.1):
-// a fake that silently accepted a violation the real repo rejects would
-// disagree with it, and every Wave 2 screen is built and tested against this
-// fake first.
-
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 
 const isValidIsoDate = (value: string): boolean => {
@@ -457,11 +444,6 @@ const validateActivo = (a: Activo): void => {
   }
 }
 
-// --- sort/cursor helpers ------------------------------------------------------
-// Mirrors repo.local.ts's compareValues/makeComparator exactly (§10.3.1): the
-// index-encoded cursor below is the one deliberate simplification (§10.5) —
-// everything else (defaults, comparator, error codes) is meant to agree.
-
 const compareValues = (a: unknown, b: unknown): number => {
   if (a === b) return 0
   if (a === undefined || a === null) return -1
@@ -474,9 +456,6 @@ const compareValues = (a: unknown, b: unknown): number => {
   return 0
 }
 
-// `sortDir` applies uniformly across the whole key tuple (primary field,
-// tiebreak field, final id fallback) — see specs.md §11, 2026-08-18: mixing
-// direction across levels was a real reproduced ordering bug in repo.local.ts.
 const makeComparator = <T extends { id: EntityId }>(
   sortBy: keyof T,
   sortDir: 'asc' | 'desc',
@@ -494,10 +473,6 @@ const makeComparator = <T extends { id: EntityId }>(
   }
 }
 
-// Index-encoded cursor (§10.5's deliberate simplification vs. the real repo's
-// opaque value-tuple cursor — fine for an in-memory store with no compound
-// index to walk). Still must reject garbage the same way the real repo does:
-// `Number('garbage')` is NaN and `slice(NaN)` silently behaves like `slice(0)`.
 const decodeCursor = (cursor: string | undefined): number => {
   if (cursor === undefined) return 0
   const index = Number(cursor)
@@ -507,11 +482,6 @@ const decodeCursor = (cursor: string | undefined): number => {
   return index
 }
 
-// Mirrors repo.local.ts's validateLimit exactly (§10.3.1/docs/error-handling.md
-// §4): `limit` drives the "more data" signal (`nextCursor`), so 0 or a
-// fractional/negative/non-finite value is bad caller input, not a request
-// for an empty page — must reject, not silently answer with an ambiguous
-// `{ items: [] }`.
 const validateLimit = (limit: number | undefined): void => {
   if (limit === undefined) return
   if (!Number.isInteger(limit) || limit < 1) {
@@ -582,10 +552,6 @@ const createCrudRepo = <T extends { id: EntityId }>(
     },
     async addMany(items) {
       items.forEach((item) => validate(item))
-      // All-or-nothing, mirroring repo.local.ts's bulkAdd-inside-a-transaction
-      // guarantee: every id (within the batch, and against the existing store)
-      // is checked before the store is touched, so a bad row never leaves a
-      // partial batch committed.
       const existingIds = new Set(store.map((item) => item.id))
       const seenInBatch = new Set<EntityId>()
       for (const item of items) {
@@ -617,9 +583,6 @@ const createCrudRepo = <T extends { id: EntityId }>(
     },
     async removeMany(ids) {
       const idsToRemove = new Set(ids)
-      // Symmetric with `remove`'s not_found guarantee: any missing id aborts
-      // the whole batch (checked before the store is touched), never a
-      // partial delete.
       for (const id of idsToRemove) {
         if (!store.some((item) => item.id === id)) {
           throw new RepoError(`Not found: ${id}`, 'not_found')
@@ -631,11 +594,9 @@ const createCrudRepo = <T extends { id: EntityId }>(
 }
 
 export interface CreateFakeRepoOptions {
-  /** Injectable clock so seed dates (and tests/screenshots) stay deterministic. */
   today?: Date
 }
 
-/** In-memory `Repo` implementation, seeded with deterministic Spanish sample data. */
 export const createFakeRepo = ({ today = new Date() }: CreateFakeRepoOptions = {}): Repo => {
   let config: Config = { ...FAKE_CONFIG }
 
@@ -660,19 +621,10 @@ export const createFakeRepo = ({ today = new Date() }: CreateFakeRepoOptions = {
     },
     movimientos,
     activos,
-    // structuredClone, not a shallow `{ ...config }`: `config` is a plain
-    // in-memory variable here (unlike repo.local.ts, where every read comes
-    // back through IndexedDB's own structured-clone boundary), so a shallow
-    // copy still shares `secciones`/`categorias`/`preferencias` by reference
-    // with the live store — a caller mutating the returned array was
-    // silently corrupting the fake's own state (see docs/error-handling.md §4).
     async getConfig() {
       return structuredClone(config)
     },
     async updateConfig(patch) {
-      // schemaVersion is owned by ready(), never by callers — mirrors
-      // repo.local.ts's guard so a caller can't silently poison the fake's
-      // own version check via a patch that structurally allows the field.
       if (patch.schemaVersion !== undefined) {
         throw new RepoError(
           'schemaVersion is not caller-writable via updateConfig',
@@ -685,21 +637,6 @@ export const createFakeRepo = ({ today = new Date() }: CreateFakeRepoOptions = {
   }
 }
 
-// Fixed, not `new Date()` — this singleton is what every Wave 2 screen imports
-// (§10.5), so an unpinned clock would make the same code render different
-// relative seed dates depending on which real day the app happens to boot on,
-// breaking reproducibility across Playwright runs or between two people
-// looking at the same screen on different days.
-// `parseISO`, not `new Date('…T00:00:00.000Z')`: the latter is UTC midnight,
-// and `format()` below renders in *local* time, so under any negative-offset
-// timezone — every timezone this app targets — the seeded `fecha` came out
-// one calendar day early and disagreed with its own `createdAt`. `parseISO`
-// on a date-only string yields local midnight, so the seed lands on the
-// intended calendar day everywhere (found by Track E4, docs/wave-2/track-e4.md).
 const FAKE_REPO_SEED_DATE = parseISO('2026-08-18')
 
-// Every screen must read the SAME repo instance (docs/ui/implementation-plan.md)
-// so a write from the Add sheet shows up on Home immediately. This is the
-// default import for app code; tests should use `createFakeRepo()` directly
-// for an isolated instance instead of sharing this singleton.
 export const fakeRepo: Repo = createFakeRepo({ today: FAKE_REPO_SEED_DATE })
