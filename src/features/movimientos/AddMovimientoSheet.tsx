@@ -44,10 +44,10 @@ export const AddMovimientoSheet = () => {
   const { t } = useTranslation('movimientos')
   const { locale, dateFnsLocale } = useLocaleFormatting()
   // No longer about winning iOS's software-keyboard-raise race (the amount
-  // field suppresses that keyboard entirely — `MovimientoAmountInput`'s
-  // `SUPPRESS_NATIVE_KEYBOARD_FOR_AMOUNT`); still the sheet's first and
-  // primary field, so focusing it on open puts the caret there and is what
-  // a screen reader announces first.
+  // field suppresses that keyboard entirely on touch — `MovimientoAmountInput`'s
+  // `useIsCoarsePointer` gate); still the sheet's first and primary field, so
+  // focusing it on open puts the caret there and is what a screen reader
+  // announces first.
   const amountInputRef = useRef<HTMLInputElement>(null)
 
   const { secciones, categorias, preferencias } = config ?? CONFIG_SEMILLA

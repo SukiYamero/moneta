@@ -246,12 +246,20 @@ Categoria[]` prop (no default, same no-silent-fallback rule as
   `display`/`visibility`/`inert`) don't affect focusability — the restore
   can land correctly even a render tick before this hook's own re-render
   makes the bar visible again.
-- `useIsLandscape.ts` — `matchMedia('(orientation: landscape)')` exposed to
-  React via `useSyncExternalStore`, same shape as
-  `src/features/home/usePrefersReducedMotion.ts`. The detection half of
-  `specs.md` §10.53's "stay in portrait" rule — kept apart from
-  `LandscapeGuard.tsx`'s presentation on purpose, per that section's own
-  reasoning about what a real lock does and doesn't cover in each context.
+- `useMediaQuery.ts` — generic `matchMedia` query exposed to React via
+  `useSyncExternalStore`, degrading to `false` where `matchMedia` doesn't
+  exist (jsdom, very old browsers) rather than throwing. `useIsLandscape.ts`
+  and `useIsCoarsePointer.ts` both build on this instead of each keeping its
+  own copy of the subscribe/getSnapshot plumbing.
+- `useIsCoarsePointer.ts` — `useMediaQuery('(pointer: coarse)')`: true on a
+  phone or tablet (no mouse/trackpad as the primary pointer), false on a
+  desktop/laptop window however small. Gates `MovimientoAmountInput`'s
+  on-screen keypad — touch keeps it, desktop gets the OS keyboard back.
+- `useIsLandscape.ts` — `useMediaQuery('(orientation: landscape) and
+(pointer: coarse)')`. The detection half of `specs.md` §10.53's "stay in
+  portrait" rule — kept apart from `LandscapeGuard.tsx`'s presentation on
+  purpose, per that section's own reasoning about what a real lock does and
+  doesn't cover in each context.
 - `LandscapeGuard.tsx` — the presentation half: self-contained, mounted
   once in `src/main.tsx` above `AppLock` and the router (not inside
   `AppShell`, which would miss the auth screens, the PIN lock and

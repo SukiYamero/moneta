@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { useMediaQuery } from '@/components/shared/useMediaQuery'
 
 // `pointer: coarse` is the primary-input-mechanism signal, not a width
 // breakpoint — it's true on a phone or tablet (no mouse/trackpad as the
@@ -7,22 +7,6 @@ import { useSyncExternalStore } from 'react'
 // gates touch devices only, tablets included, with no width ceiling to
 // misclassify either a narrow desktop window or a large tablet.
 const LANDSCAPE_QUERY = '(orientation: landscape) and (pointer: coarse)'
-
-// jsdom (the test environment) has no matchMedia — same guard shape as
-// src/features/home/usePrefersReducedMotion.ts, degrading to "not
-// landscape" rather than throwing.
-const supportsMatchMedia = (): boolean =>
-  typeof window !== 'undefined' && typeof window.matchMedia === 'function'
-
-const subscribe = (callback: () => void): (() => void) => {
-  if (!supportsMatchMedia()) return () => {}
-  const mediaQueryList = window.matchMedia(LANDSCAPE_QUERY)
-  mediaQueryList.addEventListener('change', callback)
-  return () => mediaQueryList.removeEventListener('change', callback)
-}
-
-const getSnapshot = (): boolean =>
-  supportsMatchMedia() ? window.matchMedia(LANDSCAPE_QUERY).matches : false
 
 /**
  * Whether the viewport is currently wider than it is tall on a touch
@@ -39,5 +23,4 @@ const getSnapshot = (): boolean =>
  * this hook is what `LandscapeGuard` uses to detect and guard against
  * landscape there instead of silently doing nothing.
  */
-export const useIsLandscape = (): boolean =>
-  useSyncExternalStore(subscribe, getSnapshot, () => false)
+export const useIsLandscape = (): boolean => useMediaQuery(LANDSCAPE_QUERY)
