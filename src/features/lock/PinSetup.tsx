@@ -144,7 +144,13 @@ export const PinSetup = ({ open, onClose, mode }: PinSetupProps) => {
           <PinDots length={PIN_LENGTH} filled={pin.length} error={hasError} />
           <input
             ref={inputRef}
-            inputMode="numeric"
+            // `initialFocus` above lands here synchronously on open — see
+            // `useOverlay`'s own comment on why that timing exists at all.
+            // `sr-only` keeps the box real and focusable (not display:none),
+            // so without inputMode="none" that focus call raises the OS
+            // keyboard on top of `PinPad`, the keypad this screen actually
+            // shows; same fix shape as the amount field (specs.md §10.54).
+            inputMode="none"
             pattern="\d*"
             maxLength={PIN_LENGTH}
             value={pin}

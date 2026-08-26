@@ -126,7 +126,13 @@ const AccountLockScreen = () => {
         <span className="sr-only">{t('screen.pinLabel')}</span>
         <PinDots length={PIN_LENGTH} filled={pin.length} error={!!error} />
         <input
-          inputMode="numeric"
+          // `sr-only` clips the box but leaves it real and focusable, so
+          // WebKit still raises the OS numeric keyboard for it — on top of
+          // `PinPad` below, which is the keypad this screen actually shows.
+          // `inputMode="none"` keeps the input focusable (physical keyboard,
+          // screen reader) without inviting the software one; same fix
+          // shape as the amount field (specs.md §10.54).
+          inputMode="none"
           pattern="\d*"
           maxLength={PIN_LENGTH}
           value={pin}

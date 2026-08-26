@@ -150,3 +150,13 @@ test('a guest sees an actionable error for a failed biometric attempt', () => {
   render(<LockScreen />)
   expect(screen.getByRole('alert')).toHaveTextContent(T('lock:errors.biometricUnavailable'))
 })
+
+// The hidden input backs `PinPad`, our own on-screen keypad — same shape as
+// the amount field (specs.md §10.54): without inputMode="none", focusing
+// this real, sr-only-but-focusable input raises the OS software keyboard on
+// top of the app's own keypad. Tapping the dots forwards focus here via the
+// wrapping <label>, so this is reachable without any explicit autofocus.
+test('the hidden PIN input suppresses the native keyboard so only the on-screen pad shows', () => {
+  render(<LockScreen />)
+  expect(screen.getByLabelText(T('lock:screen.pinLabel'))).toHaveAttribute('inputMode', 'none')
+})
