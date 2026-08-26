@@ -43,6 +43,30 @@ const AMOUNT_COLOR_CLASS: Record<TipoMovimiento, string> = {
   gasto: 'text-foreground',
 }
 
+type AmountFontSizeStep = 'lg' | 'md' | 'sm'
+
+// This hero size is deliberately not a design-system token
+// (docs/ui/design-tokens.md) — the smaller steps below are new one-off
+// arbitrary values in that same spirit, picked by the formatted string's
+// own length (grouping separators included, since they occupy width too).
+const AMOUNT_FONT_SIZE_CLASS: Record<AmountFontSizeStep, string> = {
+  lg: 'text-[2.875rem]',
+  md: 'text-[2.5rem]',
+  sm: 'text-[2.1875rem]',
+}
+
+const AMOUNT_FONT_SIZE_THRESHOLDS: readonly { maxLength: number; step: AmountFontSizeStep }[] = [
+  { maxLength: 9, step: 'lg' },
+  { maxLength: 12, step: 'md' },
+  { maxLength: Number.POSITIVE_INFINITY, step: 'sm' },
+]
+
+const amountFontSizeClassFor = (formatted: string): string => {
+  const step =
+    AMOUNT_FONT_SIZE_THRESHOLDS.find(({ maxLength }) => formatted.length <= maxLength)?.step ?? 'sm'
+  return AMOUNT_FONT_SIZE_CLASS[step]
+}
+
 const currencySymbolFor = (moneda: Moneda, locale: string): string => {
   const parts = new Intl.NumberFormat(locale, {
     style: 'currency',
@@ -133,6 +157,7 @@ export const MovimientoAmountInput = ({
   // is what makes the pad appear on open, with no extra wiring here.
   const [keypadOpen, setKeypadOpen] = useState(false)
   const wrapperRef = useRef<HTMLDivElement>(null)
+  const padRef = useRef<HTMLDivElement>(null)
 
   const handleWrapperFocus = () => setKeypadOpen(true)
 
@@ -144,10 +169,11 @@ export const MovimientoAmountInput = ({
     inputElRef.current?.blur()
   }
 
-  // Whether the gesture's own `pointerdown` landed inside this wrapper —
-  // the sole source of truth for whether `pointerup` may dismiss. No
-  // focus/blur decides this: a real iOS log showed focus walking to an
-  // outside ancestor only *after* `pointerup` already resolved the gesture.
+  // Whether the gesture's own `pointerdown` landed on the input itself or
+  // the pad — deliberately narrower than "this field's whole wrapper
+  // column", so the label and the empty flanks beside a short amount
+  // count as outside and dismiss it. No focus/blur decides this: a real
+  // iOS log showed focus walking outside only *after* `pointerup` resolved.
   const gestureStartedInsidePadRef = useRef(true)
 
   // The collapse waits for `pointerup`, not `pointerdown`: this component
@@ -165,7 +191,10 @@ export const MovimientoAmountInput = ({
     gestureStartedInsidePadRef.current = true
     const handlePointerDown = (event: PointerEvent) => {
       const target = event.target as Node | null
-      gestureStartedInsidePadRef.current = !!(target && wrapperRef.current?.contains(target))
+      gestureStartedInsidePadRef.current = !!(
+        target &&
+        (inputElRef.current?.contains(target) || padRef.current?.contains(target))
+      )
     }
     const handlePointerUpOutside = () => {
       if (gestureStartedInsidePadRef.current) {
@@ -315,7 +344,8 @@ export const MovimientoAmountInput = ({
           aria-invalid={invalid}
           aria-describedby={error !== undefined ? errorId : undefined}
           className={cn(
-            'h-auto w-40 min-w-12 max-w-[calc(100%-3rem)] border-none bg-transparent p-0 text-center text-[2.875rem] leading-none font-extrabold tracking-tight shadow-none',
+            'h-auto w-40 min-w-12 max-w-[calc(100%-3rem)] border-none bg-transparent p-0 text-center leading-none font-extrabold tracking-tight shadow-none transition-[font-size] duration-150',
+            amountFontSizeClassFor(value),
             AMOUNT_COLOR_CLASS[tipo],
             // `field-sizing: content` does NOT override an explicit `width`
             // the way a fixed fallback width might suggest it would
@@ -375,9 +405,11 @@ export const MovimientoAmountInput = ({
           // not expand it. `px-5.5` rides along on this same element
           // (`NumericKeypad`'s grid, its only rendered element) to re-inset
           // the keys after the bleed reaches the true edges.
+          ref={padRef}
           className="mt-2 w-[calc(100%+2.75rem)] -mx-5.5 px-5.5 animate-sheet-up"
           size="compact"
           disabled={disabled}
+          deleteAutoRepeat
           onDigit={handleKeypadDigit}
           onDelete={handleKeypadDelete}
           onDecimal={handleKeypadDecimal}
