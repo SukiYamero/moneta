@@ -1,21 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { LandscapeGuard } from '@/components/shared/LandscapeGuard'
-
-vi.mock('@/lib/deviceStore', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/deviceStore')>()
-  return { ...actual, hasSkippedLandscapeGate: vi.fn(), markLandscapeGateSkipped: vi.fn() }
-})
-
-import { hasSkippedLandscapeGate, markLandscapeGateSkipped } from '@/lib/deviceStore'
-
-const mHasSkipped = vi.mocked(hasSkippedLandscapeGate)
-const mMarkSkipped = vi.mocked(markLandscapeGateSkipped)
+import { useLandscapeGateStore } from '@/lib/landscapeGateStore'
 
 afterEach(() => {
   vi.unstubAllGlobals()
-  vi.clearAllMocks()
+  useLandscapeGateStore.setState({ skippedThisSession: false })
 })
 
 const stubMatchMedia = (matches: boolean) => {
@@ -31,20 +22,17 @@ const stubMatchMedia = (matches: boolean) => {
 }
 
 describe('LandscapeGuard', () => {
-  it('renders nothing in portrait', async () => {
+  it('renders nothing in portrait', () => {
     stubMatchMedia(false)
-    mHasSkipped.mockResolvedValue(false)
     const { container } = render(<LandscapeGuard />)
-    await waitFor(() => expect(mHasSkipped).toHaveBeenCalled())
     expect(container).toBeEmptyDOMElement()
   })
 
-  it('blocks in landscape once the device has never dismissed it', async () => {
+  it('blocks immediately in landscape, with no async resolution delay', () => {
     stubMatchMedia(true)
-    mHasSkipped.mockResolvedValue(false)
     render(<LandscapeGuard />)
 
-    const guard = await screen.findByRole('status')
+    const guard = screen.getByRole('status')
     expect(guard).toHaveTextContent('Gira tu teléfono')
     expect(guard).toHaveTextContent(
       'Esta app está pensada para usarse en vertical. Vuelve a ese modo para la mejor experiencia.',
@@ -53,33 +41,42 @@ describe('LandscapeGuard', () => {
     expect(guard.className).toMatch(/inset-0/)
   })
 
-  it('renders nothing while the stored dismissal is still resolving, to avoid a flash', () => {
-    stubMatchMedia(true)
-    mHasSkipped.mockReturnValue(new Promise(() => {}))
-    const { container } = render(<LandscapeGuard />)
-    expect(container).toBeEmptyDOMElement()
-  })
-
-  it('skip dismisses the gate immediately and persists the dismissal', async () => {
+  it('skip dismisses the gate for the rest of the session', async () => {
     const user = userEvent.setup()
     stubMatchMedia(true)
-    mHasSkipped.mockResolvedValue(false)
     render(<LandscapeGuard />)
 
-    await screen.findByRole('status')
     await user.click(screen.getByRole('button', { name: 'Omitir y continuar' }))
 
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
-    expect(mMarkSkipped).toHaveBeenCalledOnce()
   })
 
-  it('stays dismissed on a device that already skipped, without waiting for a fresh tap', async () => {
+  it('stays dismissed for further rotations in the same session', async () => {
+    const user = userEvent.setup()
     stubMatchMedia(true)
-    mHasSkipped.mockResolvedValue(true)
-    const { container } = render(<LandscapeGuard />)
+    const { rerender } = render(<LandscapeGuard />)
 
-    await waitFor(() => expect(mHasSkipped).toHaveBeenCalled())
-    expect(container).toBeEmptyDOMElement()
+    await user.click(screen.getByRole('button', { name: 'Omitir y continuar' }))
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
+
+    // Back to portrait, then landscape again — still the same session.
+    stubMatchMedia(false)
+    rerender(<LandscapeGuard />)
+    stubMatchMedia(true)
+    rerender(<LandscapeGuard />)
+
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+  })
+
+  it('a fresh session (module state reset) shows the gate again', () => {
+    stubMatchMedia(true)
+    useLandscapeGateStore.setState({ skippedThisSession: true })
+    const { rerender } = render(<LandscapeGuard />)
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+
+    // Simulate a new session starting: fresh session state, same as a reload.
+    useLandscapeGateStore.setState({ skippedThisSession: false })
+    rerender(<LandscapeGuard />)
+    expect(screen.getByRole('status')).toBeInTheDocument()
   })
 })

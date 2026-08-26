@@ -308,6 +308,11 @@ profileOwner.ts` owns reading/writing it (`ensureOwnerMarker`/
   caller. `onAction` is `() => void`, not `() => Promise<void>`: an async
   action self-catches before it's handed here, the same "a store action
   fully owns its own error handling" rule every other store follows.
+- `landscapeGateStore.ts` — `LandscapeGuard`'s "Omitir y continuar" skip
+  (`specs.md` §10.53): a plain zustand store with no persistence, so a
+  reload or fresh launch starts unskipped again by construction. Replaced a
+  `deviceStore.ts` row (`kurobello-device` v11) that made the dismissal
+  stick forever on one device — v12 drops that table.
 - `swUpdate.ts` — service-worker update lifecycle (`specs.md` §10.16). A pure
   `createSwUpdateController(registerSW)` factory around `virtual:pwa-register`
   (`vite.config.ts`'s `registerType: 'prompt'`), injectable so tests never

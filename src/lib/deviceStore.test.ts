@@ -5,7 +5,6 @@ import {
   clearDriveDecision,
   clearGuestLock,
   clearGuestUsed,
-  clearLandscapeGateSkipped,
   clearLoggedIn,
   deviceDb,
   getAdoptionConsent,
@@ -13,10 +12,8 @@ import {
   getDriveDecision,
   getGuestLock,
   hasLoggedInBefore,
-  hasSkippedLandscapeGate,
   hasUsedGuestBefore,
   markGuestUsed,
-  markLandscapeGateSkipped,
   markLoggedIn,
   setAdoptionConsent,
   setDriveDecision,
@@ -30,7 +27,6 @@ afterEach(async () => {
   await clearGuestLock()
   await clearGuestUsed()
   await clearAdoptionConsent()
-  await clearLandscapeGateSkipped()
   await deviceDb.deviceId.clear()
   __resetDeviceIdForTests()
 })
@@ -428,65 +424,6 @@ test('clearAdoptionConsent is safe to fire-and-forget: a delete failure is caugh
     .mockRejectedValue(new Error('IDB blocked'))
 
   await expect(clearAdoptionConsent()).resolves.toBeUndefined()
-  expect(warn).toHaveBeenCalled()
-
-  spy.mockRestore()
-  warn.mockRestore()
-})
-
-test('the landscape gate is not skipped on a fresh device', async () => {
-  expect(await hasSkippedLandscapeGate()).toBe(false)
-})
-
-test('markLandscapeGateSkipped persists the dismissal', async () => {
-  await markLandscapeGateSkipped()
-  expect(await hasSkippedLandscapeGate()).toBe(true)
-})
-
-test('clearLandscapeGateSkipped removes the dismissal', async () => {
-  await markLandscapeGateSkipped()
-  await clearLandscapeGateSkipped()
-  expect(await hasSkippedLandscapeGate()).toBe(false)
-})
-
-test('clearLandscapeGateSkipped on an already-clear dismissal is a no-op, not an error', async () => {
-  await expect(clearLandscapeGateSkipped()).resolves.toBeUndefined()
-  expect(await hasSkippedLandscapeGate()).toBe(false)
-})
-
-test('hasSkippedLandscapeGate degrades to false on a storage read failure', async () => {
-  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-  const spy = vi
-    .spyOn(deviceDb.landscapeGateSkipped, 'get')
-    .mockRejectedValue(new Error('IDB blocked'))
-
-  expect(await hasSkippedLandscapeGate()).toBe(false)
-  expect(warn).toHaveBeenCalled()
-
-  spy.mockRestore()
-  warn.mockRestore()
-})
-
-test('markLandscapeGateSkipped is safe to fire-and-forget: a write failure is caught and logged, not thrown', async () => {
-  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-  const spy = vi
-    .spyOn(deviceDb.landscapeGateSkipped, 'put')
-    .mockRejectedValue(new Error('IDB blocked'))
-
-  await expect(markLandscapeGateSkipped()).resolves.toBeUndefined()
-  expect(warn).toHaveBeenCalled()
-
-  spy.mockRestore()
-  warn.mockRestore()
-})
-
-test('clearLandscapeGateSkipped is safe to fire-and-forget: a delete failure is caught and logged, not thrown', async () => {
-  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-  const spy = vi
-    .spyOn(deviceDb.landscapeGateSkipped, 'delete')
-    .mockRejectedValue(new Error('IDB blocked'))
-
-  await expect(clearLandscapeGateSkipped()).resolves.toBeUndefined()
   expect(warn).toHaveBeenCalled()
 
   spy.mockRestore()
