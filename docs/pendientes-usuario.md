@@ -411,14 +411,17 @@ environment, the same limit as items 16/17/20.
 and separately reach the unlock screen and tap the dots. In both, does only
 our own keypad appear — no second, system keyboard sliding up over it?
 
-### 22. Does the amount keypad behave on the device? — `owner: user`
+---
+
+## Closed
+
+### 22. Does the amount keypad behave on the device? — closed 2026-08-26 (user)
 
 Raised 2026-08-25, from your own report that it never went away
-(`specs.md` §10.54). Four behaviors changed and all four are **CONFIRMED in
-Chromium and PLAUSIBLE on iOS** — the root cause was WebKit-specific and no
-iOS device is available here, so the fix is deliberately built not to depend
-on either engine's focus behavior rather than verified against the one that
-broke.
+(`specs.md` §10.54). Four behaviors changed. They shipped CONFIRMED in
+Chromium and only PLAUSIBLE on iOS — the root cause was WebKit-specific and
+no iOS device exists in this environment — and are now confirmed on the
+device itself.
 
 **The check, and please report each separately:**
 
@@ -448,7 +451,20 @@ time. It goes away when you dismiss the pad. Do you want it suppressed on
 that field specifically, given our own keypad already makes it obvious where
 you are typing?
 
-### 23. Three more amount-field requests — `owner: user`
+**Confirmed on both platforms 2026-08-26 (user): "probé en Android y iOS y
+todo bien."** Every check in items 22 and 23 passes on a real device, including
+the Android sheet-dismissal regression that turned up while confirming them and
+was fixed at its source (a backdrop now closes only on a gesture that began on
+it, `specs.md` §10.35).
+
+Worth keeping, because it is the reason this closed at all: the iOS half was
+settled by a device console over Safari Web Inspector — eight lines of log
+named the mechanism after three rounds of hypotheses had missed it. The Android
+half never needed the device, because Android is Blink and reproduces locally.
+Knowing which of the two a bug is decides whether to instrument or to
+reproduce, and getting that backwards is what the three wasted rounds were.
+
+### 23. Three more amount-field requests — closed 2026-08-26 (user)
 
 Raised 2026-08-26, from your own three follow-up requests. All CONFIRMED in
 Chromium (real geometry/timers, not just jsdom); no iOS device is available
@@ -472,10 +488,6 @@ Android half, which is not the same question:
    (measured ~28px and ~67px narrower than they'd otherwise be) so more of
    a large number stays visible — short amounts render at exactly the size
    they always did.
-
----
-
-## Closed
 
 ### 13. Does tapping `+` now raise the keyboard? — closed 2026-08-25 (user)
 

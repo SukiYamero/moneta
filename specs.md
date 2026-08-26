@@ -1061,7 +1061,7 @@ Its original "UI" subsection is superseded by §10.41 below (which also folds in
 - Tab off the pad's last key is the one keyboard-driven close, gated on an explicit forward `Tab` keydown and run on the following `focusout` — never a bare `focusout`, which a touch-driven focus walk also produces.
 - Keys are `aria-disabled`, never natively `disabled`: a native `disabled` control dispatches no pointer events at all, which blinds the gesture bookkeeping above for exactly the disabled key.
 - Delete removes the digit or decimal separator before the caret, skipping back over an auto-inserted grouping separator so it takes content rather than formatting, and auto-repeats while held (this caller only).
-- The digits render at one size for every amount; `NumericKeypad` renders `size="compact"` here. `PinPad`/`LockScreen` pass neither and are unaffected by every rule above.
+- The digits render at one size for every amount; `NumericKeypad` renders `size="compact"` here. `PinPad`/`LockScreen` pass neither and are unaffected by every rule above — the coarse-pointer gate deliberately does not extend to them, since `PinPad` is those screens' only visible way to enter a PIN and no desktop design exists to replace it.
 - `?debugKeypad=1` arms `keypadDebugLog.ts`, a read-only mirror of pointer/touch/focus activity that never feeds a decision.
 
 **Implementation.** `src/features/movimientos/MovimientoAmountInput.tsx`, `keypadDebugLog.ts`, `src/components/shared/useIsCoarsePointer.ts` (on `useMediaQuery`, shared with `useIsLandscape`).
