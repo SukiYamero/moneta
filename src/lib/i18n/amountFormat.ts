@@ -29,6 +29,9 @@ const separatorsFor = (locale: string): AmountSeparators => {
 // `Infinity`) is rejected by the regex before `Number()` ever sees it.
 const NORMALIZED_AMOUNT = /^-?\d+(\.\d+)?$/
 
+/** The locale's own decimal separator character (e.g. "," for es-CO, "." for en-US) — the amount keypad's decimal key reads its label from this rather than hardcoding one, same rule as the rest of this file. */
+export const decimalSeparatorFor = (locale: string): string => separatorsFor(locale).decimal
+
 export type ParsedAmount =
   | { ok: true; value: number }
   | { ok: false; reason: 'empty' | 'malformed' | 'not_positive' }

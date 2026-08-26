@@ -1,0 +1,116 @@
+import { describe, it, expect, vi } from 'vitest'
+import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { NumericKeypad } from '@/components/shared/NumericKeypad'
+
+describe('NumericKeypad', () => {
+  it('renders digit buttons 0-9 and calls onDigit with the pressed digit', async () => {
+    const user = userEvent.setup()
+    const onDigit = vi.fn()
+    render(<NumericKeypad onDigit={onDigit} onDelete={() => {}} deleteAriaLabel="Delete" />)
+
+    await user.click(screen.getByRole('button', { name: '7' }))
+
+    expect(onDigit).toHaveBeenCalledWith(7)
+  })
+
+  it('calls onDelete when the delete button is pressed', async () => {
+    const user = userEvent.setup()
+    const onDelete = vi.fn()
+    render(<NumericKeypad onDigit={() => {}} onDelete={onDelete} deleteAriaLabel="Delete" />)
+
+    await user.click(screen.getByRole('button', { name: 'Delete' }))
+
+    expect(onDelete).toHaveBeenCalledOnce()
+  })
+
+  it('renders a blank cell (no decimal key) when decimalLabel is omitted — the PIN pad shape', () => {
+    render(<NumericKeypad onDigit={() => {}} onDelete={() => {}} deleteAriaLabel="Delete" />)
+
+    // 10 digits + delete, no decimal key
+    expect(screen.getAllByRole('button')).toHaveLength(11)
+  })
+
+  it('renders a decimal key showing the given label and calls onDecimal when pressed', async () => {
+    const user = userEvent.setup()
+    const onDecimal = vi.fn()
+    render(
+      <NumericKeypad
+        onDigit={() => {}}
+        onDelete={() => {}}
+        onDecimal={onDecimal}
+        decimalLabel=","
+        decimalAriaLabel="Decimal separator"
+        deleteAriaLabel="Delete"
+      />,
+    )
+
+    const decimalButton = screen.getByRole('button', { name: 'Decimal separator' })
+    expect(decimalButton).toHaveTextContent(',')
+    await user.click(decimalButton)
+
+    expect(onDecimal).toHaveBeenCalledOnce()
+  })
+
+  it('disables every digit button when digitsDisabled is true', () => {
+    render(
+      <NumericKeypad
+        onDigit={() => {}}
+        onDelete={() => {}}
+        deleteAriaLabel="Delete"
+        digitsDisabled
+      />,
+    )
+
+    for (const digit of [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]) {
+      expect(screen.getByRole('button', { name: String(digit) })).toBeDisabled()
+    }
+  })
+
+  it('disables the decimal button when decimalDisabled is true', () => {
+    render(
+      <NumericKeypad
+        onDigit={() => {}}
+        onDelete={() => {}}
+        onDecimal={() => {}}
+        decimalLabel=","
+        decimalAriaLabel="Decimal separator"
+        deleteAriaLabel="Delete"
+        decimalDisabled
+      />,
+    )
+
+    expect(screen.getByRole('button', { name: 'Decimal separator' })).toBeDisabled()
+  })
+
+  it('disables the delete button when deleteDisabled is true', () => {
+    render(
+      <NumericKeypad
+        onDigit={() => {}}
+        onDelete={() => {}}
+        deleteAriaLabel="Delete"
+        deleteDisabled
+      />,
+    )
+
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeDisabled()
+  })
+
+  it('disables every key when disabled is true, regardless of the individual flags', () => {
+    render(
+      <NumericKeypad
+        onDigit={() => {}}
+        onDelete={() => {}}
+        onDecimal={() => {}}
+        decimalLabel=","
+        decimalAriaLabel="Decimal separator"
+        deleteAriaLabel="Delete"
+        disabled
+      />,
+    )
+
+    expect(screen.getByRole('button', { name: '1' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Decimal separator' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeDisabled()
+  })
+})

@@ -400,6 +400,10 @@
           "empty": "Informe um valor",
           "malformed": "Esse valor não é válido",
           "notPositive": "O valor deve ser maior que zero"
+        },
+        "keypad": {
+          "deleteCta": "Apagar",
+          "decimalCta": "Separador decimal"
         }
       },
       "categoryError": "Escolha uma categoria",

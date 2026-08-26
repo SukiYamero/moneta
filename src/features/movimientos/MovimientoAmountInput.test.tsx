@@ -20,7 +20,7 @@ const ControlledHarness = ({ initialValue = '', ...props }: HarnessProps) => {
 }
 
 describe('MovimientoAmountInput', () => {
-  it('labels the field via aria-label and sets inputMode=decimal', () => {
+  it('labels the field via aria-label, and never renders type=number', () => {
     render(
       <MovimientoAmountInput
         value=""
@@ -32,7 +32,6 @@ describe('MovimientoAmountInput', () => {
     )
     const input = screen.getByLabelText('Monto')
     expect(input).toBeInTheDocument()
-    expect(input).toHaveAttribute('inputMode', 'decimal')
     expect(input).not.toHaveAttribute('type', 'number')
   })
 
@@ -304,6 +303,103 @@ describe('MovimientoAmountInput', () => {
       await user.type(input, '{delete}', { initialSelectionStart: 2, initialSelectionEnd: 3 })
 
       expect(input.value).toBe('12.345')
+    })
+  })
+
+  describe('on-screen keypad (native software keyboard suppressed)', () => {
+    it('sets inputMode=none so no software keyboard rises, instead of decimal', () => {
+      render(
+        <MovimientoAmountInput
+          value=""
+          onChange={() => {}}
+          locale="es-CO"
+          moneda="COP"
+          tipo="gasto"
+        />,
+      )
+
+      expect(screen.getByLabelText('Monto')).toHaveAttribute('inputMode', 'none')
+    })
+
+    it("renders a decimal key labeled with the locale's own separator", () => {
+      render(<ControlledHarness locale="es-CO" moneda="COP" tipo="gasto" />)
+      expect(screen.getByRole('button', { name: 'Separador decimal' })).toHaveTextContent(',')
+    })
+
+    it('renders the dot as the decimal key under a dot-decimal locale', () => {
+      // `locale` drives `Intl`-based number formatting; the UI copy (aria-label)
+      // stays whatever `i18next`'s language is — forced to `es` in tests
+      // (`src/test/setup.ts`) independently of the `locale` prop here.
+      render(<ControlledHarness locale="en-US" moneda="USD" tipo="gasto" />)
+      expect(screen.getByRole('button', { name: 'Separador decimal' })).toHaveTextContent('.')
+    })
+
+    it('tapping digit keys appends through the same live-grouping pipeline as typing', async () => {
+      const user = userEvent.setup()
+      render(<ControlledHarness locale="es-CO" moneda="COP" tipo="gasto" />)
+
+      for (const digit of ['1', '2', '3', '4', '5', '6', '7']) {
+        await user.click(screen.getByRole('button', { name: digit }))
+      }
+
+      expect(screen.getByLabelText('Monto')).toHaveValue('1.234.567')
+    })
+
+    it('tapping the decimal key inserts the locale separator', async () => {
+      const user = userEvent.setup()
+      render(<ControlledHarness initialValue="12" locale="es-CO" moneda="COP" tipo="gasto" />)
+
+      await user.click(screen.getByRole('button', { name: 'Separador decimal' }))
+      await user.click(screen.getByRole('button', { name: '5' }))
+
+      expect(screen.getByLabelText('Monto')).toHaveValue('12,5')
+    })
+
+    it('disables the decimal key once the value already has a separator', () => {
+      render(<ControlledHarness initialValue="12,5" locale="es-CO" moneda="COP" tipo="gasto" />)
+
+      expect(screen.getByRole('button', { name: 'Separador decimal' })).toBeDisabled()
+    })
+
+    it('disables delete when the value is empty', () => {
+      render(<ControlledHarness locale="es-CO" moneda="COP" tipo="gasto" />)
+
+      expect(screen.getByRole('button', { name: 'Borrar' })).toBeDisabled()
+    })
+
+    it('tapping delete removes the last digit through the same reformat pipeline as backspace', async () => {
+      const user = userEvent.setup()
+      render(<ControlledHarness initialValue="1.234" locale="es-CO" moneda="COP" tipo="gasto" />)
+
+      await user.click(screen.getByRole('button', { name: 'Borrar' }))
+
+      expect(screen.getByLabelText('Monto')).toHaveValue('123')
+    })
+
+    it('deletes the current selection instead of just the last character, when one exists', async () => {
+      const user = userEvent.setup()
+      render(<ControlledHarness initialValue="12.345" locale="es-CO" moneda="COP" tipo="gasto" />)
+      const input = screen.getByLabelText('Monto') as HTMLInputElement
+
+      // select "345" (indices 3 to 6) then tap delete
+      input.focus()
+      input.setSelectionRange(3, 6)
+      await user.click(screen.getByRole('button', { name: 'Borrar' }))
+
+      expect(input.value).toBe('12')
+    })
+
+    it('inserts a tapped digit at the current caret position, not just at the end', async () => {
+      const user = userEvent.setup()
+      render(<ControlledHarness initialValue="1.234" locale="es-CO" moneda="COP" tipo="gasto" />)
+      const input = screen.getByLabelText('Monto') as HTMLInputElement
+
+      // caret right after "1.2" (index 3, before "34")
+      input.focus()
+      input.setSelectionRange(3, 3)
+      await user.click(screen.getByRole('button', { name: '9' }))
+
+      expect(input.value).toBe('12.934')
     })
   })
 })

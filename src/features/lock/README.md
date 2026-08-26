@@ -83,10 +83,12 @@ dev/test-harness layout.
   steal could land mid-keystroke and drop characters typed via the hidden
   input (found chasing a flaky test, not just a test artifact: the same
   race is live for real keyboard/screen-reader PIN entry).
-- `PinPad.tsx` — the shared 3×4 numeric keypad (`PIN_LENGTH`, the single
-  source of truth for the PIN length, is exported from here). 12 slots — a
-  blank cell, digits 0-9, delete — matching the export's own `padKeys`
-  shape; never a submit key, callers auto-advance on `maxLength`.
+- `PinPad.tsx` — PIN-shaped configuration of `src/components/shared/NumericKeypad.tsx`
+  (`PIN_LENGTH`, the single source of truth for the PIN length, is exported
+  from here): no decimal key, digits disabled once `maxLength` is reached,
+  never a submit key — callers auto-advance instead. The keypad itself now
+  lives in `components/shared` so `MovimientoAmountInput.tsx`'s amount
+  keypad reuses it rather than forking a second one.
 - `PinDots.tsx` — the four dot indicators (filled/outline, or all-red on
   error).
 - `FullScreenPanel.tsx` — the push-in full-screen overlay shell shared by

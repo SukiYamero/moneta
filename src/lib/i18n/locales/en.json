@@ -400,6 +400,10 @@
           "empty": "Enter an amount",
           "malformed": "That amount doesn't look right",
           "notPositive": "The amount must be greater than zero"
+        },
+        "keypad": {
+          "deleteCta": "Delete",
+          "decimalCta": "Decimal separator"
         }
       },
       "categoryError": "Choose a category",
