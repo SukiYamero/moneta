@@ -333,6 +333,17 @@ category icon/tint resolution (`movimientoView.ts`), and form field state
 - Style with Tailwind utility classes; no separate CSS modules unless unavoidable.
 - Use shadcn/ui components from `@/components/ui`. Add new ones with
   `bunx shadcn@latest add <name>`. Compose with the `cn()` helper from `@/lib/utils`.
+- **Reach for shadcn first for a new primitive, keep what is already
+  customized.** A component this repo has already reshaped (`button.tsx`'s
+  `touch`/`icon-touch` variants, the hand-built `BottomSheet`/`CenterModal` on
+  `useOverlay.ts`) stays as it is — those carry behavior the generated version
+  does not have. Build by hand only when shadcn's version cannot reach the
+  project's style or a rule in this file.
+- **`shadcn add` overwrites primitives it considers its own.** Adding
+  `calendar` silently replaced `button.tsx` with the stock version and deleted
+  the `touch`/`icon-touch` size variants ~15 files depend on. Run
+  `git diff src/components/ui/` immediately after every add and revert
+  everything the CLI touched that you did not ask for.
 - Icons: `lucide-react` (not Phosphor, even though the design canvas
   prototype uses Phosphor via a CDN — see `docs/ui/design-tokens.md` for
   why). Fonts: Manrope (`@fontsource-variable/manrope`), matching the design.

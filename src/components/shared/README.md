@@ -43,9 +43,12 @@ files are never `index.tsx` themselves).
 
 ## Form controls & pickers
 
+- `TextAreaField.tsx` — labelled two-row textarea with a character counter
+  past 75% of `maxLength`.
 - `TextField.tsx` — labelled text input (`Label`+`Input` from
   `@/components/ui`).
-- `DateChipPicker.tsx` — date chip that expands an inline month grid.
+- `DateChipPicker.tsx` — date chip that opens a floating calendar
+  (`ui/calendar.tsx` inside `ui/popover.tsx`).
 - `SegmentedControl.tsx` — pill-group toggle (radiogroup pattern).
 - `useRovingRadioGroup.ts` — the roving-tabIndex/arrow-key mechanics shared
   by `SegmentedControl` and `src/features/settings/OptionList.tsx`.

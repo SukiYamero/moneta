@@ -985,20 +985,26 @@ outcome as a rule in the relevant §10 entry.
 
 **Watch out.** The 88% max-height fraction is still duplicated as a literal Tailwind class in both shells (`max-h-[88dvh]`) alongside the one JS constant — Tailwind's bracket syntax can't reference a JS constant, so this half of the duplication is a build-time constraint kept in sync by hand.
 
-### 10.50 DateChipPicker's grid height and aria-labels
+### 10.50 The date picker floats on a Radix popover
 
-**Goal.** The inline month-grid popover always renders the same height, and its labels are localized rather than hardcoded Spanish.
+**Goal.** Picking a date opens a calendar layered above the sheet that owns the screen, without displacing anything under it.
 
 **Rules.**
 
-- The grid always renders exactly 6 weeks (42 cells) from `startOfWeek(startOfMonth(viewMonth))` — never the month's own real span (28/35/42) — because 6 is the maximum any month can ever require, so it never truncates a real day the way a 5-week/35-cell constant would.
-- `groupLabel`/`prevMonth`/`nextMonth` resolve through the `dateChipPicker` locale namespace (all four locale files), not hardcoded Spanish.
-- The popover shows a visible "today" ring on an in-month, unselected day cell (`ring-1 ring-inset ring-primary`).
-- Escape closes the popover via `useEscapeToClose`, correctly outranking an ancestor `BottomSheet`/`CenterModal` through the shared overlay stack (§10.5.1).
+- The calendar renders the month's own real span — a five-week month is five rows, never padded to a fixed six.
+- Every day cell is at least 44px, sized from `--cell-size` rather than an aspect ratio that shrinks with the container.
+- `DateChipPicker`'s props are `value`/`onChange`/`firstDayOfWeek`/`locale`/`dateFnsLocale`/`className`/`ref`; it takes `firstDayOfWeek` as a prop rather than reading `Config`, keeping it repo-agnostic.
+- Weekday initials, month names and the first day of the week follow `dateFnsLocale`; each day carries a full localized accessible name; `groupLabel`/`prevMonth`/`nextMonth` resolve through the `dateChipPicker` namespace in all four locale files.
+- An in-month, unselected day cell that is today shows a `ring-1 ring-inset ring-primary` ring.
+- Escape closes the calendar and leaves an ancestor `BottomSheet`/`CenterModal` open; a second Escape closes that. `PopoverContent` stops propagation on `onEscapeKeyDown` because Radix's `DismissableLayer` handles Escape in the capture phase and would otherwise pop the shared overlay handle (§10.5.1) before the sheet's own bubble-phase listener reads the stack, making the sheet believe it is the top layer.
+- `useEscapeToClose` is still called, solely to register the calendar on the shared overlay stack so `BottomNav` hides (§10.53); its Escape callback is unreachable for the reason above.
+- Outside-tap dismissal keeps Radix's `pointerdown` semantics, deliberately deviating from §10.53's "commit on `pointerup`, gesture must have started outside" rule.
+- A popover with its own actions puts them outside the scrolling region, and caps its height with `--radix-popper-available-height` rather than a flat viewport fraction. A fixed cap taller than the space at the side Radix flipped to renders the box at a negative offset and pushes its actions off-screen.
+- Tailwind v4 compiles a bare `data-name:` variant to an attribute-presence selector. Radix state is `data-state="open"|"closed"`, so animations bind to `data-[state=open]`/`data-[state=closed]`; a bare `data-open:` matches nothing and fails silently.
 
-**Implementation.** `src/components/shared/DateChipPicker.tsx`.
+**Implementation.** `src/components/shared/DateChipPicker.tsx` over `src/components/ui/calendar.tsx` (`react-day-picker`) and `src/components/ui/popover.tsx` (Radix), both rethemed onto the tokens in `src/styles/index.css`.
 
-**Watch out.** "Always 42 cells" holds for every month a real user will meet but is not a mathematical absolute — December 2011 in `Pacific/Apia` renders 41 cells (Samoa's date-line crossing dropped a calendar day locally), which `eachDayOfInterval` simply omits rather than colliding on. Never cite the 42-cell count as a hard invariant.
+**Watch out.** `bunx shadcn@latest add <name>` overwrites primitives it considers its own — it silently replaced `button.tsx` and destroyed the custom `touch`/`icon-touch` size variants. Diff `src/components/ui/` after every add.
 
 ### 10.51 A blocked submit moves focus, it does not blur unconditionally
 
@@ -1011,6 +1017,21 @@ outcome as a rule in the relevant §10 entry.
 - Moving focus to the real target still dismisses an iOS on-screen keyboard as a side effect whenever the new target isn't the already-focused text input (moving focus off a text field closes the software keyboard on its own — no explicit `blur()` is needed for that case).
 
 **Implementation.** The effect lives in `MovimientoFormFields.tsx`, using the same focusable-element selector `useOverlay.ts` exports (`FOCUSABLE_SELECTOR`) to find the section's first focusable descendant.
+
+### 10.52 The movement note is a textarea, stored as one line
+
+**Goal.** A description has room to be written and read, without a multi-line note reshaping a movement row.
+
+**Rules.**
+
+- The note field is a two-row `<textarea>` (`TextAreaField`), not a single-line input, capped at 180 characters. It carries `min-h-11` and `text-base` explicitly — below 16px iOS zooms the page on focus.
+- `TextField` stays the single-line primitive; the two are separate components and every existing `TextField` caller is untouched.
+- A character counter appears once the value reaches 75% of `maxLength`, so the ceiling is visible before `maxLength` silently truncates a paste.
+- The counter's row is always present whenever `maxLength` is set, reserving its height with `min-h-4`; only its text is conditional. Mounting it on threshold instead pushes the form's submit button down mid-typing.
+- `submit()` collapses every whitespace run in `nota`, newlines included, to single spaces. Both the create and the edit path funnel through it, and nothing else writes `nota`.
+- A movement row renders `nota` on one line: `truncate` sets `white-space: nowrap`, which turns segment breaks into spaces, so rows written by any client generation single-line regardless of what they contain.
+
+**Implementation.** `src/components/shared/TextAreaField.tsx`, wired in `src/features/movimientos/MovimientoFormFields.tsx`; the collapse lives in `useMovimientoForm.ts`.
 
 ### 10.53 Backdrop uncoverable, BottomNav hidden under any overlay, portrait lock
 
@@ -1052,6 +1073,7 @@ outcome as a rule in the relevant §10 entry.
 
 ### Sync & outbox correctness
 
+- **The search filter's custom range is two chips, not one range calendar.** `poc/date-range` carries a `RangeDateChipPicker` (two-tap draft, explicit apply, footer outside the scroll region) that works but has no tests and is not wired into `main`. Deciding it in means writing its coverage and choosing whether it lives in `features/search/` or moves to `components/shared/`.
 - **Two tabs of the same account can race each other's Drive writes.** No cross-tab coordination exists — `src/lib/sync/engine.ts`/`driveFiles.ts` guard reentrancy with plain module-level in-flight maps, real within one tab, invisible across two. A cross-tab leader election (Web Locks API) is the natural fix.
 - **A profile switch or fast logout+relogin racing a live write can enqueue into, or drain from, the wrong profile's outbox.** `src/lib/dataStore.ts`'s write path calls `enqueueOperation` with no explicit database, still resolving the target from `outbox.ts`'s module-level binding — unlike `sync/engine.ts`'s `push()`/`pull()`, which now take an explicit profile-scoped database.
 - **A `config` sync operation still carries the whole `Config` object** (`src/lib/outbox.ts`'s `OutboxOperation`), so two offline devices each changing config replay as two whole-object `put`s and the later one silently wins a category the earlier device added.
