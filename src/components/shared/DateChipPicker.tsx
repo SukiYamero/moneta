@@ -31,6 +31,10 @@ export const DateChipPicker = ({
   const [open, setOpen] = useState(false)
   const [viewMonth, setViewMonth] = useState(() => startOfMonth(selected))
 
+  // Radix's own capture-phase Escape handling (popover.tsx) already stops the
+  // event before it reaches this hook's bubble-phase listener and closes the
+  // popover itself via `onOpenChange` — this call only registers the
+  // calendar on the shared overlay stack so BottomNav stays hidden.
   useEscapeToClose({ open, onClose: () => setOpen(false) })
 
   const dayMonthFormatter = useMemo(
@@ -77,7 +81,6 @@ export const DateChipPicker = ({
           align="center"
           sideOffset={8}
           className="w-auto p-0"
-          onEscapeKeyDown={(event) => event.stopPropagation()}
         >
           <Calendar
             mode="single"

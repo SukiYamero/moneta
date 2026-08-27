@@ -15,6 +15,7 @@ const PopoverContent = ({
   className,
   align = 'center',
   sideOffset = 4,
+  onEscapeKeyDown,
   ...props
 }: ComponentProps<typeof PopoverPrimitive.Content>) => {
   return (
@@ -25,9 +26,15 @@ const PopoverContent = ({
         sideOffset={sideOffset}
         className={cn(
           'z-50 flex w-72 origin-(--radix-popover-content-transform-origin) flex-col gap-2.5 rounded-xl border border-border-subtle bg-surface-sunken p-2.5 text-ms text-foreground shadow-md outline-hidden',
-          'data-open:animate-pop-in',
+          'data-[state=open]:animate-pop-in data-[state=closed]:animate-pop-out',
           className,
         )}
+        onEscapeKeyDown={(event) => {
+          // Radix's own capture-phase Escape handling would otherwise reach a
+          // parent sheet/modal's bubble-phase listener in the same keystroke.
+          event.stopPropagation()
+          onEscapeKeyDown?.(event)
+        }}
         {...props}
       />
     </PopoverPrimitive.Portal>
