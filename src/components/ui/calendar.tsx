@@ -78,7 +78,7 @@ const Calendar = ({
         ),
         dropdowns: cn('flex items-center justify-center gap-1.5', defaultClassNames.dropdowns),
         dropdown_root: cn(
-          'relative inline-flex h-(--cell-size) min-w-11 items-center justify-center rounded-md border border-border-subtle bg-background px-2.5 transition-colors has-[:focus-visible]:border-ring has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring/50 data-[disabled=true]:opacity-50',
+          'relative inline-flex h-(--cell-size) min-w-11 items-center justify-center rounded-md transition-shadow has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring/50 data-[disabled=true]:opacity-50',
           defaultClassNames.dropdown_root,
         ),
         dropdown: cn(
