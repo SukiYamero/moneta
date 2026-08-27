@@ -50,11 +50,19 @@ export const CenterModal = ({
           left: OVERLAY_BACKDROP_OVERSCAN_INLINE,
           right: OVERLAY_BACKDROP_OVERSCAN_INLINE,
         }}
-        className={cn('fixed z-50 animate-fade-in bg-black/70', OVERLAY_FIXED_LAYER_OPACITY_CLASS)}
+        className={cn(
+          'fixed z-50 animate-fade-in bg-black/70',
+          OVERLAY_FIXED_LAYER_OPACITY_CLASS,
+          'transform-gpu',
+        )}
         aria-hidden="true"
       />
       <div
-        className={cn('pointer-events-none fixed inset-0 z-50', OVERLAY_FIXED_LAYER_OPACITY_CLASS)}
+        className={cn(
+          'pointer-events-none fixed inset-0 z-50',
+          OVERLAY_FIXED_LAYER_OPACITY_CLASS,
+          'transform-gpu',
+        )}
         style={viewportInset ? { top: viewportInset.top, height: viewportInset.height } : undefined}
       >
         <div
@@ -76,6 +84,7 @@ export const CenterModal = ({
             'pointer-events-auto absolute inset-x-6.5 top-1/2 max-h-[88dvh] -translate-y-1/2 overflow-y-auto overscroll-y-contain rounded-3xl border border-border-subtle bg-card p-6 animate-pop-in',
             OVERLAY_PANEL_CLASS,
             OVERLAY_FIXED_LAYER_OPACITY_CLASS,
+            'transform-gpu',
             className,
           )}
         >
