@@ -99,19 +99,11 @@ export const BottomSheet = ({
           left: OVERLAY_BACKDROP_OVERSCAN_INLINE,
           right: OVERLAY_BACKDROP_OVERSCAN_INLINE,
         }}
-        className={cn(
-          'fixed z-50 animate-fade-in bg-black/55',
-          OVERLAY_FIXED_LAYER_OPACITY_CLASS,
-          'transform-gpu',
-        )}
+        className={cn('fixed z-50 animate-fade-in bg-black/55', OVERLAY_FIXED_LAYER_OPACITY_CLASS)}
         aria-hidden="true"
       />
       <div
-        className={cn(
-          'pointer-events-none fixed inset-0 z-50',
-          OVERLAY_FIXED_LAYER_OPACITY_CLASS,
-          'transform-gpu',
-        )}
+        className={cn('pointer-events-none fixed inset-0 z-50', OVERLAY_FIXED_LAYER_OPACITY_CLASS)}
         style={viewportInset ? { top: viewportInset.top, height: viewportInset.height } : undefined}
       >
         <div
@@ -132,7 +124,6 @@ export const BottomSheet = ({
             'pointer-events-auto absolute inset-x-0 bottom-0 flex max-h-[88dvh] flex-col rounded-t-5xl border-t border-border-subtle bg-card animate-sheet-up transition-transform duration-200 ease-out',
             OVERLAY_PANEL_CLASS,
             OVERLAY_FIXED_LAYER_OPACITY_CLASS,
-            'transform-gpu',
             className,
           )}
         >

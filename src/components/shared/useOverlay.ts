@@ -17,7 +17,13 @@ export const useRefocusOnResize = (containerRef: RefObject<HTMLElement | null>, 
     if (!open) return
     const container = containerRef.current
     if (!container) return
-    const observer = new ResizeObserver(() => {
+    let previousHeight: number | null = null
+    const observer = new ResizeObserver((entries) => {
+      const height = entries[0]?.contentRect.height
+      if (height === undefined) return
+      const shrank = previousHeight !== null && height < previousHeight
+      previousHeight = height
+      if (!shrank) return
       const active = document.activeElement
       if (active instanceof HTMLElement && container.contains(active)) {
         active.scrollIntoView({ block: 'center' })

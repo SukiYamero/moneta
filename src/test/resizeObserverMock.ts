@@ -14,11 +14,12 @@ export class MockResizeObserver {
     MockResizeObserver.instances = MockResizeObserver.instances.filter((i) => i !== this)
   }
 
-  trigger() {
-    this.callback([], this as unknown as ResizeObserver)
+  trigger(height: number) {
+    const entry = { contentRect: { height } } as ResizeObserverEntry
+    this.callback([entry], this as unknown as ResizeObserver)
   }
 }
 
-export const triggerAllResizeObservers = () => {
-  for (const instance of MockResizeObserver.instances) instance.trigger()
+export const triggerAllResizeObservers = (height: number) => {
+  for (const instance of MockResizeObserver.instances) instance.trigger(height)
 }
