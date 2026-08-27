@@ -6,7 +6,7 @@ import type { Categoria, Moneda, Seccion, TipoMovimiento } from '@/lib/schema'
 import { cn } from '@/lib/utils'
 import { DateChipPicker } from '@/components/shared/DateChipPicker'
 import { SegmentedControl, type SegmentedControlOption } from '@/components/shared/SegmentedControl'
-import { TextField } from '@/components/shared/TextField'
+import { TextAreaField } from '@/components/shared/TextAreaField'
 import { FOCUSABLE_SELECTOR } from '@/components/shared/useOverlay'
 import { CategoryPicker, CategoryFormModal } from '@/features/tags'
 import { MovimientoAmountInput } from '@/features/movimientos/MovimientoAmountInput'
@@ -42,7 +42,7 @@ export interface MovimientoFormFieldsProps {
   disabled?: boolean
 }
 
-const NOTE_MAX_LENGTH = 40
+const NOTE_MAX_LENGTH = 180
 
 export const MovimientoFormFields = ({
   tipo,
@@ -156,7 +156,7 @@ export const MovimientoFormFields = ({
           />
         </button>
         {showMore && (
-          <TextField
+          <TextAreaField
             label={t('form.noteLabel')}
             value={nota}
             onChange={onNotaChange}

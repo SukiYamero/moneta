@@ -145,7 +145,7 @@ export const useMovimientoForm = ({
 
     setSubmitting(true)
     try {
-      const nota = fields.nota.trim() || undefined
+      const nota = fields.nota.trim().replaceAll(/\s+/g, ' ') || undefined
       if (mode === 'create') {
         const ok = await createMovimiento({
           fecha: fields.fecha,

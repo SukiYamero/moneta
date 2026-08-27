@@ -17,7 +17,8 @@
       "title": "Gira tu teléfono",
       "body": "Esta app está pensada para usarse en vertical. Vuelve a ese modo para la mejor experiencia.",
       "skip": "Omitir y continuar"
-    }
+    },
+    "characterCount": "{{count}} de {{max}} caracteres"
   },
   "auth": {
     "welcome": {
