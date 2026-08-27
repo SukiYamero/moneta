@@ -1002,7 +1002,9 @@ outcome as a rule in the relevant §10 entry.
 - Escape closes the calendar and leaves an ancestor `BottomSheet`/`CenterModal` open; a second Escape closes that. `PopoverContent` stops propagation on `onEscapeKeyDown` because Radix's `DismissableLayer` handles Escape in the capture phase and would otherwise pop the shared overlay handle (§10.5.1) before the sheet's own bubble-phase listener reads the stack, making the sheet believe it is the top layer.
 - `useEscapeToClose` is still called, solely to register the calendar on the shared overlay stack so `BottomNav` hides (§10.53); its Escape callback is unreachable for the reason above.
 - Outside-tap dismissal keeps Radix's `pointerdown` semantics, deliberately deviating from §10.53's "commit on `pointerup`, gesture must have started outside" rule.
-- A popover with its own actions puts them outside the scrolling region, and caps its height with `--radix-popper-available-height` rather than a flat viewport fraction. A fixed cap taller than the space at the side Radix flipped to renders the box at a negative offset and pushes its actions off-screen.
+- `PopoverContent` caps its height at `--radix-popper-available-height` with an `88dvh` fallback, carries `collisionPadding`, and scrolls internally. Radix's Popper writes that variable from the same overflow detection that drives its flip, so the box shrinks to whatever side it landed on; a flat viewport fraction taller than that space renders it at a negative offset instead. The fallback matters because an absent variable resolves `max-height` to `none` — unbounded, which is the original defect returning with nothing to signal it.
+- A consumer whose popover has its own action row overrides `overflow` on `PopoverContent` and owns an inner scroll region, keeping the actions a `shrink-0` sibling. Actions inside the scrolling region are what put an untappable button below the fold to begin with.
+- The calendar's `root` and `months` are positioned. `Nav` is a sibling of `Month` inside `Months` and positions absolutely; the project themes the calendar entirely in Tailwind and never imports `react-day-picker`'s stylesheet, where those two carry the `position: relative` this depends on. Without it the chevrons resolve against Radix's popper wrapper and sit above the caption row.
 - Tailwind v4 compiles a bare `data-name:` variant to an attribute-presence selector. Radix state is `data-state="open"|"closed"`, so animations bind to `data-[state=open]`/`data-[state=closed]`; a bare `data-open:` matches nothing and fails silently.
 
 **Implementation.** `src/components/shared/DateChipPicker.tsx` over `src/components/ui/calendar.tsx` (`react-day-picker`) and `src/components/ui/popover.tsx` (Radix), both rethemed onto the tokens in `src/styles/index.css`.
@@ -1078,6 +1080,7 @@ outcome as a rule in the relevant §10 entry.
 
 ### Sync & outbox correctness
 
+- **`ProfilesSection.test.tsx`'s "this device" case fails intermittently in a full run** and passes in isolation — a test-isolation leak, not a product defect. A test that fails one run in three trains everyone to rerun instead of look.
 - **The search filter's custom range is two chips, not one range calendar.** `poc/date-range` carries a `RangeDateChipPicker` (two-tap draft, explicit apply, footer outside the scroll region) that works but has no tests and is not wired into `main`. Deciding it in means writing its coverage and choosing whether it lives in `features/search/` or moves to `components/shared/`.
 - **Two tabs of the same account can race each other's Drive writes.** No cross-tab coordination exists — `src/lib/sync/engine.ts`/`driveFiles.ts` guard reentrancy with plain module-level in-flight maps, real within one tab, invisible across two. A cross-tab leader election (Web Locks API) is the natural fix.
 - **A profile switch or fast logout+relogin racing a live write can enqueue into, or drain from, the wrong profile's outbox.** `src/lib/dataStore.ts`'s write path calls `enqueueOperation` with no explicit database, still resolving the target from `outbox.ts`'s module-level binding — unlike `sync/engine.ts`'s `push()`/`pull()`, which now take an explicit profile-scoped database.
@@ -1120,10 +1123,15 @@ outcome as a rule in the relevant §10 entry.
 - `config-<device>.json` never compacts — fine unless a real account's file is observed growing unreasonably.
 - The "most recently used" profile comparison only works within one device — revisit if profiles are ever synced cross-device (no such sync exists).
 
+### Onboarding
+
+- **No first-run walkthrough exists** — a new user goes straight from `WelcomeScreen`/`DrivePermissionScreen` (auth + Drive opt-in only, §10.4) to the empty Home screen, with no feature-tutorial flow of the kind native apps typically show on first open. No design-canvas artboard covers this yet — needs design work before it can be built.
+
 ### Branding / polish
 
 - **Diff every design-canvas artboard against its spec section** — a one-time audit, still not done for most of the 19 artboards.
 - Rename the OAuth consent screen to the current brand name in Google Cloud Console — a user action, no code change.
+- **Profile → Preferences doesn't communicate its state clearly and shows unspecified erratic behavior** — needs a UX pass; not yet diagnosed (`src/features/profile/PreferencesSection.tsx`, `src/features/settings/PreferencesEditor.tsx`).
 
 ### Waiting on the user
 
