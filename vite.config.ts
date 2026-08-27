@@ -4,6 +4,7 @@ import { configDefaults } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
+import basicSsl from '@vitejs/plugin-basic-ssl'
 import { APP_NAME } from './src/lib/branding.ts'
 
 export default defineConfig({
@@ -51,6 +52,8 @@ export default defineConfig({
         enabled: false,
       },
     }),
+    // crypto.randomUUID needs a secure context; plain http://<lan-ip> doesn't have one.
+    process.env.VITE_DEV_HTTPS === 'true' && basicSsl(),
   ],
   test: {
     environment: 'jsdom',
