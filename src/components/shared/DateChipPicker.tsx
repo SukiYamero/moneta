@@ -94,6 +94,8 @@ export const DateChipPicker = ({
             labels={{
               labelPrevious: () => t('prevMonth'),
               labelNext: () => t('nextMonth'),
+              labelMonthDropdown: () => t('monthDropdown'),
+              labelYearDropdown: () => t('yearDropdown'),
             }}
           />
         </PopoverContent>

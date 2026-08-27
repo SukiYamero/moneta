@@ -544,6 +544,8 @@
   "dateChipPicker": {
     "groupLabel": "Date picker",
     "prevMonth": "Previous month",
-    "nextMonth": "Next month"
+    "nextMonth": "Next month",
+    "monthDropdown": "Choose month",
+    "yearDropdown": "Choose year"
   }
 }

@@ -1,9 +1,26 @@
 import type { ComponentProps } from 'react'
 import { DayPicker, getDefaultClassNames, type DayButtonProps } from 'react-day-picker'
-import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react'
+import { ChevronLeftIcon, ChevronRightIcon, ChevronDownIcon } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
 import { buttonVariants } from '@/components/ui/button'
+
+const chevronIcons = {
+  left: ChevronLeftIcon,
+  right: ChevronRightIcon,
+  up: ChevronDownIcon,
+  down: ChevronDownIcon,
+} as const satisfies Record<'left' | 'right' | 'up' | 'down', typeof ChevronLeftIcon>
+
+const yearsAgo = (years: number) => {
+  const today = new Date()
+  return new Date(today.getFullYear() - years, 0, 1)
+}
+
+const yearsAhead = (years: number) => {
+  const today = new Date()
+  return new Date(today.getFullYear() + years, 11, 31)
+}
 
 const Calendar = ({
   className,
@@ -12,6 +29,8 @@ const Calendar = ({
   locale,
   formatters,
   labels,
+  startMonth = yearsAgo(15),
+  endMonth = yearsAhead(1),
   ...props
 }: ComponentProps<typeof DayPicker>) => {
   const defaultClassNames = getDefaultClassNames()
@@ -19,7 +38,9 @@ const Calendar = ({
   return (
     <DayPicker
       showOutsideDays={showOutsideDays}
-      captionLayout="label"
+      captionLayout="dropdown"
+      startMonth={startMonth}
+      endMonth={endMonth}
       className={cn(
         'group/calendar bg-surface-sunken p-3.5 [--cell-radius:var(--radius-md)] [--cell-size:--spacing(11)]',
         className,
@@ -52,10 +73,24 @@ const Calendar = ({
           defaultClassNames.button_next,
         ),
         month_caption: cn(
-          'flex h-(--cell-size) w-full items-center justify-center text-ms font-bold capitalize',
+          'flex h-(--cell-size) w-full items-center justify-center',
           defaultClassNames.month_caption,
         ),
-        caption_label: cn('font-bold select-none', defaultClassNames.caption_label),
+        dropdowns: cn('flex items-center justify-center gap-1.5', defaultClassNames.dropdowns),
+        dropdown_root: cn(
+          'relative inline-flex h-(--cell-size) min-w-11 items-center justify-center rounded-md transition-shadow has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring/50 data-[disabled=true]:opacity-50',
+          defaultClassNames.dropdown_root,
+        ),
+        dropdown: cn(
+          'absolute inset-0 z-10 cursor-pointer appearance-none opacity-0 disabled:cursor-not-allowed',
+          defaultClassNames.dropdown,
+        ),
+        months_dropdown: defaultClassNames.months_dropdown,
+        years_dropdown: defaultClassNames.years_dropdown,
+        caption_label: cn(
+          'flex items-center gap-1 text-ms font-bold capitalize select-none',
+          defaultClassNames.caption_label,
+        ),
         month_grid: cn('w-full border-collapse', defaultClassNames.month_grid),
         weekdays: cn('flex', defaultClassNames.weekdays),
         weekday: cn(
@@ -77,12 +112,15 @@ const Calendar = ({
         Root: ({ className: rootClassName, rootRef, ...rootProps }) => (
           <div data-slot="calendar" ref={rootRef} className={cn(rootClassName)} {...rootProps} />
         ),
-        Chevron: ({ className: chevronClassName, orientation, ...chevronProps }) =>
-          orientation === 'left' ? (
-            <ChevronLeftIcon className={cn('size-3.5', chevronClassName)} {...chevronProps} />
-          ) : (
-            <ChevronRightIcon className={cn('size-3.5', chevronClassName)} {...chevronProps} />
-          ),
+        Chevron: ({
+          className: chevronClassName,
+          orientation = 'left',
+          size: _size,
+          ...chevronProps
+        }) => {
+          const Icon = chevronIcons[orientation]
+          return <Icon className={cn('size-3.5', chevronClassName)} {...chevronProps} />
+        },
         DayButton: CalendarDayButton,
       }}
       {...props}

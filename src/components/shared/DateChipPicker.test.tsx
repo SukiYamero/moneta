@@ -7,6 +7,7 @@ import { MemoryRouter } from 'react-router'
 import { DateChipPicker } from '@/components/shared/DateChipPicker'
 import { BottomNav } from '@/components/shared/BottomNav'
 import { BottomSheet } from '@/components/shared/BottomSheet'
+import { i18next } from '@/lib/i18n'
 
 describe('DateChipPicker', () => {
   it('shows the selected date as a formatted chip and starts collapsed', () => {
@@ -168,4 +169,119 @@ describe('DateChipPicker', () => {
       expect(screen.getByRole('button', { name: expectedDayName })).toBeInTheDocument()
     },
   )
+
+  describe('month and year dropdowns', () => {
+    it('moving either dropdown moves the calendar to that month/year', async () => {
+      const user = userEvent.setup()
+      render(
+        <DateChipPicker value="2026-08-10" onChange={() => {}} locale="es-CO" dateFnsLocale={es} />,
+      )
+
+      await user.click(screen.getByRole('button', { name: /10 de agosto/ }))
+      expect(screen.getByRole('status')).toHaveTextContent('agosto 2026')
+
+      await user.selectOptions(screen.getByRole('combobox', { name: 'Elegir mes' }), 'diciembre')
+      expect(screen.getByRole('status')).toHaveTextContent('diciembre 2026')
+
+      await user.selectOptions(screen.getByRole('combobox', { name: 'Elegir año' }), '2027')
+      expect(screen.getByRole('status')).toHaveTextContent('diciembre 2027')
+    })
+
+    it.each([
+      ['es-CO', es, /10 de agosto/, 'agosto'],
+      ['en-US', enUS, /August 10/, 'August'],
+    ])(
+      'lists month options localized off the %s dateFnsLocale, never hardcoded English',
+      async (locale, dateFnsLocale, chipName, augustLabel) => {
+        const user = userEvent.setup()
+        render(
+          <DateChipPicker
+            value="2026-08-10"
+            onChange={() => {}}
+            locale={locale}
+            dateFnsLocale={dateFnsLocale}
+          />,
+        )
+
+        await user.click(screen.getByRole('button', { name: chipName }))
+
+        const monthSelect = screen.getByRole('combobox', { name: 'Elegir mes' })
+        expect(within(monthSelect).getByRole('option', { name: augustLabel })).toBeInTheDocument()
+      },
+    )
+
+    it('bounds the year select to 15 years back and 1 year ahead of today, not the library default 100 years', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] })
+      vi.setSystemTime(new Date('2026-08-10T12:00:00'))
+      try {
+        const user = userEvent.setup()
+        render(
+          <DateChipPicker
+            value="2026-08-10"
+            onChange={() => {}}
+            locale="es-CO"
+            dateFnsLocale={es}
+          />,
+        )
+
+        await user.click(screen.getByRole('button', { name: /10 de agosto/ }))
+
+        const yearSelect = screen.getByRole('combobox', { name: 'Elegir año' })
+        const years = within(yearSelect)
+          .getAllByRole('option')
+          .map((option) => option.textContent)
+
+        expect(years).toEqual(Array.from({ length: 17 }, (_, i) => String(2011 + i)))
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it.each([
+      ['es', 'Elegir mes', 'Elegir año'],
+      ['en', 'Choose month', 'Choose year'],
+      ['pt-BR', 'Escolher mês', 'Escolher ano'],
+    ])(
+      'gives the month and year selects a localized accessible name for %s',
+      async (language, monthLabel, yearLabel) => {
+        await i18next.changeLanguage(language)
+        const user = userEvent.setup()
+        render(
+          <DateChipPicker
+            value="2026-08-10"
+            onChange={() => {}}
+            locale="es-CO"
+            dateFnsLocale={es}
+          />,
+        )
+
+        await user.click(screen.getByRole('button', { name: /10 de agosto/ }))
+
+        expect(screen.getByRole('combobox', { name: monthLabel })).toBeInTheDocument()
+        expect(screen.getByRole('combobox', { name: yearLabel })).toBeInTheDocument()
+
+        await i18next.changeLanguage('es')
+      },
+    )
+
+    it('keeps a focus-visible ring and the 44px hit area on the dropdowns now that the bordered frame is gone', async () => {
+      const user = userEvent.setup()
+      render(
+        <DateChipPicker value="2026-08-10" onChange={() => {}} locale="es-CO" dateFnsLocale={es} />,
+      )
+
+      await user.click(screen.getByRole('button', { name: /10 de agosto/ }))
+
+      const monthRoot = screen.getByRole('combobox', { name: 'Elegir mes' }).parentElement
+      expect(monthRoot).toHaveClass(
+        'has-[:focus-visible]:ring-2',
+        'has-[:focus-visible]:ring-ring/50',
+        'h-(--cell-size)',
+        'min-w-11',
+        'data-[disabled=true]:opacity-50',
+      )
+      expect(monthRoot?.className).not.toMatch(/\bborder\b/)
+      expect(monthRoot?.className).not.toMatch(/bg-background/)
+    })
+  })
 })
