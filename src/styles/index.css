@@ -88,7 +88,7 @@ html {
   --color-canvas: var(--canvas);
   --color-surface-sunken: var(--surface-sunken);
 
-  --overlay-dim: color-mix(in oklch, var(--canvas), black 55%);
+  --overlay-dim: var(--canvas);
 
   --color-border-subtle: var(--border-subtle);
   --color-border-strong: var(--border-strong);

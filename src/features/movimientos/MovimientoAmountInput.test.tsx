@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { BottomSheet } from '@/components/shared/BottomSheet'
 import {
@@ -690,6 +690,75 @@ describe('MovimientoAmountInput', () => {
 
       await user.pointer('[/MouseLeft]')
       expect(screen.queryByRole('button', { name: '1' })).not.toBeInTheDocument()
+    })
+
+    // The comment above `dismissKeypad`'s call site (`useEffect`) admits the
+    // remaining exposure directly: gating on `pointerup` protects the
+    // dismissing gesture's own hit-test, but the browser's `click` for
+    // *that same gesture* is still a fresh, separate hit-test against
+    // whatever the collapse just moved into its place — reproduced live for
+    // the backdrop (`BottomSheet.tsx`'s `useBackdropDismiss`) but not
+    // guarded here for an ordinary control sitting below the pad, e.g. the
+    // sheet's own primary submit button.
+    it('keeps the pad mounted between an outside pointerup and its paired click, so the collapse cannot retarget that click before it fires', async () => {
+      const user = userEvent.setup()
+      render(
+        <div>
+          <ControlledHarness locale="es-CO" moneda="COP" tipo="gasto" />
+          <button type="button">Guardar</button>
+        </div>,
+      )
+      const input = screen.getByLabelText('Monto')
+      await user.click(input)
+      expect(screen.getByRole('button', { name: '1' })).toBeInTheDocument()
+
+      const submit = screen.getByRole('button', { name: 'Guardar' })
+      act(() => {
+        submit.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
+        submit.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }))
+      })
+
+      // The `click` this same gesture is about to fire on `submit` hasn't
+      // happened yet — collapsing now would shift `submit` out from under
+      // it before that click's own hit-test runs.
+      expect(screen.getByRole('button', { name: '1' })).toBeInTheDocument()
+
+      act(() => {
+        submit.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      })
+
+      expect(screen.queryByRole('button', { name: '1' })).not.toBeInTheDocument()
+    })
+
+    it('still closes the pad after a beat when no click ever follows the outside pointerup', async () => {
+      const user = userEvent.setup()
+      render(
+        <div>
+          <ControlledHarness locale="es-CO" moneda="COP" tipo="gasto" />
+          <button type="button">Guardar</button>
+        </div>,
+      )
+      const input = screen.getByLabelText('Monto')
+      await user.click(input)
+      expect(screen.getByRole('button', { name: '1' })).toBeInTheDocument()
+
+      const submit = screen.getByRole('button', { name: 'Guardar' })
+      vi.useFakeTimers()
+      try {
+        act(() => {
+          submit.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
+          submit.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }))
+        })
+        expect(screen.getByRole('button', { name: '1' })).toBeInTheDocument()
+
+        act(() => {
+          vi.advanceTimersByTime(1000)
+        })
+
+        expect(screen.queryByRole('button', { name: '1' })).not.toBeInTheDocument()
+      } finally {
+        vi.useRealTimers()
+      }
     })
   })
 

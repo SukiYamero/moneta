@@ -32,6 +32,10 @@ const AMOUNT_COLOR_CLASS: Record<TipoMovimiento, string> = {
   gasto: 'text-foreground',
 }
 
+// A generous upper bound on how long a real touch-to-`click` translation can
+// take — only reached when a gesture's own `click` never arrives at all.
+const DISMISS_AFTER_CLICK_TIMEOUT_MS = 400
+
 const currencySymbolFor = (moneda: Moneda, locale: string): string => {
   const parts = new Intl.NumberFormat(locale, {
     style: 'currency',
@@ -85,13 +89,33 @@ export const MovimientoAmountInput = ({
   // resolves, so focus/blur alone can't tell where the gesture started.
   const gestureStartedInsidePadRef = useRef(true)
 
-  // A `click` is re-hit-tested against the post-collapse DOM, separately
-  // from the `pointerup` that triggered the collapse.
+  // A `click` is re-hit-tested against the post-collapse DOM: collapsing
+  // here, synchronously, would shrink the layout under whatever this same
+  // gesture's own `click` is about to land on (a category chip, the sheet's
+  // submit button) before that hit-test runs — the actual collapse below
+  // waits for that `click` (or a bounded fallback if one never comes)
+  // instead of running inline here.
   useEffect(() => {
     if (!keypadOpen) return
     logKeypadState('probe armed; pad is', wrapperRef.current)
     const stopDebugLog = armKeypadDebugLog(wrapperRef)
     gestureStartedInsidePadRef.current = true
+    let cancelPendingDismiss: (() => void) | null = null
+    const scheduleDismiss = () => {
+      if (cancelPendingDismiss) return
+      const finish = () => {
+        cancelPendingDismiss = null
+        document.removeEventListener('click', finish, true)
+        clearTimeout(timeoutId)
+        dismissKeypad()
+      }
+      const timeoutId = setTimeout(finish, DISMISS_AFTER_CLICK_TIMEOUT_MS)
+      document.addEventListener('click', finish, { capture: true, once: true })
+      cancelPendingDismiss = () => {
+        document.removeEventListener('click', finish, true)
+        clearTimeout(timeoutId)
+      }
+    }
     const handlePointerDown = (event: PointerEvent) => {
       const target = event.target as Node | null
       gestureStartedInsidePadRef.current = !!(
@@ -107,7 +131,7 @@ export const MovimientoAmountInput = ({
         return
       }
       logKeypadState('>>> PAD CLOSED', wrapperRef.current)
-      dismissKeypad()
+      scheduleDismiss()
     }
     const handlePointerCancel = () => {
       gestureStartedInsidePadRef.current = false
@@ -129,6 +153,7 @@ export const MovimientoAmountInput = ({
     document.addEventListener('keydown', handleKeyDown)
     document.addEventListener('focusout', handleFocusOut)
     return () => {
+      cancelPendingDismiss?.()
       stopDebugLog()
       document.removeEventListener('pointerdown', handlePointerDown)
       document.removeEventListener('pointerup', handlePointerUpOutside)
