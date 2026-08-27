@@ -68,6 +68,7 @@ export const CategoryFormModal = ({
   const [seccionId, setSeccionId] = useState('')
   const [icono, setIcono] = useState<CategoryIconKey | undefined>(undefined)
   const [color, setColor] = useState<IconAvatarTint>('neutral')
+  const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
     if (!open) return
@@ -100,8 +101,8 @@ export const CategoryFormModal = ({
 
   const canSave = trimmedName.length > 0 && !isDuplicateName
 
-  const handleSave = () => {
-    if (!canSave) return
+  const handleSave = async () => {
+    if (!canSave || submitting) return
     const result: Categoria = {
       id: categoria?.id ?? crypto.randomUUID(),
       nombre: trimmedName,
@@ -112,8 +113,13 @@ export const CategoryFormModal = ({
       archivado: categoria?.archivado,
       presupuesto: categoria?.presupuesto,
     }
-    void upsertCategoria(result)
-    onClose()
+    setSubmitting(true)
+    try {
+      const saved = await upsertCategoria(result)
+      if (saved) onClose()
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const preview = getMovimientoVisual({ icono, color }, effectiveTipo)
@@ -221,8 +227,8 @@ export const CategoryFormModal = ({
             type="button"
             size="touch"
             className="flex-1"
-            disabled={!canSave}
-            onClick={handleSave}
+            disabled={!canSave || submitting}
+            onClick={() => void handleSave()}
           >
             {t('form.saveCta')}
           </Button>

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const mUpsertCategoria = vi.fn()
+const mUpsertCategoria = vi.fn().mockResolvedValue(true)
 vi.mock('@/lib/dataStore', () => ({
   useDataStore: vi.fn(
     (selector: (state: { upsertCategoria: typeof mUpsertCategoria }) => unknown) =>
@@ -225,6 +225,27 @@ describe('CategoryFormModal', () => {
     expect(saved.color).toBe('rose')
     expect(typeof saved.id).toBe('string')
     expect(onClose).toHaveBeenCalledOnce()
+  })
+
+  it('does not close when the write is refused or fails, so the user still sees the toast and can retry', async () => {
+    const user = userEvent.setup()
+    const onClose = vi.fn()
+    mUpsertCategoria.mockResolvedValueOnce(false)
+    render(
+      <CategoryFormModal
+        open
+        onClose={onClose}
+        tipo="gasto"
+        secciones={SECCIONES}
+        categorias={[]}
+        initialName="Gimnasio"
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: /guardar/i }))
+
+    expect(mUpsertCategoria).toHaveBeenCalledOnce()
+    expect(onClose).not.toHaveBeenCalled()
   })
 
   it('editing keeps the existing id and preserves the tipo the category was created with, ignoring the sheet toggle', async () => {

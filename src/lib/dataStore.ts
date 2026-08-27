@@ -20,7 +20,7 @@ type DataState = {
   updateMovimiento: (id: string, patch: Partial<Omit<Movimiento, 'id'>>) => Promise<boolean>
   deleteMovimiento: (id: string) => Promise<boolean>
   updateConfig: (patch: Partial<Config>) => Promise<boolean>
-  upsertCategoria: (categoria: Categoria) => Promise<void>
+  upsertCategoria: (categoria: Categoria) => Promise<boolean>
   archiveCategoria: (id: string) => Promise<void>
   deleteCategoria: (id: string) => Promise<void>
 }
@@ -194,9 +194,9 @@ export const useDataStore = create<DataState>((set, get) => ({
 
   upsertCategoria: async (categoria) => {
     const previous = get().config
-    if (!previous) return
+    if (!previous) return false
     const prior = previous.categorias.find((c) => c.id === categoria.id)
-    await runMutation(
+    return runMutation(
       'settings',
       () =>
         set((state) =>
