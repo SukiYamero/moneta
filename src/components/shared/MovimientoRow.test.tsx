@@ -139,6 +139,35 @@ describe('MovimientoRow', () => {
     expect(screen.getByText(/\$\+3,200\.00|US\$\+3,200\.00/)).toBeInTheDocument()
   })
 
+  it('renders a long note on a single truncated line rather than wrapping', () => {
+    const longNota =
+      'Esta es una nota muy larga que describe con mucho detalle el gasto realizado en el supermercado del barrio durante el fin de semana pasado'
+    render(
+      <MovimientoRow
+        movimiento={{ ...baseMovimiento, nota: longNota }}
+        categorias={categorias}
+        locale="es-CO"
+        dateFnsLocale={es}
+      />,
+    )
+
+    expect(screen.getByText(longNota)).toHaveClass('truncate')
+  })
+
+  it('renders a nota containing a newline as one line', () => {
+    render(
+      <MovimientoRow
+        movimiento={{ ...baseMovimiento, nota: 'Pago quincena\ny bono' }}
+        categorias={categorias}
+        locale="es-CO"
+        dateFnsLocale={es}
+      />,
+    )
+
+    const label = screen.getByText((_, element) => element?.textContent === 'Pago quincena\ny bono')
+    expect(label).toHaveClass('truncate')
+  })
+
   it('renders a neutral "sin categoría" label, never a raw id, when the category is missing from Config', () => {
     render(
       <MovimientoRow

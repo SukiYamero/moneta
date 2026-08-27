@@ -17,7 +17,8 @@
       "title": "Rotate your phone",
       "body": "This app is designed to be used in portrait mode. Switch back to that mode for the best experience.",
       "skip": "Skip and continue"
-    }
+    },
+    "characterCount": "{{count}} of {{max}} characters"
   },
   "auth": {
     "welcome": {

@@ -286,6 +286,36 @@ describe('useMovimientoForm — successful create', () => {
     const written = vi.mocked(repo.movimientos.add).mock.calls[0]?.[0]
     expect(written?.nota).toBeUndefined()
   })
+
+  it.each([
+    ['a newline', 'Almuerzo\ncon el equipo', 'Almuerzo con el equipo'],
+    ['a run of spaces and tabs', 'Almuerzo   \t con el equipo', 'Almuerzo con el equipo'],
+    [
+      'a mix of newlines and spaces at the edges',
+      '  Almuerzo\ncon el equipo  \n',
+      'Almuerzo con el equipo',
+    ],
+  ])('collapses %s into a single logical line before writing', async (_case, typed, expected) => {
+    const repo = makeRepo()
+    mGetRepo.mockReturnValue(repo)
+    const { result } = renderHook(() =>
+      useMovimientoForm({
+        mode: 'create',
+        locale: LOCALE,
+        monedaPrincipal: 'COP',
+        categorias: CONFIG_SEMILLA.categorias,
+        onSaved: vi.fn(),
+      }),
+    )
+    act(() => result.current.setAmountRaw('5000'))
+    act(() => result.current.selectCategoria(categoria()))
+    act(() => result.current.setNota(typed))
+
+    await act(() => result.current.submit())
+
+    const written = vi.mocked(repo.movimientos.add).mock.calls[0]?.[0]
+    expect(written?.nota).toBe(expected)
+  })
 })
 
 describe('useMovimientoForm — a refused or failed write keeps the sheet open with values intact', () => {

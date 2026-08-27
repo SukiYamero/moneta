@@ -39,4 +39,5 @@ export { ScreenLoading, type ScreenLoadingProps } from '@/components/shared/Scre
 export { ScreenHeader, type ScreenHeaderProps } from '@/components/shared/ScreenHeader'
 export { usePendingDelay, type UsePendingDelayOptions } from '@/components/shared/usePendingDelay'
 export { TextField, type TextFieldProps } from '@/components/shared/TextField'
+export { TextAreaField, type TextAreaFieldProps } from '@/components/shared/TextAreaField'
 export { NumericKeypad, type NumericKeypadProps } from '@/components/shared/NumericKeypad'
