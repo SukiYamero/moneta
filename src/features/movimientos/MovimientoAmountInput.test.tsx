@@ -692,14 +692,8 @@ describe('MovimientoAmountInput', () => {
       expect(screen.queryByRole('button', { name: '1' })).not.toBeInTheDocument()
     })
 
-    // The comment above `dismissKeypad`'s call site (`useEffect`) admits the
-    // remaining exposure directly: gating on `pointerup` protects the
-    // dismissing gesture's own hit-test, but the browser's `click` for
-    // *that same gesture* is still a fresh, separate hit-test against
-    // whatever the collapse just moved into its place — reproduced live for
-    // the backdrop (`BottomSheet.tsx`'s `useBackdropDismiss`) but not
-    // guarded here for an ordinary control sitting below the pad, e.g. the
-    // sheet's own primary submit button.
+    // The pad must stay mounted until this gesture's own click fires, or the
+    // click retargets against the shrunk layout.
     it('keeps the pad mounted between an outside pointerup and its paired click, so the collapse cannot retarget that click before it fires', async () => {
       const user = userEvent.setup()
       render(

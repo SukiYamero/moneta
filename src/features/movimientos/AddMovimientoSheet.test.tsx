@@ -80,11 +80,8 @@ describe('AddMovimientoSheet', () => {
     expect(scrolledTo.contains(amountInput)).toBe(false)
   })
 
-  // The note field sits behind "ver más", low enough in the sheet that the
-  // iOS keyboard it raises can cover it entirely — `BottomSheet`'s own
-  // keyboard-aware clamping (specs.md §10.49) repositions the *sheet*, not
-  // any one field inside its scrollable body, so nothing today brings the
-  // note itself into the space the clamp leaves visible.
+  // The note field can sit low enough in the sheet for the keyboard to cover
+  // it entirely.
   it('scrolls the note field into view when it receives focus', async () => {
     const user = userEvent.setup()
     const scrollIntoView = vi.fn()

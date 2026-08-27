@@ -89,12 +89,9 @@ export const MovimientoAmountInput = ({
   // resolves, so focus/blur alone can't tell where the gesture started.
   const gestureStartedInsidePadRef = useRef(true)
 
-  // A `click` is re-hit-tested against the post-collapse DOM: collapsing
-  // here, synchronously, would shrink the layout under whatever this same
-  // gesture's own `click` is about to land on (a category chip, the sheet's
-  // submit button) before that hit-test runs — the actual collapse below
-  // waits for that `click` (or a bounded fallback if one never comes)
-  // instead of running inline here.
+  // Collapsing on pointerup would shift the layout under this gesture's own
+  // click before it hit-tests; the collapse waits for that click (or a
+  // timeout) instead.
   useEffect(() => {
     if (!keypadOpen) return
     logKeypadState('probe armed; pad is', wrapperRef.current)
