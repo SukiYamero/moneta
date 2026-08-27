@@ -27,7 +27,7 @@ const PopoverContent = ({
         sideOffset={sideOffset}
         collisionPadding={collisionPadding}
         className={cn(
-          'z-50 flex w-72 max-h-(--radix-popper-available-height) origin-(--radix-popover-content-transform-origin) flex-col gap-2.5 overflow-y-auto overscroll-contain rounded-xl border border-border-subtle bg-surface-sunken p-2.5 text-ms text-foreground shadow-md outline-hidden',
+          'z-50 flex w-72 max-h-[var(--radix-popper-available-height,88dvh)] origin-(--radix-popover-content-transform-origin) flex-col gap-2.5 overflow-y-auto overscroll-contain rounded-xl border border-border-subtle bg-surface-sunken p-2.5 text-ms text-foreground shadow-md outline-hidden',
           // Scrollable by default; a consumer with its own pinned footer
           // overrides to overflow-hidden and wraps only its scrolling child in
           // a `min-h-0 flex-1 overflow-y-auto overscroll-contain` div, keeping

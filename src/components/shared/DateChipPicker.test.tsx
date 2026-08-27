@@ -76,7 +76,7 @@ describe('DateChipPicker', () => {
 
     const content = document.querySelector('[data-slot="popover-content"]')
     expect(content).toHaveClass(
-      'max-h-(--radix-popper-available-height)',
+      'max-h-[var(--radix-popper-available-height,88dvh)]',
       'overflow-y-auto',
       'overscroll-contain',
     )
