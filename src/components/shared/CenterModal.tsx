@@ -1,9 +1,11 @@
+import { useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { cn } from '@/lib/utils'
 import {
   OVERLAY_PANEL_CLASS,
   useBackdropDismiss,
   useOverlay,
+  useRefocusOnResize,
   type OverlayShellProps,
 } from '@/components/shared/useOverlay'
 import {
@@ -32,6 +34,8 @@ export const CenterModal = ({
     onClose,
   )
   const viewportInset = useVisualViewportInset(open)
+  const bodyRef = useRef<HTMLDivElement>(null)
+  useRefocusOnResize(bodyRef, open)
 
   if (!open) return null
 
@@ -54,7 +58,10 @@ export const CenterModal = ({
         style={viewportInset ? { top: viewportInset.top, height: viewportInset.height } : undefined}
       >
         <div
-          ref={panelRef}
+          ref={(node) => {
+            panelRef(node)
+            bodyRef.current = node
+          }}
           role="dialog"
           aria-modal="true"
           aria-labelledby={labelledBy}

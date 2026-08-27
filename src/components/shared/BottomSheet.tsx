@@ -5,6 +5,7 @@ import {
   OVERLAY_PANEL_CLASS,
   useBackdropDismiss,
   useOverlay,
+  useRefocusOnResize,
   type OverlayShellProps,
 } from '@/components/shared/useOverlay'
 import {
@@ -35,6 +36,8 @@ export const BottomSheet = ({
     onClose,
   )
   const viewportInset = useVisualViewportInset(open)
+  const bodyRef = useRef<HTMLDivElement>(null)
+  useRefocusOnResize(bodyRef, open)
   const [dragY, setDragY] = useState(0)
   const [dragging, setDragging] = useState(false)
   const dragStartY = useRef(0)
@@ -135,7 +138,10 @@ export const BottomSheet = ({
             <div className="h-1.25 w-9.5 rounded-full bg-border-strong" />
           </div>
           {}
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-5.5 pb-7">
+          <div
+            ref={bodyRef}
+            className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-5.5 pb-7"
+          >
             {children}
           </div>
         </div>

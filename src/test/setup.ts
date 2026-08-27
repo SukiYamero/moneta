@@ -3,6 +3,7 @@ import { afterEach, beforeAll, expect } from 'vitest'
 import { cleanup } from '@testing-library/react'
 import 'fake-indexeddb/auto'
 import { i18next } from '@/lib/i18n'
+import { MockResizeObserver } from '@/test/resizeObserverMock'
 
 // jsdom defaults navigator.language(s) to en-US. Set via Object.defineProperty (not
 // vi.stubGlobal) so it survives a test's own vi.stubGlobal('navigator')/unstubAllGlobals cycle.
@@ -23,6 +24,8 @@ const createMatchMedia = (query: string): MediaQueryList =>
 
 beforeAll(async () => {
   window.matchMedia = createMatchMedia
+  // jsdom has no `ResizeObserver` at all.
+  window.ResizeObserver = MockResizeObserver as unknown as typeof ResizeObserver
   Object.defineProperty(navigator, 'language', { value: 'es-CO', configurable: true })
   Object.defineProperty(navigator, 'languages', { value: ['es-CO'], configurable: true })
   await i18next.changeLanguage('es')
@@ -30,6 +33,7 @@ beforeAll(async () => {
 
 afterEach(async () => {
   cleanup()
+  MockResizeObserver.instances = []
   await i18next.changeLanguage('es')
 })
 

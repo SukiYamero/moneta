@@ -9,6 +9,25 @@ import {
   type RefObject,
 } from 'react'
 
+// A collapsing sibling (e.g. the amount keypad unmounting) shifts everything
+// below it in the same scroll container at a fixed scrollTop, so a field
+// that focus already centered can end up back out of view.
+export const useRefocusOnResize = (containerRef: RefObject<HTMLElement | null>, open: boolean) => {
+  useEffect(() => {
+    if (!open) return
+    const container = containerRef.current
+    if (!container) return
+    const observer = new ResizeObserver(() => {
+      const active = document.activeElement
+      if (active instanceof HTMLElement && container.contains(active)) {
+        active.scrollIntoView({ block: 'center' })
+      }
+    })
+    observer.observe(container)
+    return () => observer.disconnect()
+  }, [containerRef, open])
+}
+
 export interface UseOverlayOptions<T extends HTMLElement> {
   open: boolean
   onClose: () => void
