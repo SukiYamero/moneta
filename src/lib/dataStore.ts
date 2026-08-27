@@ -22,7 +22,7 @@ type DataState = {
   deleteMovimiento: (id: string) => Promise<boolean>
   updateConfig: (patch: Partial<Config>) => Promise<boolean>
   /** Create (new id) or edit (existing id) — one action, matching `CategoryFormModal`'s single component for both (specs.md §10.22). */
-  upsertCategoria: (categoria: Categoria) => Promise<void>
+  upsertCategoria: (categoria: Categoria) => Promise<boolean>
   archiveCategoria: (id: string) => Promise<void>
   /** Only a category with no referencing movimiento may be deleted (specs.md §10.22 Decision 5) — otherwise it must be archived instead. */
   deleteCategoria: (id: string) => Promise<void>
@@ -273,9 +273,9 @@ export const useDataStore = create<DataState>((set, get) => ({
 
   upsertCategoria: async (categoria) => {
     const previous = get().config
-    if (!previous) return
+    if (!previous) return false
     const prior = previous.categorias.find((c) => c.id === categoria.id)
-    await runMutation(
+    return runMutation(
       'settings',
       () =>
         set((state) =>

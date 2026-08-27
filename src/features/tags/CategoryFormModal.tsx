@@ -83,6 +83,7 @@ export const CategoryFormModal = ({
   const [seccionId, setSeccionId] = useState('')
   const [icono, setIcono] = useState<CategoryIconKey | undefined>(undefined)
   const [color, setColor] = useState<IconAvatarTint>('neutral')
+  const [submitting, setSubmitting] = useState(false)
 
   // Reset from props only when the modal opens — it stays mounted (its
   // parent toggles `open`) across closes/reopens, possibly for a different
@@ -118,8 +119,8 @@ export const CategoryFormModal = ({
 
   const canSave = trimmedName.length > 0 && !isDuplicateName
 
-  const handleSave = () => {
-    if (!canSave) return
+  const handleSave = async () => {
+    if (!canSave || submitting) return
     const result: Categoria = {
       id: categoria?.id ?? crypto.randomUUID(),
       nombre: trimmedName,
@@ -130,11 +131,13 @@ export const CategoryFormModal = ({
       archivado: categoria?.archivado,
       presupuesto: categoria?.presupuesto,
     }
-    // Store owns its own optimistic-apply/rollback/error-toast (specs.md
-    // §10.13) — the sheet closes immediately, matching every other write
-    // here (Tier 3, specs.md §10.9): the busy state never blocks the modal.
-    void upsertCategoria(result)
-    onClose()
+    setSubmitting(true)
+    try {
+      const saved = await upsertCategoria(result)
+      if (saved) onClose()
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const preview = getMovimientoVisual({ icono, color }, effectiveTipo)
@@ -246,8 +249,8 @@ export const CategoryFormModal = ({
             type="button"
             size="touch"
             className="flex-1"
-            disabled={!canSave}
-            onClick={handleSave}
+            disabled={!canSave || submitting}
+            onClick={() => void handleSave()}
           >
             {t('form.saveCta')}
           </Button>
