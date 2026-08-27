@@ -13,6 +13,10 @@ Things only the user can do — design work in the Claude Design canvas, decisio
 
 ## Open
 
+### 25. Does the iOS picker wheel close the calendar? — `owner: user`
+
+The date picker's caption is now a month dropdown and a year dropdown, the only native `<select>`s in the app. On iOS a `<select>` raises the OS picker wheel — a third layer above the popover, which is itself above a `BottomSheet`. The app's own overlay bookkeeping is safe (`useOverlay.ts` binds nothing to focus events, so it is simply inert while that layer is up), but Radix's `DismissableLayer` dismisses on focus activity it judges to be outside the popover, and WebKit has raised a `blur` before immediately refocusing a `<select>` in some versions. If it does that here, the calendar closes mid-selection. No agent can verify this. The check: open the calendar from the date chip, tap the month or the year to raise the wheel, spin it and pick a different value — does the calendar stay open and move to that month/year, or does it close by itself?
+
 ### 10. Look at the new screens on light — `owner: user`
 
 Three things still haven't been seen on the light theme (confirmed working otherwise): the returning-user screen (only renders after a session lapses, so it wasn't on the path the user already walked), the PIN-entry lock screen (as opposed to PIN setup, which was seen), and a judgment call on two colors (`#f72121`, a rose that has nowhere to go but pure red on light; `#af7809`, a yellow that only earns contrast on white by turning brown) — ask whether those two read as acceptable.

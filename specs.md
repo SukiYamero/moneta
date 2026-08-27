@@ -996,6 +996,9 @@ outcome as a rule in the relevant §10 entry.
 - `DateChipPicker`'s props are `value`/`onChange`/`firstDayOfWeek`/`locale`/`dateFnsLocale`/`className`/`ref`; it takes `firstDayOfWeek` as a prop rather than reading `Config`, keeping it repo-agnostic.
 - Weekday initials, month names and the first day of the week follow `dateFnsLocale`; each day carries a full localized accessible name; `groupLabel`/`prevMonth`/`nextMonth` resolve through the `dateChipPicker` namespace in all four locale files.
 - An in-month, unselected day cell that is today shows a `ring-1 ring-inset ring-primary` ring.
+- The caption is a month dropdown and a year dropdown — bare text plus a chevron, no border or fill — alongside the prev/next chevrons, which the dropdown layout leaves in place. Focus-visible is a `box-shadow` ring, independent of any border, and the 44px floor comes from `--cell-size` on a border-box element, so neither depends on the frame.
+- The year list spans 15 years back to one ahead. `react-day-picker` defaults to a hundred, which is a worse control than the arrows it replaces.
+- The dropdowns' own accessible names resolve through `dateChipPicker.monthDropdown`/`yearDropdown`; `react-day-picker`'s defaults for them are hardcoded English, unlike its month and weekday text, which follows the threaded locale.
 - Escape closes the calendar and leaves an ancestor `BottomSheet`/`CenterModal` open; a second Escape closes that. `PopoverContent` stops propagation on `onEscapeKeyDown` because Radix's `DismissableLayer` handles Escape in the capture phase and would otherwise pop the shared overlay handle (§10.5.1) before the sheet's own bubble-phase listener reads the stack, making the sheet believe it is the top layer.
 - `useEscapeToClose` is still called, solely to register the calendar on the shared overlay stack so `BottomNav` hides (§10.53); its Escape callback is unreachable for the reason above.
 - Outside-tap dismissal keeps Radix's `pointerdown` semantics, deliberately deviating from §10.53's "commit on `pointerup`, gesture must have started outside" rule.
@@ -1003,6 +1006,8 @@ outcome as a rule in the relevant §10 entry.
 - Tailwind v4 compiles a bare `data-name:` variant to an attribute-presence selector. Radix state is `data-state="open"|"closed"`, so animations bind to `data-[state=open]`/`data-[state=closed]`; a bare `data-open:` matches nothing and fails silently.
 
 **Implementation.** `src/components/shared/DateChipPicker.tsx` over `src/components/ui/calendar.tsx` (`react-day-picker`) and `src/components/ui/popover.tsx` (Radix), both rethemed onto the tokens in `src/styles/index.css`.
+
+**Watch out.** The caption dropdowns are native `<select>`s, the only ones in the app. On iOS they raise the OS picker wheel as a layer above both the popover and the sheet; `useOverlay.ts` binds nothing to focus events so its own bookkeeping is unaffected, but Radix's `DismissableLayer` dismisses on focus activity it reads as outside, which a WebKit blur-then-refocus around the wheel could trigger. Unverified on a device.
 
 **Watch out.** `bunx shadcn@latest add <name>` overwrites primitives it considers its own — it silently replaced `button.tsx` and destroyed the custom `touch`/`icon-touch` size variants. Diff `src/components/ui/` after every add.
 
