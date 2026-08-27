@@ -6,6 +6,11 @@ export const OVERLAY_MAX_HEIGHT_FRACTION = 0.88
 // zoom levels, unlike the integer `documentElement.clientHeight`.
 const VIEWPORT_MATCH_TOLERANCE_PX = 1
 
+// A resize/scroll event can fire before the keyboard's own dismiss animation
+// has actually finished settling; re-reading shortly after catches the value
+// it eventually reports even when no further event arrives to trigger it.
+const SETTLE_RECHECK_DELAY_MS = 200
+
 export const OVERLAY_BACKDROP_OVERSCAN_BLOCK = '-50dvh'
 export const OVERLAY_BACKDROP_OVERSCAN_INLINE = '-50dvw'
 
@@ -40,12 +45,20 @@ export const useVisualViewportInset = (enabled: boolean): VisualViewportInset | 
       setInset(matchesLayoutViewport ? null : { top: viewport.offsetTop, height: viewport.height })
     }
 
+    let recheckTimeoutId: ReturnType<typeof setTimeout>
+    const handleViewportChange = () => {
+      update()
+      clearTimeout(recheckTimeoutId)
+      recheckTimeoutId = setTimeout(update, SETTLE_RECHECK_DELAY_MS)
+    }
+
     update()
-    viewport.addEventListener('resize', update)
-    viewport.addEventListener('scroll', update)
+    viewport.addEventListener('resize', handleViewportChange)
+    viewport.addEventListener('scroll', handleViewportChange)
     return () => {
-      viewport.removeEventListener('resize', update)
-      viewport.removeEventListener('scroll', update)
+      clearTimeout(recheckTimeoutId)
+      viewport.removeEventListener('resize', handleViewportChange)
+      viewport.removeEventListener('scroll', handleViewportChange)
     }
   }, [enabled])
 

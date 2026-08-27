@@ -73,6 +73,31 @@ describe('useVisualViewportInset', () => {
     expect(result.current).toEqual({ top: 60, height: 400 })
   })
 
+  it('re-checks itself shortly after a resize event, catching a value the keyboard animation had not settled to yet', () => {
+    vi.useFakeTimers()
+    const viewport = new FakeVisualViewport()
+    vi.stubGlobal('visualViewport', viewport)
+
+    const { result } = renderHook(() => useVisualViewportInset(true))
+
+    act(() => {
+      viewport.height = 400
+      viewport.dispatchEvent(new Event('resize'))
+    })
+    expect(result.current).toEqual({ top: 0, height: 400 })
+
+    // The keyboard finished closing without firing another event; nothing
+    // but the scheduled re-check ever reads the now-correct value.
+    viewport.height = document.documentElement.clientHeight
+
+    act(() => {
+      vi.advanceTimersByTime(200)
+    })
+    expect(result.current).toBeNull()
+
+    vi.useRealTimers()
+  })
+
   it('stops listening once disabled, and removes both listeners on unmount', () => {
     const viewport = new FakeVisualViewport()
     vi.stubGlobal('visualViewport', viewport)
