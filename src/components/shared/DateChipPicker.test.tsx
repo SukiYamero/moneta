@@ -66,6 +66,20 @@ describe('DateChipPicker', () => {
     )
   })
 
+  it('anchors the prev/next nav to the months container that also holds the caption row', async () => {
+    const user = userEvent.setup()
+    render(
+      <DateChipPicker value="2026-08-10" onChange={() => {}} locale="es-CO" dateFnsLocale={es} />,
+    )
+
+    await user.click(screen.getByRole('button', { name: /10 de agosto/ }))
+
+    const nav = within(screen.getByRole('group', { name: 'Selector de fecha' })).getByRole(
+      'navigation',
+    )
+    expect(nav.parentElement).toHaveClass('relative')
+  })
+
   it('closes only the calendar on Escape, leaves the sheet open, and returns focus to the chip', async () => {
     const user = userEvent.setup()
     const onSheetClose = vi.fn()

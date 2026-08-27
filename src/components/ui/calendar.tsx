@@ -55,8 +55,8 @@ const Calendar = ({
         ...labels,
       }}
       classNames={{
-        root: cn('w-fit', defaultClassNames.root),
-        months: cn('flex flex-col gap-4', defaultClassNames.months),
+        root: cn('relative w-fit', defaultClassNames.root),
+        months: cn('relative flex flex-col gap-4', defaultClassNames.months),
         month: cn('flex w-full flex-col gap-2.5', defaultClassNames.month),
         nav: cn(
           'absolute inset-x-0 top-0 flex w-full items-center justify-between',
