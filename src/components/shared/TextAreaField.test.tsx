@@ -120,4 +120,13 @@ describe('TextAreaField', () => {
     render(<TextAreaField label="Descripción" value={'a'.repeat(200)} onChange={() => {}} />)
     expect(screen.queryByText(/caracteres/)).not.toBeInTheDocument()
   })
+
+  it('reserves the counter row height below the threshold, so it appearing does not shift the field', () => {
+    const { container } = render(
+      <TextAreaField label="Descripción" value="" onChange={() => {}} maxLength={180} />,
+    )
+    const reservedSlot = container.querySelector('p.min-h-4')
+    expect(reservedSlot).toBeInTheDocument()
+    expect(reservedSlot).toHaveTextContent('')
+  })
 })

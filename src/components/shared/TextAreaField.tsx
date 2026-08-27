@@ -60,9 +60,9 @@ export const TextAreaField = ({
         )}
         {...props}
       />
-      {showCounter && (
-        <p id={counterId} className="text-right text-xs text-fg-tertiary">
-          {t('characterCount', { count: value.length, max: maxLength })}
+      {maxLength !== undefined && (
+        <p id={counterId} className="min-h-4 text-right text-xs text-fg-tertiary">
+          {showCounter && t('characterCount', { count: value.length, max: maxLength })}
         </p>
       )}
       {error !== undefined && (
