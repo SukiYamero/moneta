@@ -172,8 +172,8 @@ category icon/tint resolution (`movimientoView.ts`), and form field state
 ## Data contract: `src/lib/schema.ts`
 
 - **Import the types, never redefine them.** It is the stable contract.
-- Domain field names stay in Spanish (`Movimiento`, `seccion`, `monto`…): they are
-  the real Drive columns. Do not translate them.
+- Domain field names stay in Spanish (`Movimiento`, `categoria`, `monto`…): they
+  are the real Drive columns. Do not translate them.
 - Structural change (rename/split/delete a field) ⇒ bump `SCHEMA_VERSION` +
   idempotent migration + backup of the JSON data files before running it.
   Additive/optional fields go through `extra` first.
