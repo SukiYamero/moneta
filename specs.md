@@ -901,7 +901,7 @@ outcome as a rule in the relevant §10 entry.
 - The amount display is a new component, `MovimientoAmountInput` — borderless, auto-sizing (`field-sizing: content`), a decorative currency symbol beside it, digits colored by `tipo` (income = success color, expense = plain foreground). It is not built on the shared `AmountField` (since deleted, see §10.48) — it reuses only `parseAmountForInput`/`formatAmountForInput` directly.
 - The create sheet has no visible heading (the sheet's own grab handle is the header) and no Cancel button — dismissal is backdrop-tap/Escape/drag-to-dismiss only; the primary button (labeled "Agregar gasto"/"Agregar ingreso", following the type toggle — never a generic "Save") takes the full action row.
 - Edit mode keeps its own Cancel + Save row (Cancel returns to view mode without writing — a distinct affordance from dismissing the whole sheet) and keeps the generic "Guardar"/"Save" label, since edit's type toggle changes an existing movement rather than naming what gets created.
-- The category field (`CategoryField`) is a single collapsed row — icon swatch, picked name or a placeholder, chevron — that opens `CategorySheet` (§10.22) on tap; it never renders an inline chip carousel.
+- The category field (`CategoryField`) is a single collapsed row — icon swatch, picked name or a placeholder, chevron — that opens `CategorySheet` (§10.22) on tap.
 - View mode's icon block starts flush with no extra top padding, matching every other sheet.
 
 **Implementation.** `src/features/movimientos/MovimientoAmountInput.tsx`, `MovimientoFormFields.tsx`, `AddMovimientoSheet.tsx`, `MovimientoSheet.tsx`; `src/features/tags/CategoryField.tsx`, `CategorySheet.tsx`.
