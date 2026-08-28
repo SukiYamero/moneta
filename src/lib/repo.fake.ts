@@ -1,64 +1,11 @@
 import { format, parseISO, subDays } from 'date-fns'
-import type { Activo, Categoria, Config, Movimiento } from '@/lib/schema'
+import type { Activo, Config, Movimiento } from '@/lib/schema'
 import { CONFIG_SEMILLA } from '@/lib/schema'
 import type { CrudRepo, EntityId, ListQuery, ListResult, Repo } from '@/lib/repo'
 import { RepoError } from '@/lib/repo'
 
-const FAKE_CATEGORIAS: Categoria[] = [
-  ...CONFIG_SEMILLA.categorias,
-  {
-    id: 'cat_comida',
-    nombre: 'Comida',
-    icono: 'utensils',
-    color: 'amber',
-  },
-  {
-    id: 'cat_transporte',
-    nombre: 'Transporte',
-    icono: 'car',
-    color: 'blue',
-  },
-  {
-    id: 'cat_compras',
-    nombre: 'Compras',
-    icono: 'shopping-bag',
-    color: 'purple',
-  },
-  {
-    id: 'cat_ocio',
-    nombre: 'Ocio',
-    icono: 'party-popper',
-    color: 'rose',
-  },
-  {
-    id: 'cat_salud',
-    nombre: 'Salud',
-    icono: 'heart-pulse',
-    color: 'emerald',
-  },
-  {
-    id: 'cat_hogar',
-    nombre: 'Hogar',
-    icono: 'house',
-    color: 'emerald',
-  },
-  {
-    id: 'cat_regalo',
-    nombre: 'Regalo',
-    icono: 'gift',
-    color: 'purple',
-  },
-  {
-    id: 'cat_freelance',
-    nombre: 'Freelance',
-    icono: 'laptop',
-    color: 'blue',
-  },
-]
-
 const FAKE_CONFIG: Config = {
   ...CONFIG_SEMILLA,
-  categorias: FAKE_CATEGORIAS,
 }
 
 interface MovimientoTemplate {

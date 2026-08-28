@@ -358,7 +358,6 @@
       "nameLabel": "Nome",
       "namePlaceholder": "Ex: Academia",
       "nameDuplicateError": "Já existe uma categoria com esse nome",
-      "nameRequiredError": "Digite um nome",
       "iconLabel": "Ícone",
       "colorLabel": "Cor",
       "saveCta": "Salvar",

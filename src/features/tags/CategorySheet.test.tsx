@@ -155,6 +155,55 @@ describe('CategorySheet', () => {
     expect(within(getDialog()).getByRole('button', { name: 'Categoría 00' })).toBeInTheDocument()
   })
 
+  it('typing a search query while drilled into a parent exits to flat search across both levels', async () => {
+    const user = userEvent.setup()
+    const parent = categoria({ id: 'cat_parent', nombre: 'Transporte' })
+    const child = categoria({ id: 'cat_child', nombre: 'Gasolina', padreId: 'cat_parent' })
+    const other = categoria({ id: 'cat_other', nombre: 'Comida' })
+    render(
+      <CategorySheet
+        open
+        onClose={vi.fn()}
+        categorias={[parent, child, other]}
+        onSelect={vi.fn()}
+      />,
+    )
+
+    await user.click(within(getDialog()).getByRole('button', { name: 'Transporte' }))
+    expect(screen.getByRole('heading', { level: 2, name: 'Transporte' })).toBeInTheDocument()
+
+    await user.type(screen.getByRole('textbox', { name: /buscar categoría/i }), 'comida')
+
+    expect(screen.getByRole('heading', { level: 2, name: 'Categoría' })).toBeInTheDocument()
+    expect(within(getDialog()).getByRole('button', { name: 'Comida' })).toBeInTheDocument()
+  })
+
+  it('a fresh open always starts at level 1, even after a previous session drilled in', async () => {
+    const user = userEvent.setup()
+    const parent = categoria({ id: 'cat_parent', nombre: 'Transporte' })
+    const child = categoria({ id: 'cat_child', nombre: 'Gasolina', padreId: 'cat_parent' })
+    const { rerender } = render(
+      <CategorySheet open onClose={vi.fn()} categorias={[parent, child]} onSelect={vi.fn()} />,
+    )
+
+    await user.click(within(getDialog()).getByRole('button', { name: 'Transporte' }))
+    expect(screen.getByRole('heading', { level: 2, name: 'Transporte' })).toBeInTheDocument()
+
+    rerender(
+      <CategorySheet
+        open={false}
+        onClose={vi.fn()}
+        categorias={[parent, child]}
+        onSelect={vi.fn()}
+      />,
+    )
+    rerender(
+      <CategorySheet open onClose={vi.fn()} categorias={[parent, child]} onSelect={vi.fn()} />,
+    )
+
+    expect(screen.getByRole('heading', { level: 2, name: 'Categoría' })).toBeInTheDocument()
+  })
+
   it('clearing the query returns to level 1', async () => {
     const user = userEvent.setup()
     const parent = categoria({ id: 'cat_parent', nombre: 'Transporte' })
