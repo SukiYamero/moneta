@@ -64,9 +64,14 @@ export const PagedGrid = <T,>({
     return items.slice(start, start + pageSize)
   }, [items, page, pageSize])
 
+  const prevItemsRef = useRef(items)
+
   useLayoutEffect(() => {
     const measured = trackRef.current?.getBoundingClientRect().height
-    if (measured && (minHeight === undefined || measured > minHeight)) setMinHeight(measured)
+    const itemsChanged = prevItemsRef.current !== items
+    prevItemsRef.current = items
+    if (!measured) return
+    if (itemsChanged || minHeight === undefined || measured > minHeight) setMinHeight(measured)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pageItems])
 

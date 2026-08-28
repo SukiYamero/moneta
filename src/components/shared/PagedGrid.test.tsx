@@ -321,11 +321,32 @@ describe('PagedGrid', () => {
         return { height: rows * 40 } as DOMRect
       })
 
+    const items = makeItems(20)
+    const { rerender } = render(<Harness items={items} page={0} onPageChange={vi.fn()} />)
+    expect(getTrack().style.minHeight).toBe('120px')
+
+    rerender(<Harness items={items} page={2} onPageChange={vi.fn()} />)
+    expect(getTrack().style.minHeight).toBe('120px')
+
+    spy.mockRestore()
+  })
+
+  it('re-baselines the reserved height when a new items list replaces the old one', () => {
+    // jsdom lays out nothing, hence the stub: height tracks how many tiles are actually mounted.
+    const spy = vi
+      .spyOn(Element.prototype, 'getBoundingClientRect')
+      .mockImplementation(function (this: Element) {
+        const rows = this.getAttribute('role') === 'group' ? Math.ceil(this.children.length / 3) : 0
+        return { height: rows * 40 } as DOMRect
+      })
+
     const { rerender } = render(<Harness items={makeItems(20)} page={0} onPageChange={vi.fn()} />)
     expect(getTrack().style.minHeight).toBe('120px')
 
-    rerender(<Harness items={makeItems(20)} page={2} onPageChange={vi.fn()} />)
-    expect(getTrack().style.minHeight).toBe('120px')
+    // A different list (e.g. drilling into a category with few children) must not
+    // keep inheriting a taller list's reserved height.
+    rerender(<Harness items={makeItems(2)} page={0} onPageChange={vi.fn()} />)
+    expect(getTrack().style.minHeight).toBe('40px')
 
     spy.mockRestore()
   })
