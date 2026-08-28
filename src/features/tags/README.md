@@ -1,10 +1,11 @@
 # src/features/tags
 
-The category picker and taxonomy editor. `index.ts` re-exports `CategoryPicker`
-and `CategoryFormModal` as this folder's public surface; both are consumed by
-`src/features/movimientos` (via `MovimientoFormFields`) and
-`CategoryFormModal` is also used directly by
-`src/features/settings/CategoriesSection.tsx` — one editor for both flows.
+Category selection and the taxonomy editor. `index.ts` re-exports
+`CategoryField`, `CategorySheet` and `CategoryFormModal` as this folder's
+public surface. `CategoryField`/`CategorySheet` are consumed by
+`src/features/movimientos` (via `MovimientoFormFields`); `CategoryFormModal`
+is also used directly by `src/features/settings/CategoriesSection.tsx` — one
+editor for both flows.
 
 The curated icon allowlist (`CATEGORY_ICONS`, `CategoryIconKey` → `LucideIcon`)
 lives in `src/components/shared/categoryIcons.ts`, not here — it's shared by
@@ -18,27 +19,27 @@ type/list one layer further down, in `src/lib/categoryIconKeys.ts`, is what
   concepts, each with one multilingual keyword bag (so "gimnasio"/"gym"/
   "academia" resolve the same regardless of input language). No match:
   `icono` stays `undefined` (caller falls back by `tipo`), `color` falls
-  back to `leastUsedTint()`.
-- `categoryOrder.ts` — `orderForPicker(categorias, tipo)`: non-archived
-  categories, matching `tipo` sorted first via a stable partition. Shared by
-  `CategoryPicker` and `TagPickerSheet` so both apply the identical order.
-- `CategoryPicker.tsx` — rendered inline inside a sheet (Add/Edit movement),
-  never its own overlay. A fixed left column (count button opening
-  `TagPickerSheet`, plus a dashed "Custom" chip opening `CategoryFormModal`
-  directly) beside a horizontally-scrolling carousel of `TagChip`s
-  (single-select). Filters out `archivado` categories; orders via
-  `categoryOrder.ts`. Props: `categorias`/`tipo`/`selectedId`/`onSelect`/`onCreateRequested`.
-- `TagPickerSheet.tsx` — the full, searchable picker, a `BottomSheet` opened
-  by `CategoryPicker`'s count button: a search input over a grid of
-  `IconAvatar` + name rows. Selecting a category closes the sheet; a
-  "crear «query»" row (shown only when the query matches nothing) hands the
-  query to the caller, which closes this sheet and opens `CategoryFormModal`.
+  back to `leastUsedTint()`. `rankCategoryIcons(query)` reorders the full
+  icon grid so a matched icon leads — never a filter.
+- `CategoryField.tsx` — the collapsed field rendered inline inside a sheet
+  (Add/Edit movement): icon swatch, picked name or a placeholder, a chevron.
+  Tapping it opens `CategorySheet`. Props: `categoria`/`tipo`/`onOpen`.
+- `CategorySheet.tsx` — the full picker, a `BottomSheet`. Two levels: level 1
+  is every top-level category plus a "Custom" tile; a tile with children
+  drills into level 2 (that category itself, general, plus its children); a
+  childless tile selects and closes the sheet. A search field is flat across
+  both levels and exits any drill-in. Archived categories never appear, and a
+  category whose own parent is archived renders at level 1. A fresh open
+  always starts at level 1. The "Custom" tile at either level, and the
+  "crear «query»" affordance shown on an empty search, both open
+  `CategoryFormModal` pre-filled — creating never auto-selects.
 - `CategoryFormModal.tsx` — a `CenterModal`, create and edit in one
-  component: name/section/icon grid/color grid + a live `TagChip` preview.
-  The section control is hidden when only one section exists. Duplicate name
-  is blocked inline, scoped to the chosen section. Calls
-  `useDataStore().upsertCategoria` and closes immediately (optimistic write,
-  doesn't wait for it to settle).
+  component: name/icon grid/color grid + a live `TagChip` preview, and the
+  parent's name/icon shown read-only when creating a child. Opens with the
+  panel focused, never the name input. Duplicate name is blocked inline,
+  scoped to siblings under the same `padreId`. Calls
+  `useDataStore().upsertCategoria`, which returns a boolean the modal waits
+  on before closing.
 
 The taxonomy reference itself (`Movimiento.categoria` holding `Categoria.id`,
 resolved for display via `movimientoView.ts`'s `resolveCategoria`) lives

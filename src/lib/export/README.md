@@ -7,10 +7,10 @@ CSV export of the user's movements. No UI here — `index.ts`'s
   parts (never one big concatenated string). No repo/store/UI import. Emits
   a UTF-8 BOM, a leading `sep=;` hint line, and formats the decimal via the
   given `Intl` locale tag. The header row is the schema field names, not
-  localized labels; `extra` is not exported. `seccion`/`categoria` are ids —
-  `buildMovimientoCsvParts` takes `secciones`/`categorias` (`Config`'s,
-  id → `nombre`) and writes the resolved name, falling back to the raw id
-  when a lookup misses. Also the yearly-compaction CSV's implementation:
+  localized labels; `extra` is not exported. `categoria` is an id —
+  `buildMovimientoCsvParts` takes `categorias` (`Config`'s, id → `nombre`)
+  and writes the resolved name, falling back to the raw id when a lookup
+  misses. Also the yearly-compaction CSV's implementation:
   `sync/engine.ts`'s `compactYear()` imports `buildMovimientoCsvParts`
   directly.
 - `delivery.ts` — platform branching only: builds the `Blob`/`File` and

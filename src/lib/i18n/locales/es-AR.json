@@ -358,7 +358,6 @@
       "nameLabel": "Nombre",
       "namePlaceholder": "Ej: Gimnasio",
       "nameDuplicateError": "Ya existe una categoría con ese nombre",
-      "nameRequiredError": "Escribí un nombre",
       "iconLabel": "Ícono",
       "colorLabel": "Color",
       "saveCta": "Guardar",

@@ -81,7 +81,7 @@ history to record one entry):
 - `Activo[]` — **balance** (what you own and what it's worth today) →
   `act-<device>.json` in the same folder (few enough that sharding buys
   nothing).
-- `Config` (sections, categories, preferences, schemaVersion) →
+- `Config` (categories, preferences, schemaVersion) →
   `config-<device>.json` in the **appDataFolder** (syncs across devices).
 
 Storage format is **JSON files** (only the Drive Files API under
@@ -105,10 +105,14 @@ ever sees them.
 - `moneda` always present; UI fixes it to `"COP"` for now (field already supports multi-currency).
 - `id` = app-generated uuid (not the row position).
 - Dates in ISO (`yyyy-mm-dd`).
-- Views are NOT stored: total, per-section breakdown and history are derived by
+- Views are NOT stored: total, category breakdown and history are derived by
   grouping `Movimiento[]`.
 - `schemaVersion` + `extra` = migration safety net. New fields go into `extra`
-  (free JSON) first, before being promoted to a real column.
+  (free JSON) first, before being promoted to a real column. Current version
+  is 2, with no migration registered from 1 — the app refuses to boot against
+  version-1 stored data.
+- A `Categoria` is a name, an icon, a color and an optional `padreId` (the
+  parent's id, absent for a top-level category) — no type, no section.
 
 **Closed decisions:** `metodo` optional with enum `efectivo|debito|credito|banco`;
 `presupuesto` exists in the schema but has no UI in v1; flow and balance are two
@@ -246,7 +250,7 @@ outcome as a rule in the relevant §10 entry.
 **Rules.**
 
 - `movimientos`/`activos` share one generic `CrudRepo<T>` shape (`list`/`get`/`add`/`addMany`/`update`/`remove`/`removeMany`).
-- `list()` takes an optional query (date range, `seccion`, sort, `limit`/`cursor`) — pagination is not a later retrofit.
+- `list()` takes an optional query (date range, sort, `limit`/`cursor`) — pagination is not a later retrofit.
 - `Config` stays atomic (`getConfig`/`updateConfig`); it is not entity-scale data.
 - Errors are a typed `RepoError` (`code: 'not_found' | 'schema_mismatch' | 'network' | 'unknown' | ...`), never a raw throw, so callers branch uniformly across implementations.
 - `ready()` runs the `schemaVersion` check/migration before first use; every implementation exposes it.
@@ -567,22 +571,34 @@ outcome as a rule in the relevant §10 entry.
 
 ### 10.22 The category picker — assigning a category, and what a category _is_
 
-**Goal.** A movement can be given a category, and a user can create their own category — name, icon, color — without leaving the sheet they're in.
+**Goal.** A movement's category comes from a two-level sheet, searchable at any depth, and a category is nothing more than a name, an icon, a color and an optional parent.
 
 **Rules.**
 
-- `Movimiento.categoria` stores `Categoria.id` (not a display name); `Movimiento.seccion` stores `Seccion.id`. Display names resolve through `Config` at render time — a rename never rewrites historical movements, and a movement whose category id doesn't resolve (unsynced shard, deleted elsewhere) renders the `tipo` fallback icon/tint and a "sin categoría" label, never a raw id or a crash.
-- Choosing a category sets both `categoria = cat.id` and `seccion = cat.seccionId` in one action — `seccion` is derived, never picked independently. The picker orders by `tipo` (matching type first) but never hides the other type, and picking a category of the other type never flips the sheet's gasto/ingreso toggle.
-- `Categoria.icono`/`color`/`archivado` are additive optional fields (no `SCHEMA_VERSION` bump). `icono` is a string key into a curated allowlist (`CATEGORY_ICONS`), never a component reference. Resolution (`getMovimientoVisual`) is exactly: the category's own `icono`/`color` → the `tipo`-based fallback. No name-keyed lookup table exists.
-- "Create from query" always opens the category modal pre-filled (name + suggested icon/color) — never a silent one-tap create. A category referenced by any movement is archived, never hard-deleted; unreferenced ones may be deleted outright; the last category cannot be archived if it would leave the picker empty.
-- Icon/color suggestion never calls a translation API or an on-device LLM (offline-first — no third party sees a user's category names). `categorySuggest.ts` holds ~30 concepts, each one multilingual keyword bag + one icon + one tint, matched on whole normalized words. The suggested color is always the concept's own tint even if reused elsewhere (deliberate); with no match, icon = `tipo` fallback and color = the least-used tint among the user's categories. A suggestion is always a visible pre-selection, never applied silently.
-- Seed category/section names are localized once at seed time; after that they are ordinary user data, never translated at render time. Duplicate-name check is trimmed/case/accent-insensitive and scoped to the section.
-- Category writes go through `dataStore`'s dedicated actions (`upsertCategoria`/`archiveCategoria`/`deleteCategoria`), which build the array from the freshest store state inside `set` — never from a value captured before an `await` (the same read-modify-write race already fixed once in `repo.local.update()`).
-- `upsertCategoria` returns `Promise<boolean>` (matching §10.23) — `CategoryFormModal` closes only on `true`, with a `submitting` flag guarding against a double-tap firing two writes.
+- A `Categoria` is `id`/`nombre`/`icono`/`color`/optional `padreId` (the parent's id) — no `tipo`, no section. `Movimiento.categoria` stores the picked id whatever its level; every consumer (display, stats, CSV) resolves and treats a parent and a child identically.
+- The collapsed field opens a sheet: level 1 is every top-level category plus a "Custom" tile; a tile with children drills into level 2 (that category itself, general, plus its children); a childless tile selects and closes the sheet.
+- Search is flat across both levels and exits any drill-in; the "Custom" tile at either level opens the create modal pre-filled with that level's parent (undefined at level 1). Archived categories never appear at either level or in search; a category whose own parent is archived renders at level 1 (an orphan, not hidden).
+- A fresh open always starts at level 1, regardless of where a previous session left off.
+- A category referenced by any movement can only be archived, never deleted; the last non-archived category cannot itself be archived, or the picker would have nothing to offer.
+- Display resolves through `Config` at render time (a rename never rewrites history); an id that doesn't resolve renders the `tipo` fallback icon/tint and an "unknown category" label, never a raw id or a crash.
 
-**Implementation.** `src/features/tags/**` (`CategoryPicker.tsx`, `CategoryFormModal.tsx`, `categorySuggest.ts`, `categoryIcons.ts` or `categoryIconKeys.ts`), `src/lib/dataStore.ts` (the three actions), `src/lib/schema.ts` (`Categoria.icono`/`color`/`archivado`), `src/lib/export/csv.ts` (must write resolved names, never raw ids).
+**Implementation.** `src/features/tags/CategoryField.tsx`, `CategorySheet.tsx` (§10.22.1 covers `CategoryFormModal.tsx`); `src/components/shared/movimientoView.ts` (resolution/fallback); `src/lib/dataStore.ts` (`upsertCategoria`/`archiveCategoria`/`deleteCategoria`).
 
-**Watch out.** A `Config` write (adding a category) is a single whole-document op under the sync/op-log model — two devices each adding a category offline replay as two whole-config puts, and the later one silently drops the other device's category. Known, unresolved, not specific to any one track.
+**Watch out.** A `Config` write (adding a category) is a single whole-document op under the sync/op-log model — two devices each adding a category offline replay as two whole-config puts, and the later one silently drops the other device's category. Known, unresolved.
+
+### 10.22.1 Creating a category — icon/color suggestion and the form
+
+**Goal.** Typing a category name pre-selects a sensible icon and color, offline, in any of the app's languages, without leaving the sheet.
+
+**Rules.**
+
+- `categorySuggest.ts` matches the typed name against a table of multilingual keyword concepts (whole normalized words only, never a translation API or on-device LLM); a match pre-selects that concept's icon/color as a visible, changeable selection — never applied silently. No match: icon falls back to the movement's `tipo`, color to the least-used tint among the user's existing categories.
+- `rankCategoryIcons` reorders the full icon grid so a matched icon leads — it is always a reordering, never a filter; every icon stays reachable.
+- The create modal opens with the panel focused, never the name input, so no keyboard rises on open. A parent (`padreId`) is only ever shown, never chosen from within the modal.
+- The duplicate-name check is scoped to siblings under the same `padreId` (or top-level, when there is none) — the same name is fine under a different parent.
+- `upsertCategoria` returns a boolean; the modal closes only on `true` and guards a double-tap with a `submitting` flag.
+
+**Implementation.** `src/features/tags/CategoryFormModal.tsx`, `categorySuggest.ts`; `src/components/shared/categoryIcons.ts` (`CATEGORY_ICONS` allowlist).
 
 ### 10.23 The movement sheet — creating, viewing, editing and deleting
 
@@ -881,16 +897,14 @@ outcome as a rule in the relevant §10 entry.
 
 **Rules.**
 
-- Field order (both sheets, via `MovimientoFormFields`): type toggle → centered date chip (no "Fecha" label) → centered amount display → categories (fixed column + horizontally-scrolling carousel) → note field ("Descripción", `maxLength=40`) behind a collapsed-by-default "ver más ⇄ ver menos" disclosure.
+- Field order (both sheets, via `MovimientoFormFields`): type toggle → centered date chip (no "Fecha" label) → centered amount display → category field → note field ("Descripción", `maxLength=40`) behind a collapsed-by-default "ver más ⇄ ver menos" disclosure.
 - The amount display is a new component, `MovimientoAmountInput` — borderless, auto-sizing (`field-sizing: content`), a decorative currency symbol beside it, digits colored by `tipo` (income = success color, expense = plain foreground). It is not built on the shared `AmountField` (since deleted, see §10.48) — it reuses only `parseAmountForInput`/`formatAmountForInput` directly.
 - The create sheet has no visible heading (the sheet's own grab handle is the header) and no Cancel button — dismissal is backdrop-tap/Escape/drag-to-dismiss only; the primary button (labeled "Agregar gasto"/"Agregar ingreso", following the type toggle — never a generic "Save") takes the full action row.
 - Edit mode keeps its own Cancel + Save row (Cancel returns to view mode without writing — a distinct affordance from dismissing the whole sheet) and keeps the generic "Guardar"/"Save" label, since edit's type toggle changes an existing movement rather than naming what gets created.
-- The category picker's inline surface (`CategoryPicker`) is a fixed column (count button opening `TagPickerSheet`, plus a dashed "Custom" chip) beside a 2-row horizontally-scrolling carousel of `TagChip`s, ordered per §10.22. Search lives only in `TagPickerSheet`, not inline.
-- `TagPickerSheet` is a full picker: search input + 2-column grid of icon+name rows (not `TagChip` pills) + the same "crear «query»" affordance. Selecting an existing category closes the picker immediately; creating one closes the picker first, then opens `CategoryFormModal` — creating never auto-selects.
-- `CategoryPicker`'s external prop contract (`categorias`/`tipo`/`selectedId`/`onSelect`/`onCreateRequested`) stays stable across this restructure.
+- The category field (`CategoryField`) is a single collapsed row — icon swatch, picked name or a placeholder, chevron — that opens `CategorySheet` (§10.22) on tap.
 - View mode's icon block starts flush with no extra top padding, matching every other sheet.
 
-**Implementation.** `src/features/movimientos/MovimientoAmountInput.tsx`, `MovimientoFormFields.tsx`, `AddMovimientoSheet.tsx`, `MovimientoSheet.tsx`; `src/features/tags/TagPickerSheet.tsx`, `categoryOrder.ts`, `CategoryPicker.tsx`.
+**Implementation.** `src/features/movimientos/MovimientoAmountInput.tsx`, `MovimientoFormFields.tsx`, `AddMovimientoSheet.tsx`, `MovimientoSheet.tsx`; `src/features/tags/CategoryField.tsx`, `CategorySheet.tsx`.
 
 **Watch out.** `field-sizing: content` combined with an explicit Tailwind width utility (e.g. `w-40`) pins the box at that width in a supporting browser — it does **not** gracefully fall back the way blog posts imply. The correct pattern is `@supports`-gated: keep `w-40` as the fallback and add `supports-[field-sizing:content]:w-auto` so a supporting browser's own `@supports` evaluation hands width back to content-sizing. Confirmed in Chrome; Firefox has no `field-sizing` support, unconfirmed there.
 

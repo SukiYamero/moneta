@@ -358,7 +358,6 @@
       "nameLabel": "Name",
       "namePlaceholder": "E.g. Gym",
       "nameDuplicateError": "A category with that name already exists",
-      "nameRequiredError": "Enter a name",
       "iconLabel": "Icon",
       "colorLabel": "Color",
       "saveCta": "Save",

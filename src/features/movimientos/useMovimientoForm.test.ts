@@ -248,7 +248,6 @@ describe('useMovimientoForm — successful create', () => {
       moneda: 'COP',
       nota: 'Pesas',
     })
-    expect(written).not.toHaveProperty('seccion')
 
     expect(result.current.amountRaw).toBe('')
     expect(result.current.nota).toBe('')
