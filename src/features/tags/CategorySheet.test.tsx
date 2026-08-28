@@ -49,8 +49,18 @@ describe('CategorySheet', () => {
     expect(tiles).toHaveLength(9)
     expect(within(grid).getByRole('button', { name: /custom/i })).toBeInTheDocument()
 
-    expect(within(getDialog()).getByRole('button', { name: 'Page 1 of 2' })).toBeInTheDocument()
-    expect(within(getDialog()).getByRole('button', { name: 'Page 2 of 2' })).toBeInTheDocument()
+    expect(within(getDialog()).getByRole('button', { name: 'Página 1 de 2' })).toBeInTheDocument()
+    expect(within(getDialog()).getByRole('button', { name: 'Página 2 de 2' })).toBeInTheDocument()
+  })
+
+  it('does not put aria-pressed on a top-level tile that drills into children, only leaf tiles get it', () => {
+    const parent = categoria({ id: 'cat_parent', nombre: 'Transporte' })
+    const child = categoria({ id: 'cat_child', nombre: 'Gasolina', padreId: 'cat_parent' })
+    render(<CategorySheet open onClose={vi.fn()} categorias={[parent, child]} onSelect={vi.fn()} />)
+
+    expect(within(getDialog()).getByRole('button', { name: 'Transporte' })).not.toHaveAttribute(
+      'aria-pressed',
+    )
   })
 
   it('drilling into a parent with children shows the parent as the first tile of level 2, and back returns to level 1 on the page it came from', async () => {
@@ -81,11 +91,11 @@ describe('CategorySheet', () => {
       <CategorySheet open onClose={vi.fn()} categorias={[...topLevel, child]} onSelect={vi.fn()} />,
     )
 
-    await user.click(within(getDialog()).getByRole('button', { name: 'Page 2 of 2' }))
+    await user.click(within(getDialog()).getByRole('button', { name: 'Página 2 de 2' }))
     await user.click(within(getDialog()).getByRole('button', { name: 'Transporte' }))
     await user.click(within(getDialog()).getByRole('button', { name: /volver/i }))
 
-    expect(within(getDialog()).getByRole('button', { name: 'Page 2 of 2' })).toHaveAttribute(
+    expect(within(getDialog()).getByRole('button', { name: 'Página 2 de 2' })).toHaveAttribute(
       'aria-current',
       'true',
     )
@@ -147,7 +157,7 @@ describe('CategorySheet', () => {
       <CategorySheet open onClose={vi.fn()} categorias={manyTopLevel(12)} onSelect={vi.fn()} />,
     )
 
-    await user.click(within(getDialog()).getByRole('button', { name: 'Page 2 of 2' }))
+    await user.click(within(getDialog()).getByRole('button', { name: 'Página 2 de 2' }))
     expect(within(getDialog()).getByRole('button', { name: 'Categoría 08' })).toBeInTheDocument()
 
     await user.type(screen.getByRole('textbox', { name: /buscar categoría/i }), 'Categoría 00')

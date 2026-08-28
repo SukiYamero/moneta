@@ -10,7 +10,7 @@ import { TagChip } from '@/components/shared/TagChip'
 import { PagedGrid } from '@/components/shared/PagedGrid'
 import { TINT_CLASSES, ICON_AVATAR_TINTS } from '@/components/shared/tintClasses'
 import { getMovimientoVisual } from '@/components/shared/movimientoView'
-import type { IconAvatarTint } from '@/components/shared/IconAvatar'
+import { IconAvatar, type IconAvatarTint } from '@/components/shared/IconAvatar'
 import { normalizeForSearch } from '@/features/search/searchMatch'
 import { CATEGORY_ICONS, type CategoryIconKey } from '@/components/shared/categoryIcons'
 import { rankCategoryIcons, suggestCategoryVisual } from '@/features/tags/categorySuggest'
@@ -190,15 +190,14 @@ export const CategoryFormModal = ({
                   onClick={() => setIcono(key)}
                   className="flex size-11 items-center justify-center rounded-lg"
                 >
-                  <span
+                  <IconAvatar
+                    icon={Icon}
+                    tint={color}
+                    size="tile"
                     className={cn(
-                      'flex size-10.5 items-center justify-center rounded-md',
-                      TINT_CLASSES[color].badge,
                       icono === key && 'ring-2 ring-primary ring-offset-2 ring-offset-card',
                     )}
-                  >
-                    <Icon className="size-5.5" aria-hidden="true" />
-                  </span>
+                  />
                 </button>
               )
             }}
