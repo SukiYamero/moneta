@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -50,6 +51,8 @@ export const PagedGrid = <T,>({
   const dragAxis = useRef<DragAxis>(null)
   const pointerId = useRef<number | null>(null)
   const suppressNextClick = useRef(false)
+  const trackRef = useRef<HTMLDivElement>(null)
+  const [minHeight, setMinHeight] = useState<number>()
 
   useEffect(() => {
     if (page <= pageCount - 1) return
@@ -60,6 +63,17 @@ export const PagedGrid = <T,>({
     const start = page * pageSize
     return items.slice(start, start + pageSize)
   }, [items, page, pageSize])
+
+  const prevItemsRef = useRef(items)
+
+  useLayoutEffect(() => {
+    const measured = trackRef.current?.getBoundingClientRect().height
+    const itemsChanged = prevItemsRef.current !== items
+    prevItemsRef.current = items
+    if (!measured) return
+    if (itemsChanged || minHeight === undefined || measured > minHeight) setMinHeight(measured)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pageItems])
 
   const clampOffset = (raw: number) => {
     if (raw < 0 && !hasNextPage) return 0
@@ -129,7 +143,8 @@ export const PagedGrid = <T,>({
     resetDrag()
   }
 
-  const handleLostPointerCapture = () => {
+  const handleLostPointerCapture = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.pointerId !== pointerId.current) return
     pointerId.current = null
     resetDrag()
   }
@@ -153,6 +168,7 @@ export const PagedGrid = <T,>({
 
   const trackStyle: CSSProperties = {
     gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
+    minHeight: minHeight ? `${minHeight}px` : undefined,
     transform: dragOffset ? `translateX(${dragOffset}px)` : undefined,
     transitionDuration: dragging ? '0ms' : undefined,
   }
@@ -161,6 +177,7 @@ export const PagedGrid = <T,>({
     <div className={cn('flex flex-col gap-3', className)}>
       <div className="relative overflow-hidden">
         <div
+          ref={trackRef}
           role="group"
           aria-label={ariaLabel}
           tabIndex={0}
