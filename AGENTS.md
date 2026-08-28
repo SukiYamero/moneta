@@ -421,7 +421,8 @@ The cycle, which the operator runs:
 
 1. A task exists — the user names it, or it is already written in a `.md`.
    If the feature has no `specs.md` §10 entry, one is written first: Goal,
-   Rules, Implementation, short and close to ready to execute.
+   Rules, Implementation, short and close to ready to execute. The task's own
+   `.md` is a different document, and it is not short — see below.
 2. **Implementers** build it, in parallel where the file sets are disjoint.
    Each owns an explicit list of files and touches nothing else.
 3. A **reviewer** goes over each finished branch — always, not only when
@@ -436,6 +437,34 @@ The cycle, which the operator runs:
 Documentation is deferred on purpose. Work that has not been confirmed does
 not get written down as though it had, and a plan left in place after the
 work lands reads as current when it is not.
+
+### A task's own `.md` has two lives, and they have opposite rules
+
+**While the task is in flight — steps 1 to 5 — it is as long as it needs to
+be.** It is a brief for an agent that has none of the conversation behind it,
+so it spells out the contract, the exact tokens and classes to build against,
+the files it owns and the files it must not touch, the edge cases, the likely
+failure modes, and an acceptance criterion per rule that names the test.
+Padding is still forbidden; length that removes a guess is not padding. A
+brief that omits an edge case buys a second round of work, which is what the
+brief exists to prevent — and a brief trimmed for elegance is where that
+omission happens.
+
+The `specs.md` §10 twenty-line ceiling does **not** apply to it. `specs.md`
+says what the product does; a task brief says how to build something that does
+not exist yet, to an agent that cannot ask.
+
+**After the user confirms — step 6 — it is replaced by its final, minimal
+form:** the shortest honest statement of what now exists and why it was
+needed, in the shape of the files already in `docs/tasks/`. Replaced, not
+appended to and not annotated as done. Everything the brief carried was about
+work that had not happened; none of it is true any more, and the `specs.md`
+entry and the directory `README.md`s now carry what survives.
+
+**Compaction happens only after the user's confirmation.** Not when the code
+is written, not when `bun run check` passes, not when a reviewer signs off.
+Compacting earlier destroys the brief while it is still the only record of
+what the work is supposed to be.
 
 ## Rules every agent follows
 

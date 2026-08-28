@@ -38,7 +38,10 @@ worktree, and you hand back working code plus an honest report.
   those are configuration, not prose.
 - **Do not write documentation yet.** `specs.md`, the `README.md`s and the
   task's own `.md` are consolidated after the user confirms the feature
-  works, not while you build it.
+  works, not while you build it. Your brief stays long and unedited until
+  then — it is the only record of what the work is supposed to be, and
+  trimming it while the work is in flight is not tidying, it is deleting the
+  spec.
 
 ## Done gate
 

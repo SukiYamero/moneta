@@ -38,5 +38,13 @@ this role exists to prevent.
   closing the plan.** A plan with an unresolved product decision buried in it
   is not finished.
 - Say plainly which parts of the task are blocking and which are independent.
-- Keep it short enough to act on. A plan nobody reads to the end is a plan
-  that gets half-followed.
+- **Write for an agent that has none of the conversation behind it.** Name the
+  exact files, the exact tokens and classes, the exact contract, the edge
+  cases, and the test that proves each criterion. Anything you leave implicit
+  is something the implementer will guess at, and the guess is the second round
+  of work this role exists to prevent.
+- Length is not the measure — a guess removed per paragraph is. Cut padding,
+  restating, and anything the implementer could recover by reading the repo.
+  Never cut an edge case, a contract detail, or a file boundary to make the
+  plan shorter; `AGENTS.md` § "A task's own `.md` has two lives" is explicit
+  that a brief is compacted only after the user confirms the work.

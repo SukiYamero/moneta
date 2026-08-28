@@ -30,7 +30,10 @@ a dispatch.
      the assumptions, the options, the edge cases to watch. None of that is
      true any more. What replaces it is the shortest honest statement of what
      now exists and why it was needed. Replace it; do not append to it and do
-     not annotate it as done.
+     not annotate it as done. Until this step the brief stays at full length:
+     a brief is deliberately long while the work is in flight, and compacting
+     one before the user has confirmed destroys the spec the work is measured
+     against.
    - **Consolidate the `specs.md` §10 entry** to what the product now does,
      and update a directory `README.md` if the shape of a folder changed.
    - Whoever has the fullest context writes both; usually you.
