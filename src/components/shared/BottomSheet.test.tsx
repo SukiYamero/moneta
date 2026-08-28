@@ -1,8 +1,8 @@
-import { describe, it, expect, vi, afterEach } from 'vitest'
-import { act, render, screen } from '@testing-library/react'
+import { describe, it, expect, vi } from 'vitest'
+import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { BottomSheet } from '@/components/shared/BottomSheet'
-import { OVERLAY_FIXED_LAYER_OPACITY_CLASS } from '@/components/shared/useVisualViewportInset'
+import { OVERLAY_FIXED_LAYER_OPACITY_CLASS } from '@/components/shared/useOverlay'
 
 const Harness = ({ open, onClose }: { open: boolean; onClose: () => void }) => {
   return (
@@ -123,67 +123,16 @@ describe('BottomSheet', () => {
     trigger.remove()
   })
 
-  describe('viewport-safe positioning', () => {
-    // jsdom has no VisualViewport implementation.
-    class FakeVisualViewport extends EventTarget {
-      offsetTop = 0
-      height = document.documentElement.clientHeight
-    }
-
-    afterEach(() => {
-      vi.unstubAllGlobals()
-    })
-
-    it('leaves the wrapper/panel unstyled when the visual viewport matches the layout viewport', () => {
-      vi.stubGlobal('visualViewport', new FakeVisualViewport())
+  describe('sizing is CSS-only', () => {
+    it('bounds the panel from its classes, with no inline viewport geometry', () => {
       render(<Harness open onClose={() => {}} />)
-
       const dialog = screen.getByRole('dialog')
       const wrapper = dialog.parentElement as HTMLElement
 
+      expect(dialog).toHaveClass('max-h-[88dvh]')
+      expect(dialog.style.maxHeight).toBe('')
       expect(wrapper.style.top).toBe('')
       expect(wrapper.style.height).toBe('')
-      expect(dialog.style.maxHeight).toBe('')
-    })
-
-    it('pins the wrapper to the real visible area and clamps the panel once the keyboard shrinks it', () => {
-      const viewport = new FakeVisualViewport()
-      vi.stubGlobal('visualViewport', viewport)
-      render(<Harness open onClose={() => {}} />)
-
-      const dialog = screen.getByRole('dialog')
-      const wrapper = dialog.parentElement as HTMLElement
-
-      act(() => {
-        viewport.offsetTop = 120
-        viewport.height = 400
-        viewport.dispatchEvent(new Event('resize'))
-      })
-
-      expect(wrapper.style.top).toBe('120px')
-      expect(wrapper.style.height).toBe('400px')
-      expect(dialog.style.maxHeight).toBe(`${400 * 0.88}px`)
-    })
-
-    it('never shrinks the backdrop along with the keyboard-safe wrapper', () => {
-      const viewport = new FakeVisualViewport()
-      vi.stubGlobal('visualViewport', viewport)
-      render(<Harness open onClose={() => {}} />)
-
-      const dialog = screen.getByRole('dialog')
-      const wrapper = dialog.parentElement as HTMLElement
-      const backdrop = document.querySelector('[aria-hidden="true"]') as HTMLElement
-      const backdropTopBeforeResize = backdrop.style.top
-
-      act(() => {
-        viewport.offsetTop = 120
-        viewport.height = 400
-        viewport.dispatchEvent(new Event('resize'))
-      })
-
-      expect(wrapper.contains(backdrop)).toBe(false)
-      expect(backdrop.style.top).toBe(backdropTopBeforeResize)
-      expect(backdrop.style.height).toBe('')
     })
   })
 

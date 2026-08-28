@@ -13,6 +13,18 @@ Things only the user can do — design work in the Claude Design canvas, decisio
 
 ## Open
 
+### 27. `dvh` never recovers in the installed PWA on iOS — `owner: user`
+
+Measured on a real iPhone in an installed PWA: `100dvh` reads 852 before the first keyboard, 793 after it, and stays 793 for the rest of the session — `window.innerHeight` and `visualViewport.height` drift with it. It is a WebKit bug with no web-side fix, and it means `max-h-[88dvh]` on both overlay shells silently resolves ~7% short once any field has been focused. Not visible in a Safari tab, only in the installed app. The decision needed: accept the shorter sheet, or replace `dvh` on the shells with a measured height taken once at boot. Tied to item 28 — a native wrapper would make this moot.
+
+### 28. Native wrapper for the App Store — `owner: user`
+
+Distribution priority is: installed from the app stores first, mobile web second, desktop web last. Play Store needs a TWA (Bubblewrap/PWABuilder); the App Store cannot use a TWA and needs a WKWebView wrapper such as Capacitor. That choice also decides two iOS keyboard problems that have no web-side fix at all: `Keyboard.setAccessoryBarVisible(false)` removes the AutoFill bar that overlays the bottom of a sheet, and `Keyboard.setResizeMode('native')` removes the viewport pan entirely. Worth deciding before hardening any further web-only workaround for either.
+
+### 29. The AutoFill bar overlapping the sheet bottom — `owner: user`
+
+With the keyboard up, iOS floats its AutoFill bar (key/card/location, ~20–44px depending on whether QuickType is collapsed) over the bottom of the sheet. `visualViewport.height` does not subtract it and no CSS `env()` or web API exposes its height, so the only web-side option is reserving a fixed bottom buffer that is wrong on some devices. Deliberately not compensated for. Deferred by the user until store packaging (item 28), which removes the bar outright.
+
 ### 25. Does the iOS picker wheel close the calendar? — `owner: user`
 
 The date picker's caption is now a month dropdown and a year dropdown, the only native `<select>`s in the app. On iOS a `<select>` raises the OS picker wheel — a third layer above the popover, which is itself above a `BottomSheet`. The app's own overlay bookkeeping is safe (`useOverlay.ts` binds nothing to focus events, so it is simply inert while that layer is up), but Radix's `DismissableLayer` dismisses on focus activity it judges to be outside the popover, and WebKit has raised a `blur` before immediately refocusing a `<select>` in some versions. If it does that here, the calendar closes mid-selection. No agent can verify this. The check: open the calendar from the date chip, tap the month or the year to raise the wheel, spin it and pick a different value — does the calendar stay open and move to that month/year, or does it close by itself?

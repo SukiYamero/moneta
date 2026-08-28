@@ -80,24 +80,6 @@ describe('AddMovimientoSheet', () => {
     expect(scrolledTo.contains(amountInput)).toBe(false)
   })
 
-  // The note field can sit low enough in the sheet for the keyboard to cover
-  // it entirely.
-  it('scrolls the note field into view when it receives focus', async () => {
-    const user = userEvent.setup()
-    const scrollIntoView = vi.fn()
-    HTMLElement.prototype.scrollIntoView = scrollIntoView
-    useMovimientoSheetStore.setState({ addOpen: true })
-    render(<AddMovimientoSheet />)
-
-    await user.click(screen.getByRole('button', { name: /más detalles/i }))
-    const noteField = screen.getByRole('textbox', { name: /descripción/i })
-    await user.click(noteField)
-
-    expect(scrollIntoView).toHaveBeenCalled()
-    const scrolledTo = scrollIntoView.mock.contexts.at(-1) as HTMLElement
-    expect(scrolledTo).toBe(noteField)
-  })
-
   it('saves a movement with the picked category, amount and note, then closes the sheet', async () => {
     const user = userEvent.setup()
     useMovimientoSheetStore.setState({ addOpen: true })

@@ -7,7 +7,6 @@ import { BottomSheet } from '@/components/shared/BottomSheet'
 import { CenterModal } from '@/components/shared/CenterModal'
 import { DateChipPicker } from '@/components/shared/DateChipPicker'
 import { OVERLAY_BODY_DIM_BACKGROUND, useHasOpenOverlay } from '@/components/shared/useOverlay'
-import { triggerAllResizeObservers } from '@/test/resizeObserverMock'
 
 const Harness = ({ open, onClose }: { open: boolean; onClose: () => void }) => {
   return (
@@ -261,61 +260,6 @@ describe('useOverlay — initial focus lands in the same task as the trigger cli
     })
 
     expect(screen.getByRole('textbox', { name: 'Monto' })).toHaveFocus()
-  })
-})
-
-describe('useRefocusOnResize — a focused field survives a sibling collapsing around it', () => {
-  it('re-centers the focused field inside the sheet when its body shrinks', () => {
-    const scrollIntoView = vi.fn()
-    HTMLElement.prototype.scrollIntoView = scrollIntoView
-    render(<Harness open onClose={() => {}} />)
-    act(() => triggerAllResizeObservers(300))
-
-    const second = screen.getByRole('button', { name: 'Segundo' })
-    act(() => second.focus())
-    scrollIntoView.mockClear()
-
-    act(() => triggerAllResizeObservers(200))
-
-    expect(scrollIntoView).toHaveBeenCalled()
-    expect(scrollIntoView.mock.contexts.at(-1)).toBe(second)
-  })
-
-  // The keyboard closing grows the sheet back — never hides a focused field,
-  // so re-centering here would only fight whatever settle position iOS itself
-  // already picked (reported live as the sheet ending up mostly off-screen).
-  it('does nothing when the body grows', () => {
-    const scrollIntoView = vi.fn()
-    HTMLElement.prototype.scrollIntoView = scrollIntoView
-    render(<Harness open onClose={() => {}} />)
-    act(() => triggerAllResizeObservers(200))
-
-    const second = screen.getByRole('button', { name: 'Segundo' })
-    act(() => second.focus())
-    scrollIntoView.mockClear()
-
-    act(() => triggerAllResizeObservers(300))
-
-    expect(scrollIntoView).not.toHaveBeenCalled()
-  })
-
-  it('does nothing on a shrink when focus sits outside the sheet', () => {
-    const scrollIntoView = vi.fn()
-    HTMLElement.prototype.scrollIntoView = scrollIntoView
-    render(
-      <div>
-        <button type="button">Afuera</button>
-        <Harness open onClose={() => {}} />
-      </div>,
-    )
-    act(() => triggerAllResizeObservers(300))
-
-    act(() => screen.getByRole('button', { name: 'Afuera' }).focus())
-    scrollIntoView.mockClear()
-
-    act(() => triggerAllResizeObservers(200))
-
-    expect(scrollIntoView).not.toHaveBeenCalled()
   })
 })
 

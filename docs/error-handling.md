@@ -556,3 +556,12 @@ screens rendered `` `No se pudo iniciar sesión: ${error}` `` where `error`
 was the thrown `Error`'s own English `.message`. Rule: never render
 `error.message`/`RepoError.code` raw as user copy — route through the
 message-keyed copy table (§7).
+
+**Fighting a browser's own scroll made the sheet jump on iOS.** A hook chased
+`visualViewport` and wrote its `offsetTop`/`height` onto the overlay's fixed
+layer, while a field and a `ResizeObserver` each also called `scrollIntoView`.
+iOS delivers that pan as drifting samples that keep arriving after the keyboard
+has settled, so the panel flew up and landed back, exposing the page behind it —
+Android, which never pans, was fine. Rule: when the platform already handles a
+gesture, adding a JS correction on top of it is the defect; delete the
+correction rather than tuning it.

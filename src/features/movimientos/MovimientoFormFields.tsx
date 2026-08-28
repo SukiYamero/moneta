@@ -164,7 +164,6 @@ export const MovimientoFormFields = ({
             maxLength={NOTE_MAX_LENGTH}
             disabled={disabled}
             containerClassName="w-full"
-            onFocus={(event) => event.currentTarget.scrollIntoView?.({ block: 'center' })}
           />
         )}
       </div>

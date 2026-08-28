@@ -10,13 +10,12 @@ files are never `index.tsx` themselves).
 - `useOverlay.ts` — shared Escape/Tab-trap/scroll-lock/focus-restore hook
   for `BottomSheet`/`CenterModal`; also exports `useEscapeToClose` (lighter,
   used by `DateChipPicker`'s popover), `useHasOpenOverlay()`,
-  `FOCUSABLE_SELECTOR`, `OVERLAY_PANEL_CLASS`. Nesting-aware via a
-  module-level stack, so only the topmost overlay reacts to Escape/Tab.
-- `useVisualViewportInset.ts` — tracks `window.visualViewport` so
-  `BottomSheet`/`CenterModal` can size against the actually-visible space
-  (keyboard up, page pinch-zoomed) instead of the full layout viewport.
-  Exports `OVERLAY_MAX_HEIGHT_FRACTION`, `OVERLAY_BACKDROP_OVERSCAN_BLOCK`/
-  `_INLINE`.
+  `FOCUSABLE_SELECTOR`, `OVERLAY_PANEL_CLASS`,
+  `OVERLAY_BACKDROP_OVERSCAN_BLOCK`/`_INLINE` and
+  `OVERLAY_FIXED_LAYER_OPACITY_CLASS`. Nesting-aware via a module-level
+  stack, so only the topmost overlay reacts to Escape/Tab. Its scroll lock
+  takes `body` out of flow and restores the offset on close — see
+  `specs.md` §10.49 for why `overflow: hidden` alone is not enough.
 - `BottomSheet.tsx` — sliding-sheet shell with drag-to-dismiss (Pointer
   Events). Highest-reuse shell (Filter/Movement/Profile/Add sheets, tag
   picker).

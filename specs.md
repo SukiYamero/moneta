@@ -970,21 +970,21 @@ outcome as a rule in the relevant §10 entry.
 
 **Watch out.** `AmountField.tsx` no longer exists — `MovimientoAmountInput` (§10.41) is the only amount input. `src/lib/i18n/amountFormat.ts`'s `parseAmountForInput`/`formatAmountForInput`/`isAmountInputInvalid` are used only by `useMovimientoForm.ts` and `MovimientoAmountInput.tsx`.
 
-### 10.49 Overlays stay inside the visible area under the keyboard
+### 10.49 Overlays hold still while the software keyboard opens
 
-**Goal.** `BottomSheet`/`CenterModal` never grow taller than, or get positioned outside, the space actually visible once the software keyboard (or a pinch-zoom) has shrunk it — `dvh` doesn't react to the keyboard on iOS Safari, only `window.visualViewport` does.
+**Goal.** A `BottomSheet`/`CenterModal` with a focused field stays put as the keyboard rises — it never flies up and settles back, and never exposes a strip of the page behind it.
 
 **Rules.**
 
-- `useVisualViewportInset(enabled)` tracks `window.visualViewport` and returns `{ top, height }` — the real visible offset/height — or `null` whenever there's nothing to correct for (API unavailable, disabled, or the visual viewport matches the layout viewport within a 1px tolerance, guarding against sub-pixel zoom rounding rather than the keyboard).
-- Both shells wrap their panel in a `fixed inset-0, pointer-events-none` wrapper whose inline `top`/`height` is overridden by the hook's non-null result; `undefined` leaves the class's `inset-0` in full effect, so the no-keyboard case is pixel-identical to before.
-- The panel gets an inline `maxHeight` of `OVERLAY_MAX_HEIGHT_FRACTION` (`0.88`, the single JS source of truth both shells import) times the corrected height, alongside its static `max-h-[88dvh]` Tailwind fallback.
-- `CenterModal` is bounded and scrollable at any content height (`max-h-[88dvh] overflow-y-auto overscroll-y-contain`).
-- The backdrop is a separate, always-`fixed inset-0` sibling of the clamped wrapper, never its descendant, so it keeps dimming (and hiding whatever sits behind it, `BottomNav` included) the whole layout viewport regardless of what the wrapper itself is clamped to — nesting it inside the wrapper let `BottomNav` show through the strip the wrapper stopped covering, on a real iPhone (§10.53 has the current, stronger fix on top of this).
+- Nothing reads `window.visualViewport` to position or size an overlay. iOS reports the keyboard pan as sparse, drifting samples that keep arriving after the keyboard has already settled; writing those into a `fixed` layer's `top`/`height` is itself what makes the panel visibly fly and land.
+- Panels are bounded by CSS alone (`max-h-[88dvh]`) and scroll internally (`overflow-y-auto overscroll-y-contain` on `CenterModal`, on the body wrapper in `BottomSheet`). No JS ever writes an inline height or offset onto a shell.
+- No shell and no field scrolls anything in response to a field being focused, or to an overlay resizing around a focused field. iOS reveals the focused field on its own; a second scroll stacked on top of that is what compounds into the jump instead of preventing it. §10.48's scroll on a _blocked submit_ is a different trigger and stays.
+- The document itself never scrolls behind an overlay: `html`/`body`/`#root` are `height: 100%` and every screen scrolls in an inner container (§10.34), so the body-scroll lock is `overflow: hidden` alone and there is no page pan for a `fixed` layer to be dragged by.
+- The backdrop is a `fixed` sibling of the panel wrapper, never its descendant, so it keeps dimming the whole layout viewport independently of whatever happens to the panel; §10.53 owns how far it overscans.
 
-**Implementation.** `src/components/shared/useVisualViewportInset.ts`, `BottomSheet.tsx`, `CenterModal.tsx`.
+**Implementation.** `src/components/shared/useOverlay.ts` (the lock and the overscan constants), `BottomSheet.tsx`, `CenterModal.tsx`.
 
-**Watch out.** The 88% max-height fraction is still duplicated as a literal Tailwind class in both shells (`max-h-[88dvh]`) alongside the one JS constant — Tailwind's bracket syntax can't reference a JS constant, so this half of the duplication is a build-time constraint kept in sync by hand.
+**Watch out.** `dvh` does not shrink for the keyboard on iOS, and in an installed PWA it shrinks on the first keyboard open and never recovers for that session — so `88dvh` is an upper bound, never a promise that the panel fits above the keyboard. The panel's own internal scroll is what keeps a low field reachable.
 
 ### 10.50 The date picker floats on a Radix popover
 
@@ -1047,14 +1047,14 @@ outcome as a rule in the relevant §10 entry.
 
 **Rules.**
 
-- The backdrop is unconditionally oversized: it overscans a plain `inset-0` by `OVERLAY_BACKDROP_OVERSCAN_BLOCK`/`_INLINE` (`-50dvh`/`-50dvw`) on every edge, never derived from the viewport-inset correction at all — robust to the _class_ of error (a `fixed` element's rendered box coming out smaller/offset than reasoned) rather than to one specific geometry.
+- The backdrop is unconditionally oversized: it overscans a plain `inset-0` by `OVERLAY_BACKDROP_OVERSCAN_BLOCK`/`_INLINE` (`-50dvh`/`-50dvw`) on every edge, a flat constant derived from no measurement — robust to the _class_ of error (a `fixed` element's rendered box coming out smaller or offset than reasoned, §10.49) rather than to one specific geometry.
 - `useHasOpenOverlay()` (`useOverlay.ts`, via `useSyncExternalStore` over the same stack §10.5.1 describes) is true whenever any overlay anywhere is open. `BottomNav` reads it directly, not a prop threaded from `AppShell`, so it reacts to every overlay app-wide, not just the sheets `AppShell` happens to own.
 - `BottomNav` hides via `opacity-0 pointer-events-none` while any overlay is open — never unmount, `display: none`, or `inert`. `useOverlay` restores focus to the trigger element (often `BottomNav`'s own Add FAB) synchronously on close, one render tick before this hook's own state update repaints the bar visible again; `opacity`/`pointer-events` don't affect scriptable focusability, so the restore still lands.
 - No orientation lock is called via the Screen Orientation API anywhere (`screen.orientation.lock()` is unimplemented on iOS Safari and redundant with the manifest where it would work) — the manifest's `orientation: 'portrait'` is the only lock for an installed PWA/TWA; a bare mobile browser tab has no real platform lock available at all.
 - `LandscapeGuard` (mounted once in `src/main.tsx`, above `AppLock` and the router) renders nothing in portrait and a full-screen blocking `role="status"` in landscape for that unlockable browser-tab case — mounted above the router specifically so it also covers the auth screens, the PIN lock, and `/settings`, not just the three bottom-nav tabs.
 - The gate's "Omitir y continuar" skip is session-scoped, not per-device: in-memory zustand state with no persistence, so it dismisses the gate for the rest of the running app but a reload or a fresh launch shows it again once. It renders synchronously off that state — no async storage read, so no tri-state "not resolved yet" is needed to avoid a flash.
 
-**Implementation.** `src/components/shared/useIsLandscape.ts` (`matchMedia` via `useSyncExternalStore`) + `LandscapeGuard.tsx` (presentation only, kept separate so a future design swaps `LandscapeGuard`'s body alone) + `src/lib/landscapeGateStore.ts` (the session skip); `BottomNav.tsx`, `useOverlay.ts`, `useVisualViewportInset.ts` (overscan constants), `BottomSheet.tsx`/`CenterModal.tsx`.
+**Implementation.** `src/components/shared/useIsLandscape.ts` (`matchMedia` via `useSyncExternalStore`) + `LandscapeGuard.tsx` (presentation only, kept separate so a future design swaps `LandscapeGuard`'s body alone) + `src/lib/landscapeGateStore.ts` (the session skip); `BottomNav.tsx`, `useOverlay.ts` (overscan constants), `BottomSheet.tsx`/`CenterModal.tsx`.
 
 **Watch out.** iOS has no documented equivalent to the manifest orientation lock even when installed to the home screen — the portrait guarantee on iOS rests entirely on `LandscapeGuard`, not a platform-level lock.
 
