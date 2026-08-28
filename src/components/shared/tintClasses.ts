@@ -59,6 +59,30 @@ export const TINT_CLASSES: Record<
     badge: 'bg-muted text-muted-foreground',
     pill: 'border-border-strong bg-muted text-foreground',
   },
+  teal: {
+    icon: 'text-chart-6',
+    fill: 'bg-chart-6',
+    badge: 'bg-chart-6/15 text-chart-6',
+    pill: 'border-chart-6/40 bg-chart-6/15 text-chart-6',
+  },
+  indigo: {
+    icon: 'text-chart-7',
+    fill: 'bg-chart-7',
+    badge: 'bg-chart-7/15 text-chart-7',
+    pill: 'border-chart-7/40 bg-chart-7/15 text-chart-7',
+  },
+  orange: {
+    icon: 'text-chart-8',
+    fill: 'bg-chart-8',
+    badge: 'bg-chart-8/15 text-chart-8',
+    pill: 'border-chart-8/40 bg-chart-8/15 text-chart-8',
+  },
+  magenta: {
+    icon: 'text-chart-9',
+    fill: 'bg-chart-9',
+    badge: 'bg-chart-9/15 text-chart-9',
+    pill: 'border-chart-9/40 bg-chart-9/15 text-chart-9',
+  },
 }
 
 export { ICON_AVATAR_TINTS } from '@/lib/iconAvatarTint'

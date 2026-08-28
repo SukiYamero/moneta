@@ -43,6 +43,10 @@ const COLOR_NAME_KEY = {
   danger: 'colors.danger',
   info: 'colors.info',
   neutral: 'colors.neutral',
+  teal: 'colors.teal',
+  indigo: 'colors.indigo',
+  orange: 'colors.orange',
+  magenta: 'colors.magenta',
 } as const satisfies Record<IconAvatarTint, string>
 
 export const CategoryFormModal = ({

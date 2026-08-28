@@ -376,7 +376,11 @@
       "success": "Verde",
       "danger": "Vermelho",
       "info": "Azul-claro",
-      "neutral": "Cinza"
+      "neutral": "Cinza",
+      "teal": "Verde-azulado",
+      "indigo": "Índigo",
+      "orange": "Laranja",
+      "magenta": "Magenta"
     }
   },
   "movimientos": {

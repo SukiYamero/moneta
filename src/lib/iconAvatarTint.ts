@@ -8,6 +8,10 @@ export const ICON_AVATAR_TINTS = [
   'danger',
   'info',
   'neutral',
+  'teal',
+  'indigo',
+  'orange',
+  'magenta',
 ] as const
 
 export type IconAvatarTint = (typeof ICON_AVATAR_TINTS)[number]
