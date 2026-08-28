@@ -61,7 +61,6 @@ describe('buildSeedConfig — seed taxonomy localization', () => {
     expect(byId.get('cat_parqueadero')).toBe('Estacionamiento')
     expect(byId.get('cat_domicilios')).toBe('Delivery')
     expect(byId.get('cat_caja_menor')).toBe('Caja chica')
-    // a name with no regional variant stays identical to es
     expect(byId.get('cat_comida')).toBe('Comida')
   })
 
