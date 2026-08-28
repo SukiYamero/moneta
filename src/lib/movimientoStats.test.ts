@@ -13,7 +13,6 @@ import {
 const movimiento = (overrides: Partial<Movimiento> = {}): Movimiento => ({
   id: crypto.randomUUID(),
   fecha: '2026-08-15',
-  seccion: 'sec_personal',
   categoria: 'cat_sueldo',
   tipo: 'ingreso',
   monto: 1000,
@@ -149,49 +148,39 @@ describe('filterByRange()', () => {
 })
 
 describe('breakdownBy()', () => {
-  it('groups by seccion, sorted by total desc, shares summing to 1', () => {
+  it('groups by categoria, sorted by total desc, shares summing to 1', () => {
     const movimientos = [
-      movimiento({ seccion: 'sec_personal', tipo: 'gasto', monto: 100 }),
-      movimiento({ seccion: 'sec_personal', tipo: 'gasto', monto: 200 }),
-      movimiento({ seccion: 'sec_trabajo', tipo: 'gasto', monto: 100 }),
+      movimiento({ categoria: 'cat_sueldo', tipo: 'gasto', monto: 100 }),
+      movimiento({ categoria: 'cat_sueldo', tipo: 'gasto', monto: 200 }),
+      movimiento({ categoria: 'cat_ventas', tipo: 'gasto', monto: 100 }),
     ]
-    const result = breakdownBy(movimientos, 'seccion', 'gasto', 'COP')
+    const result = breakdownBy(movimientos, 'gasto', 'COP')
     expect(result).toEqual([
-      { key: 'sec_personal', total: 300, share: 0.75 },
-      { key: 'sec_trabajo', total: 100, share: 0.25 },
+      { key: 'cat_sueldo', total: 300, share: 0.75 },
+      { key: 'cat_ventas', total: 100, share: 0.25 },
     ])
   })
 
   it('filters by tipo before grouping', () => {
     const movimientos = [
-      movimiento({ seccion: 'sec_personal', tipo: 'ingreso', monto: 500 }),
-      movimiento({ seccion: 'sec_personal', tipo: 'gasto', monto: 100 }),
+      movimiento({ categoria: 'cat_sueldo', tipo: 'ingreso', monto: 500 }),
+      movimiento({ categoria: 'cat_sueldo', tipo: 'gasto', monto: 100 }),
     ]
-    const result = breakdownBy(movimientos, 'seccion', 'gasto', 'COP')
-    expect(result).toEqual([{ key: 'sec_personal', total: 100, share: 1 }])
+    const result = breakdownBy(movimientos, 'gasto', 'COP')
+    expect(result).toEqual([{ key: 'cat_sueldo', total: 100, share: 1 }])
   })
 
   it('returns an empty array with no NaN shares when the total is zero', () => {
-    expect(breakdownBy([], 'seccion', 'gasto', 'COP')).toEqual([])
-  })
-
-  it('groups by categoria as well', () => {
-    const movimientos = [
-      movimiento({ categoria: 'cat_sueldo', tipo: 'ingreso', monto: 100 }),
-      movimiento({ categoria: 'cat_ventas', tipo: 'ingreso', monto: 100 }),
-    ]
-    const result = breakdownBy(movimientos, 'categoria', 'ingreso', 'COP')
-    expect(result).toHaveLength(2)
-    expect(result.reduce((sum, entry) => sum + entry.share, 0)).toBe(1)
+    expect(breakdownBy([], 'gasto', 'COP')).toEqual([])
   })
 
   it('only groups movements matching the given moneda', () => {
     const movimientos = [
-      movimiento({ seccion: 'sec_personal', tipo: 'gasto', monto: 100, moneda: 'COP' }),
-      movimiento({ seccion: 'sec_trabajo', tipo: 'gasto', monto: 900, moneda: 'USD' }),
+      movimiento({ categoria: 'cat_sueldo', tipo: 'gasto', monto: 100, moneda: 'COP' }),
+      movimiento({ categoria: 'cat_ventas', tipo: 'gasto', monto: 900, moneda: 'USD' }),
     ]
-    const result = breakdownBy(movimientos, 'seccion', 'gasto', 'COP')
-    expect(result).toEqual([{ key: 'sec_personal', total: 100, share: 1 }])
+    const result = breakdownBy(movimientos, 'gasto', 'COP')
+    expect(result).toEqual([{ key: 'cat_sueldo', total: 100, share: 1 }])
   })
 })
 

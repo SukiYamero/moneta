@@ -110,7 +110,6 @@ describe('HistoryScreen', () => {
     const periodMovimientos = filterByRange(movimientos, range)
     const ingresoBreakdown = breakdownBy(
       periodMovimientos,
-      'categoria',
       'ingreso',
       config.preferencias.monedaPrincipal,
     )

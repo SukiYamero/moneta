@@ -56,7 +56,6 @@ const mGetLastKnownServerTime = vi.mocked(getLastKnownServerTime)
 const movimiento = (overrides: Partial<Movimiento> = {}): Movimiento => ({
   id: 'm1',
   fecha: '2026-08-01',
-  seccion: 'sec_personal',
   categoria: 'cat_sueldo',
   tipo: 'ingreso',
   monto: 1000,
@@ -65,7 +64,7 @@ const movimiento = (overrides: Partial<Movimiento> = {}): Movimiento => ({
   ...overrides,
 })
 
-const EMPTY_TAXONOMY = { secciones: [], categorias: [] }
+const EMPTY_TAXONOMY = { categorias: [] }
 
 const listing = (id: string, name: string, modifiedTime = 't1') => ({ id, name, modifiedTime })
 
@@ -245,7 +244,7 @@ describe('pull', () => {
 
     const database = getProfileDatabase('kurobello-engine-test')
     const stored = await database.config.get(1)
-    expect(stored?.secciones).toEqual(CONFIG_SEMILLA.secciones)
+    expect(stored?.categorias).toEqual(CONFIG_SEMILLA.categorias)
   })
 })
 
@@ -495,7 +494,7 @@ describe('compactYear', () => {
     expect(mDeleteFile).not.toHaveBeenCalled()
   })
 
-  it('writes category and section names into the yearly CSV, never the raw ids a Movimiento carries', async () => {
+  it('writes the category name into the yearly CSV, never the raw id a Movimiento carries', async () => {
     mListFiles.mockImplementation(async (_token, opts) =>
       opts.space === 'appDataFolder' ? [] : [listing('m1', `mov-${device}-2025-01.json`)],
     )
@@ -515,10 +514,7 @@ describe('compactYear', () => {
       '2025',
       [movimiento({ id: 'own', fecha: '2025-01-15' })],
       {
-        secciones: [{ id: 'sec_personal', nombre: 'Personal', orden: 0 }],
-        categorias: [
-          { id: 'cat_sueldo', nombre: 'Sueldo', seccionId: 'sec_personal', tipo: 'ingreso' },
-        ],
+        categorias: [{ id: 'cat_sueldo', nombre: 'Sueldo' }],
       },
       'en',
     )
@@ -528,9 +524,7 @@ describe('compactYear', () => {
     )
     expect(csvCall).toBeDefined()
     expect(csvCall![1].content).toContain('Sueldo')
-    expect(csvCall![1].content).toContain('Personal')
     expect(csvCall![1].content).not.toContain('cat_sueldo')
-    expect(csvCall![1].content).not.toContain('sec_personal')
   })
 
   it('is a no-op when this device has no monthly files for the year', async () => {

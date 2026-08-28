@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type Ref } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { Locale } from 'date-fns'
-import type { Categoria, Moneda, Seccion, TipoMovimiento } from '@/lib/schema'
+import type { Categoria, Moneda, TipoMovimiento } from '@/lib/schema'
 import { cn } from '@/lib/utils'
 import { DateChipPicker } from '@/components/shared/DateChipPicker'
 import { SegmentedControl, type SegmentedControlOption } from '@/components/shared/SegmentedControl'
@@ -30,7 +30,6 @@ export interface MovimientoFormFieldsProps {
   fecha: string
   onFechaChange: (iso: string) => void
   categorias: Categoria[]
-  secciones: Seccion[]
   categoriaId?: string
   onSelectCategoria: (categoria: Categoria) => void
   categoriaMissing: boolean
@@ -56,7 +55,6 @@ export const MovimientoFormFields = ({
   fecha,
   onFechaChange,
   categorias,
-  secciones,
   categoriaId,
   onSelectCategoria,
   categoriaMissing,
@@ -130,7 +128,6 @@ export const MovimientoFormFields = ({
       <div ref={categorySectionRef} className="flex flex-col gap-1.5">
         <CategoryPicker
           categorias={categorias}
-          tipo={tipo}
           selectedId={categoriaId}
           onSelect={onSelectCategoria}
           onCreateRequested={(query) => setCreateCategory({ open: true, initialName: query })}
@@ -171,8 +168,6 @@ export const MovimientoFormFields = ({
       <CategoryFormModal
         open={createCategory.open}
         onClose={() => setCreateCategory({ open: false })}
-        tipo={tipo}
-        secciones={secciones}
         categorias={categorias}
         initialName={createCategory.initialName}
       />

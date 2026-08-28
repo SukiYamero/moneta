@@ -58,7 +58,7 @@ export const HistoryScreen = () => {
   const range = periodRange(scope, anchor, primerDiaSemana)
   const periodMovimientos = filterByRange(movimientos, range)
   const periodTotals = totals(periodMovimientos, monedaPrincipal)
-  const breakdown = breakdownBy(periodMovimientos, 'categoria', bdType, monedaPrincipal)
+  const breakdown = breakdownBy(periodMovimientos, bdType, monedaPrincipal)
   const periodOtherCurrencies = otherCurrencies(periodMovimientos, monedaPrincipal)
   const years = buildYearOptions(movimientos, new Date())
   const label = getPeriodLabel(

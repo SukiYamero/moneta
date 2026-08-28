@@ -9,7 +9,6 @@ import { useMovimientoSheetStore } from '@/features/movimientos'
 const movimiento = (overrides: Partial<Movimiento> = {}): Movimiento => ({
   id: 'mov_1',
   fecha: '2026-08-10',
-  seccion: 'sec_personal',
   categoria: 'cat_sueldo',
   tipo: 'ingreso',
   monto: 1000,

@@ -8,7 +8,6 @@ import type { Categoria, Movimiento } from '@/lib/schema'
 const baseMovimiento: Movimiento = {
   id: 'mov_1',
   fecha: '2026-08-10',
-  seccion: 'sec_personal',
   categoria: 'cat_sueldo',
   tipo: 'ingreso',
   monto: 3200,
@@ -16,9 +15,7 @@ const baseMovimiento: Movimiento = {
   createdAt: '2026-08-10T09:00:00.000Z',
 }
 
-const categorias: Categoria[] = [
-  { id: 'cat_sueldo', nombre: 'Sueldo', seccionId: 'sec_personal', tipo: 'ingreso' },
-]
+const categorias: Categoria[] = [{ id: 'cat_sueldo', nombre: 'Sueldo' }]
 
 describe('MovimientoRow', () => {
   it('renders the category as title when no note is set, and the signed amount', () => {

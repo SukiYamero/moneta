@@ -101,14 +101,13 @@ export const otherCurrencies = (movimientos: Movimiento[], moneda: Moneda): Mone
 
 export const breakdownBy = (
   movimientos: Movimiento[],
-  groupKey: 'seccion' | 'categoria',
   tipo: Movimiento['tipo'],
   moneda: Moneda,
 ): BreakdownEntry[] => {
   const filtered = movimientos.filter((m) => m.tipo === tipo && m.moneda === moneda)
   const minorByKey = new Map<string, number>()
   for (const m of filtered) {
-    const key = m[groupKey]
+    const key = m.categoria
     minorByKey.set(key, (minorByKey.get(key) ?? 0) + toMinorUnits(m.monto))
   }
   const grandTotalMinor = [...minorByKey.values()].reduce((sum, v) => sum + v, 0)

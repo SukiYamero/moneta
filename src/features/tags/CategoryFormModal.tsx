@@ -1,13 +1,12 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { Categoria, Seccion, TipoMovimiento } from '@/lib/schema'
+import type { Categoria } from '@/lib/schema'
 import { useDataStore } from '@/lib/dataStore'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { CenterModal } from '@/components/shared/CenterModal'
 import { TextField } from '@/components/shared/TextField'
 import { TagChip } from '@/components/shared/TagChip'
-import { SegmentedControl, type SegmentedControlOption } from '@/components/shared/SegmentedControl'
 import { IconAvatar } from '@/components/shared/IconAvatar'
 import { TINT_CLASSES, ICON_AVATAR_TINTS } from '@/components/shared/tintClasses'
 import { getMovimientoVisual } from '@/components/shared/movimientoView'
@@ -23,8 +22,6 @@ import { suggestCategoryVisual } from '@/features/tags/categorySuggest'
 export interface CategoryFormModalProps {
   open: boolean
   onClose: () => void
-  tipo: TipoMovimiento
-  secciones: Seccion[]
   categorias: Categoria[]
   categoria?: Categoria
   initialName?: string
@@ -47,8 +44,6 @@ const COLOR_NAME_KEY = {
 export const CategoryFormModal = ({
   open,
   onClose,
-  tipo,
-  secciones,
   categorias,
   categoria,
   initialName,
@@ -58,14 +53,7 @@ export const CategoryFormModal = ({
   const titleId = useId()
   const nameInputRef = useRef<HTMLInputElement>(null)
 
-  const sortedSecciones = useMemo(
-    () => secciones.toSorted((a, b) => a.orden - b.orden),
-    [secciones],
-  )
-  const effectiveTipo = categoria?.tipo ?? tipo
-
   const [name, setName] = useState('')
-  const [seccionId, setSeccionId] = useState('')
   const [icono, setIcono] = useState<CategoryIconKey | undefined>(undefined)
   const [color, setColor] = useState<IconAvatarTint>('neutral')
   const [submitting, setSubmitting] = useState(false)
@@ -74,13 +62,11 @@ export const CategoryFormModal = ({
     if (!open) return
     if (categoria) {
       setName(categoria.nombre)
-      setSeccionId(categoria.seccionId)
       setIcono(categoria.icono)
       setColor(categoria.color ?? 'neutral')
     } else {
       const suggestion = suggestCategoryVisual(initialName ?? '', categorias)
       setName(initialName ?? '')
-      setSeccionId(sortedSecciones[0]?.id ?? '')
       setIcono(suggestion.icono)
       setColor(suggestion.color)
     }
@@ -94,10 +80,10 @@ export const CategoryFormModal = ({
     return categorias.some(
       (c) =>
         c.id !== categoria?.id &&
-        c.seccionId === seccionId &&
+        c.padreId === categoria?.padreId &&
         normalizeForSearch(c.nombre) === normalized,
     )
-  }, [trimmedName, seccionId, categorias, categoria])
+  }, [trimmedName, categorias, categoria])
 
   const canSave = trimmedName.length > 0 && !isDuplicateName
 
@@ -106,8 +92,7 @@ export const CategoryFormModal = ({
     const result: Categoria = {
       id: categoria?.id ?? crypto.randomUUID(),
       nombre: trimmedName,
-      seccionId,
-      tipo: effectiveTipo,
+      padreId: categoria?.padreId,
       icono,
       color,
       archivado: categoria?.archivado,
@@ -122,11 +107,7 @@ export const CategoryFormModal = ({
     }
   }
 
-  const preview = getMovimientoVisual({ icono, color }, effectiveTipo)
-  const sectionOptions: SegmentedControlOption<string>[] = sortedSecciones.map((s) => ({
-    value: s.id,
-    label: s.nombre,
-  }))
+  const preview = getMovimientoVisual({ icono, color }, 'gasto')
 
   return (
     <CenterModal open={open} onClose={onClose} labelledBy={titleId} initialFocus={nameInputRef}>
@@ -152,18 +133,6 @@ export const CategoryFormModal = ({
           maxLength={MAX_NAME_LENGTH}
           error={isDuplicateName ? t('form.nameDuplicateError') : undefined}
         />
-
-        {sortedSecciones.length > 1 && (
-          <div className="flex flex-col gap-1.5">
-            <span className="text-xs font-bold text-fg-tertiary">{t('form.sectionLabel')}</span>
-            <SegmentedControl
-              options={sectionOptions}
-              value={seccionId}
-              onChange={setSeccionId}
-              aria-label={t('form.sectionLabel')}
-            />
-          </div>
-        )}
 
         <div className="flex flex-col gap-1.5">
           <span className="text-xs font-bold text-fg-tertiary">{t('form.iconLabel')}</span>

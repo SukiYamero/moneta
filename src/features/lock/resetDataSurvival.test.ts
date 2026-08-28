@@ -19,7 +19,6 @@ const user: GoogleUser = { email: 'ana@example.com', name: 'Ana', sub: 'sub-ana'
 const movimiento: Movimiento = {
   id: 'm1',
   fecha: '2026-01-01',
-  seccion: 'sec_personal',
   categoria: 'cat_sueldo',
   tipo: 'ingreso',
   monto: 50_000,

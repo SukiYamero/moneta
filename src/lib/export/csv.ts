@@ -1,9 +1,8 @@
-import type { Categoria, Movimiento, Seccion } from '@/lib/schema'
+import type { Categoria, Movimiento } from '@/lib/schema'
 
 const COLUMNS = [
   'id',
   'fecha',
-  'seccion',
   'categoria',
   'tipo',
   'monto',
@@ -41,13 +40,11 @@ const createMontoFormatter = (locale: string): Intl.NumberFormat =>
 const buildRow = (
   movimiento: Movimiento,
   formatMonto: (value: number) => string,
-  seccionNameById: Map<string, string>,
   categoriaNameById: Map<string, string>,
 ): string => {
   const values: Record<Column, string> = {
     id: movimiento.id,
     fecha: movimiento.fecha,
-    seccion: seccionNameById.get(movimiento.seccion) ?? movimiento.seccion,
     categoria: categoriaNameById.get(movimiento.categoria) ?? movimiento.categoria,
     tipo: movimiento.tipo,
     monto: formatMonto(movimiento.monto),
@@ -69,24 +66,21 @@ const chunk = <T>(items: readonly T[], size: number): T[][] => {
 
 export interface CsvExportOptions {
   locale: string
-  secciones: readonly Pick<Seccion, 'id' | 'nombre'>[]
   categorias: readonly Pick<Categoria, 'id' | 'nombre'>[]
 }
 
 export const buildMovimientoCsvParts = (
   movimientos: readonly Movimiento[],
-  { locale, secciones, categorias }: CsvExportOptions,
+  { locale, categorias }: CsvExportOptions,
 ): string[] => {
   const formatMonto = createMontoFormatter(locale).format
-  const seccionNameById = new Map(secciones.map((s) => [s.id, s.nombre]))
   const categoriaNameById = new Map(categorias.map((c) => [c.id, c.nombre]))
   const header = COLUMNS.map((column) => encodeField(column)).join(FIELD_SEPARATOR)
   const preamble = `${BOM}${SEP_HINT_LINE}${ROW_SEPARATOR}${header}${ROW_SEPARATOR}`
   const rowChunks = chunk(movimientos, CHUNK_SIZE).map(
     (batch) =>
-      batch
-        .map((item) => buildRow(item, formatMonto, seccionNameById, categoriaNameById))
-        .join(ROW_SEPARATOR) + ROW_SEPARATOR,
+      batch.map((item) => buildRow(item, formatMonto, categoriaNameById)).join(ROW_SEPARATOR) +
+      ROW_SEPARATOR,
   )
   return [preamble, ...rowChunks]
 }

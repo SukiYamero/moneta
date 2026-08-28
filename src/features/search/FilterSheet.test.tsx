@@ -9,20 +9,16 @@ const categories: Categoria[] = [
   {
     id: 'cat_comida',
     nombre: 'Comida',
-    seccionId: 'sec_personal',
-    tipo: 'gasto',
     icono: 'utensils',
     color: 'amber',
   },
   {
     id: 'cat_sueldo',
     nombre: 'Sueldo',
-    seccionId: 'sec_personal',
-    tipo: 'ingreso',
     icono: 'briefcase',
     color: 'emerald',
   },
-  { id: 'cat_custom', nombre: 'Etiqueta inventada', seccionId: 'sec_personal', tipo: 'gasto' },
+  { id: 'cat_custom', nombre: 'Etiqueta inventada' },
 ]
 
 const makeFilters = (overrides: Partial<UseSearchFiltersResult> = {}): UseSearchFiltersResult => ({

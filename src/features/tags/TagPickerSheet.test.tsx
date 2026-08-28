@@ -7,8 +7,6 @@ import { TagPickerSheet } from '@/features/tags/TagPickerSheet'
 const categoria = (overrides: Partial<Categoria> = {}): Categoria => ({
   id: crypto.randomUUID(),
   nombre: 'Comida',
-  seccionId: 'sec_personal',
-  tipo: 'gasto',
   icono: 'utensils',
   color: 'amber',
   ...overrides,
@@ -21,7 +19,6 @@ describe('TagPickerSheet', () => {
         open={false}
         onClose={vi.fn()}
         categorias={[categoria()]}
-        tipo="gasto"
         onSelect={vi.fn()}
         onCreateRequested={vi.fn()}
       />,
@@ -39,7 +36,6 @@ describe('TagPickerSheet', () => {
         open
         onClose={vi.fn()}
         categorias={categorias}
-        tipo="gasto"
         onSelect={vi.fn()}
         onCreateRequested={vi.fn()}
       />,
@@ -60,7 +56,6 @@ describe('TagPickerSheet', () => {
         open
         onClose={vi.fn()}
         categorias={categorias}
-        tipo="gasto"
         onSelect={vi.fn()}
         onCreateRequested={vi.fn()}
       />,
@@ -80,7 +75,6 @@ describe('TagPickerSheet', () => {
         open
         onClose={vi.fn()}
         categorias={[categoria({ nombre: 'Comida' })]}
-        tipo="gasto"
         onSelect={vi.fn()}
         onCreateRequested={onCreateRequested}
       />,
@@ -103,7 +97,6 @@ describe('TagPickerSheet', () => {
         open
         onClose={vi.fn()}
         categorias={[categoria({ nombre: 'Comida' })]}
-        tipo="gasto"
         onSelect={vi.fn()}
         onCreateRequested={vi.fn()}
       />,
@@ -112,26 +105,6 @@ describe('TagPickerSheet', () => {
     await user.type(screen.getByRole('textbox'), 'comi')
 
     expect(screen.queryByText(/crear/i)).not.toBeInTheDocument()
-  })
-
-  it("orders categories matching the sheet's tipo first, without hiding the others", () => {
-    const categorias = [
-      categoria({ id: 'a', nombre: 'Sueldo', tipo: 'ingreso' }),
-      categoria({ id: 'b', nombre: 'Comida', tipo: 'gasto' }),
-    ]
-    render(
-      <TagPickerSheet
-        open
-        onClose={vi.fn()}
-        categorias={categorias}
-        tipo="gasto"
-        onSelect={vi.fn()}
-        onCreateRequested={vi.fn()}
-      />,
-    )
-
-    const buttons = screen.getAllByRole('button').map((b) => b.textContent)
-    expect(buttons.indexOf('Comida')).toBeLessThan(buttons.indexOf('Sueldo'))
   })
 
   it('selecting a category calls onSelect then onClose', async () => {
@@ -144,7 +117,6 @@ describe('TagPickerSheet', () => {
         open
         onClose={onClose}
         categorias={[target]}
-        tipo="gasto"
         onSelect={onSelect}
         onCreateRequested={vi.fn()}
       />,
@@ -163,7 +135,6 @@ describe('TagPickerSheet', () => {
         open
         onClose={vi.fn()}
         categorias={[target]}
-        tipo="gasto"
         selectedId="cat_x"
         onSelect={vi.fn()}
         onCreateRequested={vi.fn()}

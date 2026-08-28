@@ -6,7 +6,6 @@ describe('buildSeedConfig', () => {
   it('derives monedaPrincipal from the given region, keeping the rest of CONFIG_SEMILLA', () => {
     const seed = buildSeedConfig('MX')
     expect(seed.preferencias.monedaPrincipal).toBe('MXN')
-    expect(seed.secciones).toEqual(CONFIG_SEMILLA.secciones)
     expect(seed.categorias).toEqual(CONFIG_SEMILLA.categorias)
     expect(seed.preferencias.tema).toBe(CONFIG_SEMILLA.preferencias.tema)
     expect(seed.preferencias.primerDiaSemana).toBe(CONFIG_SEMILLA.preferencias.primerDiaSemana)
@@ -34,7 +33,6 @@ describe('buildSeedConfig', () => {
 describe('buildSeedConfig — seed taxonomy localization', () => {
   it('keeps ids stable and only localizes nombre, regardless of locale', () => {
     const seed = buildSeedConfig('CO', 'pt-BR')
-    expect(seed.secciones.map((s) => s.id)).toEqual(CONFIG_SEMILLA.secciones.map((s) => s.id))
     expect(seed.categorias.map((c) => c.id)).toEqual(CONFIG_SEMILLA.categorias.map((c) => c.id))
     expect(seed.categorias.map((c) => ({ ...c, nombre: undefined }))).toEqual(
       CONFIG_SEMILLA.categorias.map((c) => ({ ...c, nombre: undefined })),
@@ -47,24 +45,13 @@ describe('buildSeedConfig — seed taxonomy localization', () => {
   })
 
   it.each([
-    ['US', 'en', ['Personal', 'Work', 'Business'], ['Salary', 'Bills', 'Sales', 'Taxes', 'Petty cash']],
-    [
-      'BR',
-      'pt-BR',
-      ['Pessoal', 'Trabalho', 'Negócio'],
-      ['Salário', 'Contas', 'Vendas', 'Impostos', 'Fundo de caixa'],
-    ],
-    [
-      'AR',
-      'es-AR',
-      ['Personal', 'Trabajo', 'Emprendimiento'],
-      ['Sueldo', 'Servicios', 'Ventas', 'Impuestos', 'Caja chica'],
-    ],
+    ['US', 'en', ['Salary', 'Bills', 'Sales', 'Taxes', 'Petty cash']],
+    ['BR', 'pt-BR', ['Salário', 'Contas', 'Vendas', 'Impostos', 'Fundo de caixa']],
+    ['AR', 'es-AR', ['Sueldo', 'Servicios', 'Ventas', 'Impuestos', 'Caja chica']],
   ] as const)(
-    'translates section/category names for region %s, locale %s',
-    (region, locale, sectionNames, categoryNames) => {
+    'translates category names for region %s, locale %s',
+    (region, locale, categoryNames) => {
       const seed = buildSeedConfig(region, locale)
-      expect(seed.secciones.map((s) => s.nombre)).toEqual(sectionNames)
       expect(seed.categorias.map((c) => c.nombre)).toEqual(categoryNames)
     },
   )
@@ -72,10 +59,16 @@ describe('buildSeedConfig — seed taxonomy localization', () => {
   it('the currency (region) and taxonomy (locale) axes vary independently', () => {
     const seed = buildSeedConfig('MX', 'pt-BR')
     expect(seed.preferencias.monedaPrincipal).toBe('MXN')
-    expect(seed.secciones.map((s) => s.nombre)).toEqual(['Pessoal', 'Trabalho', 'Negócio'])
+    expect(seed.categorias.map((c) => c.nombre)).toEqual([
+      'Salário',
+      'Contas',
+      'Vendas',
+      'Impostos',
+      'Fundo de caixa',
+    ])
   })
 
   it('detects the active locale from the device when called with no second argument', () => {
-    expect(buildSeedConfig().secciones).toEqual(CONFIG_SEMILLA.secciones)
+    expect(buildSeedConfig().categorias).toEqual(CONFIG_SEMILLA.categorias)
   })
 })

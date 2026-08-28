@@ -47,7 +47,6 @@ const movimiento = (overrides: Partial<Movimiento> = {}): Movimiento => {
   return {
     id: crypto.randomUUID(),
     fecha: '2026-01-01',
-    seccion: 'sec_personal',
     categoria: 'cat_sueldo',
     tipo: 'ingreso',
     monto: 1000,

@@ -5,7 +5,6 @@ export type EntityId = string
 export interface ListQuery<T> {
   dateFrom?: string
   dateTo?: string
-  seccion?: string
   sortBy?: keyof T
   sortDir?: 'asc' | 'desc'
   limit?: number

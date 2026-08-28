@@ -30,7 +30,6 @@ vi.mocked(useDataStore).mockImplementation(((selector: (state: FakeDataState) =>
 const movimiento = (overrides: Partial<Movimiento> = {}): Movimiento => ({
   id: 'mov_1',
   fecha: '2026-08-10',
-  seccion: 'sec_personal',
   categoria: 'cat_servicios',
   tipo: 'gasto',
   monto: 18000,
@@ -114,7 +113,6 @@ describe('MovimientoSheet — edit mode', () => {
         expect.objectContaining({
           monto: 20000,
           categoria: 'cat_servicios',
-          seccion: 'sec_personal',
         }),
       ),
     )

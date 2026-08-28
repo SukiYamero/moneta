@@ -31,8 +31,8 @@ test('vault round-trips through IndexedDB', async () => {
   expect(read?.failedAttempts).toBe(0)
 })
 
-test('v4 upgrade is additive: vault survives alongside the new tables', async () => {
-  expect(db.verno).toBe(4)
+test('v5 upgrade is additive: vault survives alongside the new tables', async () => {
+  expect(db.verno).toBe(5)
   expect(db.tables.map((t) => t.name).toSorted()).toEqual(
     ['activos', 'config', 'movimientos', 'outbox', 'profileOwner', 'vault'].toSorted(),
   )
@@ -40,7 +40,6 @@ test('v4 upgrade is additive: vault survives alongside the new tables', async ()
   await db.movimientos.put({
     id: 'm1',
     fecha: '2026-01-01',
-    seccion: 'sec_personal',
     categoria: 'cat_sueldo',
     tipo: 'ingreso',
     monto: 1000,
@@ -51,12 +50,11 @@ test('v4 upgrade is additive: vault survives alongside the new tables', async ()
   expect(await db.movimientos.get('m1')).toBeDefined()
 })
 
-test('movimientos supports a seccion+fecha compound-index range query', async () => {
+test('movimientos supports a [fecha+createdAt] compound-index range query', async () => {
   await db.movimientos.bulkPut([
     {
       id: 'm1',
       fecha: '2026-01-01',
-      seccion: 'sec_trabajo',
       categoria: 'cat_sueldo',
       tipo: 'ingreso',
       monto: 1000,
@@ -66,7 +64,6 @@ test('movimientos supports a seccion+fecha compound-index range query', async ()
     {
       id: 'm2',
       fecha: '2026-06-01',
-      seccion: 'sec_trabajo',
       categoria: 'cat_sueldo',
       tipo: 'ingreso',
       monto: 1000,
@@ -75,8 +72,8 @@ test('movimientos supports a seccion+fecha compound-index range query', async ()
     },
   ])
   const inRange = await db.movimientos
-    .where('[seccion+fecha]')
-    .between(['sec_trabajo', '2026-01-01'], ['sec_trabajo', '2026-02-01'], true, true)
+    .where('[fecha+createdAt]')
+    .between(['2026-01-01', ''], ['2026-02-01', '￿'], true, true)
     .toArray()
   expect(inRange.map((m) => m.id)).toEqual(['m1'])
 })
@@ -89,7 +86,7 @@ test('createProfileDb builds an independently-named database with the same schem
   const other = createProfileDb('kurobello-profile-test-a')
   try {
     expect(other.name).toBe('kurobello-profile-test-a')
-    expect(other.verno).toBe(4)
+    expect(other.verno).toBe(5)
     expect(other.tables.map((t) => t.name).toSorted()).toEqual(
       ['activos', 'config', 'movimientos', 'outbox', 'profileOwner', 'vault'].toSorted(),
     )
@@ -106,7 +103,6 @@ test('two profile databases are fully isolated: a write to one is invisible to t
     await profileA.movimientos.put({
       id: 'iso-1',
       fecha: '2026-01-01',
-      seccion: 'sec_personal',
       categoria: 'cat_sueldo',
       tipo: 'ingreso',
       monto: 1,

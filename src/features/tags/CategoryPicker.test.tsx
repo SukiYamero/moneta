@@ -7,8 +7,6 @@ import { CategoryPicker } from '@/features/tags/CategoryPicker'
 const categoria = (overrides: Partial<Categoria> = {}): Categoria => ({
   id: crypto.randomUUID(),
   nombre: 'Comida',
-  seccionId: 'sec_personal',
-  tipo: 'gasto',
   icono: 'utensils',
   color: 'amber',
   ...overrides,
@@ -20,14 +18,7 @@ describe('CategoryPicker', () => {
       categoria({ id: 'a', nombre: 'Comida' }),
       categoria({ id: 'b', nombre: 'Transporte' }),
     ]
-    render(
-      <CategoryPicker
-        categorias={categorias}
-        tipo="gasto"
-        onSelect={vi.fn()}
-        onCreateRequested={vi.fn()}
-      />,
-    )
+    render(<CategoryPicker categorias={categorias} onSelect={vi.fn()} onCreateRequested={vi.fn()} />)
 
     expect(screen.getByRole('button', { name: 'Comida' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Transporte' })).toBeInTheDocument()
@@ -38,49 +29,17 @@ describe('CategoryPicker', () => {
       categoria({ id: 'a', nombre: 'Comida' }),
       categoria({ id: 'b', nombre: 'Viejo', archivado: true }),
     ]
-    render(
-      <CategoryPicker
-        categorias={categorias}
-        tipo="gasto"
-        onSelect={vi.fn()}
-        onCreateRequested={vi.fn()}
-      />,
-    )
+    render(<CategoryPicker categorias={categorias} onSelect={vi.fn()} onCreateRequested={vi.fn()} />)
 
     expect(screen.queryByRole('button', { name: 'Viejo' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: /1/ })).toBeInTheDocument()
-  })
-
-  it("orders categories matching the sheet's tipo first, without hiding the others", () => {
-    const categorias = [
-      categoria({ id: 'a', nombre: 'Sueldo', tipo: 'ingreso' }),
-      categoria({ id: 'b', nombre: 'Comida', tipo: 'gasto' }),
-    ]
-    render(
-      <CategoryPicker
-        categorias={categorias}
-        tipo="gasto"
-        onSelect={vi.fn()}
-        onCreateRequested={vi.fn()}
-      />,
-    )
-
-    const buttons = screen.getAllByRole('button').map((b) => b.textContent)
-    expect(buttons.indexOf('Comida')).toBeLessThan(buttons.indexOf('Sueldo'))
   })
 
   it('calls onSelect with the tapped category, single-select', async () => {
     const user = userEvent.setup()
     const onSelect = vi.fn()
     const target = categoria({ id: 'cat_x', nombre: 'Comida' })
-    render(
-      <CategoryPicker
-        categorias={[target]}
-        tipo="gasto"
-        onSelect={onSelect}
-        onCreateRequested={vi.fn()}
-      />,
-    )
+    render(<CategoryPicker categorias={[target]} onSelect={onSelect} onCreateRequested={vi.fn()} />)
 
     await user.click(screen.getByRole('button', { name: 'Comida' }))
 
@@ -92,7 +51,6 @@ describe('CategoryPicker', () => {
     render(
       <CategoryPicker
         categorias={[target]}
-        tipo="gasto"
         selectedId="cat_x"
         onSelect={vi.fn()}
         onCreateRequested={vi.fn()}
@@ -104,12 +62,7 @@ describe('CategoryPicker', () => {
 
   it('the carousel scrolls horizontally rather than wrapping', () => {
     const { container } = render(
-      <CategoryPicker
-        categorias={[categoria()]}
-        tipo="gasto"
-        onSelect={vi.fn()}
-        onCreateRequested={vi.fn()}
-      />,
+      <CategoryPicker categorias={[categoria()]} onSelect={vi.fn()} onCreateRequested={vi.fn()} />,
     )
 
     const scroller = container.querySelector('.overflow-x-auto')
@@ -123,7 +76,6 @@ describe('CategoryPicker', () => {
     render(
       <CategoryPicker
         categorias={[categoria()]}
-        tipo="gasto"
         onSelect={vi.fn()}
         onCreateRequested={onCreateRequested}
       />,
@@ -141,14 +93,7 @@ describe('CategoryPicker', () => {
       categoria({ id: 'a', nombre: 'Comida' }),
       categoria({ id: 'b', nombre: 'Transporte' }),
     ]
-    render(
-      <CategoryPicker
-        categorias={categorias}
-        tipo="gasto"
-        onSelect={vi.fn()}
-        onCreateRequested={vi.fn()}
-      />,
-    )
+    render(<CategoryPicker categorias={categorias} onSelect={vi.fn()} onCreateRequested={vi.fn()} />)
 
     await user.click(screen.getByRole('button', { name: /ver todas/i }))
 
@@ -161,14 +106,7 @@ describe('CategoryPicker', () => {
     const user = userEvent.setup()
     const onSelect = vi.fn()
     const target = categoria({ id: 'cat_x', nombre: 'Comida' })
-    render(
-      <CategoryPicker
-        categorias={[target]}
-        tipo="gasto"
-        onSelect={onSelect}
-        onCreateRequested={vi.fn()}
-      />,
-    )
+    render(<CategoryPicker categorias={[target]} onSelect={onSelect} onCreateRequested={vi.fn()} />)
 
     await user.click(screen.getByRole('button', { name: /ver todas/i }))
     const dialog = screen.getByRole('dialog')
@@ -184,7 +122,6 @@ describe('CategoryPicker', () => {
     render(
       <CategoryPicker
         categorias={[categoria({ nombre: 'Comida' })]}
-        tipo="gasto"
         onSelect={vi.fn()}
         onCreateRequested={onCreateRequested}
       />,

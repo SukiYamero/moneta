@@ -1,13 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { format, parseISO, type Locale } from 'date-fns'
-import {
-  CONFIG_SEMILLA,
-  type Categoria,
-  type Movimiento,
-  type Seccion,
-  type Moneda,
-} from '@/lib/schema'
+import { CONFIG_SEMILLA, type Categoria, type Movimiento, type Moneda } from '@/lib/schema'
 import { useDataStore } from '@/lib/dataStore'
 import { toast } from '@/lib/toastStore'
 import { useLocaleFormatting } from '@/lib/i18n/localeFormatting'
@@ -29,7 +23,6 @@ import { useMovimientoSheetStore } from '@/features/movimientos/movimientoSheetS
 interface MovimientoViewProps {
   movimiento: Movimiento
   categoria: Categoria | undefined
-  seccion: Seccion | undefined
   dateFnsLocale: Locale
   locale: string
   onEdit: () => void
@@ -39,7 +32,6 @@ interface MovimientoViewProps {
 const MovimientoView = ({
   movimiento,
   categoria,
-  seccion,
   dateFnsLocale,
   locale,
   onEdit,
@@ -58,10 +50,7 @@ const MovimientoView = ({
         <IconAvatar icon={icon} tint={tint} size="lg" />
         <div className={`text-3xl font-extrabold ${amount.colorClass}`}>{amount.text}</div>
         <div className="text-base font-bold">{categoriaLabel}</div>
-        <div className="text-sm font-medium text-fg-tertiary capitalize">
-          {dateLabel}
-          {seccion ? ` · ${seccion.nombre}` : ''}
-        </div>
+        <div className="text-sm font-medium text-fg-tertiary capitalize">{dateLabel}</div>
         {movimiento.nota && <p className="text-sm text-fg-secondary">{movimiento.nota}</p>}
       </div>
       <div className="flex gap-2.5">
@@ -85,7 +74,6 @@ const MovimientoView = ({
 interface MovimientoEditFormProps {
   movimiento: Movimiento
   categorias: Categoria[]
-  secciones: Seccion[]
   monedaPrincipal: Moneda
   primerDiaSemana: 0 | 1
   locale: string
@@ -97,7 +85,6 @@ interface MovimientoEditFormProps {
 const MovimientoEditForm = ({
   movimiento,
   categorias,
-  secciones,
   monedaPrincipal,
   primerDiaSemana,
   locale,
@@ -111,7 +98,6 @@ const MovimientoEditForm = ({
     initial: movimiento,
     locale,
     monedaPrincipal,
-    categorias,
     onSaved,
   })
 
@@ -129,7 +115,6 @@ const MovimientoEditForm = ({
         fecha={form.fecha}
         onFechaChange={form.setFecha}
         categorias={categorias}
-        secciones={secciones}
         categoriaId={form.categoriaId}
         onSelectCategoria={form.selectCategoria}
         categoriaMissing={form.categoriaMissing}
@@ -190,9 +175,8 @@ export const MovimientoSheet = () => {
     }
   }, [isOpen, movimiento, closeMovimiento])
 
-  const { secciones, categorias, preferencias } = config ?? CONFIG_SEMILLA
+  const { categorias, preferencias } = config ?? CONFIG_SEMILLA
   const categoria = movimiento ? resolveCategoria(movimiento.categoria, { categorias }) : undefined
-  const seccion = movimiento ? secciones.find((s) => s.id === movimiento.seccion) : undefined
 
   const handleDelete = async () => {
     if (!movimiento) return
@@ -212,7 +196,6 @@ export const MovimientoSheet = () => {
           <MovimientoView
             movimiento={movimiento}
             categoria={categoria}
-            seccion={seccion}
             dateFnsLocale={dateFnsLocale}
             locale={locale}
             onEdit={() => setMode('edit')}
@@ -223,7 +206,6 @@ export const MovimientoSheet = () => {
           <MovimientoEditForm
             movimiento={movimiento}
             categorias={categorias}
-            secciones={secciones}
             monedaPrincipal={preferencias.monedaPrincipal}
             primerDiaSemana={preferencias.primerDiaSemana}
             locale={locale}

@@ -80,7 +80,6 @@ describe('cross-profile push coalescing', () => {
       payload: {
         id: 'mA',
         fecha: '2026-08-01',
-        seccion: 's',
         categoria: 'c',
         tipo: 'ingreso',
         monto: 1,
@@ -107,7 +106,6 @@ describe('cross-profile push coalescing', () => {
       payload: {
         id: 'mB',
         fecha: '2026-08-01',
-        seccion: 's',
         categoria: 'c',
         tipo: 'ingreso',
         monto: 1,

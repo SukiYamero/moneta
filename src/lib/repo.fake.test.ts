@@ -41,7 +41,6 @@ describe('createFakeRepo', () => {
     await repo.movimientos.add({
       id: 'mov_new',
       fecha: '2026-08-18',
-      seccion: 'sec_personal',
       categoria: 'cat_comida',
       tipo: 'gasto',
       monto: 1000,
@@ -64,21 +63,18 @@ describe('createFakeRepo', () => {
     expect(first.nota).not.toBe('Editado')
   })
 
-  it('honors dateFrom/dateTo/seccion/sortBy/sortDir/limit/cursor together', async () => {
+  it('honors dateFrom/dateTo/sortBy/sortDir/limit/cursor together', async () => {
     const repo = createFakeRepo({ today: TODAY })
     const page1 = await repo.movimientos.list({
-      seccion: 'sec_personal',
       sortBy: 'fecha',
       sortDir: 'desc',
       limit: 2,
     })
 
     expect(page1.items.length).toBe(2)
-    expect(page1.items.every((m) => m.seccion === 'sec_personal')).toBe(true)
     expect(page1.nextCursor).toBeDefined()
 
     const page2 = await repo.movimientos.list({
-      seccion: 'sec_personal',
       sortBy: 'fecha',
       sortDir: 'desc',
       limit: 2,

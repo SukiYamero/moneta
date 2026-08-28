@@ -24,13 +24,12 @@ export const AddMovimientoSheet = () => {
   const { locale, dateFnsLocale } = useLocaleFormatting()
   const amountInputRef = useRef<HTMLInputElement>(null)
 
-  const { secciones, categorias, preferencias } = config ?? CONFIG_SEMILLA
+  const { categorias, preferencias } = config ?? CONFIG_SEMILLA
 
   const form = useMovimientoForm({
     mode: 'create',
     locale,
     monedaPrincipal: preferencias.monedaPrincipal,
-    categorias,
     onSaved: closeAdd,
   })
 
@@ -59,7 +58,6 @@ export const AddMovimientoSheet = () => {
           fecha={form.fecha}
           onFechaChange={form.setFecha}
           categorias={categorias}
-          secciones={secciones}
           categoriaId={form.categoriaId}
           onSelectCategoria={form.selectCategoria}
           categoriaMissing={form.categoriaMissing}

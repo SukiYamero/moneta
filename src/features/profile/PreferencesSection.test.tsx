@@ -6,8 +6,7 @@ import type { Config } from '@/lib/schema'
 import { PreferencesSection } from '@/features/profile/PreferencesSection'
 
 const config = (overrides: Partial<Config['preferencias']> = {}): Config => ({
-  schemaVersion: 1,
-  secciones: [],
+  schemaVersion: 2,
   categorias: [],
   preferencias: {
     tema: 'sistema',

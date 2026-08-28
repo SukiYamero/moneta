@@ -78,7 +78,6 @@ describe('push() removes its own operations from the pushing profile’s outbox,
       payload: {
         id: 'mA',
         fecha: '2026-08-01',
-        seccion: 's',
         categoria: 'c',
         tipo: 'ingreso',
         monto: 1,

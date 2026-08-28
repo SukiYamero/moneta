@@ -81,7 +81,6 @@ describe('trigger wiring: re-arming the debounce', () => {
       payload: {
         id: 'op1',
         fecha: '2026-08-01',
-        seccion: 's',
         categoria: 'c',
         tipo: 'ingreso',
         monto: 1,
@@ -98,7 +97,6 @@ describe('trigger wiring: re-arming the debounce', () => {
       payload: {
         id: 'op2',
         fecha: '2026-08-01',
-        seccion: 's',
         categoria: 'c',
         tipo: 'ingreso',
         monto: 1,
