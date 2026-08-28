@@ -106,6 +106,20 @@ describe('BottomSheet', () => {
     })
   })
 
+  it('focuses the panel instead of a search input when autoFocus is false', async () => {
+    render(
+      <BottomSheet open onClose={() => {}} ariaLabel="Sheet sin autofoco" autoFocus={false}>
+        <input aria-label="Buscar" />
+      </BottomSheet>,
+    )
+    const dialog = screen.getByRole('dialog', { name: 'Sheet sin autofoco' })
+
+    await vi.waitFor(() => {
+      expect(dialog).toHaveFocus()
+    })
+    expect(screen.getByRole('textbox', { name: 'Buscar' })).not.toHaveFocus()
+  })
+
   it('restores focus to the trigger element on close', async () => {
     const trigger = document.createElement('button')
     trigger.textContent = 'Abrir'

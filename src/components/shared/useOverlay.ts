@@ -18,6 +18,7 @@ export interface UseOverlayOptions<T extends HTMLElement> {
   open: boolean
   onClose: () => void
   initialFocus?: RefObject<HTMLElement | null>
+  autoFocus?: boolean
   ref?: Ref<T>
 }
 
@@ -90,6 +91,7 @@ export const useOverlay = <T extends HTMLElement>({
   open,
   onClose,
   initialFocus,
+  autoFocus = true,
   ref,
 }: UseOverlayOptions<T>) => {
   const panelRef = useRef<T | null>(null)
@@ -123,8 +125,9 @@ export const useOverlay = <T extends HTMLElement>({
     // passive `useEffect` runs after that task has ended.
     if (isTopOverlay(handle)) {
       const panel = panelRef.current
-      const target =
-        initialFocus?.current ?? panel?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR) ?? panel
+      const target = autoFocus
+        ? (initialFocus?.current ?? panel?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR) ?? panel)
+        : panel
       target?.focus()
     }
 
@@ -145,7 +148,7 @@ export const useOverlay = <T extends HTMLElement>({
       const last = focusable.at(-1)
       if (!first || !last) return
 
-      if (event.shiftKey && document.activeElement === first) {
+      if (event.shiftKey && (document.activeElement === first || document.activeElement === panel)) {
         event.preventDefault()
         last.focus()
       } else if (!event.shiftKey && document.activeElement === last) {

@@ -88,6 +88,20 @@ describe('CenterModal', () => {
     expect(onClose).toHaveBeenCalledOnce()
   })
 
+  it('focuses the panel instead of a search input when autoFocus is false', async () => {
+    render(
+      <CenterModal open onClose={() => {}} ariaLabel="Modal sin autofoco" autoFocus={false}>
+        <input aria-label="Buscar" />
+      </CenterModal>,
+    )
+    const dialog = screen.getByRole('dialog', { name: 'Modal sin autofoco' })
+
+    await vi.waitFor(() => {
+      expect(dialog).toHaveFocus()
+    })
+    expect(screen.getByRole('textbox', { name: 'Buscar' })).not.toHaveFocus()
+  })
+
   it('traps Tab focus within the panel', async () => {
     const user = userEvent.setup()
     render(<Harness open onClose={() => {}} />)

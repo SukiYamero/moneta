@@ -23,9 +23,10 @@ export const BottomSheet = ({
   ariaLabel,
   className,
   initialFocus,
+  autoFocus,
   ref,
 }: BottomSheetProps) => {
-  const panelRef = useOverlay<HTMLDivElement>({ open, onClose, initialFocus, ref })
+  const panelRef = useOverlay<HTMLDivElement>({ open, onClose, initialFocus, autoFocus, ref })
   const { backdropRef, onClick: handleBackdropClick } = useBackdropDismiss<HTMLDivElement>(
     open,
     onClose,

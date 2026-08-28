@@ -20,9 +20,10 @@ export const CenterModal = ({
   ariaLabel,
   className,
   initialFocus,
+  autoFocus,
   ref,
 }: CenterModalProps) => {
-  const panelRef = useOverlay<HTMLDivElement>({ open, onClose, initialFocus, ref })
+  const panelRef = useOverlay<HTMLDivElement>({ open, onClose, initialFocus, autoFocus, ref })
   const { backdropRef, onClick: handleBackdropClick } = useBackdropDismiss<HTMLDivElement>(
     open,
     onClose,

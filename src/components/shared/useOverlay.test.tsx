@@ -263,6 +263,116 @@ describe('useOverlay — initial focus lands in the same task as the trigger cli
   })
 })
 
+describe('useOverlay — autoFocus opt-out', () => {
+  it('focuses the panel, not the first focusable control, when autoFocus is false', async () => {
+    render(
+      <BottomSheet open onClose={() => {}} ariaLabel="Sheet sin autofoco" autoFocus={false}>
+        <input aria-label="Buscar" />
+      </BottomSheet>,
+    )
+    const dialog = screen.getByRole('dialog', { name: 'Sheet sin autofoco' })
+
+    await vi.waitFor(() => {
+      expect(dialog).toHaveFocus()
+    })
+    expect(screen.getByRole('textbox', { name: 'Buscar' })).not.toHaveFocus()
+  })
+
+  it('ignores initialFocus when autoFocus is false', async () => {
+    const Harness = () => {
+      const inputRef = useRef<HTMLInputElement>(null)
+      return (
+        <BottomSheet
+          open
+          onClose={() => {}}
+          ariaLabel="Sheet con ambos props"
+          autoFocus={false}
+          initialFocus={inputRef}
+        >
+          <input ref={inputRef} aria-label="Buscar" />
+        </BottomSheet>
+      )
+    }
+    render(<Harness />)
+    const dialog = screen.getByRole('dialog', { name: 'Sheet con ambos props' })
+
+    await vi.waitFor(() => {
+      expect(dialog).toHaveFocus()
+    })
+    expect(screen.getByRole('textbox', { name: 'Buscar' })).not.toHaveFocus()
+  })
+
+  it('still closes on Escape when autoFocus is false', async () => {
+    const user = userEvent.setup()
+    const onClose = vi.fn()
+    render(
+      <BottomSheet open onClose={onClose} ariaLabel="Sheet sin autofoco" autoFocus={false}>
+        <input aria-label="Buscar" />
+      </BottomSheet>,
+    )
+    await vi.waitFor(() => {
+      expect(screen.getByRole('dialog')).toHaveFocus()
+    })
+
+    await user.keyboard('{Escape}')
+    expect(onClose).toHaveBeenCalledOnce()
+  })
+
+  it('traps Tab from the panel itself, before any control has been focused, when autoFocus is false', async () => {
+    const user = userEvent.setup()
+    render(
+      <BottomSheet open onClose={() => {}} ariaLabel="Sheet sin autofoco" autoFocus={false}>
+        <button type="button">Primero</button>
+        <button type="button">Segundo</button>
+      </BottomSheet>,
+    )
+    await vi.waitFor(() => {
+      expect(screen.getByRole('dialog')).toHaveFocus()
+    })
+
+    await user.tab({ shift: true })
+    expect(screen.getByRole('button', { name: 'Segundo' })).toHaveFocus()
+
+    await user.tab()
+    expect(screen.getByRole('button', { name: 'Primero' })).toHaveFocus()
+
+    await user.tab()
+    expect(screen.getByRole('button', { name: 'Segundo' })).toHaveFocus()
+  })
+
+  it('restores focus to the trigger on close, whether or not autoFocus is false', async () => {
+    const user = userEvent.setup()
+    const Harness = () => {
+      const [open, setOpen] = useState(false)
+      return (
+        <>
+          <button type="button" onClick={() => setOpen(true)}>
+            Abrir
+          </button>
+          <BottomSheet
+            open={open}
+            onClose={() => setOpen(false)}
+            ariaLabel="Sheet sin autofoco"
+            autoFocus={false}
+          >
+            <input aria-label="Buscar" />
+          </BottomSheet>
+        </>
+      )
+    }
+    render(<Harness />)
+    const trigger = screen.getByRole('button', { name: 'Abrir' })
+    await user.click(trigger)
+
+    await vi.waitFor(() => {
+      expect(screen.getByRole('dialog')).toHaveFocus()
+    })
+
+    await user.keyboard('{Escape}')
+    expect(trigger).toHaveFocus()
+  })
+})
+
 describe('useOverlay + useEscapeToClose — DateChipPicker inside a BottomSheet', () => {
   it('Escape closes the picker popover first, not the sheet behind it', async () => {
     const user = userEvent.setup()
