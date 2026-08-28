@@ -246,6 +246,32 @@ describe('pull', () => {
     const stored = await database.config.get(1)
     expect(stored?.categorias).toEqual(CONFIG_SEMILLA.categorias)
   })
+
+  it('rejects a remote config with a stale schemaVersion instead of overwriting local', async () => {
+    const database = getProfileDatabase('kurobello-engine-test')
+    await database.config.put({ ...CONFIG_SEMILLA, id: 1 })
+
+    mListFiles.mockImplementation(async (_token, opts) =>
+      opts.space === 'appDataFolder' ? [listing('c1', 'config-remdev.json')] : [],
+    )
+    mReadJsonFile.mockResolvedValue({
+      v: 1,
+      device: 'remdev',
+      ops: [
+        {
+          op: 'put',
+          hlc: '000000001-0000-remdev',
+          basedOn: null,
+          config: { ...CONFIG_SEMILLA, schemaVersion: CONFIG_SEMILLA.schemaVersion - 1 },
+        },
+      ],
+    })
+
+    await pull('tok', profile, 'en')
+
+    const stored = await database.config.get(1)
+    expect(stored?.schemaVersion).toBe(CONFIG_SEMILLA.schemaVersion)
+  })
 })
 
 describe('push', () => {
