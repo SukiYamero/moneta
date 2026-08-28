@@ -35,7 +35,7 @@ The date picker's caption is now a month dropdown and a year dropdown, the only 
 
 ### 10. Look at the new screens on light — `owner: user`
 
-Three things still haven't been seen on the light theme (confirmed working otherwise): the returning-user screen (only renders after a session lapses, so it wasn't on the path the user already walked), the PIN-entry lock screen (as opposed to PIN setup, which was seen), and a judgment call on two colors (`#f72121`, a rose that has nowhere to go but pure red on light; `#af7809`, a yellow that only earns contrast on white by turning brown) — ask whether those two read as acceptable.
+Two things still haven't been seen on the light theme: the returning-user screen (only renders after a session lapses, so it wasn't on the path the user already walked), and the PIN-entry lock screen (as opposed to PIN setup, which was seen).
 
 ### 4. Verify `connectDrive` against a real Drive — `owner: user`
 
@@ -61,10 +61,6 @@ The design export shows a gear button in the Add sheet's header opening app sett
 
 The amount field's live-grouping rewrites the input's value and caret position synchronously on every keystroke, which is a known-risky pattern against an active IME composition session (test tooling can't simulate a real IME's composition overlay to confirm either way). The check: on a real device with an IME active (e.g. Android set to Japanese/Chinese, or iOS predictive full-width numerals), type a multi-digit amount into the Monto field in the Add sheet — does the number and its grouping come out correct, with no duplicated/dropped characters and no composition window misbehaving? A plain Latin/QWERTY keyboard isn't expected to exercise this.
 
-### 18. Saving a category does not work — `owner: user` (deferred by the user until other adjustments close)
-
-Cause found, confirmation pending. `CategoryFormModal.tsx:107` and `dataStore.ts:114` both mint an id with `crypto.randomUUID()`, which is `undefined` outside a secure context — so from a phone on a plain `http://<lan-ip>:5173` dev session neither a category nor a movement can be created at all, which is exactly the pair of symptoms reported. `bun run dev:https` serves over HTTPS with a self-signed certificate and is the answer; no code change is warranted, and adding a non-crypto id fallback would be worse than the bug. The check: over `dev:https` on the phone, create a category from the picker and save a movement with it — do both land?
-
 ### 11. Where the biometric option lives, and how it is presented — `owner: user`
 
 The biometric unlock mechanism itself works end to end (confirmed) — the complaint is about where the toggle sits and how it's shown in the UI, with no more specific feedback given yet. The design export has no biometric UI anywhere to fall back on, so the current placement was built without a reference. Ask what specifically looked wrong about the placement/presentation before any track touches it.
@@ -89,6 +85,16 @@ Same symptom as item 17, reported a third time, traced to a real WebKit clipping
 
 `LockScreen` and `PinSetup` back their PIN dots with a screen-reader-only `<input>` that's clipped visually but stays real and focusable, so WebKit could raise the OS numeric keyboard over the app's own on-screen keypad. Both now carry `inputMode="none"`, the same fix used on the amount field, but whether iOS was actually raising the keyboard there in the first place is unconfirmed on-device. The check: on a real iPhone, open "Configurar PIN" from the profile sheet, and separately reach the unlock screen and tap the PIN dots — in both, does only the app's own keypad appear, with no second system keyboard sliding up over it?
 
-### 24. Can the create-category modal be closed on iOS? — `owner: user` (deferred by the user)
+## Closed
 
-On a real iPhone, the create-category modal took the full screen height and could not be closed. The user deferred fixing it directly, on the suspicion it's the same root cause as the keyboard/viewport clipping items above (17/20) rather than a separate bug, and asked to check whether those fixes resolve it for free without a redesign of that modal. The check: on a real iPhone, open the category picker and tap to create a new category — does the modal now close (backdrop tap, an explicit close control, or however it's meant to dismiss)?
+### 18. Saving a category does not work
+
+Cause: `CategoryFormModal.tsx:107` and `dataStore.ts:114` mint an id with `crypto.randomUUID()`, which is `undefined` outside a secure context — a plain `http://<lan-ip>:5173` dev session couldn't create a category or a movement at all. `bun run dev:https` (self-signed HTTPS) is the fix; no code change was needed. Confirmed working over `dev:https` on a real phone.
+
+### 24. Create-category modal couldn't be closed on iOS
+
+Same root cause as the keyboard/viewport clipping fixes (overlays painting at `.99` opacity to dodge the WebKit `position: fixed` clipping bug). Confirmed on a real iPhone: the modal now closes.
+
+### 10 (partial). The two judgment-call colors on light theme
+
+`#f72121` (rose) and `#af7809` (amber) confirmed acceptable on the light theme.
