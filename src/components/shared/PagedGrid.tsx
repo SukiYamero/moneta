@@ -175,7 +175,7 @@ export const PagedGrid = <T,>({
 
   return (
     <div className={cn('flex flex-col gap-3', className)}>
-      <div className="relative overflow-hidden">
+      <div className="relative overflow-x-hidden">
         <div
           ref={trackRef}
           role="group"
@@ -189,7 +189,7 @@ export const PagedGrid = <T,>({
           onClickCapture={handleClickCapture}
           onKeyDown={handleKeyDown}
           style={trackStyle}
-          className="grid touch-pan-y select-none gap-2 rounded-lg outline-none transition-transform duration-200 ease-[var(--ease-ios)] focus-visible:ring-3 focus-visible:ring-ring/50"
+          className="grid touch-pan-y select-none gap-2 rounded-lg outline-none transition-transform duration-300 ease-[var(--ease-ios)] focus-visible:ring-3 focus-visible:ring-ring/50"
         >
           {pageItems.map((item, index) => (
             <div key={itemKey(item, index)}>{renderItem(item, index)}</div>

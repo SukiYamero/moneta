@@ -158,21 +158,25 @@ export const CategorySheet = ({
         type="button"
         onClick={() => (hasChildren ? handleDrillIn(categoria) : handleSelect(categoria))}
         aria-pressed={selected}
-        className={cn(
-          'flex h-full w-full flex-col items-center gap-1.5 rounded-xl px-1.5 py-2.5 text-center',
-          general && 'bg-surface-sunken',
-          selected && 'ring-2 ring-primary',
-        )}
+        className="flex h-full w-full flex-col items-center justify-center gap-1.5 text-center"
       >
         <span
           className={cn(
-            'flex size-9.5 shrink-0 items-center justify-center rounded-md',
-            TINT_CLASSES[tint].badge,
+            'flex flex-col items-center gap-1.5 rounded-lg px-2 py-1.5',
+            general && 'bg-surface-sunken',
+            selected && 'ring-2 ring-primary',
           )}
         >
-          <Icon className="size-4.5" aria-hidden="true" />
+          <span
+            className={cn(
+              'flex size-10 shrink-0 items-center justify-center rounded-md',
+              TINT_CLASSES[tint].badge,
+            )}
+          >
+            <Icon className="size-5" aria-hidden="true" />
+          </span>
+          <span className="line-clamp-2 text-xs font-bold">{categoria.nombre}</span>
         </span>
-        <span className="line-clamp-2 text-xs font-bold">{categoria.nombre}</span>
       </button>
     )
   }
