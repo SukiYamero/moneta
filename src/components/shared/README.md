@@ -53,6 +53,9 @@ files are never `index.tsx` themselves).
   by `SegmentedControl` and `src/features/settings/OptionList.tsx`.
 - `NumericKeypad.tsx` — shared 3x4 on-screen numeric keypad, used by
   `src/features/lock/PinPad.tsx` and `MovimientoAmountInput.tsx`.
+- `PagedGrid.tsx` — a fixed-size, swipeable grid (Pointer Events) that pages
+  its items `columns × rows` at a time, with page dots. Used by
+  `CategorySheet`'s category grid and `CategoryFormModal`'s icon grid.
 - `Toggle.tsx` — on/off switch.
 - `InfoButton.tsx` — small "?" affordance that opens a caller-owned
   `CenterModal`.

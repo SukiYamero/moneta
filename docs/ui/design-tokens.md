@@ -73,7 +73,8 @@ around invite inconsistency, not intentional hierarchy.
 **Deliberately NOT tokenized:** the largest, rare, one-off display sizes
 (the welcome-screen title, the giant amount-entry input). Those are
 one-of-a-kind hero moments, not a reused step in the scale — use an
-arbitrary Tailwind value (`text-[46px]`) there. If a "hero number" size
+arbitrary, `rem`-based Tailwind value (`text-[2.875rem]`) there; `scripts/no-raw-px.sh`
+fails the build on a raw px arbitrary value like `text-[46px]`. If a "hero number" size
 turns out to repeat across screens as the design grows, promote it to a
 token then; don't pre-invent a step for a value used once.
 
@@ -101,8 +102,10 @@ grid. Tokenizing every one-off spacing value would be over-engineering the
 wrong seam: layout spacing is per-component composition, not a
 brand-identity value like a color or a radius — getting a gap 1px off
 doesn't fragment the brand the way an inconsistent green would. Use
-Tailwind's default spacing scale, or an arbitrary value (`gap-[7px]`) for a
-one-off. If the same odd spacing value turns out to recur as a deliberate
+Tailwind's default spacing scale (including its half steps, e.g. `size-8.5`
+for 34px), or an arbitrary `rem`-based value (`gap-[0.4375rem]`, never
+`gap-[7px]` — `scripts/no-raw-px.sh` fails the build on a raw px arbitrary
+value) for a one-off. If the same odd spacing value turns out to recur as a deliberate
 rhythm (not coincidence) across many components, that's a signal to add a
 named token then — not before.
 

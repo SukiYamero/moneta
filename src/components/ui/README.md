@@ -15,4 +15,4 @@ beyond normalizing namespace imports (`import * as React` → named imports).
   Composed into `src/components/shared/TextField.tsx` (label association,
   error wiring, touch target) and `src/features/movimientos/
 MovimientoAmountInput.tsx`; also imported directly by
-  `src/features/tags/TagPickerSheet.tsx`.
+  `src/features/tags/CategorySheet.tsx`.

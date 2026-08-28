@@ -11,11 +11,13 @@ it has no `BottomNav`; its own unmount closes the Profile sheet that opened it.
   `Config` is already resolved. Each section is wrapped in its own
   `<section aria-labelledby>` with a visually hidden `<h2>` (via
   `ProfileSectionHeading`).
-- `CategoriesSection.tsx` — `Config.categorias` grouped by `Seccion`. Reuses
-  `CategoryFormModal` for create/edit. An active row offers **Archive**; an
-  archived row offers **Delete** only when no `movimiento` references it,
-  otherwise a note explaining why (`tags:errors.categoryInUse`) instead of a
-  button that would always fail. The archived group starts collapsed.
+- `CategoriesSection.tsx` — `Config.categorias`, top-level categories with
+  their children indented underneath (an orphan whose parent is missing or
+  archived renders top-level). Reuses `CategoryFormModal` for create/edit. An
+  active row offers **Archive**; an archived row offers **Delete** only when
+  no `movimiento` references it, otherwise a note explaining why
+  (`tags:errors.categoryInUse`) instead of a button that would always fail.
+  The archived group starts collapsed.
 - `PreferencesEditor.tsx` — `tema` (`OptionList`), `primerDiaSemana`
   (`SegmentedControl`, domingo/lunes), `idioma` and `monedaPrincipal`
   (`OptionList`). Purely controlled: takes `preferencias` + `onChange(patch)`,
