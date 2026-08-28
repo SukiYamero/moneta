@@ -249,6 +249,8 @@ export const CategorySheet = ({
         onClose={() => setCreateOpen(false)}
         categorias={categorias}
         initialName={trimmedQuery || undefined}
+        padreId={parent?.id}
+        onCreated={handleSelect}
       />
     </>
   )

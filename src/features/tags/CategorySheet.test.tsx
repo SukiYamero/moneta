@@ -244,4 +244,35 @@ describe('CategorySheet', () => {
 
     expect(screen.getByRole('heading', { name: /nueva categoría/i })).toBeInTheDocument()
   })
+
+  it("creating from the Custom tile at level 2 passes that parent's id to the modal", async () => {
+    const user = userEvent.setup()
+    const parent = categoria({ id: 'cat_parent', nombre: 'Transporte' })
+    const child = categoria({ id: 'cat_child', nombre: 'Gasolina', padreId: 'cat_parent' })
+    render(<CategorySheet open onClose={vi.fn()} categorias={[parent, child]} onSelect={vi.fn()} />)
+
+    await user.click(within(getDialog()).getByRole('button', { name: 'Transporte' }))
+    const level2Grid = within(getDialog()).getByRole('group', { name: /categorías/i })
+    await user.click(within(level2Grid).getByRole('button', { name: /custom/i }))
+
+    const createDialog = screen.getByRole('dialog', { name: 'Nueva categoría' })
+    expect(within(createDialog).getByText('Transporte')).toBeInTheDocument()
+  })
+
+  it('creating a category from the sheet selects it and closes the sheet', async () => {
+    const user = userEvent.setup()
+    const onSelect = vi.fn()
+    const onClose = vi.fn()
+    render(<CategorySheet open onClose={onClose} categorias={[categoria()]} onSelect={onSelect} />)
+
+    const grid = within(getDialog()).getByRole('group', { name: /categorías/i })
+    await user.click(within(grid).getByRole('button', { name: /custom/i }))
+
+    const createDialog = screen.getByRole('dialog', { name: 'Nueva categoría' })
+    await user.type(within(createDialog).getByRole('textbox', { name: /nombre/i }), 'Gimnasio')
+    await user.click(within(createDialog).getByRole('button', { name: /guardar/i }))
+
+    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ nombre: 'Gimnasio' }))
+    expect(onClose).toHaveBeenCalledOnce()
+  })
 })
