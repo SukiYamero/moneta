@@ -8,7 +8,7 @@ import { DateChipPicker } from '@/components/shared/DateChipPicker'
 import { SegmentedControl, type SegmentedControlOption } from '@/components/shared/SegmentedControl'
 import { TextAreaField } from '@/components/shared/TextAreaField'
 import { FOCUSABLE_SELECTOR } from '@/components/shared/useOverlay'
-import { CategoryPicker, CategoryFormModal } from '@/features/tags'
+import { CategoryField, CategorySheet } from '@/features/tags'
 import { MovimientoAmountInput } from '@/features/movimientos/MovimientoAmountInput'
 import type { AmountErrorReason } from '@/features/movimientos/useMovimientoForm'
 
@@ -66,9 +66,7 @@ export const MovimientoFormFields = ({
   disabled,
 }: MovimientoFormFieldsProps) => {
   const { t } = useTranslation('movimientos')
-  const [createCategory, setCreateCategory] = useState<{ open: boolean; initialName?: string }>({
-    open: false,
-  })
+  const [categorySheetOpen, setCategorySheetOpen] = useState(false)
   const [showMore, setShowMore] = useState(false)
   const amountSectionRef = useRef<HTMLDivElement>(null)
   const categorySectionRef = useRef<HTMLDivElement>(null)
@@ -126,11 +124,10 @@ export const MovimientoFormFields = ({
       </div>
 
       <div ref={categorySectionRef} className="flex flex-col gap-1.5">
-        <CategoryPicker
-          categorias={categorias}
-          selectedId={categoriaId}
-          onSelect={onSelectCategoria}
-          onCreateRequested={(query) => setCreateCategory({ open: true, initialName: query })}
+        <CategoryField
+          categoria={categorias.find((c) => c.id === categoriaId)}
+          tipo={tipo}
+          onOpen={() => setCategorySheetOpen(true)}
         />
         {categoriaMissing && (
           <p role="alert" className="text-sm text-destructive">
@@ -165,11 +162,12 @@ export const MovimientoFormFields = ({
         )}
       </div>
 
-      <CategoryFormModal
-        open={createCategory.open}
-        onClose={() => setCreateCategory({ open: false })}
+      <CategorySheet
+        open={categorySheetOpen}
+        onClose={() => setCategorySheetOpen(false)}
         categorias={categorias}
-        initialName={createCategory.initialName}
+        selectedId={categoriaId}
+        onSelect={onSelectCategoria}
       />
     </div>
   )

@@ -22,6 +22,7 @@ export interface CategoryFormModalProps {
   categoria?: Categoria
   initialName?: string
   padreId?: string
+  onCreated?: (categoria: Categoria) => void
 }
 
 const ICON_GRID_COLUMNS = 5
@@ -51,6 +52,7 @@ export const CategoryFormModal = ({
   categoria,
   initialName,
   padreId,
+  onCreated,
 }: CategoryFormModalProps) => {
   const { t } = useTranslation('tags')
   const upsertCategoria = useDataStore((s) => s.upsertCategoria)
@@ -117,7 +119,10 @@ export const CategoryFormModal = ({
     setSubmitting(true)
     try {
       const saved = await upsertCategoria(result)
-      if (saved) onClose()
+      if (saved) {
+        onCreated?.(result)
+        onClose()
+      }
     } finally {
       setSubmitting(false)
     }
