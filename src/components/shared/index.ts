@@ -41,3 +41,4 @@ export { usePendingDelay, type UsePendingDelayOptions } from '@/components/share
 export { TextField, type TextFieldProps } from '@/components/shared/TextField'
 export { TextAreaField, type TextAreaFieldProps } from '@/components/shared/TextAreaField'
 export { NumericKeypad, type NumericKeypadProps } from '@/components/shared/NumericKeypad'
+export { PagedGrid, type PagedGridProps } from '@/components/shared/PagedGrid'
