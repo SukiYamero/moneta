@@ -9,64 +9,48 @@ const FAKE_CATEGORIAS: Categoria[] = [
   {
     id: 'cat_comida',
     nombre: 'Comida',
-    seccionId: 'sec_personal',
-    tipo: 'gasto',
     icono: 'utensils',
     color: 'amber',
   },
   {
     id: 'cat_transporte',
     nombre: 'Transporte',
-    seccionId: 'sec_personal',
-    tipo: 'gasto',
     icono: 'car',
     color: 'blue',
   },
   {
     id: 'cat_compras',
     nombre: 'Compras',
-    seccionId: 'sec_personal',
-    tipo: 'gasto',
     icono: 'shopping-bag',
     color: 'purple',
   },
   {
     id: 'cat_ocio',
     nombre: 'Ocio',
-    seccionId: 'sec_personal',
-    tipo: 'gasto',
     icono: 'party-popper',
     color: 'rose',
   },
   {
     id: 'cat_salud',
     nombre: 'Salud',
-    seccionId: 'sec_personal',
-    tipo: 'gasto',
     icono: 'heart-pulse',
     color: 'emerald',
   },
   {
     id: 'cat_hogar',
     nombre: 'Hogar',
-    seccionId: 'sec_personal',
-    tipo: 'gasto',
     icono: 'house',
     color: 'emerald',
   },
   {
     id: 'cat_regalo',
     nombre: 'Regalo',
-    seccionId: 'sec_personal',
-    tipo: 'ingreso',
     icono: 'gift',
     color: 'purple',
   },
   {
     id: 'cat_freelance',
     nombre: 'Freelance',
-    seccionId: 'sec_trabajo',
-    tipo: 'ingreso',
     icono: 'laptop',
     color: 'blue',
   },
@@ -79,7 +63,6 @@ const FAKE_CONFIG: Config = {
 
 interface MovimientoTemplate {
   offsetDays: number
-  seccion: string
   categoria: string
   tipo: Movimiento['tipo']
   monto: number
@@ -90,7 +73,6 @@ interface MovimientoTemplate {
 const MOVIMIENTO_TEMPLATES: MovimientoTemplate[] = [
   {
     offsetDays: 0,
-    seccion: 'sec_personal',
     categoria: 'cat_comida',
     tipo: 'gasto',
     monto: 18000,
@@ -99,7 +81,6 @@ const MOVIMIENTO_TEMPLATES: MovimientoTemplate[] = [
   },
   {
     offsetDays: 1,
-    seccion: 'sec_personal',
     categoria: 'cat_compras',
     tipo: 'gasto',
     monto: 245000,
@@ -108,7 +89,6 @@ const MOVIMIENTO_TEMPLATES: MovimientoTemplate[] = [
   },
   {
     offsetDays: 1,
-    seccion: 'sec_personal',
     categoria: 'cat_transporte',
     tipo: 'gasto',
     monto: 48000,
@@ -117,7 +97,6 @@ const MOVIMIENTO_TEMPLATES: MovimientoTemplate[] = [
   },
   {
     offsetDays: 3,
-    seccion: 'sec_personal',
     categoria: 'cat_ocio',
     tipo: 'gasto',
     monto: 63000,
@@ -126,7 +105,6 @@ const MOVIMIENTO_TEMPLATES: MovimientoTemplate[] = [
   },
   {
     offsetDays: 5,
-    seccion: 'sec_emprendimiento',
     categoria: 'cat_ventas',
     tipo: 'ingreso',
     monto: 1800000,
@@ -135,7 +113,6 @@ const MOVIMIENTO_TEMPLATES: MovimientoTemplate[] = [
   },
   {
     offsetDays: 7,
-    seccion: 'sec_personal',
     categoria: 'cat_transporte',
     tipo: 'gasto',
     monto: 180000,
@@ -144,7 +121,6 @@ const MOVIMIENTO_TEMPLATES: MovimientoTemplate[] = [
   },
   {
     offsetDays: 9,
-    seccion: 'sec_personal',
     categoria: 'cat_comida',
     tipo: 'gasto',
     monto: 154000,
@@ -153,7 +129,6 @@ const MOVIMIENTO_TEMPLATES: MovimientoTemplate[] = [
   },
   {
     offsetDays: 11,
-    seccion: 'sec_personal',
     categoria: 'cat_regalo',
     tipo: 'ingreso',
     monto: 400000,
@@ -162,7 +137,6 @@ const MOVIMIENTO_TEMPLATES: MovimientoTemplate[] = [
   },
   {
     offsetDays: 14,
-    seccion: 'sec_personal',
     categoria: 'cat_compras',
     tipo: 'gasto',
     monto: 356000,
@@ -171,7 +145,6 @@ const MOVIMIENTO_TEMPLATES: MovimientoTemplate[] = [
   },
   {
     offsetDays: 15,
-    seccion: 'sec_personal',
     categoria: 'cat_sueldo',
     tipo: 'ingreso',
     monto: 4200000,
@@ -180,7 +153,6 @@ const MOVIMIENTO_TEMPLATES: MovimientoTemplate[] = [
   },
   {
     offsetDays: 18,
-    seccion: 'sec_personal',
     categoria: 'cat_ocio',
     tipo: 'gasto',
     monto: 96000,
@@ -189,7 +161,6 @@ const MOVIMIENTO_TEMPLATES: MovimientoTemplate[] = [
   },
   {
     offsetDays: 21,
-    seccion: 'sec_personal',
     categoria: 'cat_salud',
     tipo: 'gasto',
     monto: 75000,
@@ -198,7 +169,6 @@ const MOVIMIENTO_TEMPLATES: MovimientoTemplate[] = [
   },
   {
     offsetDays: 23,
-    seccion: 'sec_emprendimiento',
     categoria: 'cat_ventas',
     tipo: 'ingreso',
     monto: 1280000,
@@ -207,7 +177,6 @@ const MOVIMIENTO_TEMPLATES: MovimientoTemplate[] = [
   },
   {
     offsetDays: 25,
-    seccion: 'sec_emprendimiento',
     categoria: 'cat_impuestos',
     tipo: 'gasto',
     monto: 320000,
@@ -216,7 +185,6 @@ const MOVIMIENTO_TEMPLATES: MovimientoTemplate[] = [
   },
   {
     offsetDays: 28,
-    seccion: 'sec_emprendimiento',
     categoria: 'cat_caja_menor',
     tipo: 'gasto',
     monto: 45000,
@@ -225,7 +193,6 @@ const MOVIMIENTO_TEMPLATES: MovimientoTemplate[] = [
   },
   {
     offsetDays: 30,
-    seccion: 'sec_personal',
     categoria: 'cat_sueldo',
     tipo: 'ingreso',
     monto: 4200000,
@@ -234,7 +201,6 @@ const MOVIMIENTO_TEMPLATES: MovimientoTemplate[] = [
   },
   {
     offsetDays: 33,
-    seccion: 'sec_personal',
     categoria: 'cat_hogar',
     tipo: 'gasto',
     monto: 850000,
@@ -243,7 +209,6 @@ const MOVIMIENTO_TEMPLATES: MovimientoTemplate[] = [
   },
   {
     offsetDays: 36,
-    seccion: 'sec_personal',
     categoria: 'cat_compras',
     tipo: 'gasto',
     monto: 240600,
@@ -252,7 +217,6 @@ const MOVIMIENTO_TEMPLATES: MovimientoTemplate[] = [
   },
   {
     offsetDays: 42,
-    seccion: 'sec_personal',
     categoria: 'cat_comida',
     tipo: 'gasto',
     monto: 58000,
@@ -261,7 +225,6 @@ const MOVIMIENTO_TEMPLATES: MovimientoTemplate[] = [
   },
   {
     offsetDays: 45,
-    seccion: 'sec_personal',
     categoria: 'cat_ocio',
     tipo: 'gasto',
     monto: 43600,
@@ -270,7 +233,6 @@ const MOVIMIENTO_TEMPLATES: MovimientoTemplate[] = [
   },
   {
     offsetDays: 48,
-    seccion: 'sec_trabajo',
     categoria: 'cat_freelance',
     tipo: 'ingreso',
     monto: 780000,
@@ -279,7 +241,6 @@ const MOVIMIENTO_TEMPLATES: MovimientoTemplate[] = [
   },
   {
     offsetDays: 51,
-    seccion: 'sec_personal',
     categoria: 'cat_transporte',
     tipo: 'gasto',
     monto: 52000,
@@ -288,7 +249,6 @@ const MOVIMIENTO_TEMPLATES: MovimientoTemplate[] = [
   },
   {
     offsetDays: 54,
-    seccion: 'sec_personal',
     categoria: 'cat_salud',
     tipo: 'gasto',
     monto: 31400,
@@ -297,7 +257,6 @@ const MOVIMIENTO_TEMPLATES: MovimientoTemplate[] = [
   },
   {
     offsetDays: 60,
-    seccion: 'sec_personal',
     categoria: 'cat_sueldo',
     tipo: 'ingreso',
     monto: 4200000,
@@ -306,7 +265,6 @@ const MOVIMIENTO_TEMPLATES: MovimientoTemplate[] = [
   },
   {
     offsetDays: 68,
-    seccion: 'sec_personal',
     categoria: 'cat_compras',
     tipo: 'gasto',
     monto: 540000,
@@ -315,7 +273,6 @@ const MOVIMIENTO_TEMPLATES: MovimientoTemplate[] = [
   },
   {
     offsetDays: 78,
-    seccion: 'sec_personal',
     categoria: 'cat_transporte',
     tipo: 'gasto',
     monto: 180000,
@@ -324,7 +281,6 @@ const MOVIMIENTO_TEMPLATES: MovimientoTemplate[] = [
   },
   {
     offsetDays: 90,
-    seccion: 'sec_personal',
     categoria: 'cat_sueldo',
     tipo: 'ingreso',
     monto: 4200000,
@@ -333,7 +289,6 @@ const MOVIMIENTO_TEMPLATES: MovimientoTemplate[] = [
   },
   {
     offsetDays: 95,
-    seccion: 'sec_personal',
     categoria: 'cat_comida',
     tipo: 'gasto',
     monto: 95000,
@@ -342,7 +297,6 @@ const MOVIMIENTO_TEMPLATES: MovimientoTemplate[] = [
   },
   {
     offsetDays: 120,
-    seccion: 'sec_personal',
     categoria: 'cat_sueldo',
     tipo: 'ingreso',
     monto: 1600000,
@@ -358,7 +312,6 @@ const seedMovimientos = (today: Date): Movimiento[] => {
       id: `mov_seed_${index}`,
       fecha: format(at, 'yyyy-MM-dd'),
       createdAt: at.toISOString(),
-      seccion: t.seccion,
       categoria: t.categoria,
       tipo: t.tipo,
       monto: t.monto,
@@ -377,7 +330,6 @@ const seedActivos = (today: Date): Activo[] => {
       id: 'act_seed_0',
       nombre: 'CDT Bancolombia',
       tipo: 'CDT',
-      seccion: 'sec_personal',
       capitalInvertido: 5000000,
       valorActual: 5320000,
       moneda: 'COP',
@@ -387,7 +339,6 @@ const seedActivos = (today: Date): Activo[] => {
       id: 'act_seed_1',
       nombre: 'Acciones Ecopetrol',
       tipo: 'acciones',
-      seccion: 'sec_personal',
       capitalInvertido: 2000000,
       valorActual: 1840000,
       moneda: 'COP',
@@ -397,7 +348,6 @@ const seedActivos = (today: Date): Activo[] => {
       id: 'act_seed_2',
       nombre: 'Cripto (BTC)',
       tipo: 'cripto',
-      seccion: 'sec_emprendimiento',
       capitalInvertido: 1200000,
       valorActual: 1560000,
       moneda: 'COP',
@@ -503,7 +453,6 @@ const paginate = <T>(items: T[], limit?: number, cursor?: string): ListResult<T>
 
 interface CrudRepoConfig<T> {
   dateField: keyof T & string
-  seccionField?: keyof T & string
   tiebreakField?: keyof T & string
   validate: (item: T) => void
 }
@@ -513,14 +462,13 @@ const createCrudRepo = <T extends { id: EntityId }>(
   config: CrudRepoConfig<T>,
 ): CrudRepo<T> => {
   let store = [...seed]
-  const { dateField, seccionField, tiebreakField, validate } = config
+  const { dateField, tiebreakField, validate } = config
 
   const applyFilters = (query: ListQuery<T> | undefined): T[] => {
-    const { dateFrom, dateTo, seccion } = query ?? {}
+    const { dateFrom, dateTo } = query ?? {}
     return store.filter((item) => {
       if (dateFrom !== undefined && String(item[dateField]) < dateFrom) return false
       if (dateTo !== undefined && String(item[dateField]) > dateTo) return false
-      if (seccionField && seccion !== undefined && item[seccionField] !== seccion) return false
       return true
     })
   }
@@ -602,14 +550,12 @@ export const createFakeRepo = ({ today = new Date() }: CreateFakeRepoOptions = {
 
   const movimientos = createCrudRepo<Movimiento>(seedMovimientos(today), {
     dateField: 'fecha',
-    seccionField: 'seccion',
     tiebreakField: 'createdAt',
     validate: validateMovimiento,
   })
 
   const activos = createCrudRepo<Activo>(seedActivos(today), {
     dateField: 'fechaActualizacion',
-    seccionField: 'seccion',
     validate: validateActivo,
   })
 

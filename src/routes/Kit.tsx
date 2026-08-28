@@ -21,13 +21,12 @@ import { ICON_AVATAR_TINTS } from '@/components/shared/tintClasses'
 import { CategoryFormModal } from '@/features/tags/CategoryFormModal'
 import { CategoryPicker } from '@/features/tags/CategoryPicker'
 import { useLocaleFormatting } from '@/lib/i18n/localeFormatting'
-import type { Categoria, Movimiento, Seccion, TipoMovimiento } from '@/lib/schema'
+import type { Categoria, Movimiento } from '@/lib/schema'
 
 const SAMPLE_MOVEMENTS: Movimiento[] = [
   {
     id: 'kit_1',
     fecha: '2026-08-18',
-    seccion: 'sec_personal',
     categoria: 'cat_sueldo',
     tipo: 'ingreso',
     monto: 4200000,
@@ -38,7 +37,6 @@ const SAMPLE_MOVEMENTS: Movimiento[] = [
   {
     id: 'kit_2',
     fecha: '2026-08-17',
-    seccion: 'sec_personal',
     categoria: 'cat_comida',
     tipo: 'gasto',
     monto: 18000,
@@ -48,7 +46,6 @@ const SAMPLE_MOVEMENTS: Movimiento[] = [
   {
     id: 'kit_3',
     fecha: '2026-08-10',
-    seccion: 'sec_emprendimiento',
     categoria: 'cat_ventas',
     tipo: 'ingreso',
     monto: 1800000,
@@ -61,32 +58,21 @@ const SAMPLE_CATEGORIAS: Categoria[] = [
   {
     id: 'cat_sueldo',
     nombre: 'Sueldo',
-    seccionId: 'sec_personal',
-    tipo: 'ingreso',
     icono: 'briefcase',
     color: 'emerald',
   },
   {
     id: 'cat_comida',
     nombre: 'Comida',
-    seccionId: 'sec_personal',
-    tipo: 'gasto',
     icono: 'utensils',
     color: 'amber',
   },
   {
     id: 'cat_ventas',
     nombre: 'Ventas',
-    seccionId: 'sec_emprendimiento',
-    tipo: 'ingreso',
     icono: 'trending-up',
     color: 'emerald',
   },
-]
-
-const SAMPLE_SECCIONES: Seccion[] = [
-  { id: 'sec_personal', nombre: 'Personal', orden: 0 },
-  { id: 'sec_emprendimiento', nombre: 'Emprendimiento', orden: 1 },
 ]
 
 const SCOPE_OPTIONS = [
@@ -137,7 +123,6 @@ export const Kit = () => {
   const amountInputRef = useRef<HTMLInputElement>(null)
   const [addSheetAmount, setAddSheetAmount] = useState('')
   const [textFieldValue, setTextFieldValue] = useState('')
-  const [pickerTipo, setPickerTipo] = useState<TipoMovimiento>('gasto')
   const [pickerSelectedId, setPickerSelectedId] = useState<string | undefined>('cat_comida')
   const [categoryModalOpen, setCategoryModalOpen] = useState(false)
   const [categoryModalCategoria, setCategoryModalCategoria] = useState<Categoria | undefined>()
@@ -217,15 +202,8 @@ export const Kit = () => {
       </Section>
 
       <Section title="CategoryPicker + CategoryFormModal">
-        <SegmentedControl
-          options={[...TYPE_OPTIONS]}
-          value={pickerTipo}
-          onChange={setPickerTipo}
-          aria-label="Tipo (demo del picker)"
-        />
         <CategoryPicker
           categorias={SAMPLE_CATEGORIAS}
-          tipo={pickerTipo}
           selectedId={pickerSelectedId}
           onSelect={(c) => setPickerSelectedId(c.id)}
           onCreateRequested={(query) => {
@@ -248,8 +226,6 @@ export const Kit = () => {
         <CategoryFormModal
           open={categoryModalOpen}
           onClose={() => setCategoryModalOpen(false)}
-          tipo={pickerTipo}
-          secciones={SAMPLE_SECCIONES}
           categorias={SAMPLE_CATEGORIAS}
           categoria={categoryModalCategoria}
           initialName={categoryModalInitialName}

@@ -1,7 +1,7 @@
 import { useId, useMemo, useState } from 'react'
 import { Plus, Search } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import type { Categoria, TipoMovimiento } from '@/lib/schema'
+import type { Categoria } from '@/lib/schema'
 import { cn } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
 import { BottomSheet } from '@/components/shared/BottomSheet'
@@ -15,7 +15,6 @@ export interface TagPickerSheetProps {
   open: boolean
   onClose: () => void
   categorias: Categoria[]
-  tipo: TipoMovimiento
   selectedId?: string
   onSelect: (categoria: Categoria) => void
   onCreateRequested: (query: string) => void
@@ -25,7 +24,6 @@ export const TagPickerSheet = ({
   open,
   onClose,
   categorias,
-  tipo,
   selectedId,
   onSelect,
   onCreateRequested,
@@ -34,7 +32,7 @@ export const TagPickerSheet = ({
   const [query, setQuery] = useState('')
   const searchId = useId()
 
-  const ordered = useMemo(() => orderForPicker(categorias, tipo), [categorias, tipo])
+  const ordered = useMemo(() => orderForPicker(categorias), [categorias])
   const trimmedQuery = query.trim()
   const filtered = useMemo(
     () => (trimmedQuery ? ordered.filter((c) => matchesQuery(trimmedQuery, c.nombre)) : ordered),
@@ -67,7 +65,7 @@ export const TagPickerSheet = ({
 
         <div className="grid grid-cols-2 gap-2">
           {filtered.map((c) => {
-            const { icon, tint } = getMovimientoVisual(c, c.tipo)
+            const { icon, tint } = getMovimientoVisual(c, 'gasto')
             const selected = c.id === selectedId
             return (
               <button

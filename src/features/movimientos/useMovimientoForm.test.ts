@@ -23,7 +23,6 @@ const LOCALE = 'es-CO'
 const movimiento = (overrides: Partial<Movimiento> = {}): Movimiento => ({
   id: crypto.randomUUID(),
   fecha: '2026-08-15',
-  seccion: 'sec_personal',
   categoria: 'cat_sueldo',
   tipo: 'ingreso',
   monto: 1000,
@@ -35,8 +34,6 @@ const movimiento = (overrides: Partial<Movimiento> = {}): Movimiento => ({
 const categoria = (overrides: Partial<Categoria> = {}): Categoria => ({
   id: 'cat_gimnasio',
   nombre: 'Gimnasio',
-  seccionId: 'sec_personal',
-  tipo: 'gasto',
   icono: 'dumbbell',
   color: 'rose',
   ...overrides,
@@ -81,7 +78,6 @@ describe('useMovimientoForm — create mode defaults', () => {
         mode: 'create',
         locale: LOCALE,
         monedaPrincipal: 'COP',
-        categorias: CONFIG_SEMILLA.categorias,
         onSaved,
       }),
     )
@@ -111,7 +107,6 @@ describe('useMovimientoForm — edit mode defaults', () => {
         initial,
         locale: LOCALE,
         monedaPrincipal: 'COP',
-        categorias: CONFIG_SEMILLA.categorias,
         onSaved: vi.fn(),
       }),
     )
@@ -131,7 +126,6 @@ describe('useMovimientoForm — validation only appears after a submit attempt',
         mode: 'create',
         locale: LOCALE,
         monedaPrincipal: 'COP',
-        categorias: CONFIG_SEMILLA.categorias,
         onSaved: vi.fn(),
       }),
     )
@@ -147,7 +141,6 @@ describe('useMovimientoForm — validation only appears after a submit attempt',
         mode: 'create',
         locale: LOCALE,
         monedaPrincipal: 'COP',
-        categorias: CONFIG_SEMILLA.categorias,
         onSaved: vi.fn(),
       }),
     )
@@ -174,7 +167,6 @@ describe('useMovimientoForm — validation only appears after a submit attempt',
         mode: 'create',
         locale: LOCALE,
         monedaPrincipal: 'COP',
-        categorias: CONFIG_SEMILLA.categorias,
         onSaved: vi.fn(),
       }),
     )
@@ -193,7 +185,6 @@ describe('useMovimientoForm — validation only appears after a submit attempt',
         mode: 'create',
         locale: LOCALE,
         monedaPrincipal: 'COP',
-        categorias: CONFIG_SEMILLA.categorias,
         onSaved: vi.fn(),
       }),
     )
@@ -214,7 +205,6 @@ describe('useMovimientoForm — selectCategoria', () => {
         mode: 'create',
         locale: LOCALE,
         monedaPrincipal: 'COP',
-        categorias: CONFIG_SEMILLA.categorias,
         onSaved: vi.fn(),
       }),
     )
@@ -229,7 +219,7 @@ describe('useMovimientoForm — selectCategoria', () => {
 })
 
 describe('useMovimientoForm — successful create', () => {
-  it('writes categoria/seccion from the selected category and clears the form', async () => {
+  it('writes only categoriaId onto the form and payload from the selected category, then clears the form', async () => {
     const repo = makeRepo()
     mGetRepo.mockReturnValue(repo)
     const onSaved = vi.fn()
@@ -238,7 +228,6 @@ describe('useMovimientoForm — successful create', () => {
         mode: 'create',
         locale: LOCALE,
         monedaPrincipal: 'COP',
-        categorias: CONFIG_SEMILLA.categorias,
         onSaved,
       }),
     )
@@ -255,11 +244,11 @@ describe('useMovimientoForm — successful create', () => {
     expect(written).toMatchObject({
       monto: 18000,
       categoria: 'cat_gimnasio',
-      seccion: 'sec_personal',
       tipo: 'gasto',
       moneda: 'COP',
       nota: 'Pesas',
     })
+    expect(written).not.toHaveProperty('seccion')
 
     expect(result.current.amountRaw).toBe('')
     expect(result.current.nota).toBe('')
@@ -274,7 +263,6 @@ describe('useMovimientoForm — successful create', () => {
         mode: 'create',
         locale: LOCALE,
         monedaPrincipal: 'COP',
-        categorias: CONFIG_SEMILLA.categorias,
         onSaved: vi.fn(),
       }),
     )
@@ -303,7 +291,6 @@ describe('useMovimientoForm — successful create', () => {
         mode: 'create',
         locale: LOCALE,
         monedaPrincipal: 'COP',
-        categorias: CONFIG_SEMILLA.categorias,
         onSaved: vi.fn(),
       }),
     )
@@ -329,7 +316,6 @@ describe('useMovimientoForm — a refused or failed write keeps the sheet open w
         mode: 'create',
         locale: LOCALE,
         monedaPrincipal: 'COP',
-        categorias: CONFIG_SEMILLA.categorias,
         onSaved,
       }),
     )
@@ -357,7 +343,6 @@ describe('useMovimientoForm — a refused or failed write keeps the sheet open w
         mode: 'create',
         locale: LOCALE,
         monedaPrincipal: 'COP',
-        categorias: CONFIG_SEMILLA.categorias,
         onSaved,
       }),
     )
@@ -385,7 +370,6 @@ describe('useMovimientoForm — double-submit guard', () => {
         mode: 'create',
         locale: LOCALE,
         monedaPrincipal: 'COP',
-        categorias: CONFIG_SEMILLA.categorias,
         onSaved: vi.fn(),
       }),
     )
@@ -408,8 +392,8 @@ describe('useMovimientoForm — double-submit guard', () => {
 })
 
 describe('useMovimientoForm — editing a movement whose category no longer resolves locally', () => {
-  it('keeps the original categoria/seccion untouched unless the user actively picks a new one', async () => {
-    const initial = movimiento({ categoria: 'cat_unresolved', seccion: 'sec_unresolved' })
+  it('keeps the original categoria untouched unless the user actively picks a new one', async () => {
+    const initial = movimiento({ categoria: 'cat_unresolved' })
     const repo = makeRepo()
     mGetRepo.mockReturnValue(repo)
     useDataStore.setState({ movimientos: [initial] })
@@ -419,7 +403,6 @@ describe('useMovimientoForm — editing a movement whose category no longer reso
         initial,
         locale: LOCALE,
         monedaPrincipal: 'COP',
-        categorias: CONFIG_SEMILLA.categorias,
         onSaved: vi.fn(),
       }),
     )
@@ -432,7 +415,6 @@ describe('useMovimientoForm — editing a movement whose category no longer reso
     const [id, patch] = vi.mocked(repo.movimientos.update).mock.calls[0]!
     expect(id).toBe(initial.id)
     expect(patch.categoria).toBe('cat_unresolved')
-    expect(patch.seccion).toBe('sec_unresolved')
   })
 })
 
@@ -448,7 +430,6 @@ describe('useMovimientoForm — editing tipo never lets monto go negative in sto
         initial,
         locale: LOCALE,
         monedaPrincipal: 'COP',
-        categorias: CONFIG_SEMILLA.categorias,
         onSaved: vi.fn(),
       }),
     )
@@ -470,7 +451,6 @@ describe('useMovimientoForm — applyParsedFields', () => {
         mode: 'create',
         locale: LOCALE,
         monedaPrincipal: 'COP',
-        categorias: CONFIG_SEMILLA.categorias,
         onSaved: vi.fn(),
       }),
     )

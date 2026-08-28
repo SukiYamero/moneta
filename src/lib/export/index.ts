@@ -47,7 +47,6 @@ export const exportMovimientosToCsv = async ({
   const [movimientos, config] = await Promise.all([fetchAllMovimientos(), repo.getConfig()])
   const parts = buildMovimientoCsvParts(movimientos, {
     locale,
-    secciones: config.secciones,
     categorias: config.categorias,
   })
   await deliverCsv({ filename: buildExportFilename(new Date()), parts })

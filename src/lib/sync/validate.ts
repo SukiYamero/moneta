@@ -6,7 +6,6 @@ import type {
   Moneda,
   Movimiento,
   Preferencias,
-  Seccion,
   TipoActivo,
   TipoMovimiento,
 } from '@/lib/schema'
@@ -70,7 +69,6 @@ export const isValidMovimiento = (value: unknown): value is Movimiento => {
   if (!isPlainObject(value)) return false
   if (!isNonEmptyString(value.id)) return false
   if (!isIsoDate(value.fecha)) return false
-  if (!isNonEmptyString(value.seccion)) return false
   if (!isNonEmptyString(value.categoria)) return false
   if (!isTipoMovimiento(value.tipo)) return false
   if (!isFiniteNumber(value.monto) || value.monto <= 0) return false
@@ -87,7 +85,6 @@ export const isValidActivo = (value: unknown): value is Activo => {
   if (!isNonEmptyString(value.id)) return false
   if (!isNonEmptyString(value.nombre)) return false
   if (!isTipoActivo(value.tipo)) return false
-  if (value.seccion !== undefined && typeof value.seccion !== 'string') return false
   if (value.capitalInvertido !== undefined && !isFiniteNumber(value.capitalInvertido)) return false
   if (!isFiniteNumber(value.valorActual) || value.valorActual < 0) return false
   if (!isMoneda(value.moneda)) return false
@@ -96,12 +93,6 @@ export const isValidActivo = (value: unknown): value is Activo => {
   if (value.extra !== undefined && !isPlainObject(value.extra)) return false
   return true
 }
-
-const isSeccion = (value: unknown): value is Seccion =>
-  isPlainObject(value) &&
-  isNonEmptyString(value.id) &&
-  isNonEmptyString(value.nombre) &&
-  isFiniteNumber(value.orden)
 
 const CATEGORY_ICON_KEY_SET = new Set<string>(CATEGORY_ICON_KEYS)
 const isCategoryIconKey = (value: unknown): value is CategoryIconKey =>
@@ -113,20 +104,18 @@ const isIconAvatarTint = (value: unknown): value is IconAvatarTint =>
 
 const sanitizeCategoria = (value: unknown): Categoria | null => {
   if (!isPlainObject(value)) return null
-  const { id, nombre, seccionId, tipo, presupuesto, icono, color } = value
+  const { id, nombre, padreId, presupuesto, icono, color, archivado } = value
   if (!isNonEmptyString(id)) return null
   if (!isNonEmptyString(nombre)) return null
-  if (!isNonEmptyString(seccionId)) return null
-  if (!isTipoMovimiento(tipo)) return null
   if (presupuesto !== undefined && !isFiniteNumber(presupuesto)) return null
   return {
     id,
     nombre,
-    seccionId,
-    tipo,
+    ...(isNonEmptyString(padreId) ? { padreId } : {}),
     ...(isFiniteNumber(presupuesto) ? { presupuesto } : {}),
     ...(isCategoryIconKey(icono) ? { icono } : {}),
     ...(isIconAvatarTint(color) ? { color } : {}),
+    ...(typeof archivado === 'boolean' ? { archivado } : {}),
   }
 }
 
@@ -147,7 +136,6 @@ const sanitizePreferencias = (value: unknown): Preferencias | null => {
 export const sanitizeConfig = (value: unknown): Config | null => {
   if (!isPlainObject(value)) return null
   if (!isFiniteNumber(value.schemaVersion)) return null
-  if (!Array.isArray(value.secciones) || !value.secciones.every(isSeccion)) return null
   if (!Array.isArray(value.categorias)) return null
   const sanitizedCategorias = value.categorias.map(sanitizeCategoria)
   if (sanitizedCategorias.some((c) => c === null)) return null
@@ -156,7 +144,6 @@ export const sanitizeConfig = (value: unknown): Config | null => {
   if (preferencias === null) return null
   return {
     schemaVersion: value.schemaVersion,
-    secciones: value.secciones,
     categorias,
     preferencias,
   }

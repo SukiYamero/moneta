@@ -97,7 +97,6 @@ describe('AddMovimientoSheet', () => {
         monto: 18000,
         tipo: 'gasto',
         categoria: 'cat_servicios',
-        seccion: 'sec_personal',
         moneda: 'COP',
         nota: 'Internet',
       }),

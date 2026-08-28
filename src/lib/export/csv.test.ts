@@ -5,7 +5,6 @@ import { buildMovimientoCsvParts, type CsvExportOptions } from '@/lib/export/csv
 const movimiento = (overrides: Partial<Movimiento> = {}): Movimiento => ({
   id: crypto.randomUUID(),
   fecha: '2026-08-15',
-  seccion: 'sec_personal',
   categoria: 'cat_sueldo',
   tipo: 'ingreso',
   monto: 1000,
@@ -14,19 +13,15 @@ const movimiento = (overrides: Partial<Movimiento> = {}): Movimiento => ({
   ...overrides,
 })
 
-const DEFAULT_SECCIONES: CsvExportOptions['secciones'] = [
-  { id: 'sec_personal', nombre: 'Personal' },
-]
 const DEFAULT_CATEGORIAS: CsvExportOptions['categorias'] = [{ id: 'cat_sueldo', nombre: 'Sueldo' }]
 
 const buildCsv = (
   movimientos: readonly Movimiento[],
   locale = 'es-CO',
-  overrides: Partial<Pick<CsvExportOptions, 'secciones' | 'categorias'>> = {},
+  overrides: Partial<Pick<CsvExportOptions, 'categorias'>> = {},
 ): string =>
   buildMovimientoCsvParts(movimientos, {
     locale,
-    secciones: DEFAULT_SECCIONES,
     categorias: DEFAULT_CATEGORIAS,
     ...overrides,
   }).join('')
@@ -45,44 +40,42 @@ describe('buildMovimientoCsvParts()', () => {
     expect(firstLine).toBe(`﻿sep=;`)
   })
 
-  it('uses the schema field names as the header row, not localized labels', () => {
+  it('uses the schema field names as the header row, not localized labels, with no section column', () => {
     const csv = buildCsv([])
     const [, header] = lines(csv)
-    expect(header).toBe('id;fecha;seccion;categoria;tipo;monto;moneda;metodo;nota;createdAt')
+    expect(header).toBe('id;fecha;categoria;tipo;monto;moneda;metodo;nota;createdAt')
   })
 
   it('produces a header-only file for an empty dataset, not an error', () => {
     const csv = buildCsv([])
     expect(lines(csv)).toEqual([
       '﻿sep=;',
-      'id;fecha;seccion;categoria;tipo;monto;moneda;metodo;nota;createdAt',
+      'id;fecha;categoria;tipo;monto;moneda;metodo;nota;createdAt',
       '',
     ])
   })
 
-  it('separates fields with ; and rows with CRLF, showing category/section names, not ids', () => {
+  it('separates fields with ; and rows with CRLF, showing the category name, not the id, in a 9-field row', () => {
     const csv = buildCsv([movimiento({ id: 'm1', monto: 500 })])
     const row = lines(csv)[2]
-    expect(row).toBe('m1;2026-08-15;Personal;Sueldo;ingreso;500;COP;;;2026-08-15T00:00:00.000Z')
+    expect(row).toBe('m1;2026-08-15;Sueldo;ingreso;500;COP;;;2026-08-15T00:00:00.000Z')
+    expect(row!.split(';')).toHaveLength(9)
   })
 
-  it('falls back to the raw id when the section/category is not in Config (unsynced shard, deleted elsewhere)', () => {
+  it('falls back to the raw id when the category is not in Config (unsynced shard, deleted elsewhere)', () => {
     const csv = buildCsv([movimiento({ id: 'm1', monto: 500 })], 'es-CO', {
-      secciones: [],
       categorias: [],
     })
     const row = lines(csv)[2]
-    expect(row).toBe(
-      'm1;2026-08-15;sec_personal;cat_sueldo;ingreso;500;COP;;;2026-08-15T00:00:00.000Z',
-    )
+    expect(row).toBe('m1;2026-08-15;cat_sueldo;ingreso;500;COP;;;2026-08-15T00:00:00.000Z')
   })
 
   it('renders optional fields (metodo, nota) as an empty column when undefined', () => {
     const csv = buildCsv([movimiento({ metodo: undefined, nota: undefined })])
     const row = lines(csv)[2]
     const fields = row!.split(';')
+    expect(fields[6]).toBe('')
     expect(fields[7]).toBe('')
-    expect(fields[8]).toBe('')
   })
 
   it('passes fecha and createdAt through as the stored ISO strings, unformatted', () => {
@@ -106,25 +99,25 @@ describe('buildMovimientoCsvParts()', () => {
     it('uses a comma for es-CO', () => {
       const csv = buildCsv([movimiento({ monto: 12000.5 })], 'es-CO')
       const row = lines(csv)[2]
-      expect(row!.split(';')[5]).toBe('12000,5')
+      expect(row!.split(';')[4]).toBe('12000,5')
     })
 
     it('uses a period for en-US', () => {
       const csv = buildCsv([movimiento({ monto: 12000.5 })], 'en-US')
       const row = lines(csv)[2]
-      expect(row!.split(';')[5]).toBe('12000.5')
+      expect(row!.split(';')[4]).toBe('12000.5')
     })
 
     it('disables thousands grouping, so no locale grouping mark can appear next to the ; separator', () => {
       const csvComma = buildCsv([movimiento({ monto: 1234567 })], 'es-CO')
       const csvPeriod = buildCsv([movimiento({ monto: 1234567 })], 'en-US')
-      expect(lines(csvComma)[2]!.split(';')[5]).toBe('1234567')
-      expect(lines(csvPeriod)[2]!.split(';')[5]).toBe('1234567')
+      expect(lines(csvComma)[2]!.split(';')[4]).toBe('1234567')
+      expect(lines(csvPeriod)[2]!.split(';')[4]).toBe('1234567')
     })
 
     it('preserves full precision rather than rounding to a fixed number of decimals', () => {
       const csv = buildCsv([movimiento({ monto: 1234.56789 })], 'en-US')
-      expect(lines(csv)[2]!.split(';')[5]).toBe('1234.56789')
+      expect(lines(csv)[2]!.split(';')[4]).toBe('1234.56789')
     })
   })
 
@@ -134,7 +127,7 @@ describe('buildMovimientoCsvParts()', () => {
       (dangerous) => {
         const csv = buildCsv([movimiento({ nota: dangerous })])
         const row = lines(csv)[2]
-        const nota = row!.split(';')[8]
+        const nota = row!.split(';')[7]
         expect(nota).toBe(`'${dangerous}`)
         expect(nota!.startsWith('=')).toBe(false)
         expect(nota!.startsWith('+')).toBe(false)
@@ -143,21 +136,19 @@ describe('buildMovimientoCsvParts()', () => {
       },
     )
 
-    it("escapes a category/section's resolved *name* the same way, since both are user-editable free text", () => {
-      const csv = buildCsv([movimiento({ categoria: 'cat_x', seccion: 'sec_x' })], 'es-CO', {
-        secciones: [{ id: 'sec_x', nombre: '@import' }],
+    it("escapes a category's resolved *name* the same way, since it is user-editable free text", () => {
+      const csv = buildCsv([movimiento({ categoria: 'cat_x' })], 'es-CO', {
         categorias: [{ id: 'cat_x', nombre: '=HYPERLINK("evil")' }],
       })
       const row = lines(csv)[2]
       const fields = row!.split(';')
-      expect(fields[2]).toBe("'@import")
-      expect(fields[3]).toBe('"\'=HYPERLINK(""evil"")"')
+      expect(fields[2]).toBe('"\'=HYPERLINK(""evil"")"')
     })
 
     it('leaves an ordinary value beginning with a normal character untouched', () => {
       const csv = buildCsv([movimiento({ nota: 'Almuerzo con el equipo' })])
       const row = lines(csv)[2]
-      expect(row!.split(';')[8]).toBe('Almuerzo con el equipo')
+      expect(row!.split(';')[7]).toBe('Almuerzo con el equipo')
     })
   })
 
@@ -184,7 +175,6 @@ describe('buildMovimientoCsvParts()', () => {
       const many = Array.from({ length: 1200 }, (_, i) => movimiento({ id: `m${i}` }))
       const parts = buildMovimientoCsvParts(many, {
         locale: 'es-CO',
-        secciones: DEFAULT_SECCIONES,
         categorias: DEFAULT_CATEGORIAS,
       })
       expect(parts.length).toBeGreaterThan(1)
@@ -194,7 +184,6 @@ describe('buildMovimientoCsvParts()', () => {
       const many = Array.from({ length: 1200 }, (_, i) => movimiento({ id: `m${i}` }))
       const csv = buildMovimientoCsvParts(many, {
         locale: 'es-CO',
-        secciones: DEFAULT_SECCIONES,
         categorias: DEFAULT_CATEGORIAS,
       }).join('')
       const dataLines = lines(csv).slice(2, -1)

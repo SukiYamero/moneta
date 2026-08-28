@@ -33,7 +33,6 @@ const makeClocks = (): {
 const movimiento = (overrides: Partial<Movimiento> = {}): Movimiento => ({
   id: 'm1',
   fecha: '2026-08-01',
-  seccion: 'sec_personal',
   categoria: 'cat_sueldo',
   tipo: 'ingreso',
   monto: 1000,
@@ -225,8 +224,8 @@ describe('replayConfig', () => {
     const { a: clockA, b: clockB } = makeClocks()
     const t1 = clockA.tick()
     const t2 = clockB.tick()
-    const configA: Config = { ...CONFIG_SEMILLA, secciones: [] }
-    const configB: Config = { ...CONFIG_SEMILLA, secciones: CONFIG_SEMILLA.secciones }
+    const configA: Config = { ...CONFIG_SEMILLA, categorias: [] }
+    const configB: Config = { ...CONFIG_SEMILLA, categorias: CONFIG_SEMILLA.categorias }
     const fileA: ConfigOpFile = {
       v: 1,
       device: 'devicea',

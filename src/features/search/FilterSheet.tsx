@@ -110,7 +110,7 @@ export const FilterSheet = ({
           <SectionHeading>{t('filters.tags.heading')}</SectionHeading>
           <div className="flex flex-wrap gap-2">
             {categories.map((category) => {
-              const { icon, tint } = getMovimientoVisual(category, category.tipo)
+              const { icon, tint } = getMovimientoVisual(category, 'gasto')
               return (
                 <TagChip
                   key={category.id}

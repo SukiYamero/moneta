@@ -15,7 +15,6 @@ const clock = createLogicalClock('dev1')
 const movimiento = {
   id: 'm1',
   fecha: '2026-08-01',
-  seccion: 'sec_personal',
   categoria: 'cat_sueldo',
   tipo: 'ingreso',
   monto: 1000,
@@ -74,20 +73,11 @@ describe('sanitizeConfig', () => {
   })
 
   it.each([
-    ['secciones not an array', { ...CONFIG_SEMILLA, secciones: 'nope' }],
-    ['a seccion missing orden', { ...CONFIG_SEMILLA, secciones: [{ id: 'x', nombre: 'X' }] }],
-    [
-      'a categoria with invalid tipo',
-      {
-        ...CONFIG_SEMILLA,
-        categorias: [{ id: 'c', nombre: 'C', seccionId: 's', tipo: 'ahorro' }],
-      },
-    ],
     [
       'a categoria missing id',
       {
         ...CONFIG_SEMILLA,
-        categorias: [{ nombre: 'C', seccionId: 's', tipo: 'gasto' }],
+        categorias: [{ nombre: 'C' }],
       },
     ],
     [
@@ -111,35 +101,51 @@ describe('sanitizeConfig', () => {
   it('strips an invalid icono but keeps the category and the rest of the config — an unknown icono is never a reason to drop a category the user created', () => {
     const value = {
       ...CONFIG_SEMILLA,
-      categorias: [
-        { id: 'c', nombre: 'C', seccionId: 's', tipo: 'gasto', icono: 'not-a-real-icon' },
-      ],
+      categorias: [{ id: 'c', nombre: 'C', icono: 'not-a-real-icon' }],
     }
     const sanitized = sanitizeConfig(value)
     expect(sanitized).not.toBeNull()
-    expect(sanitized?.categorias).toEqual([{ id: 'c', nombre: 'C', seccionId: 's', tipo: 'gasto' }])
+    expect(sanitized?.categorias).toEqual([{ id: 'c', nombre: 'C' }])
   })
 
   it("strips an invalid color but keeps the category — an invalid IconAvatarTint from a hand-edited Drive file must never reach IconAvatar/TagChip's TINT_CLASSES[tint] lookup unguarded", () => {
     const value = {
       ...CONFIG_SEMILLA,
-      categorias: [{ id: 'c', nombre: 'C', seccionId: 's', tipo: 'gasto', color: 'purple-ish' }],
+      categorias: [{ id: 'c', nombre: 'C', color: 'purple-ish' }],
     }
     const sanitized = sanitizeConfig(value)
     expect(sanitized).not.toBeNull()
-    expect(sanitized?.categorias).toEqual([{ id: 'c', nombre: 'C', seccionId: 's', tipo: 'gasto' }])
+    expect(sanitized?.categorias).toEqual([{ id: 'c', nombre: 'C' }])
   })
 
   it('keeps a valid icono/color untouched', () => {
     const value = {
       ...CONFIG_SEMILLA,
+      categorias: [{ id: 'c', nombre: 'C', icono: 'coffee', color: 'amber' }],
+    }
+    expect(sanitizeConfig(value)?.categorias).toEqual([
+      { id: 'c', nombre: 'C', icono: 'coffee', color: 'amber' },
+    ])
+  })
+
+  it('carries padreId through and drops an unknown extra key', () => {
+    const value = {
+      ...CONFIG_SEMILLA,
       categorias: [
-        { id: 'c', nombre: 'C', seccionId: 's', tipo: 'gasto', icono: 'coffee', color: 'amber' },
+        { id: 'child', nombre: 'Child', padreId: 'cat_sueldo', unknownField: 'nope' },
       ],
     }
     expect(sanitizeConfig(value)?.categorias).toEqual([
-      { id: 'c', nombre: 'C', seccionId: 's', tipo: 'gasto', icono: 'coffee', color: 'amber' },
+      { id: 'child', nombre: 'Child', padreId: 'cat_sueldo' },
     ])
+  })
+
+  it('keeps archivado: true on a category — a Drive pull must never silently un-archive a category', () => {
+    const value = {
+      ...CONFIG_SEMILLA,
+      categorias: [{ id: 'c', nombre: 'C', archivado: true }],
+    }
+    expect(sanitizeConfig(value)?.categorias).toEqual([{ id: 'c', nombre: 'C', archivado: true }])
   })
 })
 
@@ -246,7 +252,7 @@ describe('parseActOpFile / parseConfigOpFile', () => {
     const bad = {
       v: 1,
       device: 'dev1',
-      ops: [{ op: 'put', hlc, basedOn: null, config: { ...CONFIG_SEMILLA, secciones: 'nope' } }],
+      ops: [{ op: 'put', hlc, basedOn: null, config: { ...CONFIG_SEMILLA, categorias: 'nope' } }],
     }
     const parsedBad = parseConfigOpFile(bad)
     expect(parsedBad.file?.ops).toHaveLength(0)

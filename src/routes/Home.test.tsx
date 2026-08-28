@@ -23,7 +23,6 @@ const USER: GoogleUser = { email: 'alex@example.com', name: 'Alex Rivera' }
 const movimiento = (overrides: Partial<Movimiento> = {}): Movimiento => ({
   id: crypto.randomUUID(),
   fecha: '2026-08-15',
-  seccion: 'sec_personal',
   categoria: 'cat_sueldo',
   tipo: 'ingreso',
   monto: 1_000_000,

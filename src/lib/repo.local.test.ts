@@ -21,7 +21,6 @@ const movimiento = (overrides: Partial<Movimiento> = {}): Movimiento => {
   return {
     id: crypto.randomUUID(),
     fecha: '2026-01-01',
-    seccion: 'sec_personal',
     categoria: 'cat_sueldo',
     tipo: 'ingreso',
     monto: 1000,
@@ -101,15 +100,21 @@ describe('ready() / schemaVersion gate', () => {
   })
 
   it('leaves an already-current config untouched', async () => {
-    await db.config.put({ ...CONFIG_SEMILLA, secciones: [], id: 1 })
+    await db.config.put({ ...CONFIG_SEMILLA, categorias: [], id: 1 })
     const repo = createLocalRepo()
     await repo.ready()
     const config = await repo.getConfig()
-    expect(config.secciones).toEqual([])
+    expect(config.categorias).toEqual([])
   })
 
   it('rejects with schema_mismatch when stored data is newer than this build', async () => {
     await db.config.put({ ...CONFIG_SEMILLA, schemaVersion: SCHEMA_VERSION + 1, id: 1 })
+    const repo = createLocalRepo()
+    await expect(repo.ready()).rejects.toMatchObject({ code: 'schema_mismatch' })
+  })
+
+  it('rejects with schema_mismatch when stored data is at schemaVersion 1 and no migration is registered — the deliberate no-migration decision for this contract change', async () => {
+    await db.config.put({ ...CONFIG_SEMILLA, schemaVersion: 1, id: 1 })
     const repo = createLocalRepo()
     await expect(repo.ready()).rejects.toMatchObject({ code: 'schema_mismatch' })
   })
@@ -233,27 +238,11 @@ describe('movimientos bulk paths (addMany / removeMany)', () => {
 })
 
 describe('list() — filtering', () => {
-  it('combines seccion + date range (exercises the compound index path)', async () => {
-    const repo = createLocalRepo()
-    await repo.movimientos.addMany([
-      movimiento({ seccion: 'sec_trabajo', fecha: '2026-01-01' }),
-      movimiento({ seccion: 'sec_trabajo', fecha: '2026-06-01' }),
-      movimiento({ seccion: 'sec_personal', fecha: '2026-01-15' }),
-    ])
-    const { items } = await repo.movimientos.list({
-      seccion: 'sec_trabajo',
-      dateFrom: '2026-01-01',
-      dateTo: '2026-02-01',
-    })
-    expect(items).toHaveLength(1)
-    expect(items[0]?.fecha).toBe('2026-01-01')
-  })
-
-  it('applies the same dateFrom/dateTo/seccion semantics to activos, keyed off fechaActualizacion', async () => {
+  it('applies dateFrom/dateTo to activos, keyed off fechaActualizacion', async () => {
     const repo = createLocalRepo()
     await repo.activos.addMany([
-      activo({ fechaActualizacion: '2026-01-01', seccion: 'sec_personal' }),
-      activo({ fechaActualizacion: '2026-06-01', seccion: 'sec_personal' }),
+      activo({ fechaActualizacion: '2026-01-01' }),
+      activo({ fechaActualizacion: '2026-06-01' }),
     ])
     const { items } = await repo.activos.list({ dateFrom: '2026-01-01', dateTo: '2026-01-31' })
     expect(items).toHaveLength(1)
@@ -374,9 +363,9 @@ describe('list() — keyset pagination', () => {
 describe('Config', () => {
   it('is atomic: getConfig() after updateConfig() reflects the full merged result', async () => {
     const repo = createLocalRepo()
-    await repo.updateConfig({ secciones: [] })
+    await repo.updateConfig({ categorias: [] })
     const config = await repo.getConfig()
-    expect(config.secciones).toEqual([])
+    expect(config.categorias).toEqual([])
   })
 })
 
@@ -390,12 +379,12 @@ describe('Config — error normalization', () => {
     [
       'updateConfig() wraps an unexpected db.config.get() failure',
       'get',
-      (repo: ReturnType<typeof createLocalRepo>) => repo.updateConfig({ secciones: [] }),
+      (repo: ReturnType<typeof createLocalRepo>) => repo.updateConfig({ categorias: [] }),
     ],
     [
       'updateConfig() wraps an unexpected db.config.put() failure',
       'put',
-      (repo: ReturnType<typeof createLocalRepo>) => repo.updateConfig({ secciones: [] }),
+      (repo: ReturnType<typeof createLocalRepo>) => repo.updateConfig({ categorias: [] }),
     ],
   ] as const)('%s as RepoError(unknown)', async (_label, method, run) => {
     const repo = createLocalRepo()
@@ -620,14 +609,14 @@ describe('createLocalRepo(database) — per-profile isolation', () => {
     const otherDb = createProfileDb('kurobello-profile-config-test')
     try {
       const otherRepo = createLocalRepo(otherDb)
-      await otherRepo.updateConfig({ secciones: [] })
+      await otherRepo.updateConfig({ categorias: [] })
 
       const otherConfig = await otherRepo.getConfig()
-      expect(otherConfig.secciones).toEqual([])
+      expect(otherConfig.categorias).toEqual([])
 
       const defaultRepo = createLocalRepo()
       const defaultConfig = await defaultRepo.getConfig()
-      expect(defaultConfig.secciones.length).toBeGreaterThan(0)
+      expect(defaultConfig.categorias.length).toBeGreaterThan(0)
     } finally {
       otherDb.close()
       await otherDb.delete()

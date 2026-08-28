@@ -432,10 +432,9 @@ const pushOnce = async (token: string, profile: ProfileRecord): Promise<void> =>
   }
 }
 
-type CsvTaxonomy = Pick<Config, 'secciones' | 'categorias'>
+type CsvTaxonomy = Pick<Config, 'categorias'>
 
 const csvTaxonomy = (config: Config | undefined): CsvTaxonomy => ({
-  secciones: config?.secciones ?? [],
   categorias: config?.categorias ?? [],
 })
 

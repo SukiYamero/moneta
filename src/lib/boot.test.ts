@@ -114,7 +114,6 @@ describe('useBootStore.run()', () => {
     const movA = {
       id: 'm-a',
       fecha: '2026-01-01',
-      seccion: 'sec_personal',
       categoria: 'cat_sueldo',
       tipo: 'ingreso' as const,
       monto: 100,

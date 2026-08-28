@@ -24,7 +24,6 @@ export interface UseMovimientoFormArgs {
   initial?: Movimiento
   locale: string
   monedaPrincipal: Moneda
-  categorias: Categoria[]
   onSaved: () => void
 }
 
@@ -56,7 +55,6 @@ interface FormFields {
   fecha: string
   nota: string
   categoriaId?: string
-  seccionId?: string
 }
 
 const defaultsFor = (
@@ -71,7 +69,6 @@ const defaultsFor = (
       fecha: initial.fecha,
       nota: initial.nota ?? '',
       categoriaId: initial.categoria,
-      seccionId: initial.seccion,
     }
   }
   return {
@@ -80,7 +77,6 @@ const defaultsFor = (
     fecha: todayIso(),
     nota: '',
     categoriaId: undefined,
-    seccionId: undefined,
   }
 }
 
@@ -89,7 +85,6 @@ export const useMovimientoForm = ({
   initial,
   locale,
   monedaPrincipal,
-  categorias,
   onSaved,
 }: UseMovimientoFormArgs): UseMovimientoFormResult => {
   const createMovimiento = useDataStore((s) => s.createMovimiento)
@@ -113,7 +108,7 @@ export const useMovimientoForm = ({
   const setNota = (nota: string) => setFields((f) => ({ ...f, nota }))
 
   const selectCategoria = (categoria: Categoria) =>
-    setFields((f) => ({ ...f, categoriaId: categoria.id, seccionId: categoria.seccionId }))
+    setFields((f) => ({ ...f, categoriaId: categoria.id }))
 
   const reset = () => {
     setFields(defaultsFor(mode, initial, locale))
@@ -128,11 +123,7 @@ export const useMovimientoForm = ({
       if (patch.monto !== undefined) next.amountRaw = formatAmountForInput(patch.monto, locale)
       if (patch.fecha !== undefined) next.fecha = patch.fecha
       if (patch.nota !== undefined) next.nota = patch.nota
-      if (patch.categoriaId !== undefined) {
-        next.categoriaId = patch.categoriaId
-        next.seccionId =
-          categorias.find((c) => c.id === patch.categoriaId)?.seccionId ?? f.seccionId
-      }
+      if (patch.categoriaId !== undefined) next.categoriaId = patch.categoriaId
       return next
     })
 
@@ -140,8 +131,7 @@ export const useMovimientoForm = ({
     if (submitting) return
     setAttempted(true)
     setSubmitAttempts((n) => n + 1)
-    if (!parsedAmount.ok || fields.categoriaId === undefined || fields.seccionId === undefined)
-      return
+    if (!parsedAmount.ok || fields.categoriaId === undefined) return
 
     setSubmitting(true)
     try {
@@ -149,7 +139,6 @@ export const useMovimientoForm = ({
       if (mode === 'create') {
         const ok = await createMovimiento({
           fecha: fields.fecha,
-          seccion: fields.seccionId,
           categoria: fields.categoriaId,
           tipo: fields.tipo,
           monto: parsedAmount.value,
@@ -164,7 +153,6 @@ export const useMovimientoForm = ({
       } else if (initial) {
         const ok = await updateMovimiento(initial.id, {
           fecha: fields.fecha,
-          seccion: fields.seccionId,
           categoria: fields.categoriaId,
           tipo: fields.tipo,
           monto: parsedAmount.value,

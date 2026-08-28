@@ -1,20 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Categoria, Movimiento, Seccion } from '@/lib/schema'
+import type { Categoria, Movimiento } from '@/lib/schema'
 
 const mArchiveCategoria = vi.fn()
 const mUpsertCategoria = vi.fn()
 const mDeleteCategoria = vi.fn()
 
-const SECCIONES: Seccion[] = [
-  { id: 'sec_personal', nombre: 'Personal', orden: 0 },
-  { id: 'sec_trabajo', nombre: 'Trabajo', orden: 1 },
-]
-
 const categoria = (overrides: Partial<Categoria> = {}): Categoria => ({
   id: crypto.randomUUID(),
   nombre: 'Comida',
-  seccionId: 'sec_personal',
-  tipo: 'gasto',
   icono: 'utensils',
   color: 'amber',
   ...overrides,
@@ -23,7 +16,6 @@ const categoria = (overrides: Partial<Categoria> = {}): Categoria => ({
 const movimiento = (overrides: Partial<Movimiento> = {}): Movimiento => ({
   id: crypto.randomUUID(),
   fecha: '2026-08-15',
-  seccion: 'sec_personal',
   categoria: 'cat_comida',
   tipo: 'gasto',
   monto: 1000,
@@ -33,7 +25,7 @@ const movimiento = (overrides: Partial<Movimiento> = {}): Movimiento => ({
 })
 
 let state: {
-  config: { secciones: Seccion[]; categorias: Categoria[] }
+  config: { categorias: Categoria[] }
   movimientos: Movimiento[]
 }
 
@@ -56,14 +48,12 @@ describe('CategoriesSection', () => {
     vi.clearAllMocks()
     state = {
       config: {
-        secciones: SECCIONES,
         categorias: [
-          categoria({ id: 'cat_comida', nombre: 'Comida', seccionId: 'sec_personal' }),
-          categoria({ id: 'cat_sueldo', nombre: 'Sueldo', seccionId: 'sec_trabajo' }),
+          categoria({ id: 'cat_comida', nombre: 'Comida' }),
+          categoria({ id: 'cat_sueldo', nombre: 'Sueldo' }),
           categoria({
             id: 'cat_vieja',
             nombre: 'Categoría vieja',
-            seccionId: 'sec_personal',
             archivado: true,
           }),
         ],
@@ -72,10 +62,8 @@ describe('CategoriesSection', () => {
     }
   })
 
-  it('groups active categories by section', () => {
+  it('renders a flat list of active categories', () => {
     render(<CategoriesSection />)
-    expect(screen.getByText('Personal')).toBeInTheDocument()
-    expect(screen.getByText('Trabajo')).toBeInTheDocument()
     expect(screen.getByText('Comida')).toBeInTheDocument()
     expect(screen.getByText('Sueldo')).toBeInTheDocument()
   })

@@ -128,7 +128,6 @@ const movOp = {
   mov: {
     id: 'm1',
     fecha: '2026-08-01',
-    seccion: 's',
     categoria: 'c',
     tipo: 'ingreso' as const,
     monto: 1,

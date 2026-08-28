@@ -118,11 +118,10 @@ export const SearchScreen = () => {
     }
     for (const tag of filters.selectedTags) {
       const category = categoriaById.get(tag)
-      const tipo = category?.tipo ?? 'gasto'
       chips.push({
         key: `tag-${tag}`,
         label: category?.nombre ?? t('tags:unknownCategory'),
-        icon: getMovimientoVisual(category, tipo).icon,
+        icon: getMovimientoVisual(category, 'gasto').icon,
         onRemove: () => filters.toggleTag(tag),
       })
     }

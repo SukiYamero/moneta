@@ -1,13 +1,12 @@
 import { useState, type ReactNode } from 'react'
 import { Archive, ArchiveRestore, ChevronDown, Plus, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import type { Categoria, Seccion, TipoMovimiento } from '@/lib/schema'
+import type { Categoria } from '@/lib/schema'
 import { useDataStore } from '@/lib/dataStore'
 import { getMovimientoVisual } from '@/components/shared/movimientoView'
 import { IconAvatar } from '@/components/shared/IconAvatar'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { Button } from '@/components/ui/button'
-import { SegmentedControl, type SegmentedControlOption } from '@/components/shared/SegmentedControl'
 import { CategoryFormModal } from '@/features/tags/CategoryFormModal'
 import { ProfileSectionHeading } from '@/features/profile/ProfileSectionHeading'
 
@@ -20,7 +19,7 @@ const CategoryRow = ({
   onEdit: () => void
   trailing: ReactNode
 }) => {
-  const { icon, tint } = getMovimientoVisual(categoria, categoria.tipo)
+  const { icon, tint } = getMovimientoVisual(categoria, 'gasto')
   return (
     <div className="flex min-h-11 items-center gap-3 rounded-xl border border-border-subtle bg-card px-3 py-2">
       <button type="button" onClick={onEdit} className="flex min-w-0 flex-1 items-center gap-3">
@@ -36,7 +35,6 @@ const CategoryRow = ({
 
 export const CategoriesSection = () => {
   const { t } = useTranslation(['settings', 'tags'])
-  const secciones = useDataStore((s) => s.config?.secciones ?? [])
   const categorias = useDataStore((s) => s.config?.categorias ?? [])
   const movimientos = useDataStore((s) => s.movimientos)
   const archiveCategoria = useDataStore((s) => s.archiveCategoria)
@@ -45,7 +43,6 @@ export const CategoriesSection = () => {
 
   const [editing, setEditing] = useState<Categoria | undefined>(undefined)
   const [creating, setCreating] = useState(false)
-  const [createTipo, setCreateTipo] = useState<TipoMovimiento>('gasto')
   const [archivedOpen, setArchivedOpen] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<Categoria | undefined>(undefined)
 
@@ -59,12 +56,6 @@ export const CategoriesSection = () => {
 
   const active = categorias.filter((c) => !c.archivado)
   const archived = categorias.filter((c) => c.archivado)
-  const sortedSecciones = secciones.toSorted((a: Seccion, b: Seccion) => a.orden - b.orden)
-
-  const typeOptions: SegmentedControlOption<TipoMovimiento>[] = [
-    { value: 'gasto', label: t('settings:categories.type.gasto') },
-    { value: 'ingreso', label: t('settings:categories.type.ingreso') },
-  ]
 
   const confirmDelete = () => {
     if (!deleteTarget) return
@@ -80,35 +71,26 @@ export const CategoriesSection = () => {
         <p className="text-sm text-fg-tertiary">{t('settings:categories.empty')}</p>
       ) : (
         <div className="flex flex-col gap-4">
-          {sortedSecciones.map((seccion) => {
-            const rows = active.filter((c) => c.seccionId === seccion.id)
-            if (rows.length === 0) return null
-            return (
-              <div key={seccion.id} className="flex flex-col gap-1.5">
-                <span className="text-xs font-bold text-fg-tertiary">{seccion.nombre}</span>
-                <div className="flex flex-col gap-1.5">
-                  {rows.map((categoria) => (
-                    <CategoryRow
-                      key={categoria.id}
-                      categoria={categoria}
-                      onEdit={() => setEditing(categoria)}
-                      trailing={
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-touch"
-                          aria-label={t('settings:categories.archiveCta')}
-                          onClick={() => void archiveCategoria(categoria.id)}
-                        >
-                          <Archive className="size-4" aria-hidden="true" />
-                        </Button>
-                      }
-                    />
-                  ))}
-                </div>
-              </div>
-            )
-          })}
+          <div className="flex flex-col gap-1.5">
+            {active.map((categoria) => (
+              <CategoryRow
+                key={categoria.id}
+                categoria={categoria}
+                onEdit={() => setEditing(categoria)}
+                trailing={
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-touch"
+                    aria-label={t('settings:categories.archiveCta')}
+                    onClick={() => void archiveCategoria(categoria.id)}
+                  >
+                    <Archive className="size-4" aria-hidden="true" />
+                  </Button>
+                }
+              />
+            ))}
+          </div>
 
           {archived.length > 0 && (
             <div className="flex flex-col gap-1.5">
@@ -169,13 +151,6 @@ export const CategoriesSection = () => {
       )}
 
       <div className="mt-3 flex items-center gap-2">
-        <SegmentedControl
-          options={typeOptions}
-          value={createTipo}
-          onChange={setCreateTipo}
-          aria-label={t('settings:categories.newTypeLabel')}
-          className="flex-1"
-        />
         <Button type="button" variant="outline" size="touch" onClick={() => setCreating(true)}>
           <Plus className="size-4" aria-hidden="true" />
           {t('settings:categories.newCta')}
@@ -185,8 +160,6 @@ export const CategoriesSection = () => {
       <CategoryFormModal
         open={modalOpen}
         onClose={closeModal}
-        tipo={createTipo}
-        secciones={secciones}
         categorias={categorias}
         categoria={editing}
       />

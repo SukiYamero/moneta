@@ -166,11 +166,8 @@ const validateLimit = (limit: number | undefined): void => {
 interface EntityConfig<T extends { id: EntityId }> {
   table: Table<T, EntityId, T>
   dateField: keyof T & string
-  seccionField: (keyof T & string) | undefined
   tiebreakField: (keyof T & string) | undefined
-  compoundIndex: string | undefined
   fastIndex: string
-  fastSeccionIndex: string
   validate: (item: T) => void
   entityLabel: string
 }
@@ -215,14 +212,11 @@ const findDuplicateId = async <T extends { id: EntityId }>(
 const matchesFilters = <T>(
   item: T,
   dateField: keyof T & string,
-  seccionField: (keyof T & string) | undefined,
   dateFrom: string | undefined,
   dateTo: string | undefined,
-  seccion: string | undefined,
 ): boolean => {
   if (dateFrom !== undefined && String(item[dateField]) < dateFrom) return false
   if (dateTo !== undefined && String(item[dateField]) > dateTo) return false
-  if (seccionField && seccion !== undefined && item[seccionField] !== seccion) return false
   return true
 }
 
@@ -243,33 +237,14 @@ const createCrudRepo = <T extends { id: EntityId }>(
   ensureReady: () => Promise<void>,
   database: ProfileDb,
 ): CrudRepo<T> => {
-  const {
-    table,
-    dateField,
-    seccionField,
-    tiebreakField,
-    compoundIndex,
-    fastIndex,
-    fastSeccionIndex,
-    validate,
-    entityLabel,
-  } = config
+  const { table, dateField, tiebreakField, fastIndex, validate, entityLabel } = config
 
   const fetchCandidates = async (
     dateFrom: string | undefined,
     dateTo: string | undefined,
-    seccion: string | undefined,
   ): Promise<T[]> => {
     const hasDateRange = dateFrom !== undefined || dateTo !== undefined
 
-    if (seccionField && seccion !== undefined && hasDateRange && compoundIndex) {
-      const lower: [string, string] = [seccion, dateFrom ?? '']
-      const upper: [string, string] = [seccion, dateTo ?? '￿']
-      return table.where(compoundIndex).between(lower, upper, true, true).toArray()
-    }
-    if (seccionField && seccion !== undefined) {
-      return table.where(seccionField).equals(seccion).toArray()
-    }
     if (hasDateRange) {
       return table
         .where(dateField)
@@ -282,16 +257,13 @@ const createCrudRepo = <T extends { id: EntityId }>(
   const listSlow = async (
     dateFrom: string | undefined,
     dateTo: string | undefined,
-    seccion: string | undefined,
     sortBy: keyof T,
     sortDir: 'asc' | 'desc',
     limit: number | undefined,
     cursor: string | undefined,
   ): Promise<ListResult<T>> => {
-    const candidates = await fetchCandidates(dateFrom, dateTo, seccion)
-    const filtered = candidates.filter((item) =>
-      matchesFilters(item, dateField, seccionField, dateFrom, dateTo, seccion),
-    )
+    const candidates = await fetchCandidates(dateFrom, dateTo)
+    const filtered = candidates.filter((item) => matchesFilters(item, dateField, dateFrom, dateTo))
 
     const comparator = makeComparator<T>(sortBy, sortDir, tiebreakField)
     const sorted = filtered.toSorted(comparator)
@@ -318,14 +290,10 @@ const createCrudRepo = <T extends { id: EntityId }>(
   const tryFastPath = async (
     dateFrom: string | undefined,
     dateTo: string | undefined,
-    seccion: string | undefined,
     sortDir: 'asc' | 'desc',
     limit: number,
     cursor: string | undefined,
   ): Promise<ListResult<T> | null> => {
-    const useSeccion = seccionField !== undefined && seccion !== undefined
-    const indexName = useSeccion ? fastSeccionIndex : fastIndex
-
     let dateLower = dateFrom ?? ''
     let dateUpper = dateTo ?? '￿'
     let tieLower = ''
@@ -345,11 +313,11 @@ const createCrudRepo = <T extends { id: EntityId }>(
       }
     }
 
-    const lower = useSeccion ? [seccion, dateLower, tieLower] : [dateLower, tieLower]
-    const upper = useSeccion ? [seccion, dateUpper, tieUpper] : [dateUpper, tieUpper]
+    const lower = [dateLower, tieLower]
+    const upper = [dateUpper, tieUpper]
 
     const fetchSize = limit + 1 + TIE_SAFETY_MARGIN
-    let collection = table.where(indexName).between(lower, upper, true, true)
+    let collection = table.where(fastIndex).between(lower, upper, true, true)
     // Dexie's Collection#reverse() flips index iteration direction, not Array#reverse().
     // oxlint-disable-next-line unicorn/no-array-reverse
     if (sortDir === 'desc') collection = collection.reverse()
@@ -364,9 +332,7 @@ const createCrudRepo = <T extends { id: EntityId }>(
       return null
     }
 
-    const filtered = usable.filter((item) =>
-      matchesFilters(item, dateField, seccionField, dateFrom, dateTo, seccion),
-    )
+    const filtered = usable.filter((item) => matchesFilters(item, dateField, dateFrom, dateTo))
     const page = filtered.slice(0, limit)
     const hasMore = filtered.length > page.length
     const lastItem = page.at(-1)
@@ -382,16 +348,16 @@ const createCrudRepo = <T extends { id: EntityId }>(
   const list = async (query: ListQuery<T> = {}): Promise<ListResult<T>> => {
     await ensureReady()
     try {
-      const { dateFrom, dateTo, seccion, sortDir = 'desc', limit, cursor } = query
+      const { dateFrom, dateTo, sortDir = 'desc', limit, cursor } = query
       validateLimit(limit)
       const sortBy = query.sortBy ?? dateField
 
       if (sortBy === dateField && limit !== undefined) {
-        const fast = await tryFastPath(dateFrom, dateTo, seccion, sortDir, limit, cursor)
+        const fast = await tryFastPath(dateFrom, dateTo, sortDir, limit, cursor)
         if (fast) return fast
       }
 
-      return await listSlow(dateFrom, dateTo, seccion, sortBy, sortDir, limit, cursor)
+      return await listSlow(dateFrom, dateTo, sortBy, sortDir, limit, cursor)
     } catch (error) {
       return wrapUnknown(error)
     }
@@ -555,11 +521,8 @@ export const createLocalRepo = (database: ProfileDb = db): Repo => {
     {
       table: database.movimientos as Table<Movimiento, EntityId, Movimiento>,
       dateField: 'fecha',
-      seccionField: 'seccion',
       tiebreakField: 'createdAt',
-      compoundIndex: '[seccion+fecha]',
       fastIndex: '[fecha+createdAt]',
-      fastSeccionIndex: '[seccion+fecha+createdAt]',
       validate: validateMovimiento,
       entityLabel: 'movimiento',
     },
@@ -571,11 +534,8 @@ export const createLocalRepo = (database: ProfileDb = db): Repo => {
     {
       table: database.activos as Table<Activo, EntityId, Activo>,
       dateField: 'fechaActualizacion',
-      seccionField: 'seccion',
       tiebreakField: undefined,
-      compoundIndex: '[seccion+fechaActualizacion]',
       fastIndex: '[fechaActualizacion+id]',
-      fastSeccionIndex: '[seccion+fechaActualizacion+id]',
       validate: validateActivo,
       entityLabel: 'activo',
     },

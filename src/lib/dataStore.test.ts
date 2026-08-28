@@ -21,7 +21,6 @@ const mToastError = vi.mocked(toast.error)
 const movimiento = (overrides: Partial<Movimiento> = {}): Movimiento => ({
   id: crypto.randomUUID(),
   fecha: '2026-08-15',
-  seccion: 'sec_personal',
   categoria: 'cat_sueldo',
   tipo: 'ingreso',
   monto: 1000,
@@ -43,8 +42,6 @@ const activo = (overrides: Partial<Activo> = {}): Activo => ({
 const categoria = (overrides: Partial<Categoria> = {}): Categoria => ({
   id: crypto.randomUUID(),
   nombre: 'Gimnasio',
-  seccionId: 'sec_personal',
-  tipo: 'gasto',
   icono: 'dumbbell',
   color: 'rose',
   ...overrides,
@@ -227,7 +224,6 @@ describe('useDataStore.createMovimiento', () => {
 
     await useDataStore.getState().createMovimiento({
       fecha: '2026-08-19',
-      seccion: 'sec_personal',
       categoria: 'cat_sueldo',
       tipo: 'ingreso',
       monto: 5000,
@@ -455,7 +451,7 @@ describe('useDataStore.updateConfig', () => {
     const repo = makeFakeRepo()
     mGetRepo.mockReturnValue(repo)
 
-    await useDataStore.getState().updateConfig({ secciones: [] })
+    await useDataStore.getState().updateConfig({ categorias: [] })
 
     expect(useDataStore.getState().config).toEqual(CONFIG_SEMILLA)
     expect(repo.updateConfig).not.toHaveBeenCalled()
@@ -468,7 +464,7 @@ describe('useDataStore.updateConfig', () => {
     mGetRepo.mockReturnValue(repo)
     vi.mocked(repo.updateConfig).mockRejectedValue(new RepoError('boom', 'unknown'))
 
-    await useDataStore.getState().updateConfig({ secciones: [] })
+    await useDataStore.getState().updateConfig({ categorias: [] })
 
     expect(useDataStore.getState().config).toEqual(CONFIG_SEMILLA)
     expect(mToastError).toHaveBeenCalledWith('home:error.codes.unknown')

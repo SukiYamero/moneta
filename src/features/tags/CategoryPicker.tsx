@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { LayoutGrid, Plus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import type { Categoria, TipoMovimiento } from '@/lib/schema'
+import type { Categoria } from '@/lib/schema'
 import { TagChip } from '@/components/shared/TagChip'
 import { getMovimientoVisual } from '@/components/shared/movimientoView'
 import { orderForPicker } from '@/features/tags/categoryOrder'
@@ -9,7 +9,6 @@ import { TagPickerSheet } from '@/features/tags/TagPickerSheet'
 
 export interface CategoryPickerProps {
   categorias: Categoria[]
-  tipo: TipoMovimiento
   selectedId?: string
   onSelect: (categoria: Categoria) => void
   onCreateRequested: (query: string) => void
@@ -17,7 +16,6 @@ export interface CategoryPickerProps {
 
 export const CategoryPicker = ({
   categorias,
-  tipo,
   selectedId,
   onSelect,
   onCreateRequested,
@@ -25,7 +23,7 @@ export const CategoryPicker = ({
   const { t } = useTranslation('tags')
   const [pickerOpen, setPickerOpen] = useState(false)
 
-  const ordered = useMemo(() => orderForPicker(categorias, tipo), [categorias, tipo])
+  const ordered = useMemo(() => orderForPicker(categorias), [categorias])
   const activeCount = ordered.length
 
   return (
@@ -52,7 +50,7 @@ export const CategoryPicker = ({
 
       <div className="grid min-w-0 flex-1 auto-cols-max grid-flow-col grid-rows-2 touch-pan-x gap-1.5 overflow-x-auto py-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {ordered.map((c) => {
-          const { icon, tint } = getMovimientoVisual(c, c.tipo)
+          const { icon, tint } = getMovimientoVisual(c, 'gasto')
           return (
             <TagChip
               key={c.id}
@@ -70,7 +68,6 @@ export const CategoryPicker = ({
         open={pickerOpen}
         onClose={() => setPickerOpen(false)}
         categorias={categorias}
-        tipo={tipo}
         selectedId={selectedId}
         onSelect={onSelect}
         onCreateRequested={(query) => {

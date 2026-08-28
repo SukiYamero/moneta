@@ -36,7 +36,7 @@ describe('getMovimientoVisual', () => {
 
 describe('resolveCategoria', () => {
   const config: Pick<Config, 'categorias'> = {
-    categorias: [{ id: 'cat_1', nombre: 'Comida', seccionId: 'sec_1', tipo: 'gasto' }],
+    categorias: [{ id: 'cat_1', nombre: 'Comida' }],
   }
 
   it('finds a category by id', () => {

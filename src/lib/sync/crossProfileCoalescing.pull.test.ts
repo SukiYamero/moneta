@@ -36,7 +36,6 @@ const mGetLastKnownServerTime = vi.mocked(getLastKnownServerTime)
 const movimiento = (overrides: Partial<Movimiento> = {}): Movimiento => ({
   id: 'm1',
   fecha: '2026-08-01',
-  seccion: 'sec_personal',
   categoria: 'cat_sueldo',
   tipo: 'ingreso',
   monto: 1000,

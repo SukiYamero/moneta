@@ -12,7 +12,6 @@ import {
 const movimiento = (overrides: Partial<Movimiento> = {}): Movimiento => ({
   id: crypto.randomUUID(),
   fecha: '2026-08-15',
-  seccion: 'sec_personal',
   categoria: 'Comida',
   tipo: 'gasto',
   monto: 1000,

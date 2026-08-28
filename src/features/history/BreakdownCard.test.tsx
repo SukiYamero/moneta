@@ -46,9 +46,7 @@ describe('BreakdownCard', () => {
 
   it('resolves a breakdown entry (a category id) to its name, never rendering the raw id', () => {
     const breakdown: BreakdownEntry[] = [{ key: 'cat_comida', total: 5000, share: 1 }]
-    const categorias: Categoria[] = [
-      { id: 'cat_comida', nombre: 'Comida', seccionId: 'sec_1', tipo: 'gasto' },
-    ]
+    const categorias: Categoria[] = [{ id: 'cat_comida', nombre: 'Comida' }]
     render(
       <BreakdownCard
         scope="dia"

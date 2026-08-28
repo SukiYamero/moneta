@@ -6,7 +6,6 @@ const movimiento = (overrides: Partial<Movimiento> = {}): Movimiento => {
   return {
     id: crypto.randomUUID(),
     fecha: '2026-01-01',
-    seccion: 'sec_personal',
     categoria: 'cat_sueldo',
     tipo: 'ingreso',
     monto: 1000,
@@ -21,7 +20,6 @@ const activo = (overrides: Partial<Activo> = {}): Activo => {
     id: crypto.randomUUID(),
     nombre: 'CDT Bancolombia',
     tipo: 'CDT',
-    seccion: 'sec_personal',
     valorActual: 1000,
     moneda: 'COP',
     fechaActualizacion: '2026-01-01',
@@ -277,15 +275,6 @@ export const testRepoContract = (makeRepo: () => Promise<Repo> | Repo): void => 
         })
         expect(items.map((m) => m.fecha).toSorted()).toEqual(['2026-01-01', '2026-01-15'])
       })
-
-      it('seccion filters by exact match', async () => {
-        const repo = await makeRepo()
-        await repo.movimientos.add(movimiento({ seccion: 'sec_personal' }))
-        await repo.movimientos.add(movimiento({ seccion: 'sec_trabajo' }))
-        const { items } = await repo.movimientos.list({ seccion: 'sec_trabajo' })
-        expect(items).toHaveLength(1)
-        expect(items[0]?.seccion).toBe('sec_trabajo')
-      })
     })
 
     describe('list() — sorting', () => {
@@ -378,9 +367,8 @@ export const testRepoContract = (makeRepo: () => Promise<Repo> | Repo): void => 
       it('shallow-merges an updateConfig() patch, leaving other top-level keys untouched', async () => {
         const repo = await makeRepo()
         const before = await repo.getConfig()
-        const updated = await repo.updateConfig({ secciones: [] })
-        expect(updated.secciones).toEqual([])
-        expect(updated.categorias).toEqual(before.categorias)
+        const updated = await repo.updateConfig({ categorias: [] })
+        expect(updated.categorias).toEqual([])
         expect(updated.preferencias).toEqual(before.preferencias)
       })
 
@@ -397,10 +385,10 @@ export const testRepoContract = (makeRepo: () => Promise<Repo> | Repo): void => 
       it('getConfig() returns a fresh object: mutating the result never affects stored data', async () => {
         const repo = await makeRepo()
         const config = await repo.getConfig()
-        const snapshot = [...config.secciones]
-        config.secciones.push({ id: 'hack', nombre: 'x', orden: 99 })
+        const snapshot = [...config.categorias]
+        config.categorias.push({ id: 'hack', nombre: 'x' })
         const again = await repo.getConfig()
-        expect(again.secciones).toEqual(snapshot)
+        expect(again.categorias).toEqual(snapshot)
       })
     })
   })

@@ -78,6 +78,15 @@ export const createProfileDb = (name: string): ProfileDb => {
     profileOwner: 'id',
   })
 
+  database.version(5).stores({
+    vault: 'id',
+    movimientos: 'id, fecha, [fecha+createdAt]',
+    activos: 'id, fechaActualizacion, [fechaActualizacion+id]',
+    config: 'id',
+    outbox: 'id, hlc, [entity+entityId]',
+    profileOwner: 'id',
+  })
+
   return database
 }
 

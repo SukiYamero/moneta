@@ -15,7 +15,6 @@ const mDeliverCsv = vi.mocked(deliverCsv)
 const movimiento = (overrides: Partial<Movimiento> = {}): Movimiento => ({
   id: crypto.randomUUID(),
   fecha: '2026-08-15',
-  seccion: 'sec_personal',
   categoria: 'cat_sueldo',
   tipo: 'ingreso',
   monto: 1000,
@@ -103,18 +102,14 @@ describe('exportMovimientosToCsv()', () => {
     }
   })
 
-  it('resolves category/section names via repo.getConfig(), never the raw id', async () => {
-    const repo = repoStubWithPages(
-      [movimiento({ categoria: 'cat_sueldo', seccion: 'sec_personal' })],
-      500,
-    )
+  it('resolves the category name via repo.getConfig(), never the raw id', async () => {
+    const repo = repoStubWithPages([movimiento({ categoria: 'cat_sueldo' })], 500)
     mGetRepo.mockReturnValue(repo)
 
     await exportMovimientosToCsv({ locale: 'es-CO' })
 
     const csv = mDeliverCsv.mock.calls[0]![0].parts.join('')
-    expect(csv).toContain(';Personal;Sueldo;')
-    expect(csv).not.toContain('sec_personal')
+    expect(csv).toContain(';Sueldo;')
     expect(csv).not.toContain('cat_sueldo')
   })
 
@@ -143,7 +138,7 @@ describe('exportMovimientosToCsv()', () => {
     await expect(exportMovimientosToCsv({ locale: 'es-CO' })).resolves.toBeUndefined()
 
     const csv = mDeliverCsv.mock.calls[0]![0].parts.join('')
-    expect(csv).toContain('id;fecha;seccion;categoria;tipo;monto;moneda;metodo;nota;createdAt')
+    expect(csv).toContain('id;fecha;categoria;tipo;monto;moneda;metodo;nota;createdAt')
     expect(csv.split('\r\n')).toHaveLength(3)
   })
 

@@ -19,7 +19,6 @@ const mGetRepo = vi.mocked(getRepo)
 const movimiento = (overrides: Partial<Movimiento> = {}): Movimiento => ({
   id: crypto.randomUUID(),
   fecha: '2026-08-15',
-  seccion: 'sec_personal',
   categoria: 'cat_comida',
   tipo: 'gasto',
   monto: 18_000,
@@ -32,8 +31,8 @@ const CONFIG: Config = {
   ...CONFIG_SEMILLA,
   categorias: [
     ...CONFIG_SEMILLA.categorias,
-    { id: 'cat_comida', nombre: 'Comida', seccionId: 'sec_personal', tipo: 'gasto' },
-    { id: 'cat_transporte', nombre: 'Transporte', seccionId: 'sec_personal', tipo: 'gasto' },
+    { id: 'cat_comida', nombre: 'Comida' },
+    { id: 'cat_transporte', nombre: 'Transporte' },
   ],
 }
 
