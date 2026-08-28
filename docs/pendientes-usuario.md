@@ -13,6 +13,10 @@ Things only the user can do — design work in the Claude Design canvas, decisio
 
 ## Open
 
+### 30. Clear stored data before the new category model runs — `owner: user`
+
+`SCHEMA_VERSION` goes to 2 with the category-experience work and no migration is registered, so the app throws `schema_mismatch` against anything already stored. Nothing is lost that matters — there are no users and the data is test data — but the app will not boot until the old data is gone, and stale Drive data would otherwise pull the old taxonomy straight back over the new seed. Three steps, all of them the user's: (1) in the browser's DevTools, Application → Storage → **Clear site data** for the dev origin, which removes the `kurobello`, `kurobello-<profile>` and `kurobello-device` IndexedDB databases and the service-worker cache — do it for every origin the app has been opened on, including the HTTPS dev origin used from the phone; (2) on `drive.google.com`, delete the **`KuroBello`** folder and empty the trash; (3) on `drive.google.com` → Settings → **Manage apps** → the app → Options → **Delete hidden app data**, which is the only way to reach the `appDataFolder` holding `config-<device>.json` — it is invisible in the normal Drive UI. The check afterwards: open the app, get through onboarding, and confirm the category sheet shows the seeded catalog and not five old categories.
+
 ### 27. `dvh` never recovers in the installed PWA on iOS — `owner: user`
 
 Measured on a real iPhone in an installed PWA: `100dvh` reads 852 before the first keyboard, 793 after it, and stays 793 for the rest of the session — `window.innerHeight` and `visualViewport.height` drift with it. It is a WebKit bug with no web-side fix, and it means `max-h-[88dvh]` on both overlay shells silently resolves ~7% short once any field has been focused. Not visible in a Safari tab, only in the installed app. The decision needed: accept the shorter sheet, or replace `dvh` on the shells with a measured height taken once at boot. Tied to item 28 — a native wrapper would make this moot.
@@ -59,7 +63,7 @@ The amount field's live-grouping rewrites the input's value and caret position s
 
 ### 18. Saving a category does not work — `owner: user` (deferred by the user until other adjustments close)
 
-Reported directly by the user, not yet investigated or reproduced. One lead worth checking first: the category form's Save button is disabled until the form is judged valid with no visible reason shown — the same shape as an earlier "nothing happens on tap" bug already fixed elsewhere in the app. Needs reproduction before any fix is attempted.
+Cause found, confirmation pending. `CategoryFormModal.tsx:107` and `dataStore.ts:114` both mint an id with `crypto.randomUUID()`, which is `undefined` outside a secure context — so from a phone on a plain `http://<lan-ip>:5173` dev session neither a category nor a movement can be created at all, which is exactly the pair of symptoms reported. `bun run dev:https` serves over HTTPS with a self-signed certificate and is the answer; no code change is warranted, and adding a non-crypto id fallback would be worse than the bug. The check: over `dev:https` on the phone, create a category from the picker and save a movement with it — do both land?
 
 ### 11. Where the biometric option lives, and how it is presented — `owner: user`
 
