@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { Categoria } from '@/lib/schema'
-import { leastUsedTint, suggestCategoryVisual } from '@/features/tags/categorySuggest'
+import { CATEGORY_ICON_KEYS } from '@/lib/categoryIconKeys'
+import { ICON_AVATAR_TINTS } from '@/components/shared/tintClasses'
+import {
+  CATEGORY_CONCEPTS,
+  leastUsedTint,
+  suggestCategoryVisual,
+} from '@/features/tags/categorySuggest'
 
 describe('suggestCategoryVisual', () => {
   it('resolves "gimnasio", "gym" and "academia" to the same icon/color, with no locale awareness needed', () => {
@@ -65,5 +71,104 @@ describe('leastUsedTint', () => {
   it('ignores categories with no color set', () => {
     const categorias: Pick<Categoria, 'color'>[] = [{ color: undefined }, { color: undefined }]
     expect(leastUsedTint(categorias)).toBeDefined()
+  })
+})
+
+describe('CATEGORY_CONCEPTS', () => {
+  it('every icon key is reachable through at least one keyword concept', () => {
+    const covered = new Set(CATEGORY_CONCEPTS.map((c) => c.icon))
+    expect(CATEGORY_ICON_KEYS.filter((k) => !covered.has(k))).toEqual([])
+  })
+
+  it('every concept icon is a member of CATEGORY_ICON_KEYS', () => {
+    const invalid = CATEGORY_CONCEPTS.filter(
+      (c) => !(CATEGORY_ICON_KEYS as readonly string[]).includes(c.icon),
+    )
+    expect(invalid).toEqual([])
+  })
+
+  it('every concept tint is a member of ICON_AVATAR_TINTS', () => {
+    const invalid = CATEGORY_CONCEPTS.filter(
+      (c) => !(ICON_AVATAR_TINTS as readonly string[]).includes(c.tint),
+    )
+    expect(invalid).toEqual([])
+  })
+})
+
+describe('suggestCategoryVisual resolves new keywords in Spanish and English', () => {
+  it.each([
+    ['prestamo', 'hand-coins'],
+    ['loan', 'hand-coins'],
+    ['comision', 'percent'],
+    ['fees', 'percent'],
+    ['contador', 'calculator'],
+    ['accounting', 'calculator'],
+    ['donacion', 'handshake'],
+    ['charity', 'handshake'],
+    ['seguro', 'shield'],
+    ['insurance', 'shield'],
+    ['expensas', 'building-2'],
+    ['hoa', 'building-2'],
+    ['lavanderia', 'washing-machine'],
+    ['laundry', 'washing-machine'],
+    ['limpieza', 'spray-can'],
+    ['cleaning', 'spray-can'],
+    ['herramientas', 'hammer'],
+    ['tools', 'hammer'],
+    ['muebles', 'sofa'],
+    ['furniture', 'sofa'],
+    ['domicilio', 'truck'],
+    ['delivery', 'truck'],
+    ['paquete', 'package'],
+    ['shipping', 'package'],
+    ['estacionamiento', 'parking'],
+    ['parking', 'parking'],
+    ['tren', 'train'],
+    ['train', 'train'],
+    ['hotel', 'hotel'],
+    ['lodging', 'hotel'],
+    ['equipaje', 'luggage'],
+    ['luggage', 'luggage'],
+    ['television', 'tv'],
+    ['electronics', 'tv'],
+    ['camisa', 'shirt'],
+    ['pantalon', 'shirt'],
+    ['joyeria', 'gem'],
+    ['jewelry', 'gem'],
+    ['chequeo', 'stethoscope'],
+    ['checkup', 'stethoscope'],
+    ['lentes', 'glasses'],
+    ['glasses', 'glasses'],
+    ['urgencia', 'bandage'],
+    ['emergency', 'bandage'],
+    ['colegio', 'school'],
+    ['school', 'school'],
+    ['pelicula', 'film'],
+    ['movie', 'film'],
+    ['suscripcion', 'ticket'],
+    ['subscription', 'ticket'],
+    ['deporte', 'trophy'],
+    ['sport', 'trophy'],
+    ['manualidades', 'palette'],
+    ['hobby', 'palette'],
+    ['pizza', 'pizza'],
+    ['cerveza', 'beer'],
+    ['drinks', 'beer'],
+    ['panaderia', 'cake'],
+    ['bakery', 'cake'],
+    ['chef', 'chef-hat'],
+    ['catering', 'chef-hat'],
+    ['frutas', 'apple'],
+    ['feria', 'apple'],
+    ['oficina', 'briefcase-business'],
+    ['office', 'briefcase-business'],
+    ['tramite', 'file-text'],
+    ['legal', 'file-text'],
+    ['jardineria', 'flower-2'],
+    ['gardening', 'flower-2'],
+    ['varios', 'sparkles'],
+    ['misc', 'sparkles'],
+  ] as const)('resolves "%s" to the "%s" icon', (word, expectedIcon) => {
+    expect(suggestCategoryVisual(word, []).icono).toBe(expectedIcon)
   })
 })
