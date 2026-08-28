@@ -19,6 +19,12 @@ interface FakeDataState {
 
 let state: FakeDataState
 
+const pickCategory = async (user: ReturnType<typeof userEvent.setup>, name: string) => {
+  const dialog = screen.getByRole('dialog', { name: 'Categoría' })
+  await user.type(within(dialog).getByRole('textbox', { name: /buscar categoría/i }), name)
+  await user.click(within(dialog).getByRole('button', { name }))
+}
+
 vi.mocked(useDataStore).mockImplementation(((selector: (state: FakeDataState) => unknown) =>
   selector(state)) as typeof useDataStore)
 
@@ -87,11 +93,7 @@ describe('AddMovimientoSheet', () => {
 
     await user.type(screen.getByRole('textbox', { name: /monto/i }), '18000')
     await user.click(screen.getByRole('button', { name: /elegir categoría/i }))
-    await user.click(
-      within(screen.getByRole('dialog', { name: 'Categoría' })).getByRole('button', {
-        name: 'Servicios',
-      }),
-    )
+    await pickCategory(user, 'Servicios')
     await user.click(screen.getByRole('button', { name: /más detalles/i }))
     await user.type(screen.getByRole('textbox', { name: /descripción/i }), 'Internet')
     await user.click(screen.getByRole('button', { name: /agregar gasto/i }))
@@ -134,11 +136,7 @@ describe('AddMovimientoSheet', () => {
 
     await user.type(screen.getByRole('textbox', { name: /monto/i }), '5000')
     await user.click(screen.getByRole('button', { name: /elegir categoría/i }))
-    await user.click(
-      within(screen.getByRole('dialog', { name: 'Categoría' })).getByRole('button', {
-        name: 'Servicios',
-      }),
-    )
+    await pickCategory(user, 'Servicios')
     const saveButton = screen.getByRole('button', { name: /agregar gasto/i })
     await user.click(saveButton)
 
@@ -205,8 +203,7 @@ describe('AddMovimientoSheet', () => {
       const user = userEvent.setup()
       await openBoth(user)
 
-      const categoryDialog = screen.getByRole('dialog', { name: 'Categoría' })
-      await user.click(within(categoryDialog).getByRole('button', { name: 'Servicios' }))
+      await pickCategory(user, 'Servicios')
 
       expect(screen.getAllByRole('dialog')).toHaveLength(1)
       expect(useMovimientoSheetStore.getState().addOpen).toBe(true)
