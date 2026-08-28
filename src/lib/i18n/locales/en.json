@@ -18,7 +18,10 @@
       "body": "This app is designed to be used in portrait mode. Switch back to that mode for the best experience.",
       "skip": "Skip and continue"
     },
-    "characterCount": "{{count}} of {{max}} characters"
+    "characterCount": "{{count}} of {{max}} characters",
+    "pagination": {
+      "pageAria": "Page {{page}} of {{count}}"
+    }
   },
   "auth": {
     "welcome": {

@@ -18,7 +18,10 @@
       "body": "Este app foi pensado para ser usado na vertical. Volte a esse modo para a melhor experiência.",
       "skip": "Pular e continuar"
     },
-    "characterCount": "{{count}} de {{max}} caracteres"
+    "characterCount": "{{count}} de {{max}} caracteres",
+    "pagination": {
+      "pageAria": "Página {{page}} de {{count}}"
+    }
   },
   "auth": {
     "welcome": {

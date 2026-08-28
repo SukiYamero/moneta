@@ -10,6 +10,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from 'react'
+import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 
 export interface PagedGridProps<T> {
@@ -40,10 +41,12 @@ export const PagedGrid = <T,>({
   ariaLabel,
   className,
 }: PagedGridProps<T>) => {
+  const { t } = useTranslation('common')
   const pageSize = columns * rows
   const pageCount = Math.max(1, Math.ceil(items.length / pageSize))
-  const hasPrevPage = page > 0
-  const hasNextPage = page < pageCount - 1
+  const safePage = Math.min(page, Math.max(pageCount - 1, 0))
+  const hasPrevPage = safePage > 0
+  const hasNextPage = safePage < pageCount - 1
 
   const [dragOffset, setDragOffset] = useState(0)
   const [dragging, setDragging] = useState(false)
@@ -55,14 +58,14 @@ export const PagedGrid = <T,>({
   const [minHeight, setMinHeight] = useState<number>()
 
   useEffect(() => {
-    if (page <= pageCount - 1) return
-    onPageChange(pageCount - 1)
-  }, [page, pageCount, onPageChange])
+    if (page === safePage) return
+    onPageChange(safePage)
+  }, [page, safePage, onPageChange])
 
   const pageItems = useMemo(() => {
-    const start = page * pageSize
+    const start = safePage * pageSize
     return items.slice(start, start + pageSize)
-  }, [items, page, pageSize])
+  }, [items, safePage, pageSize])
 
   const prevItemsRef = useRef(items)
 
@@ -126,8 +129,8 @@ export const PagedGrid = <T,>({
   const commitOrSpring = (dx: number) => {
     if (dragAxis.current !== 'horizontal') return
     if (Math.abs(dx) < SWIPE_COMMIT_THRESHOLD_PX) return
-    if (dx < 0 && hasNextPage) onPageChange(page + 1)
-    else if (dx > 0 && hasPrevPage) onPageChange(page - 1)
+    if (dx < 0 && hasNextPage) onPageChange(safePage + 1)
+    else if (dx > 0 && hasPrevPage) onPageChange(safePage - 1)
   }
 
   const handlePointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -159,10 +162,10 @@ export const PagedGrid = <T,>({
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     if (event.key === 'ArrowRight' && hasNextPage) {
       event.preventDefault()
-      onPageChange(page + 1)
+      onPageChange(safePage + 1)
     } else if (event.key === 'ArrowLeft' && hasPrevPage) {
       event.preventDefault()
-      onPageChange(page - 1)
+      onPageChange(safePage - 1)
     }
   }
 
@@ -208,15 +211,15 @@ export const PagedGrid = <T,>({
             <button
               key={dotPage}
               type="button"
-              aria-label={`Page ${dotPage + 1} of ${pageCount}`}
-              aria-current={dotPage === page ? 'true' : undefined}
+              aria-label={t('pagination.pageAria', { page: dotPage + 1, count: pageCount })}
+              aria-current={dotPage === safePage ? 'true' : undefined}
               onClick={() => onPageChange(dotPage)}
               className="flex size-11 shrink-0 items-center justify-center rounded-full outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
             >
               <span
                 className={cn(
                   'rounded-full bg-fg-faint transition-[width]',
-                  dotPage === page ? 'h-1.5 w-4.5 bg-foreground' : 'size-1.5',
+                  dotPage === safePage ? 'h-1.5 w-4.5 bg-foreground' : 'size-1.5',
                 )}
               />
             </button>
