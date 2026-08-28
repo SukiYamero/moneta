@@ -11,6 +11,13 @@
         "invalidInput": "There was a problem with your data.",
         "network": "No connection. Check your internet and try again.",
         "unknown": "Something went wrong. Try again."
+      },
+      "recover": {
+        "cta": "Clear local data and retry",
+        "confirmTitle": "Clear local data?",
+        "confirmDescription": "This deletes the movements, categories and settings stored on this device. This can't be undone.",
+        "cancelCta": "Cancel",
+        "confirmCta": "Clear and retry"
       }
     },
     "landscapeGuard": {

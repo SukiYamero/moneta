@@ -11,6 +11,13 @@
         "invalidInput": "Hubo un problema con tus datos.",
         "network": "No hay conexión. Revisa tu internet e intenta de nuevo.",
         "unknown": "Ocurrió un error inesperado. Intenta de nuevo."
+      },
+      "recover": {
+        "cta": "Borrar datos locales y reintentar",
+        "confirmTitle": "¿Borrar los datos locales?",
+        "confirmDescription": "Esto elimina los movimientos, categorías y ajustes guardados en este dispositivo. No se puede deshacer.",
+        "cancelCta": "Cancelar",
+        "confirmCta": "Borrar y reintentar"
       }
     },
     "landscapeGuard": {

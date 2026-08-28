@@ -1,7 +1,10 @@
 import { CircleAlert } from 'lucide-react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { RepoErrorCode } from '@/lib/repo'
 import { repoErrorCopyKey } from '@/lib/errorCopy'
+import { clearLocalDatabaseAndReload } from '@/lib/bootRecovery'
+import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 
 export interface BootErrorScreenProps {
   code: RepoErrorCode
@@ -10,6 +13,7 @@ export interface BootErrorScreenProps {
 
 export const BootErrorScreen = ({ code, onRetry }: BootErrorScreenProps) => {
   const { t } = useTranslation('common')
+  const [confirmOpen, setConfirmOpen] = useState(false)
 
   return (
     <div className="flex min-h-full flex-col items-center justify-center gap-3.5 bg-background px-8 text-center text-foreground">
@@ -31,6 +35,27 @@ export const BootErrorScreen = ({ code, onRetry }: BootErrorScreenProps) => {
       >
         {t('error.retry')}
       </button>
+      {code === 'schema_mismatch' && (
+        <>
+          <button
+            type="button"
+            onClick={() => setConfirmOpen(true)}
+            className="h-11 rounded-2xl px-6 text-sm font-bold text-danger"
+          >
+            {t('error.recover.cta')}
+          </button>
+          <ConfirmDialog
+            open={confirmOpen}
+            onClose={() => setConfirmOpen(false)}
+            onConfirm={() => void clearLocalDatabaseAndReload()}
+            title={t('error.recover.confirmTitle')}
+            description={t('error.recover.confirmDescription')}
+            cancelLabel={t('error.recover.cancelCta')}
+            confirmLabel={t('error.recover.confirmCta')}
+            destructive
+          />
+        </>
+      )}
     </div>
   )
 }
