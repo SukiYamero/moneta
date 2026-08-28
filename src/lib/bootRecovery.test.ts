@@ -57,4 +57,21 @@ describe('clearLocalDatabaseAndReload', () => {
     expect(consoleError).toHaveBeenCalledOnce()
     expect(window.location.reload).toHaveBeenCalledOnce()
   })
+
+  it('still reloads, instead of hanging forever, when another open connection blocks the delete', async () => {
+    mGetActiveProfileBinding.mockReturnValue(null)
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.spyOn(indexedDB, 'deleteDatabase').mockImplementation(() => {
+      const target = new EventTarget()
+      queueMicrotask(() => target.dispatchEvent(new Event('blocked')))
+      return target as unknown as IDBOpenDBRequest
+    })
+
+    await clearLocalDatabaseAndReload()
+
+    expect(consoleWarn).toHaveBeenCalledOnce()
+    expect(consoleError).toHaveBeenCalledOnce()
+    expect(window.location.reload).toHaveBeenCalledOnce()
+  })
 })

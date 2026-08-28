@@ -8,9 +8,10 @@ const deleteIndexedDbDatabase = (name: string): Promise<void> =>
     request.addEventListener('error', () =>
       reject(request.error ?? new Error(`indexedDB.deleteDatabase("${name}") failed`)),
     )
-    request.addEventListener('blocked', () =>
-      console.warn(`indexedDB.deleteDatabase("${name}") is blocked by another open connection`),
-    )
+    request.addEventListener('blocked', () => {
+      console.warn(`indexedDB.deleteDatabase("${name}") is blocked by another open connection`)
+      reject(new Error(`indexedDB.deleteDatabase("${name}") is blocked`))
+    })
   })
 
 export const clearLocalDatabaseAndReload = async (): Promise<void> => {

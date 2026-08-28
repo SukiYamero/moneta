@@ -47,7 +47,10 @@ export const BootErrorScreen = ({ code, onRetry }: BootErrorScreenProps) => {
           <ConfirmDialog
             open={confirmOpen}
             onClose={() => setConfirmOpen(false)}
-            onConfirm={() => void clearLocalDatabaseAndReload()}
+            onConfirm={() => {
+              setConfirmOpen(false)
+              void clearLocalDatabaseAndReload()
+            }}
             title={t('error.recover.confirmTitle')}
             description={t('error.recover.confirmDescription')}
             cancelLabel={t('error.recover.cancelCta')}
