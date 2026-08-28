@@ -318,7 +318,7 @@ describe('useOverlay — autoFocus opt-out', () => {
     expect(onClose).toHaveBeenCalledOnce()
   })
 
-  it('still traps Tab inside the panel once focus reaches its controls, when autoFocus is false', async () => {
+  it('traps Tab from the panel itself, before any control has been focused, when autoFocus is false', async () => {
     const user = userEvent.setup()
     render(
       <BottomSheet open onClose={() => {}} ariaLabel="Sheet sin autofoco" autoFocus={false}>
@@ -330,7 +330,9 @@ describe('useOverlay — autoFocus opt-out', () => {
       expect(screen.getByRole('dialog')).toHaveFocus()
     })
 
-    screen.getByRole('button', { name: 'Segundo' }).focus()
+    await user.tab({ shift: true })
+    expect(screen.getByRole('button', { name: 'Segundo' })).toHaveFocus()
+
     await user.tab()
     expect(screen.getByRole('button', { name: 'Primero' })).toHaveFocus()
 
