@@ -39,6 +39,7 @@ export const BottomSheet = ({
   if (!open) return null
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (pointerIdRef.current !== null) return
     dragStartY.current = event.clientY
     pointerIdRef.current = event.pointerId
     setDragging(true)
@@ -46,6 +47,7 @@ export const BottomSheet = ({
   }
 
   const handlePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.pointerId !== pointerIdRef.current) return
     if (!dragging) return
     setDragY(Math.max(0, event.clientY - dragStartY.current))
   }
@@ -59,6 +61,7 @@ export const BottomSheet = ({
   }
 
   const endDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.pointerId !== pointerIdRef.current) return
     releaseCapture(event)
     if (!dragging) return
     setDragging(false)
@@ -67,6 +70,7 @@ export const BottomSheet = ({
   }
 
   const cancelDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.pointerId !== pointerIdRef.current) return
     releaseCapture(event)
     setDragging(false)
     setDragY(0)
@@ -74,7 +78,8 @@ export const BottomSheet = ({
 
   // The only event guaranteed to fire when a drag ends outside the window —
   // the OS delivers no pointerup/pointercancel back to the page in that case.
-  const handleLostPointerCapture = () => {
+  const handleLostPointerCapture = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.pointerId !== pointerIdRef.current) return
     pointerIdRef.current = null
     if (!dragging) return
     setDragging(false)
