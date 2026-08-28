@@ -241,6 +241,66 @@ describe('PagedGrid', () => {
     expect(onPageChange).toHaveBeenCalledWith(1)
   })
 
+  it('suppresses the ghost click a mouse drag leaves on the tile under the pointer', () => {
+    const onPageChange = vi.fn()
+    const onItemClick = vi.fn()
+    render(
+      <PagedGrid
+        items={makeItems(20)}
+        columns={3}
+        rows={3}
+        page={0}
+        onPageChange={onPageChange}
+        renderItem={(item) => (
+          <button type="button" onClick={onItemClick}>
+            {item.label}
+          </button>
+        )}
+        itemKey={(item) => item.id}
+        ariaLabel="Categorías"
+      />,
+    )
+    const track = getTrack()
+
+    dispatchPointer(track, 'pointerdown', { pointerId: 1, clientX: 0 })
+    dispatchPointer(track, 'pointermove', { pointerId: 1, clientX: -60 })
+    dispatchPointer(track, 'pointerup', { pointerId: 1, clientX: -60 })
+
+    const tile = within(track).getAllByRole('button')[0]
+    const clickEvent = new MouseEvent('click', { bubbles: true, cancelable: true })
+    act(() => {
+      tile?.dispatchEvent(clickEvent)
+    })
+
+    expect(clickEvent.defaultPrevented).toBe(true)
+    expect(onItemClick).not.toHaveBeenCalled()
+  })
+
+  it('does not suppress a plain tap that never crossed the axis-lock distance', async () => {
+    const user = userEvent.setup()
+    const onItemClick = vi.fn()
+    render(
+      <PagedGrid
+        items={makeItems(20)}
+        columns={3}
+        rows={3}
+        page={0}
+        onPageChange={vi.fn()}
+        renderItem={(item) => (
+          <button type="button" onClick={onItemClick}>
+            {item.label}
+          </button>
+        )}
+        itemKey={(item) => item.id}
+        ariaLabel="Categorías"
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Item 0' }))
+
+    expect(onItemClick).toHaveBeenCalledOnce()
+  })
+
   it('does not page past the last page with ArrowRight', async () => {
     const user = userEvent.setup()
     const onPageChange = vi.fn()

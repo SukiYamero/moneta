@@ -5,6 +5,7 @@ import {
   useState,
   type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from 'react'
@@ -48,6 +49,7 @@ export const PagedGrid = <T,>({
   const dragStart = useRef({ x: 0, y: 0 })
   const dragAxis = useRef<DragAxis>(null)
   const pointerId = useRef<number | null>(null)
+  const suppressNextClick = useRef(false)
 
   useEffect(() => {
     if (page <= pageCount - 1) return
@@ -84,6 +86,7 @@ export const PagedGrid = <T,>({
     pointerId.current = event.pointerId
     dragStart.current = { x: event.clientX, y: event.clientY }
     dragAxis.current = null
+    suppressNextClick.current = false
     event.currentTarget.setPointerCapture?.(event.pointerId)
   }
 
@@ -95,7 +98,10 @@ export const PagedGrid = <T,>({
     if (dragAxis.current === null) {
       if (Math.max(Math.abs(dx), Math.abs(dy)) < AXIS_LOCK_DISTANCE_PX) return
       dragAxis.current = Math.abs(dx) > Math.abs(dy) ? 'horizontal' : 'vertical'
-      if (dragAxis.current === 'horizontal') setDragging(true)
+      if (dragAxis.current === 'horizontal') {
+        setDragging(true)
+        suppressNextClick.current = true
+      }
     }
 
     if (dragAxis.current !== 'horizontal') return
@@ -128,6 +134,13 @@ export const PagedGrid = <T,>({
     resetDrag()
   }
 
+  const handleClickCapture = (event: ReactMouseEvent<HTMLDivElement>) => {
+    if (!suppressNextClick.current) return
+    suppressNextClick.current = false
+    event.preventDefault()
+    event.stopPropagation()
+  }
+
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     if (event.key === 'ArrowRight' && hasNextPage) {
       event.preventDefault()
@@ -156,6 +169,7 @@ export const PagedGrid = <T,>({
           onPointerUp={handlePointerUp}
           onPointerCancel={handlePointerCancel}
           onLostPointerCapture={handleLostPointerCapture}
+          onClickCapture={handleClickCapture}
           onKeyDown={handleKeyDown}
           style={trackStyle}
           className="grid touch-pan-y select-none gap-2 rounded-lg outline-none transition-transform duration-200 ease-[var(--ease-ios)] focus-visible:ring-3 focus-visible:ring-ring/50"
