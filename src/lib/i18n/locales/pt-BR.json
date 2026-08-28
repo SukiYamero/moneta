@@ -340,13 +340,17 @@
   },
   "tags": {
     "unknownCategory": "Sem categoria",
-    "picker": {
+    "sheet": {
+      "fieldLabel": "Categoria",
+      "fieldPlaceholder": "Escolher categoria",
+      "title": "Categoria",
+      "backAria": "Voltar",
+      "closeAria": "Fechar",
       "searchLabel": "Buscar categoria",
       "searchPlaceholder": "Buscar categoria",
+      "customCta": "Personalizado",
       "createOption": "Criar «{{query}}»",
-      "openAllAria": "Ver todas as categorias ({{count}})",
-      "customCta": "Nova",
-      "sheetHeading": "Todas as categorias"
+      "gridAria": "Categorias"
     },
     "form": {
       "createTitle": "Nova categoria",

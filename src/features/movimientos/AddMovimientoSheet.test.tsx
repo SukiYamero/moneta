@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/lib/dataStore', () => ({ useDataStore: vi.fn() }))
 
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { Config } from '@/lib/schema'
 import { CONFIG_SEMILLA } from '@/lib/schema'
@@ -35,14 +35,14 @@ describe('AddMovimientoSheet', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
-  it('opens with gasto selected, an empty amount, and categories ordered gasto-first', () => {
+  it('opens with gasto selected, an empty amount, and no category picked', () => {
     useMovimientoSheetStore.setState({ addOpen: true })
     render(<AddMovimientoSheet />)
 
     expect(screen.getByRole('dialog', { name: /agregar movimiento/i })).toBeInTheDocument()
     expect(screen.getByRole('radio', { name: /gasto/i })).toHaveAttribute('aria-checked', 'true')
     expect(screen.getByRole('textbox', { name: /monto/i })).toHaveValue('')
-    expect(screen.getByRole('button', { name: 'Servicios' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /elegir categoría/i })).toBeInTheDocument()
   })
 
   it('shows a distinct inline error for an empty amount and never calls createMovimiento', async () => {
@@ -72,7 +72,7 @@ describe('AddMovimientoSheet', () => {
     await user.click(screen.getByRole('button', { name: /agregar gasto/i }))
 
     const categoryError = await screen.findByText(/elige una categoría/i)
-    expect(screen.getByRole('button', { name: /ver todas las categorías/i })).toHaveFocus()
+    expect(screen.getByRole('button', { name: /elegir categoría/i })).toHaveFocus()
     expect(amountInput).not.toHaveFocus()
     expect(scrollIntoView).toHaveBeenCalledOnce()
     const scrolledTo = scrollIntoView.mock.contexts[0] as HTMLElement
@@ -86,7 +86,12 @@ describe('AddMovimientoSheet', () => {
     render(<AddMovimientoSheet />)
 
     await user.type(screen.getByRole('textbox', { name: /monto/i }), '18000')
-    await user.click(screen.getByRole('button', { name: 'Servicios' }))
+    await user.click(screen.getByRole('button', { name: /elegir categoría/i }))
+    await user.click(
+      within(screen.getByRole('dialog', { name: 'Categoría' })).getByRole('button', {
+        name: 'Servicios',
+      }),
+    )
     await user.click(screen.getByRole('button', { name: /más detalles/i }))
     await user.type(screen.getByRole('textbox', { name: /descripción/i }), 'Internet')
     await user.click(screen.getByRole('button', { name: /agregar gasto/i }))
@@ -128,7 +133,12 @@ describe('AddMovimientoSheet', () => {
     render(<AddMovimientoSheet />)
 
     await user.type(screen.getByRole('textbox', { name: /monto/i }), '5000')
-    await user.click(screen.getByRole('button', { name: 'Servicios' }))
+    await user.click(screen.getByRole('button', { name: /elegir categoría/i }))
+    await user.click(
+      within(screen.getByRole('dialog', { name: 'Categoría' })).getByRole('button', {
+        name: 'Servicios',
+      }),
+    )
     const saveButton = screen.getByRole('button', { name: /agregar gasto/i })
     await user.click(saveButton)
 
@@ -161,12 +171,12 @@ describe('AddMovimientoSheet', () => {
     expect(cta).toHaveClass('h-13.5', 'rounded-2xl', 'text-md', 'font-extrabold')
   })
 
-  describe('the nested TagPickerSheet (count button) stacks correctly above this sheet', () => {
+  describe('the nested CategorySheet stacks correctly above this sheet', () => {
     const openBoth = async (user: ReturnType<typeof userEvent.setup>) => {
       useMovimientoSheetStore.setState({ addOpen: true })
       render(<AddMovimientoSheet />)
       await user.type(screen.getByRole('textbox', { name: /monto/i }), '5000')
-      await user.click(screen.getByRole('button', { name: /ver todas/i }))
+      await user.click(screen.getByRole('button', { name: /elegir categoría/i }))
       expect(screen.getAllByRole('dialog')).toHaveLength(2)
     }
 
@@ -189,6 +199,19 @@ describe('AddMovimientoSheet', () => {
       await user.keyboard('{Escape}')
 
       expect(useMovimientoSheetStore.getState().addOpen).toBe(false)
+    })
+
+    it('selecting a category closes only the CategorySheet, leaving the Add sheet mounted with its draft intact', async () => {
+      const user = userEvent.setup()
+      await openBoth(user)
+
+      const categoryDialog = screen.getByRole('dialog', { name: 'Categoría' })
+      await user.click(within(categoryDialog).getByRole('button', { name: 'Servicios' }))
+
+      expect(screen.getAllByRole('dialog')).toHaveLength(1)
+      expect(useMovimientoSheetStore.getState().addOpen).toBe(true)
+      expect(screen.getByRole('textbox', { name: /monto/i })).toHaveValue('5.000')
+      expect(screen.getByRole('button', { name: 'Servicios' })).toBeInTheDocument()
     })
   })
 })

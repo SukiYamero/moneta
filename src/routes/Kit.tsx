@@ -19,7 +19,8 @@ import {
 import { ToastKitDemo } from '@/components/shared/ToastKitDemo'
 import { ICON_AVATAR_TINTS } from '@/components/shared/tintClasses'
 import { CategoryFormModal } from '@/features/tags/CategoryFormModal'
-import { CategoryPicker } from '@/features/tags/CategoryPicker'
+import { CategoryField } from '@/features/tags/CategoryField'
+import { CategorySheet } from '@/features/tags/CategorySheet'
 import { useLocaleFormatting } from '@/lib/i18n/localeFormatting'
 import type { Categoria, Movimiento } from '@/lib/schema'
 
@@ -124,6 +125,7 @@ export const Kit = () => {
   const [addSheetAmount, setAddSheetAmount] = useState('')
   const [textFieldValue, setTextFieldValue] = useState('')
   const [pickerSelectedId, setPickerSelectedId] = useState<string | undefined>('cat_comida')
+  const [categorySheetOpen, setCategorySheetOpen] = useState(false)
   const [categoryModalOpen, setCategoryModalOpen] = useState(false)
   const [categoryModalCategoria, setCategoryModalCategoria] = useState<Categoria | undefined>()
   const [categoryModalInitialName, setCategoryModalInitialName] = useState<string | undefined>()
@@ -201,16 +203,18 @@ export const Kit = () => {
         </div>
       </Section>
 
-      <Section title="CategoryPicker + CategoryFormModal">
-        <CategoryPicker
+      <Section title="CategoryField + CategorySheet + CategoryFormModal">
+        <CategoryField
+          categoria={SAMPLE_CATEGORIAS.find((c) => c.id === pickerSelectedId)}
+          tipo="gasto"
+          onOpen={() => setCategorySheetOpen(true)}
+        />
+        <CategorySheet
+          open={categorySheetOpen}
+          onClose={() => setCategorySheetOpen(false)}
           categorias={SAMPLE_CATEGORIAS}
           selectedId={pickerSelectedId}
           onSelect={(c) => setPickerSelectedId(c.id)}
-          onCreateRequested={(query) => {
-            setCategoryModalCategoria(undefined)
-            setCategoryModalInitialName(query)
-            setCategoryModalOpen(true)
-          }}
         />
         <button
           type="button"
