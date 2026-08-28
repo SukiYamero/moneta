@@ -188,12 +188,12 @@ export const CategoryFormModal = ({
                 >
                   <span
                     className={cn(
-                      'flex size-10 items-center justify-center rounded-md',
+                      'flex size-10.5 items-center justify-center rounded-md',
                       TINT_CLASSES[color].badge,
                       icono === key && 'ring-2 ring-primary ring-offset-2 ring-offset-card',
                     )}
                   >
-                    <Icon className="size-5" aria-hidden="true" />
+                    <Icon className="size-5.5" aria-hidden="true" />
                   </span>
                 </button>
               )

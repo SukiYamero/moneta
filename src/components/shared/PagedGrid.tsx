@@ -175,7 +175,7 @@ export const PagedGrid = <T,>({
 
   return (
     <div className={cn('flex flex-col gap-3', className)}>
-      <div className="relative overflow-x-hidden">
+      <div className="relative overflow-x-hidden py-0.5">
         <div
           ref={trackRef}
           role="group"

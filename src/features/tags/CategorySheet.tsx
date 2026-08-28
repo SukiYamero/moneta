@@ -169,11 +169,11 @@ export const CategorySheet = ({
         >
           <span
             className={cn(
-              'flex size-10 shrink-0 items-center justify-center rounded-md',
+              'flex size-10.5 shrink-0 items-center justify-center rounded-md',
               TINT_CLASSES[tint].badge,
             )}
           >
-            <Icon className="size-5" aria-hidden="true" />
+            <Icon className="size-5.5" aria-hidden="true" />
           </span>
           <span className="line-clamp-2 text-xs font-bold">{categoria.nombre}</span>
         </span>
