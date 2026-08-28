@@ -353,9 +353,8 @@
       "editTitle": "Editar categoría",
       "nameLabel": "Nombre",
       "namePlaceholder": "Ej: Gimnasio",
-      "nameDuplicateError": "Ya existe una categoría con ese nombre en esta sección",
+      "nameDuplicateError": "Ya existe una categoría con ese nombre",
       "nameRequiredError": "Escribe un nombre",
-      "sectionLabel": "Sección",
       "iconLabel": "Ícono",
       "colorLabel": "Color",
       "saveCta": "Guardar",
@@ -459,11 +458,6 @@
     "categories": {
       "heading": "Categorías",
       "newCta": "Nueva categoría",
-      "newTypeLabel": "Tipo de la nueva categoría",
-      "type": {
-        "gasto": "Gasto",
-        "ingreso": "Ingreso"
-      },
       "archivedGroup": "Archivadas",
       "archiveCta": "Archivar",
       "restoreCta": "Restaurar",

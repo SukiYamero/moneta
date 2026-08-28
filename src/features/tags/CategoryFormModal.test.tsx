@@ -11,7 +11,11 @@ vi.mock('@/lib/dataStore', () => ({
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { Categoria } from '@/lib/schema'
+import { CATEGORY_ICON_KEYS } from '@/lib/categoryIconKeys'
 import { CategoryFormModal } from '@/features/tags/CategoryFormModal'
+
+const ICON_GRID_PAGE_SIZE = 20
+const iconGridPageCount = Math.ceil(CATEGORY_ICON_KEYS.length / ICON_GRID_PAGE_SIZE)
 
 const categoria = (overrides: Partial<Categoria> = {}): Categoria => ({
   id: crypto.randomUUID(),
@@ -58,9 +62,7 @@ describe('CategoryFormModal', () => {
 
   it('disables Save while the name is empty', async () => {
     const user = userEvent.setup()
-    render(
-      <CategoryFormModal open onClose={vi.fn()} categorias={[]} initialName="Gimnasio" />,
-    )
+    render(<CategoryFormModal open onClose={vi.fn()} categorias={[]} initialName="Gimnasio" />)
     const nameField = screen.getByRole('textbox', { name: /nombre/i })
     await user.clear(nameField)
 
@@ -101,9 +103,7 @@ describe('CategoryFormModal', () => {
   it('saves via dataStore.upsertCategoria with nombre/icono/color set, and closes', async () => {
     const user = userEvent.setup()
     const onClose = vi.fn()
-    render(
-      <CategoryFormModal open onClose={onClose} categorias={[]} initialName="Gimnasio" />,
-    )
+    render(<CategoryFormModal open onClose={onClose} categorias={[]} initialName="Gimnasio" />)
 
     await user.click(screen.getByRole('button', { name: /guardar/i }))
 
@@ -121,9 +121,7 @@ describe('CategoryFormModal', () => {
     const user = userEvent.setup()
     const onClose = vi.fn()
     mUpsertCategoria.mockResolvedValueOnce(false)
-    render(
-      <CategoryFormModal open onClose={onClose} categorias={[]} initialName="Gimnasio" />,
-    )
+    render(<CategoryFormModal open onClose={onClose} categorias={[]} initialName="Gimnasio" />)
 
     await user.click(screen.getByRole('button', { name: /guardar/i }))
 
@@ -154,12 +152,134 @@ describe('CategoryFormModal', () => {
       />,
     )
 
-    await user.click(screen.getByRole('button', { name: /^gift$/i }))
-    await user.click(screen.getByRole('button', { name: /^purple$|^morado$/i }))
+    await user.click(screen.getByRole('button', { name: /^wrench$/i }))
+    await user.click(screen.getByRole('button', { name: /^blue$|^azul$/i }))
     await user.click(screen.getByRole('button', { name: /guardar/i }))
 
     const saved = mUpsertCategoria.mock.calls[0]![0] as Categoria
-    expect(saved.icono).toBe('gift')
-    expect(saved.color).toBe('purple')
+    expect(saved.icono).toBe('wrench')
+    expect(saved.color).toBe('blue')
+  })
+
+  it('opens with the panel focused, never the name input, so no keyboard rises on open', () => {
+    render(<CategoryFormModal open onClose={vi.fn()} categorias={[]} />)
+    expect(screen.getByRole('textbox', { name: /nombre/i })).not.toHaveFocus()
+    expect(screen.getByRole('dialog')).toHaveFocus()
+  })
+
+  it('shows the parent line only when padreId is set, with the parent icon and name', () => {
+    const parent = categoria({ id: 'cat_parent', nombre: 'Ocio', icono: 'gamepad', color: 'rose' })
+    const { rerender } = render(<CategoryFormModal open onClose={vi.fn()} categorias={[parent]} />)
+    expect(screen.queryByText('Ocio')).not.toBeInTheDocument()
+
+    rerender(
+      <CategoryFormModal open onClose={vi.fn()} categorias={[parent]} padreId="cat_parent" />,
+    )
+    expect(screen.getByText('Ocio')).toBeInTheDocument()
+  })
+
+  it('creating with padreId saves that padreId and defaults the color to the parent color, even when the typed name would otherwise suggest a different one', async () => {
+    const user = userEvent.setup()
+    const parent = categoria({ id: 'cat_parent', nombre: 'Ocio', icono: 'gamepad', color: 'blue' })
+    render(
+      <CategoryFormModal
+        open
+        onClose={vi.fn()}
+        categorias={[parent]}
+        padreId="cat_parent"
+        initialName="Cine"
+      />,
+    )
+
+    expect(screen.getByRole('button', { name: /^film$/i, pressed: true })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /guardar/i }))
+
+    const saved = mUpsertCategoria.mock.calls[0]![0] as Categoria
+    expect(saved.padreId).toBe('cat_parent')
+    expect(saved.color).toBe('blue')
+  })
+
+  it('lets the user override the parent-defaulted color', async () => {
+    const user = userEvent.setup()
+    const parent = categoria({ id: 'cat_parent', nombre: 'Ocio', icono: 'gamepad', color: 'rose' })
+    render(
+      <CategoryFormModal
+        open
+        onClose={vi.fn()}
+        categorias={[parent]}
+        padreId="cat_parent"
+        initialName="Cine"
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: /^blue$|^azul$/i }))
+    await user.click(screen.getByRole('button', { name: /guardar/i }))
+
+    const saved = mUpsertCategoria.mock.calls[0]![0] as Categoria
+    expect(saved.color).toBe('blue')
+  })
+
+  it('editing an existing category never sets padreId from the prop', async () => {
+    const user = userEvent.setup()
+    const parent = categoria({ id: 'cat_parent', nombre: 'Ocio' })
+    const existing = categoria({ id: 'cat_child', nombre: 'Cine', padreId: undefined })
+    render(
+      <CategoryFormModal
+        open
+        onClose={vi.fn()}
+        categorias={[parent]}
+        categoria={existing}
+        padreId="cat_parent"
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: /guardar/i }))
+
+    const saved = mUpsertCategoria.mock.calls[0]![0] as Categoria
+    expect(saved.padreId).toBeUndefined()
+  })
+
+  it('resets the icon grid to page 0 when typing changes the ranking', async () => {
+    const user = userEvent.setup()
+    render(<CategoryFormModal open onClose={vi.fn()} categorias={[]} />)
+    expect(iconGridPageCount).toBeGreaterThan(1)
+
+    await user.click(screen.getByRole('button', { name: `Page 2 of ${iconGridPageCount}` }))
+    expect(screen.getByRole('button', { name: `Page 2 of ${iconGridPageCount}` })).toHaveAttribute(
+      'aria-current',
+      'true',
+    )
+
+    await user.type(screen.getByRole('textbox', { name: /nombre/i }), 'gimnasio')
+
+    expect(screen.getByRole('button', { name: `Page 1 of ${iconGridPageCount}` })).toHaveAttribute(
+      'aria-current',
+      'true',
+    )
+    expect(
+      screen.getByRole('button', { name: `Page 2 of ${iconGridPageCount}` }),
+    ).not.toHaveAttribute('aria-current')
+  })
+
+  it('keeps the picked icon selected across further typing, wherever it lands in the reordered grid', async () => {
+    const user = userEvent.setup()
+    render(<CategoryFormModal open onClose={vi.fn()} categorias={[]} />)
+
+    await user.click(screen.getByRole('button', { name: /^briefcase$/i }))
+    expect(screen.getByRole('button', { name: /^briefcase$/i })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+
+    await user.type(screen.getByRole('textbox', { name: /nombre/i }), 'gimnasio')
+
+    expect(screen.getByRole('button', { name: /^briefcase$/i })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(screen.getByRole('button', { name: /^dumbbell$/i })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    )
   })
 })

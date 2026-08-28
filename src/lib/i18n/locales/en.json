@@ -353,9 +353,8 @@
       "editTitle": "Edit category",
       "nameLabel": "Name",
       "namePlaceholder": "E.g. Gym",
-      "nameDuplicateError": "A category with that name already exists in this section",
+      "nameDuplicateError": "A category with that name already exists",
       "nameRequiredError": "Enter a name",
-      "sectionLabel": "Section",
       "iconLabel": "Icon",
       "colorLabel": "Color",
       "saveCta": "Save",
@@ -459,11 +458,6 @@
     "categories": {
       "heading": "Categories",
       "newCta": "New category",
-      "newTypeLabel": "Type for the new category",
-      "type": {
-        "gasto": "Expense",
-        "ingreso": "Income"
-      },
       "archivedGroup": "Archived",
       "archiveCta": "Archive",
       "restoreCta": "Restore",

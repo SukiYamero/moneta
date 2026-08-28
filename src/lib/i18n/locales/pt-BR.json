@@ -353,9 +353,8 @@
       "editTitle": "Editar categoria",
       "nameLabel": "Nome",
       "namePlaceholder": "Ex: Academia",
-      "nameDuplicateError": "Já existe uma categoria com esse nome nesta seção",
+      "nameDuplicateError": "Já existe uma categoria com esse nome",
       "nameRequiredError": "Digite um nome",
-      "sectionLabel": "Seção",
       "iconLabel": "Ícone",
       "colorLabel": "Cor",
       "saveCta": "Salvar",
@@ -459,11 +458,6 @@
     "categories": {
       "heading": "Categorias",
       "newCta": "Nova categoria",
-      "newTypeLabel": "Tipo da nova categoria",
-      "type": {
-        "gasto": "Despesa",
-        "ingreso": "Receita"
-      },
       "archivedGroup": "Arquivadas",
       "archiveCta": "Arquivar",
       "restoreCta": "Restaurar",

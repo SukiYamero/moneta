@@ -54,8 +54,31 @@ export const CategoriesSection = () => {
 
   const isInUse = (categoria: Categoria) => movimientos.some((m) => m.categoria === categoria.id)
 
+  const renderActiveRow = (categoria: Categoria) => (
+    <CategoryRow
+      key={categoria.id}
+      categoria={categoria}
+      onEdit={() => setEditing(categoria)}
+      trailing={
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-touch"
+          aria-label={t('settings:categories.archiveCta')}
+          onClick={() => void archiveCategoria(categoria.id)}
+        >
+          <Archive className="size-4" aria-hidden="true" />
+        </Button>
+      }
+    />
+  )
+
   const active = categorias.filter((c) => !c.archivado)
   const archived = categorias.filter((c) => c.archivado)
+
+  const activeParentIds = new Set(active.filter((c) => !c.padreId).map((c) => c.id))
+  const topLevelActive = active.filter((c) => !c.padreId || !activeParentIds.has(c.padreId))
+  const childrenOf = (parentId: string) => active.filter((c) => c.padreId === parentId)
 
   const confirmDelete = () => {
     if (!deleteTarget) return
@@ -71,25 +94,20 @@ export const CategoriesSection = () => {
         <p className="text-sm text-fg-tertiary">{t('settings:categories.empty')}</p>
       ) : (
         <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1.5">
-            {active.map((categoria) => (
-              <CategoryRow
-                key={categoria.id}
-                categoria={categoria}
-                onEdit={() => setEditing(categoria)}
-                trailing={
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-touch"
-                    aria-label={t('settings:categories.archiveCta')}
-                    onClick={() => void archiveCategoria(categoria.id)}
-                  >
-                    <Archive className="size-4" aria-hidden="true" />
-                  </Button>
-                }
-              />
-            ))}
+          <div className="flex flex-col gap-3">
+            {topLevelActive.map((categoria) => {
+              const children = childrenOf(categoria.id)
+              return (
+                <div key={categoria.id} className="flex flex-col gap-1.5">
+                  {renderActiveRow(categoria)}
+                  {children.length > 0 && (
+                    <div className="ml-4 flex flex-col gap-1.5 border-l border-border-subtle pl-3">
+                      {children.map((child) => renderActiveRow(child))}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
           </div>
 
           {archived.length > 0 && (
