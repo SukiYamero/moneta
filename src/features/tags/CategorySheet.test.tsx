@@ -73,6 +73,25 @@ describe('CategorySheet', () => {
     expect(screen.getByRole('heading', { level: 2, name: 'Categoría' })).toBeInTheDocument()
   })
 
+  it('drilling in from page 1 returns to page 1 on back, not page 0', async () => {
+    const user = userEvent.setup()
+    const topLevel = manyTopLevel(12).map((c, i) => (i === 8 ? { ...c, nombre: 'Transporte' } : c))
+    const child = categoria({ id: 'cat_child', nombre: 'Gasolina', padreId: 'cat_8' })
+    render(
+      <CategorySheet open onClose={vi.fn()} categorias={[...topLevel, child]} onSelect={vi.fn()} />,
+    )
+
+    await user.click(within(getDialog()).getByRole('button', { name: 'Page 2 of 2' }))
+    await user.click(within(getDialog()).getByRole('button', { name: 'Transporte' }))
+    await user.click(within(getDialog()).getByRole('button', { name: /volver/i }))
+
+    expect(within(getDialog()).getByRole('button', { name: 'Page 2 of 2' })).toHaveAttribute(
+      'aria-current',
+      'true',
+    )
+    expect(within(getDialog()).getByRole('button', { name: 'Transporte' })).toBeInTheDocument()
+  })
+
   it('tapping a parent with no children selects it directly and closes the sheet', async () => {
     const user = userEvent.setup()
     const onSelect = vi.fn()
