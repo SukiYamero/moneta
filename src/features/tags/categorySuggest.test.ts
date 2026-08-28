@@ -94,6 +94,19 @@ describe('CATEGORY_CONCEPTS', () => {
     )
     expect(invalid).toEqual([])
   })
+
+  it('no keyword is claimed by more than one concept', () => {
+    const ownerByKeyword = new Map<string, string>()
+    const duplicates: string[] = []
+    for (const concept of CATEGORY_CONCEPTS) {
+      for (const keyword of concept.keywords) {
+        const owner = ownerByKeyword.get(keyword)
+        if (owner && owner !== concept.icon) duplicates.push(keyword)
+        ownerByKeyword.set(keyword, concept.icon)
+      }
+    }
+    expect(duplicates).toEqual([])
+  })
 })
 
 describe('suggestCategoryVisual resolves new keywords in Spanish and English', () => {
@@ -169,8 +182,16 @@ describe('suggestCategoryVisual resolves new keywords in Spanish and English', (
     ['gardening', 'flower-2'],
     ['varios', 'sparkles'],
     ['misc', 'sparkles'],
+    ['gasolina', 'fuel'],
+    ['nafta', 'fuel'],
+    ['gas', 'receipt'],
   ] as const)('resolves "%s" to the "%s" icon', (word, expectedIcon) => {
     expect(suggestCategoryVisual(word, []).icono).toBe(expectedIcon)
+  })
+
+  it('still resolves "car" to the "car" icon after "gasolina"/"nafta" moved exclusively to "fuel"', () => {
+    expect(suggestCategoryVisual('auto', []).icono).toBe('car')
+    expect(suggestCategoryVisual('carro', []).icono).toBe('car')
   })
 })
 

@@ -85,17 +85,7 @@ export const CATEGORY_CONCEPTS: readonly CategoryConcept[] = [
   {
     icon: 'car',
     tint: 'blue',
-    keywords: [
-      'transporte',
-      'transport',
-      'uber',
-      'taxi',
-      'carro',
-      'auto',
-      'car',
-      'gasolina',
-      'nafta',
-    ],
+    keywords: ['transporte', 'transport', 'uber', 'taxi', 'carro', 'auto', 'car'],
   },
   {
     icon: 'bus',
@@ -110,7 +100,7 @@ export const CATEGORY_CONCEPTS: readonly CategoryConcept[] = [
   {
     icon: 'fuel',
     tint: 'blue',
-    keywords: ['gasolina', 'combustible', 'fuel', 'gas', 'nafta', 'gasolina', 'combustivel'],
+    keywords: ['gasolina', 'combustible', 'fuel', 'nafta', 'combustivel'],
   },
   {
     icon: 'plane',
@@ -603,11 +593,24 @@ export const CATEGORY_CONCEPTS: readonly CategoryConcept[] = [
   },
 ]
 
-const CONCEPT_KEYWORD_INDEX: Map<string, CategoryConcept> = new Map(
-  CATEGORY_CONCEPTS.flatMap((concept) =>
-    concept.keywords.map((keyword) => [normalizeForSearch(keyword), concept] as const),
-  ),
-)
+const buildConceptKeywordIndex = (): Map<string, CategoryConcept> => {
+  const index = new Map<string, CategoryConcept>()
+  for (const concept of CATEGORY_CONCEPTS) {
+    for (const keyword of concept.keywords) {
+      const normalized = normalizeForSearch(keyword)
+      const existing = index.get(normalized)
+      if (import.meta.env.DEV && existing && existing !== concept) {
+        throw new Error(
+          `categorySuggest: keyword "${keyword}" claimed by both "${existing.icon}" and "${concept.icon}"`,
+        )
+      }
+      index.set(normalized, concept)
+    }
+  }
+  return index
+}
+
+const CONCEPT_KEYWORD_INDEX: Map<string, CategoryConcept> = buildConceptKeywordIndex()
 
 const wordsOf = (text: string): string[] =>
   normalizeForSearch(text)
