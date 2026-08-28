@@ -11,6 +11,13 @@
         "invalidInput": "Houve um problema com seus dados.",
         "network": "Sem conexão. Verifique sua internet e tente novamente.",
         "unknown": "Ocorreu um erro inesperado. Tente novamente."
+      },
+      "recover": {
+        "cta": "Excluir dados locais e tentar novamente",
+        "confirmTitle": "Excluir os dados locais?",
+        "confirmDescription": "Isso exclui os lançamentos, categorias e configurações salvos neste dispositivo. Essa ação não pode ser desfeita.",
+        "cancelCta": "Cancelar",
+        "confirmCta": "Excluir e tentar novamente"
       }
     },
     "landscapeGuard": {
