@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { buildSeedConfig } from '@/lib/seedConfig'
-import { CONFIG_SEMILLA } from '@/lib/schema'
+import { buildSeedConfig, SEED_CATEGORY_NAMES } from '@/lib/seedConfig'
+import { CATEGORIAS_SEMILLA, CONFIG_SEMILLA } from '@/lib/schema'
+import { SUPPORTED_LOCALES } from '@/lib/i18n/resources'
 
 describe('buildSeedConfig', () => {
   it('derives monedaPrincipal from the given region, keeping the rest of CONFIG_SEMILLA', () => {
@@ -31,7 +32,7 @@ describe('buildSeedConfig', () => {
 })
 
 describe('buildSeedConfig — seed taxonomy localization', () => {
-  it('keeps ids stable and only localizes nombre, regardless of locale', () => {
+  it('keeps ids and structure stable and only localizes nombre, regardless of locale', () => {
     const seed = buildSeedConfig('CO', 'pt-BR')
     expect(seed.categorias.map((c) => c.id)).toEqual(CONFIG_SEMILLA.categorias.map((c) => c.id))
     expect(seed.categorias.map((c) => ({ ...c, nombre: undefined }))).toEqual(
@@ -44,31 +45,64 @@ describe('buildSeedConfig — seed taxonomy localization', () => {
     expect(seed).toEqual(CONFIG_SEMILLA)
   })
 
-  it.each([
-    ['US', 'en', ['Salary', 'Bills', 'Sales', 'Taxes', 'Petty cash']],
-    ['BR', 'pt-BR', ['Salário', 'Contas', 'Vendas', 'Impostos', 'Fundo de caixa']],
-    ['AR', 'es-AR', ['Sueldo', 'Servicios', 'Ventas', 'Impuestos', 'Caja chica']],
-  ] as const)(
-    'translates category names for region %s, locale %s',
-    (region, locale, categoryNames) => {
-      const seed = buildSeedConfig(region, locale)
-      expect(seed.categorias.map((c) => c.nombre)).toEqual(categoryNames)
-    },
-  )
+  it('returns English names for buildSeedConfig("CO", "en")', () => {
+    const seed = buildSeedConfig('CO', 'en')
+    const byId = new Map(seed.categorias.map((c) => [c.id, c.nombre]))
+    expect(byId.get('cat_comida')).toBe('Food')
+    expect(byId.get('cat_hogar')).toBe('Home')
+    expect(byId.get('cat_sueldo')).toBe('Salary')
+    expect(byId.get('cat_impuestos')).toBe('Taxes')
+  })
+
+  it('returns the Argentine variants where they differ for buildSeedConfig("AR", "es-AR")', () => {
+    const seed = buildSeedConfig('AR', 'es-AR')
+    const byId = new Map(seed.categorias.map((c) => [c.id, c.nombre]))
+    expect(byId.get('cat_arriendo')).toBe('Alquiler')
+    expect(byId.get('cat_parqueadero')).toBe('Estacionamiento')
+    expect(byId.get('cat_domicilios')).toBe('Delivery')
+    expect(byId.get('cat_caja_menor')).toBe('Caja chica')
+    // a name with no regional variant stays identical to es
+    expect(byId.get('cat_comida')).toBe('Comida')
+  })
+
+  it('es-AR is not a copy of es — at least one seeded name differs between them', () => {
+    const es = buildSeedConfig('CO', 'es')
+    const esAR = buildSeedConfig('CO', 'es-AR')
+    const differing = es.categorias.filter((c, i) => c.nombre !== esAR.categorias[i]?.nombre)
+    expect(differing.length).toBeGreaterThan(0)
+  })
 
   it('the currency (region) and taxonomy (locale) axes vary independently', () => {
     const seed = buildSeedConfig('MX', 'pt-BR')
     expect(seed.preferencias.monedaPrincipal).toBe('MXN')
-    expect(seed.categorias.map((c) => c.nombre)).toEqual([
-      'Salário',
-      'Contas',
-      'Vendas',
-      'Impostos',
-      'Fundo de caixa',
-    ])
+    expect(seed.categorias.find((c) => c.id === 'cat_ingresos')?.nombre).toBe('Receitas')
   })
 
   it('detects the active locale from the device when called with no second argument', () => {
     expect(buildSeedConfig().categorias).toEqual(CONFIG_SEMILLA.categorias)
+  })
+})
+
+describe('SEED_CATEGORY_NAMES — locale map completeness', () => {
+  const seedIds = CATEGORIAS_SEMILLA.map((c) => c.id)
+
+  it('has an entry for every supported locale', () => {
+    expect(Object.keys(SEED_CATEGORY_NAMES).toSorted()).toEqual(SUPPORTED_LOCALES.toSorted())
+  })
+
+  it('has an identical key set across all four locale maps, matching every seeded id', () => {
+    const keySets = Object.values(SEED_CATEGORY_NAMES).map((names) => Object.keys(names).toSorted())
+    const expected = seedIds.toSorted()
+    for (const keys of keySets) {
+      expect(keys).toEqual(expected)
+    }
+  })
+
+  it('gives every id a non-empty name in every locale', () => {
+    for (const names of Object.values(SEED_CATEGORY_NAMES)) {
+      for (const id of seedIds) {
+        expect(names[id], `${id} has no name`).toBeTruthy()
+      }
+    }
   })
 })

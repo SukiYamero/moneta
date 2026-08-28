@@ -27,14 +27,7 @@ const movimiento = (overrides: Partial<Movimiento> = {}): Movimiento => ({
   ...overrides,
 })
 
-const CONFIG: Config = {
-  ...CONFIG_SEMILLA,
-  categorias: [
-    ...CONFIG_SEMILLA.categorias,
-    { id: 'cat_comida', nombre: 'Comida' },
-    { id: 'cat_transporte', nombre: 'Transporte' },
-  ],
-}
+const CONFIG: Config = CONFIG_SEMILLA
 
 const today = () => format(new Date(), 'yyyy-MM-dd')
 const daysAgo = (n: number) => format(subDays(new Date(), n), 'yyyy-MM-dd')
