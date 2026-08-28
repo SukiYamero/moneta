@@ -80,6 +80,8 @@ export const CategoryFormModal = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
+  const effectivePadreId = categoria ? categoria.padreId : padreId
+
   const trimmedName = name.trim()
   const isDuplicateName = useMemo(() => {
     if (!trimmedName) return false
@@ -87,10 +89,10 @@ export const CategoryFormModal = ({
     return categorias.some(
       (c) =>
         c.id !== categoria?.id &&
-        c.padreId === categoria?.padreId &&
+        c.padreId === effectivePadreId &&
         normalizeForSearch(c.nombre) === normalized,
     )
-  }, [trimmedName, categorias, categoria])
+  }, [trimmedName, categorias, categoria, effectivePadreId])
 
   const canSave = trimmedName.length > 0 && !isDuplicateName
 
@@ -106,7 +108,7 @@ export const CategoryFormModal = ({
     const result: Categoria = {
       id: categoria?.id ?? crypto.randomUUID(),
       nombre: trimmedName,
-      padreId: categoria ? categoria.padreId : padreId,
+      padreId: effectivePadreId,
       icono,
       color,
       archivado: categoria?.archivado,

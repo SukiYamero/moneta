@@ -91,6 +91,44 @@ describe('CategoryFormModal', () => {
     expect(screen.getByRole('button', { name: /guardar/i })).toBeEnabled()
   })
 
+  it('scopes the duplicate check to padreId when creating a child, not to top level', async () => {
+    const user = userEvent.setup()
+    const parent = categoria({ id: 'cat_parent', nombre: 'Ocio' })
+    const topLevelNamesake = categoria({ nombre: 'Cine', padreId: undefined })
+    render(
+      <CategoryFormModal
+        open
+        onClose={vi.fn()}
+        categorias={[parent, topLevelNamesake]}
+        padreId="cat_parent"
+      />,
+    )
+
+    await user.type(screen.getByRole('textbox', { name: /nombre/i }), 'Cine')
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /guardar/i })).toBeEnabled()
+  })
+
+  it('blocks a duplicate name among siblings under the same padreId when creating a child', async () => {
+    const user = userEvent.setup()
+    const parent = categoria({ id: 'cat_parent', nombre: 'Ocio' })
+    const sibling = categoria({ nombre: 'Cine', padreId: 'cat_parent' })
+    render(
+      <CategoryFormModal
+        open
+        onClose={vi.fn()}
+        categorias={[parent, sibling]}
+        padreId="cat_parent"
+      />,
+    )
+
+    await user.type(screen.getByRole('textbox', { name: /nombre/i }), 'Cine')
+
+    expect(screen.getByRole('alert')).toHaveTextContent(/ya existe una categoría/i)
+    expect(screen.getByRole('button', { name: /guardar/i })).toBeDisabled()
+  })
+
   it('caps the name length on the value itself, not only the input maxlength', async () => {
     const user = userEvent.setup()
     render(<CategoryFormModal open onClose={vi.fn()} categorias={[]} />)
