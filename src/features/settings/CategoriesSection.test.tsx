@@ -132,4 +132,20 @@ describe('CategoriesSection', () => {
     render(<CategoriesSection />)
     expect(screen.getByText(/todavía no hay categorías/i)).toBeInTheDocument()
   })
+
+  it('renders a child indented under its parent, and an orphan (missing or archived parent) at top level', () => {
+    state.config.categorias = [
+      categoria({ id: 'cat_ocio', nombre: 'Ocio' }),
+      categoria({ id: 'cat_cine', nombre: 'Cine', padreId: 'cat_ocio' }),
+      categoria({ id: 'cat_huerfana', nombre: 'Huérfana', padreId: 'cat_no_existe' }),
+    ]
+    render(<CategoriesSection />)
+
+    const childGroup = screen.getByText('Cine').closest<HTMLElement>('.border-l')
+    expect(childGroup).not.toBeNull()
+    expect(within(childGroup!).getByText('Cine')).toBeInTheDocument()
+
+    expect(screen.getByText('Ocio').closest('.border-l')).toBeNull()
+    expect(screen.getByText('Huérfana').closest('.border-l')).toBeNull()
+  })
 })

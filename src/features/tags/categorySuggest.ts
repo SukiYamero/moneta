@@ -2,7 +2,7 @@ import type { Categoria } from '@/lib/schema'
 import type { IconAvatarTint } from '@/components/shared/IconAvatar'
 import { ICON_AVATAR_TINTS } from '@/components/shared/tintClasses'
 import { normalizeForSearch } from '@/features/search/searchMatch'
-import type { CategoryIconKey } from '@/components/shared/categoryIcons'
+import { CATEGORY_ICON_KEYS, type CategoryIconKey } from '@/components/shared/categoryIcons'
 
 interface CategoryConcept {
   icon: CategoryIconKey
@@ -614,6 +614,19 @@ const wordsOf = (text: string): string[] =>
     .split(/[^\p{L}\p{N}]+/u)
     .filter((word) => word.length > 0)
 
+const matchedConcepts = (query: string): CategoryConcept[] => {
+  const matched: CategoryConcept[] = []
+  const seen = new Set<CategoryConcept>()
+  for (const word of wordsOf(query)) {
+    const concept = CONCEPT_KEYWORD_INDEX.get(word)
+    if (concept && !seen.has(concept)) {
+      seen.add(concept)
+      matched.push(concept)
+    }
+  }
+  return matched
+}
+
 export interface CategoryVisualSuggestion {
   icono: CategoryIconKey | undefined
   color: IconAvatarTint
@@ -633,9 +646,14 @@ export const suggestCategoryVisual = (
   query: string,
   existingCategorias: readonly Pick<Categoria, 'color'>[],
 ): CategoryVisualSuggestion => {
-  for (const word of wordsOf(query)) {
-    const concept = CONCEPT_KEYWORD_INDEX.get(word)
-    if (concept) return { icono: concept.icon, color: concept.tint }
-  }
+  const [concept] = matchedConcepts(query)
+  if (concept) return { icono: concept.icon, color: concept.tint }
   return { icono: undefined, color: leastUsedTint(existingCategorias) }
+}
+
+export const rankCategoryIcons = (query: string): CategoryIconKey[] => {
+  const matchedIcons = matchedConcepts(query).map((concept) => concept.icon)
+  const matchedIconSet = new Set(matchedIcons)
+  const remaining = CATEGORY_ICON_KEYS.filter((key) => !matchedIconSet.has(key))
+  return [...matchedIcons, ...remaining]
 }

@@ -5,6 +5,7 @@ import { ICON_AVATAR_TINTS } from '@/components/shared/tintClasses'
 import {
   CATEGORY_CONCEPTS,
   leastUsedTint,
+  rankCategoryIcons,
   suggestCategoryVisual,
 } from '@/features/tags/categorySuggest'
 
@@ -170,5 +171,36 @@ describe('suggestCategoryVisual resolves new keywords in Spanish and English', (
     ['misc', 'sparkles'],
   ] as const)('resolves "%s" to the "%s" icon', (word, expectedIcon) => {
     expect(suggestCategoryVisual(word, []).icono).toBe(expectedIcon)
+  })
+})
+
+describe('rankCategoryIcons', () => {
+  it('puts the matched icon first for both "gimnasio" and "gym"', () => {
+    expect(rankCategoryIcons('gimnasio')[0]).toBe('dumbbell')
+    expect(rankCategoryIcons('gym')[0]).toBe('dumbbell')
+  })
+
+  it('returns the declared order unchanged for an empty query or one matching nothing', () => {
+    expect(rankCategoryIcons('')).toEqual(CATEGORY_ICON_KEYS)
+    expect(rankCategoryIcons('xyzzy')).toEqual(CATEGORY_ICON_KEYS)
+  })
+
+  it.each(['', 'gym', 'comida y gimnasio', 'xyzzy'])(
+    'returns every key exactly once for query "%s"',
+    (query) => {
+      const ranked = rankCategoryIcons(query)
+      expect(ranked.toSorted()).toEqual(CATEGORY_ICON_KEYS.toSorted())
+    },
+  )
+
+  it('is a reordering, not a filter: a non-matching icon is still reachable after a match', () => {
+    const ranked = rankCategoryIcons('gym')
+    expect(ranked).toContain('car')
+  })
+
+  it('brings every matched concept forward, in match order, ahead of the untouched keys', () => {
+    const ranked = rankCategoryIcons('gimnasio y pizza')
+    expect(ranked.indexOf('dumbbell')).toBeLessThan(ranked.indexOf('pizza'))
+    expect(ranked.indexOf('pizza')).toBeLessThan(ranked.indexOf('briefcase'))
   })
 })

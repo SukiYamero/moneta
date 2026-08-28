@@ -7,17 +7,13 @@ import { Button } from '@/components/ui/button'
 import { CenterModal } from '@/components/shared/CenterModal'
 import { TextField } from '@/components/shared/TextField'
 import { TagChip } from '@/components/shared/TagChip'
-import { IconAvatar } from '@/components/shared/IconAvatar'
+import { PagedGrid } from '@/components/shared/PagedGrid'
 import { TINT_CLASSES, ICON_AVATAR_TINTS } from '@/components/shared/tintClasses'
 import { getMovimientoVisual } from '@/components/shared/movimientoView'
 import type { IconAvatarTint } from '@/components/shared/IconAvatar'
 import { normalizeForSearch } from '@/features/search/searchMatch'
-import {
-  CATEGORY_ICONS,
-  CATEGORY_ICON_KEYS,
-  type CategoryIconKey,
-} from '@/components/shared/categoryIcons'
-import { suggestCategoryVisual } from '@/features/tags/categorySuggest'
+import { CATEGORY_ICONS, type CategoryIconKey } from '@/components/shared/categoryIcons'
+import { rankCategoryIcons, suggestCategoryVisual } from '@/features/tags/categorySuggest'
 
 export interface CategoryFormModalProps {
   open: boolean
@@ -25,7 +21,14 @@ export interface CategoryFormModalProps {
   categorias: Categoria[]
   categoria?: Categoria
   initialName?: string
+  padreId?: string
 }
+
+const ICON_GRID_COLUMNS = 5
+const ICON_GRID_ROWS = 4
+
+const sameOrder = <T,>(a: readonly T[], b: readonly T[]): boolean =>
+  a.length === b.length && a.every((item, index) => item === b[index])
 
 const MAX_NAME_LENGTH = 30
 
@@ -47,16 +50,19 @@ export const CategoryFormModal = ({
   categorias,
   categoria,
   initialName,
+  padreId,
 }: CategoryFormModalProps) => {
   const { t } = useTranslation('tags')
   const upsertCategoria = useDataStore((s) => s.upsertCategoria)
   const titleId = useId()
-  const nameInputRef = useRef<HTMLInputElement>(null)
 
   const [name, setName] = useState('')
   const [icono, setIcono] = useState<CategoryIconKey | undefined>(undefined)
   const [color, setColor] = useState<IconAvatarTint>('neutral')
   const [submitting, setSubmitting] = useState(false)
+  const [iconPage, setIconPage] = useState(0)
+
+  const parent = padreId ? categorias.find((c) => c.id === padreId) : undefined
 
   useEffect(() => {
     if (!open) return
@@ -68,10 +74,13 @@ export const CategoryFormModal = ({
       const suggestion = suggestCategoryVisual(initialName ?? '', categorias)
       setName(initialName ?? '')
       setIcono(suggestion.icono)
-      setColor(suggestion.color)
+      setColor(parent ? (parent.color ?? 'neutral') : suggestion.color)
     }
+    setIconPage(0)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
+
+  const effectivePadreId = categoria ? categoria.padreId : padreId
 
   const trimmedName = name.trim()
   const isDuplicateName = useMemo(() => {
@@ -80,19 +89,26 @@ export const CategoryFormModal = ({
     return categorias.some(
       (c) =>
         c.id !== categoria?.id &&
-        c.padreId === categoria?.padreId &&
+        c.padreId === effectivePadreId &&
         normalizeForSearch(c.nombre) === normalized,
     )
-  }, [trimmedName, categorias, categoria])
+  }, [trimmedName, categorias, categoria, effectivePadreId])
 
   const canSave = trimmedName.length > 0 && !isDuplicateName
+
+  const rankedIcons = useMemo(() => rankCategoryIcons(trimmedName), [trimmedName])
+  const previousRankedIcons = useRef(rankedIcons)
+  useEffect(() => {
+    if (!sameOrder(previousRankedIcons.current, rankedIcons)) setIconPage(0)
+    previousRankedIcons.current = rankedIcons
+  }, [rankedIcons])
 
   const handleSave = async () => {
     if (!canSave || submitting) return
     const result: Categoria = {
       id: categoria?.id ?? crypto.randomUUID(),
       nombre: trimmedName,
-      padreId: categoria?.padreId,
+      padreId: effectivePadreId,
       icono,
       color,
       archivado: categoria?.archivado,
@@ -108,13 +124,25 @@ export const CategoryFormModal = ({
   }
 
   const preview = getMovimientoVisual({ icono, color }, 'gasto')
+  const parentVisual = parent ? getMovimientoVisual(parent, 'gasto') : undefined
 
   return (
-    <CenterModal open={open} onClose={onClose} labelledBy={titleId} initialFocus={nameInputRef}>
+    <CenterModal open={open} onClose={onClose} labelledBy={titleId} autoFocus={false}>
       <div className="flex flex-col gap-4">
-        <h2 id={titleId} className="text-base font-extrabold">
-          {categoria ? t('form.editTitle') : t('form.createTitle')}
-        </h2>
+        <div className="flex flex-col gap-1">
+          <h2 id={titleId} className="text-base font-extrabold">
+            {categoria ? t('form.editTitle') : t('form.createTitle')}
+          </h2>
+          {parent && parentVisual && (
+            <div className="flex items-center gap-1.5 text-sm text-fg-tertiary">
+              <parentVisual.icon
+                className={cn('size-4', TINT_CLASSES[parentVisual.tint].icon)}
+                aria-hidden="true"
+              />
+              <span>{parent.nombre}</span>
+            </div>
+          )}
+        </div>
 
         <div className="flex justify-center">
           <TagChip
@@ -125,7 +153,6 @@ export const CategoryFormModal = ({
         </div>
 
         <TextField
-          ref={nameInputRef}
           label={t('form.nameLabel')}
           placeholder={t('form.namePlaceholder')}
           value={name}
@@ -136,23 +163,37 @@ export const CategoryFormModal = ({
 
         <div className="flex flex-col gap-1.5">
           <span className="text-xs font-bold text-fg-tertiary">{t('form.iconLabel')}</span>
-          <div role="group" aria-label={t('form.iconLabel')} className="flex flex-wrap gap-2">
-            {CATEGORY_ICON_KEYS.map((key) => (
-              <button
-                key={key}
-                type="button"
-                aria-pressed={icono === key}
-                aria-label={key}
-                onClick={() => setIcono(key)}
-                className={cn(
-                  'rounded-lg p-0.5',
-                  icono === key && 'ring-2 ring-primary ring-offset-2 ring-offset-card',
-                )}
-              >
-                <IconAvatar icon={CATEGORY_ICONS[key]} tint={color} />
-              </button>
-            ))}
-          </div>
+          <PagedGrid
+            items={rankedIcons}
+            columns={ICON_GRID_COLUMNS}
+            rows={ICON_GRID_ROWS}
+            page={iconPage}
+            onPageChange={setIconPage}
+            ariaLabel={t('form.iconLabel')}
+            itemKey={(key) => key}
+            renderItem={(key) => {
+              const Icon = CATEGORY_ICONS[key]
+              return (
+                <button
+                  type="button"
+                  aria-pressed={icono === key}
+                  aria-label={key}
+                  onClick={() => setIcono(key)}
+                  className="flex size-11 items-center justify-center rounded-lg"
+                >
+                  <span
+                    className={cn(
+                      'flex size-9 items-center justify-center rounded-md',
+                      TINT_CLASSES[color].badge,
+                      icono === key && 'ring-2 ring-primary ring-offset-2 ring-offset-card',
+                    )}
+                  >
+                    <Icon className="size-4" aria-hidden="true" />
+                  </span>
+                </button>
+              )
+            }}
+          />
         </div>
 
         <div className="flex flex-col gap-1.5">
