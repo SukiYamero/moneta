@@ -135,10 +135,14 @@ export const CategorySheet = ({
         <button
           type="button"
           onClick={handleCustomTap}
-          className="flex h-full w-full flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-border-strong px-1.5 py-2.5 text-fg-tertiary"
+          className="flex h-full w-full items-center justify-center"
         >
-          <Plus className="size-4" aria-hidden="true" />
-          <span className="line-clamp-2 text-center text-xs font-bold">{t('sheet.customCta')}</span>
+          <span className="flex h-4/5 w-4/5 flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-border-strong px-1.5 py-2.5 text-fg-tertiary">
+            <Plus className="size-4" aria-hidden="true" />
+            <span className="line-clamp-2 text-center text-xs font-bold">
+              {t('sheet.customCta')}
+            </span>
+          </span>
         </button>
       )
     }
@@ -162,11 +166,11 @@ export const CategorySheet = ({
       >
         <span
           className={cn(
-            'flex size-9 shrink-0 items-center justify-center rounded-md',
+            'flex size-9.5 shrink-0 items-center justify-center rounded-md',
             TINT_CLASSES[tint].badge,
           )}
         >
-          <Icon className="size-4" aria-hidden="true" />
+          <Icon className="size-4.5" aria-hidden="true" />
         </span>
         <span className="line-clamp-2 text-xs font-bold">{categoria.nombre}</span>
       </button>

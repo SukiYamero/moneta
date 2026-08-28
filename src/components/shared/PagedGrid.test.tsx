@@ -38,7 +38,7 @@ const getTrack = (name = 'Categorías') => screen.getByRole('group', { name })
 
 const dispatchPointer = (
   target: Element,
-  type: 'pointerdown' | 'pointermove' | 'pointerup',
+  type: 'pointerdown' | 'pointermove' | 'pointerup' | 'lostpointercapture',
   init: { pointerId: number; clientX?: number; clientY?: number },
 ) => {
   const event = new PointerEvent(type, {
@@ -310,5 +310,40 @@ describe('PagedGrid', () => {
     await user.keyboard('{ArrowRight}')
 
     expect(onPageChange).not.toHaveBeenCalled()
+  })
+
+  it('reserves the tallest page height and never shrinks the track on a shorter page', () => {
+    // jsdom lays out nothing, hence the stub: height tracks how many tiles are actually mounted.
+    const spy = vi
+      .spyOn(Element.prototype, 'getBoundingClientRect')
+      .mockImplementation(function (this: Element) {
+        const rows = this.getAttribute('role') === 'group' ? Math.ceil(this.children.length / 3) : 0
+        return { height: rows * 40 } as DOMRect
+      })
+
+    const { rerender } = render(<Harness items={makeItems(20)} page={0} onPageChange={vi.fn()} />)
+    expect(getTrack().style.minHeight).toBe('120px')
+
+    rerender(<Harness items={makeItems(20)} page={2} onPageChange={vi.fn()} />)
+    expect(getTrack().style.minHeight).toBe('120px')
+
+    spy.mockRestore()
+  })
+
+  it('a stale lostpointercapture from an already-finished gesture does not freeze the next swipe', () => {
+    const onPageChange = vi.fn()
+    render(<Harness items={makeItems(20)} page={0} onPageChange={onPageChange} />)
+    const track = getTrack()
+
+    dispatchPointer(track, 'pointerdown', { pointerId: 1, clientX: 0 })
+    dispatchPointer(track, 'pointerup', { pointerId: 1, clientX: 0 })
+
+    dispatchPointer(track, 'pointerdown', { pointerId: 2, clientX: 0 })
+    dispatchPointer(track, 'pointermove', { pointerId: 2, clientX: -60 })
+    dispatchPointer(track, 'lostpointercapture', { pointerId: 1 })
+    dispatchPointer(track, 'pointerup', { pointerId: 2, clientX: -60 })
+
+    expect(onPageChange).toHaveBeenCalledOnce()
+    expect(onPageChange).toHaveBeenCalledWith(1)
   })
 })
