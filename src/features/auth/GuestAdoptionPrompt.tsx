@@ -4,6 +4,8 @@ import { useAuthStore } from '@/lib/authStore'
 import { Button } from '@/components/ui/button'
 import { CenterModal } from '@/components/shared/CenterModal'
 
+const preventAccidentalDismiss = (): void => {}
+
 export const GuestAdoptionPrompt = () => {
   const { t } = useTranslation('auth')
   const pending = useAuthStore((s) => s.pendingAdoption)
@@ -16,7 +18,7 @@ export const GuestAdoptionPrompt = () => {
   if (!pending) return null
 
   return (
-    <CenterModal open onClose={decline} labelledBy={titleId}>
+    <CenterModal open onClose={preventAccidentalDismiss} labelledBy={titleId}>
       <div className="flex flex-col items-center gap-3 text-center">
         <h2 id={titleId} className="text-base font-extrabold">
           {t('adoption.title')}
@@ -48,7 +50,7 @@ export const GuestAdoptionPrompt = () => {
             disabled={busy}
             onClick={() => void accept()}
           >
-            {busy ? t('adoption.moving') : t('adoption.acceptCta')}
+            {busy ? t('adoption.adding') : t('adoption.acceptCta')}
           </Button>
         </div>
       </div>

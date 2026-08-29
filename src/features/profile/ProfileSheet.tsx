@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { BottomSheet } from '@/components/shared/BottomSheet'
+import { GuestAdoptionSection } from '@/features/profile/GuestAdoptionSection'
 import { IdentitySection } from '@/features/profile/IdentitySection'
 import { ProfilesSection } from '@/features/profile/ProfilesSection'
 import { SecuritySection } from '@/features/profile/SecuritySection'
@@ -21,6 +22,7 @@ export const ProfileSheet = ({ open, onClose }: ProfileSheetProps) => {
         <h2 className="text-lg font-extrabold">{t('sheet.heading')}</h2>
         <IdentitySection />
         <ProfilesSection />
+        <GuestAdoptionSection />
         <SyncSection />
         <SecuritySection />
         <DataSection />

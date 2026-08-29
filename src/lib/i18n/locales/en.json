@@ -73,14 +73,24 @@
       "partialScopeGrant": "To keep your data saved and synced without issues, we need both Drive permissions. Try again and accept both."
     },
     "adoption": {
-      "title": "Bring your movements into this account?",
-      "description_one": "You have {{count}} movement saved only on this device. Bringing it in keeps it under this account and queues it for your Drive.",
-      "description_other": "You have {{count}} movements saved only on this device. Bringing them in keeps them under this account and queues them for your Drive.",
+      "title": "Add your movements to this account?",
+      "description_one": "You have {{count}} movement saved only on this device. Adding it copies it into this account and queues it for your Drive, without removing it from this device.",
+      "description_other": "You have {{count}} movements saved only on this device. Adding them copies them into this account and queues them for your Drive, without removing them from this device.",
       "declineNote": "If you say no, they stay on this device, in their own profile, and you can still reach them anytime.",
-      "acceptCta": "Yes, bring them",
+      "acceptCta": "Yes, add them",
       "declineCta": "No, leave them here",
-      "moving": "Moving…",
-      "error": "Couldn't bring your movements over. Try again."
+      "adding": "Adding…",
+      "error": "Couldn't add your movements. Try again.",
+      "entry": {
+        "heading": "Guest data",
+        "description_one": "{{count}} movement saved on this device isn't in this account yet.",
+        "description_other": "{{count}} movements saved on this device aren't in this account yet.",
+        "cta": "Add to this account",
+        "adding": "Adding…",
+        "success_one": "Added {{count}} movement to this account.",
+        "success_other": "Added {{count}} movements to this account.",
+        "error": "Couldn't add the movements. Try again."
+      }
     }
   },
   "driveConsent": {
