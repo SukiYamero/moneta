@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { BottomSheet } from '@/components/shared/BottomSheet'
 import { OVERLAY_FIXED_LAYER_OPACITY_CLASS } from '@/components/shared/useOverlay'
@@ -233,6 +233,35 @@ describe('BottomSheet', () => {
       )
 
       expect(onClose).not.toHaveBeenCalled()
+    })
+
+    it('ignores a second finger touching the handle instead of letting it hijack the drag', () => {
+      const onClose = vi.fn()
+      render(<Harness open onClose={onClose} />)
+      const handle = getHandle()
+
+      const dispatch = (
+        type: 'pointerdown' | 'pointermove' | 'pointerup',
+        pointerId: number,
+        clientY: number,
+      ) =>
+        act(() => {
+          handle.dispatchEvent(
+            new PointerEvent(type, { bubbles: true, cancelable: true, pointerId, clientY }),
+          )
+        })
+
+      dispatch('pointerdown', 1, 0)
+      dispatch('pointerdown', 2, 0)
+      dispatch('pointermove', 2, 300)
+      dispatch('pointerup', 2, 300)
+
+      expect(onClose).not.toHaveBeenCalled()
+
+      dispatch('pointermove', 1, 300)
+      dispatch('pointerup', 1, 300)
+
+      expect(onClose).toHaveBeenCalledOnce()
     })
   })
 })

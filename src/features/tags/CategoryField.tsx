@@ -2,7 +2,7 @@ import { ChevronRight } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { Categoria, TipoMovimiento } from '@/lib/schema'
 import { cn } from '@/lib/utils'
-import { TINT_CLASSES } from '@/components/shared/tintClasses'
+import { IconAvatar } from '@/components/shared/IconAvatar'
 import { getMovimientoVisual } from '@/components/shared/movimientoView'
 
 export interface CategoryFieldProps {
@@ -25,14 +25,7 @@ export const CategoryField = ({ categoria, tipo, onOpen }: CategoryFieldProps) =
         onClick={onOpen}
         className="flex min-h-11 items-center gap-2.5 rounded-xl border border-border-subtle bg-canvas px-3.5 py-2.5"
       >
-        <span
-          className={cn(
-            'flex size-8.5 shrink-0 items-center justify-center rounded-sm',
-            TINT_CLASSES[tint].badge,
-          )}
-        >
-          <Icon className="size-4" aria-hidden="true" />
-        </span>
+        <IconAvatar icon={Icon} tint={tint} size="compact" />
         <span
           className={cn(
             'min-w-0 flex-1 truncate text-left text-base font-bold',

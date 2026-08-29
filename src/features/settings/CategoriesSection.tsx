@@ -3,6 +3,7 @@ import { Archive, ArchiveRestore, ChevronDown, Plus, Trash2 } from 'lucide-react
 import { useTranslation } from 'react-i18next'
 import type { Categoria } from '@/lib/schema'
 import { useDataStore } from '@/lib/dataStore'
+import { groupCategoriasByParent } from '@/lib/categoryTree'
 import { getMovimientoVisual } from '@/components/shared/movimientoView'
 import { IconAvatar } from '@/components/shared/IconAvatar'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
@@ -76,9 +77,7 @@ export const CategoriesSection = () => {
   const active = categorias.filter((c) => !c.archivado)
   const archived = categorias.filter((c) => c.archivado)
 
-  const activeParentIds = new Set(active.filter((c) => !c.padreId).map((c) => c.id))
-  const topLevelActive = active.filter((c) => !c.padreId || !activeParentIds.has(c.padreId))
-  const childrenOf = (parentId: string) => active.filter((c) => c.padreId === parentId)
+  const { topLevel: topLevelActive, childrenByParent } = groupCategoriasByParent(active)
 
   const confirmDelete = () => {
     if (!deleteTarget) return
@@ -96,7 +95,7 @@ export const CategoriesSection = () => {
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-3">
             {topLevelActive.map((categoria) => {
-              const children = childrenOf(categoria.id)
+              const children = childrenByParent.get(categoria.id) ?? []
               return (
                 <div key={categoria.id} className="flex flex-col gap-1.5">
                   {renderActiveRow(categoria)}

@@ -282,20 +282,18 @@ describe('CategoryFormModal', () => {
     render(<CategoryFormModal open onClose={vi.fn()} categorias={[]} />)
     expect(iconGridPageCount).toBeGreaterThan(1)
 
-    await user.click(screen.getByRole('button', { name: `Page 2 of ${iconGridPageCount}` }))
-    expect(screen.getByRole('button', { name: `Page 2 of ${iconGridPageCount}` })).toHaveAttribute(
-      'aria-current',
-      'true',
-    )
+    await user.click(screen.getByRole('button', { name: `Página 2 de ${iconGridPageCount}` }))
+    expect(
+      screen.getByRole('button', { name: `Página 2 de ${iconGridPageCount}` }),
+    ).toHaveAttribute('aria-current', 'true')
 
     await user.type(screen.getByRole('textbox', { name: /nombre/i }), 'gimnasio')
 
-    expect(screen.getByRole('button', { name: `Page 1 of ${iconGridPageCount}` })).toHaveAttribute(
-      'aria-current',
-      'true',
-    )
     expect(
-      screen.getByRole('button', { name: `Page 2 of ${iconGridPageCount}` }),
+      screen.getByRole('button', { name: `Página 1 de ${iconGridPageCount}` }),
+    ).toHaveAttribute('aria-current', 'true')
+    expect(
+      screen.getByRole('button', { name: `Página 2 de ${iconGridPageCount}` }),
     ).not.toHaveAttribute('aria-current')
   })
 

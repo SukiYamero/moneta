@@ -2,11 +2,12 @@ import { useId, useMemo, useRef, useState } from 'react'
 import { ChevronLeft, Plus, Search, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { Categoria } from '@/lib/schema'
+import { groupCategoriasByParent } from '@/lib/categoryTree'
 import { cn } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
 import { BottomSheet } from '@/components/shared/BottomSheet'
 import { PagedGrid } from '@/components/shared/PagedGrid'
-import { TINT_CLASSES } from '@/components/shared/tintClasses'
+import { IconAvatar } from '@/components/shared/IconAvatar'
 import { getMovimientoVisual } from '@/components/shared/movimientoView'
 import { matchesQuery } from '@/features/search/searchMatch'
 import { CategoryFormModal } from '@/features/tags/CategoryFormModal'
@@ -23,9 +24,6 @@ type GridItem = { kind: 'custom' } | { kind: 'category'; categoria: Categoria; g
 
 const GRID_COLUMNS = 3
 const GRID_ROWS = 3
-
-const isTopLevel = (categoria: Categoria, liveIds: ReadonlySet<string>): boolean =>
-  categoria.padreId === undefined || !liveIds.has(categoria.padreId)
 
 export const CategorySheet = ({
   open,
@@ -54,23 +52,11 @@ export const CategorySheet = ({
   wasOpenRef.current = open
 
   const nonArchived = useMemo(() => categorias.filter((c) => !c.archivado), [categorias])
-  const idSet = useMemo(() => new Set(nonArchived.map((c) => c.id)), [nonArchived])
 
-  const topLevel = useMemo(
-    () => nonArchived.filter((c) => isTopLevel(c, idSet)),
-    [nonArchived, idSet],
+  const { topLevel, childrenByParent } = useMemo(
+    () => groupCategoriasByParent(nonArchived),
+    [nonArchived],
   )
-
-  const childrenByParent = useMemo(() => {
-    const map = new Map<string, Categoria[]>()
-    for (const c of nonArchived) {
-      if (isTopLevel(c, idSet)) continue
-      const siblings = map.get(c.padreId!) ?? []
-      siblings.push(c)
-      map.set(c.padreId!, siblings)
-    }
-    return map
-  }, [nonArchived, idSet])
 
   const trimmedQuery = query.trim()
   const isSearching = trimmedQuery.length > 0
@@ -157,7 +143,7 @@ export const CategorySheet = ({
       <button
         type="button"
         onClick={() => (hasChildren ? handleDrillIn(categoria) : handleSelect(categoria))}
-        aria-pressed={selected}
+        aria-pressed={hasChildren ? undefined : selected}
         className="flex h-full w-full flex-col items-center justify-center gap-1.5 text-center"
       >
         <span
@@ -167,14 +153,7 @@ export const CategorySheet = ({
             selected && 'ring-2 ring-primary',
           )}
         >
-          <span
-            className={cn(
-              'flex size-10.5 shrink-0 items-center justify-center rounded-md',
-              TINT_CLASSES[tint].badge,
-            )}
-          >
-            <Icon className="size-5.5" aria-hidden="true" />
-          </span>
+          <IconAvatar icon={Icon} tint={tint} size="tile" />
           <span className="line-clamp-2 text-xs font-bold">{categoria.nombre}</span>
         </span>
       </button>

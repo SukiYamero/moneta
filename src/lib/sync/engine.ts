@@ -99,7 +99,7 @@ const materializeConfig = async (
   database: ProfileDb,
   config: Config | undefined,
 ): Promise<void> => {
-  if (!config || config.schemaVersion > SCHEMA_VERSION) return
+  if (!config || config.schemaVersion !== SCHEMA_VERSION) return
   await database.config.put({ ...config, id: CONFIG_ID })
 }
 

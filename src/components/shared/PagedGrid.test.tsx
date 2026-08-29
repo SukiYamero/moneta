@@ -60,7 +60,7 @@ describe('PagedGrid', () => {
 
     const track = getTrack()
     expect(within(track).getAllByRole('button')).toHaveLength(9)
-    expect(screen.getAllByRole('button', { name: /^Page \d of 3$/ })).toHaveLength(3)
+    expect(screen.getAllByRole('button', { name: /^Página \d de 3$/ })).toHaveLength(3)
   })
 
   it('sets the grid template through inline style, not a computed class', () => {
@@ -74,7 +74,7 @@ describe('PagedGrid', () => {
   it('renders no dots for a single page', () => {
     render(<Harness items={makeItems(5)} page={0} onPageChange={vi.fn()} />)
 
-    expect(screen.queryByRole('button', { name: /^Page \d+ of/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Página \d+ de/ })).not.toBeInTheDocument()
   })
 
   it('does not render items from a page other than the current one', () => {
@@ -193,7 +193,7 @@ describe('PagedGrid', () => {
     const onPageChange = vi.fn()
     render(<Harness items={makeItems(20)} page={0} onPageChange={onPageChange} />)
 
-    await user.click(screen.getByRole('button', { name: 'Page 3 of 3' }))
+    await user.click(screen.getByRole('button', { name: 'Página 3 de 3' }))
 
     expect(onPageChange).toHaveBeenCalledOnce()
     expect(onPageChange).toHaveBeenCalledWith(2)
@@ -202,19 +202,21 @@ describe('PagedGrid', () => {
   it('gives every dot an accessible name identifying its page', () => {
     render(<Harness items={makeItems(20)} page={0} onPageChange={vi.fn()} />)
 
-    expect(screen.getByRole('button', { name: 'Page 1 of 3' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Page 2 of 3' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Page 3 of 3' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Página 1 de 3' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Página 2 de 3' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Página 3 de 3' })).toBeInTheDocument()
   })
 
   it('marks the active dot with aria-current', () => {
     render(<Harness items={makeItems(20)} page={1} onPageChange={vi.fn()} />)
 
-    expect(screen.getByRole('button', { name: 'Page 2 of 3' })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: 'Página 2 de 3' })).toHaveAttribute(
       'aria-current',
       'true',
     )
-    expect(screen.getByRole('button', { name: 'Page 1 of 3' })).not.toHaveAttribute('aria-current')
+    expect(screen.getByRole('button', { name: 'Página 1 de 3' })).not.toHaveAttribute(
+      'aria-current',
+    )
   })
 
   it('clamps to the last page and reports it when items shrink out from under the current page', () => {
@@ -227,6 +229,18 @@ describe('PagedGrid', () => {
 
     expect(onPageChange).toHaveBeenCalledOnce()
     expect(onPageChange).toHaveBeenCalledWith(0)
+  })
+
+  it('renders the clamped page items in the same render as the shrink, never a stale empty frame', () => {
+    const onPageChange = vi.fn()
+    const { rerender } = render(
+      <Harness items={makeItems(20)} page={2} onPageChange={onPageChange} />,
+    )
+
+    rerender(<Harness items={makeItems(4)} page={2} onPageChange={onPageChange} />)
+
+    const track = getTrack()
+    expect(within(track).getByRole('button', { name: 'Item 0' })).toBeInTheDocument()
   })
 
   it('pages forward with ArrowRight on the focused track', async () => {
@@ -314,12 +328,12 @@ describe('PagedGrid', () => {
 
   it('reserves the tallest page height and never shrinks the track on a shorter page', () => {
     // jsdom lays out nothing, hence the stub: height tracks how many tiles are actually mounted.
-    const spy = vi
-      .spyOn(Element.prototype, 'getBoundingClientRect')
-      .mockImplementation(function (this: Element) {
-        const rows = this.getAttribute('role') === 'group' ? Math.ceil(this.children.length / 3) : 0
-        return { height: rows * 40 } as DOMRect
-      })
+    const spy = vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: Element,
+    ) {
+      const rows = this.getAttribute('role') === 'group' ? Math.ceil(this.children.length / 3) : 0
+      return { height: rows * 40 } as DOMRect
+    })
 
     const items = makeItems(20)
     const { rerender } = render(<Harness items={items} page={0} onPageChange={vi.fn()} />)
@@ -333,12 +347,12 @@ describe('PagedGrid', () => {
 
   it('re-baselines the reserved height when a new items list replaces the old one', () => {
     // jsdom lays out nothing, hence the stub: height tracks how many tiles are actually mounted.
-    const spy = vi
-      .spyOn(Element.prototype, 'getBoundingClientRect')
-      .mockImplementation(function (this: Element) {
-        const rows = this.getAttribute('role') === 'group' ? Math.ceil(this.children.length / 3) : 0
-        return { height: rows * 40 } as DOMRect
-      })
+    const spy = vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: Element,
+    ) {
+      const rows = this.getAttribute('role') === 'group' ? Math.ceil(this.children.length / 3) : 0
+      return { height: rows * 40 } as DOMRect
+    })
 
     const { rerender } = render(<Harness items={makeItems(20)} page={0} onPageChange={vi.fn()} />)
     expect(getTrack().style.minHeight).toBe('120px')

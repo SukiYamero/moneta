@@ -62,7 +62,7 @@ export const CATEGORY_CONCEPTS: readonly CategoryConcept[] = [
   {
     icon: 'utensils',
     tint: 'amber',
-    keywords: ['comida', 'almuerzo', 'cena', 'food', 'meal', 'comida', 'restaurante', 'restaurant'],
+    keywords: ['comida', 'almuerzo', 'cena', 'food', 'meal', 'restaurante', 'restaurant'],
   },
   {
     icon: 'shopping-cart',
@@ -85,17 +85,7 @@ export const CATEGORY_CONCEPTS: readonly CategoryConcept[] = [
   {
     icon: 'car',
     tint: 'blue',
-    keywords: [
-      'transporte',
-      'transport',
-      'uber',
-      'taxi',
-      'carro',
-      'auto',
-      'car',
-      'gasolina',
-      'nafta',
-    ],
+    keywords: ['transporte', 'transport', 'uber', 'taxi', 'carro', 'auto', 'car'],
   },
   {
     icon: 'bus',
@@ -105,12 +95,12 @@ export const CATEGORY_CONCEPTS: readonly CategoryConcept[] = [
   {
     icon: 'bike',
     tint: 'blue',
-    keywords: ['bicicleta', 'bici', 'bike', 'bicycle', 'bicicleta'],
+    keywords: ['bicicleta', 'bici', 'bike', 'bicycle'],
   },
   {
     icon: 'fuel',
     tint: 'blue',
-    keywords: ['gasolina', 'combustible', 'fuel', 'gas', 'nafta', 'gasolina', 'combustivel'],
+    keywords: ['gasolina', 'combustible', 'fuel', 'nafta', 'combustivel'],
   },
   {
     icon: 'plane',
@@ -144,7 +134,7 @@ export const CATEGORY_CONCEPTS: readonly CategoryConcept[] = [
   {
     icon: 'music',
     tint: 'rose',
-    keywords: ['musica', 'música', 'music', 'spotify', 'streaming', 'música'],
+    keywords: ['musica', 'música', 'music', 'spotify', 'streaming'],
   },
   {
     icon: 'heart-pulse',
@@ -200,7 +190,7 @@ export const CATEGORY_CONCEPTS: readonly CategoryConcept[] = [
   {
     icon: 'smartphone',
     tint: 'blue',
-    keywords: ['celular', 'telefono', 'teléfono', 'phone', 'movil', 'móvil', 'celular'],
+    keywords: ['celular', 'telefono', 'teléfono', 'phone', 'movil', 'móvil'],
   },
   {
     icon: 'credit-card',
@@ -603,11 +593,24 @@ export const CATEGORY_CONCEPTS: readonly CategoryConcept[] = [
   },
 ]
 
-const CONCEPT_KEYWORD_INDEX: Map<string, CategoryConcept> = new Map(
-  CATEGORY_CONCEPTS.flatMap((concept) =>
-    concept.keywords.map((keyword) => [normalizeForSearch(keyword), concept] as const),
-  ),
-)
+const buildConceptKeywordIndex = (): Map<string, CategoryConcept> => {
+  const index = new Map<string, CategoryConcept>()
+  for (const concept of CATEGORY_CONCEPTS) {
+    for (const keyword of concept.keywords) {
+      const normalized = normalizeForSearch(keyword)
+      const existing = index.get(normalized)
+      if (import.meta.env.DEV && existing && existing !== concept) {
+        throw new Error(
+          `categorySuggest: keyword "${keyword}" claimed by both "${existing.icon}" and "${concept.icon}"`,
+        )
+      }
+      index.set(normalized, concept)
+    }
+  }
+  return index
+}
+
+const CONCEPT_KEYWORD_INDEX: Map<string, CategoryConcept> = buildConceptKeywordIndex()
 
 const wordsOf = (text: string): string[] =>
   normalizeForSearch(text)
