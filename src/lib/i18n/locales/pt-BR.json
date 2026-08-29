@@ -338,8 +338,19 @@
       "exporting": "Exportando…",
       "exportFailed": "Não foi possível exportar o arquivo. Tente novamente.",
       "deleteStored": {
-        "cta": "Excluir dados guardados neste dispositivo",
-        "note": "Ainda não disponível. Você vai poder apagar a cópia local deste dispositivo."
+        "cta": "Excluir dados guardados",
+        "deleting": "Excluindo…",
+        "unavailableNote": "Conecte o Google Drive para poder excluir seus dados guardados lá e neste dispositivo.",
+        "confirm": {
+          "title": "Excluir seus dados guardados?",
+          "description": "Isso apaga seus movimentos e ativos do Google Drive e deste dispositivo agora mesmo. Se outro dispositivo estiver conectado a esta conta, ele pode enviar sua própria cópia de novo na próxima sincronização.",
+          "confirmCta": "Excluir",
+          "cancelCta": "Cancelar"
+        },
+        "success": "Seus dados foram excluídos do Google Drive e deste dispositivo.",
+        "failedDrive": "Não terminamos de excluir seus dados do Google Drive: é possível que parte já tenha sido apagada. Tente novamente para concluir a exclusão.",
+        "failedLocal": "Seus dados já foram excluídos do Google Drive, mas não conseguimos apagar a cópia deste dispositivo. Tente novamente.",
+        "failed": "Não conseguimos excluir seus dados. Tente novamente."
       }
     },
     "preferences": {

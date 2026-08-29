@@ -338,8 +338,19 @@
       "exporting": "Exporting…",
       "exportFailed": "Couldn't export the file. Try again.",
       "deleteStored": {
-        "cta": "Delete data stored on this device",
-        "note": "Not available yet. You'll be able to delete this device's local copy."
+        "cta": "Delete stored data",
+        "deleting": "Deleting…",
+        "unavailableNote": "Connect Google Drive to delete your data there and on this device.",
+        "confirm": {
+          "title": "Delete your stored data?",
+          "description": "This permanently deletes your movements and assets from Google Drive and this device right now. If another device is signed into this account, it may upload its own copy again the next time it syncs.",
+          "confirmCta": "Delete",
+          "cancelCta": "Cancel"
+        },
+        "success": "Your data was deleted from Google Drive and this device.",
+        "failedDrive": "We couldn't finish deleting your data from Google Drive — some of it may already be gone. Try again to finish the job.",
+        "failedLocal": "Your data was deleted from Google Drive, but we couldn't clear this device's copy. Try again.",
+        "failed": "We couldn't delete your data. Try again."
       }
     },
     "preferences": {
