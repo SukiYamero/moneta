@@ -29,8 +29,12 @@ Vitest + Testing Library · bun · oxlint + Prettier.
 ```sh
 bun install
 bun run dev        # local dev server
+bun start          # dev server + Cloudflare Tunnel at dev.kurobello.com, for testing on a real phone
 bun run check      # typecheck + lint + test (the done-gate)
 bun run build      # production build
 ```
 
-Google login needs `VITE_GOOGLE_CLIENT_ID` in `.env.local` (see `.env.example`).
+Google login needs `VITE_GOOGLE_CLIENT_ID` in `.env.local` (see `.env.example`). Its
+Google Cloud Console OAuth client needs `dev.kurobello.com` (not a raw LAN IP —
+Google rejects those as an origin) in Authorized JavaScript origins to test login
+from a phone; `bun start` is what serves the app there.

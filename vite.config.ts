@@ -7,11 +7,23 @@ import { VitePWA } from 'vite-plugin-pwa'
 import basicSsl from '@vitejs/plugin-basic-ssl'
 import { APP_NAME } from './src/lib/branding.ts'
 
+const tunneled = process.env.VITE_DEV_TUNNEL === 'true'
+
 export default defineConfig({
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
+  },
+  server: {
+    // Cloudflare Tunnel proxies dev.kurobello.com to localhost:5173 with a real TLS cert;
+    // Vite's Host header check would otherwise reject that hostname.
+    allowedHosts: ['dev.kurobello.com'],
+    // The browser only ever reaches port 443 through the tunnel — without this the HMR
+    // client hardcodes the internal dev port (5173) and tries to open a socket to it directly.
+    ...(tunneled && {
+      hmr: { host: 'dev.kurobello.com', protocol: 'wss', clientPort: 443 },
+    }),
   },
   plugins: [
     {
