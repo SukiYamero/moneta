@@ -449,6 +449,7 @@
       "upToDate": "Em dia",
       "pending": "Alterações pendentes de sincronização",
       "syncing": "Sincronizando…",
+      "error": "Não foi possível sincronizar — seus dados continuam salvos neste dispositivo",
       "offline": "Sem conexão — vai sincronizar ao reconectar",
       "lastSync": "Última sincronização: {{when}}",
       "neverSynced": "Ainda não sincronizou",

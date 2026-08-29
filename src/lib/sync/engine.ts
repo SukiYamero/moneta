@@ -70,6 +70,7 @@ export const getSyncIndicator = (): SyncIndicator =>
   deriveSyncIndicator({
     isSyncing: useSyncStore.getState().phase !== 'idle',
     outboxDirty: useOutboxStore.getState().dirty,
+    lastError: useSyncStore.getState().lastError,
   })
 
 const materializeMovimientos = async (

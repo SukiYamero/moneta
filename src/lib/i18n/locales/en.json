@@ -449,6 +449,7 @@
       "upToDate": "Up to date",
       "pending": "Changes pending sync",
       "syncing": "Syncing…",
+      "error": "Couldn't sync — your data is still saved on this device",
       "offline": "Offline — will sync when reconnected",
       "lastSync": "Last synced: {{when}}",
       "neverSynced": "Not synced yet",

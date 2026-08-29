@@ -55,6 +55,15 @@ describe('SyncSection', () => {
     expect(screen.getByText('Sincronizando…')).toBeInTheDocument()
   })
 
+  it('shows "error" when the last sync attempt failed and nothing pending masks it', () => {
+    useAuthStore.setState({ status: 'authenticated', drive: { folderId: 'F' } })
+    useSyncStore.setState({ lastError: 'network error' })
+    render(<SyncSection />)
+    expect(
+      screen.getByText('No se pudo sincronizar — tus datos siguen guardados en este dispositivo'),
+    ).toBeInTheDocument()
+  })
+
   it('shows the offline state, overriding whatever the sync indicator would otherwise say', () => {
     useAuthStore.setState({ status: 'authenticated', drive: { folderId: 'F' } })
     useNetworkStore.setState({ online: false })
