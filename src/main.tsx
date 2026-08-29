@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { RouterProvider } from 'react-router/dom'
 import { router } from '@/router'
 import { AppLock } from '@/features/lock/AppLock'
+import { SingleTabGuard } from '@/features/boot/SingleTabGuard'
 import { LandscapeGuard } from '@/components/shared/LandscapeGuard'
 import { AppErrorBoundary } from '@/AppErrorBoundary'
 import { initServiceWorkerUpdates } from '@/lib/swUpdate'
@@ -23,9 +24,11 @@ createRoot(rootEl).render(
   <StrictMode>
     <AppErrorBoundary>
       <LandscapeGuard />
-      <AppLock>
-        <RouterProvider router={router} />
-      </AppLock>
+      <SingleTabGuard>
+        <AppLock>
+          <RouterProvider router={router} />
+        </AppLock>
+      </SingleTabGuard>
     </AppErrorBoundary>
   </StrictMode>,
 )

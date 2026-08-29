@@ -25,6 +25,11 @@
       "body": "Este app foi pensado para ser usado na vertical. Volte a esse modo para a melhor experiência.",
       "skip": "Pular e continuar"
     },
+    "singleTabGuard": {
+      "title": "Já está aberto em outra aba",
+      "body": "Para que seus dados sejam salvos sem problemas, o {{appName}} só pode estar aberto em um lugar por vez. Feche essa outra aba ou janela, ou volte a ela, e tente novamente aqui.",
+      "retry": "Tentar novamente"
+    },
     "characterCount": "{{count}} de {{max}} caracteres",
     "pagination": {
       "pageAria": "Página {{page}} de {{count}}"
