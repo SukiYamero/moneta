@@ -33,12 +33,18 @@ database per profile (`src/lib/db.ts`'s `createProfileDb()`), not a
   local/guest profile's movement ids against `targetDb`'s; `adoptGuestMovements
   (target)` **copies** (only `Movimiento`, no `Activo`, never deletes from the
   guest db) whatever's missing into `target`'s database and outbox — a merge,
-  idempotent, safe to re-run with nothing pending. `finishConsentedAdoption
-  (target)` runs the copy then clears the durable `adoptionConsent` marker
-  (`deviceStore.ts`). `resumePendingAdoption(activeProfile)` is `boot.ts`'s
-  fire-and-forget entry point: no-op if no consent is pending, or if the
-  pending consent names a different profile id/account key than the one now
-  active.
+  idempotent, safe to re-run with nothing pending. The per-movement enqueue
+  decision is gated on `deviceStore.ts`'s `adoptedMovements` table (keyed
+  `${profileId}:${movimientoId}`, written only after `enqueueOperation`
+  succeeds), not on whether the movement currently has a live outbox row —
+  a successfully pushed op's outbox row is routinely removed by
+  `sync/engine.ts`'s compaction, so using outbox presence as the guard would
+  re-enqueue already-delivered movements on every later re-run.
+  `finishConsentedAdoption(target)` runs the copy then clears the durable
+  `adoptionConsent` marker (`deviceStore.ts`). `resumePendingAdoption
+  (activeProfile)` is `boot.ts`'s fire-and-forget entry point: no-op if no
+  consent is pending, or if the pending consent names a different profile
+  id/account key than the one now active.
 - `index.ts` — the public barrel: profile types, registry functions,
   `getProfileDatabase`, `ensureOwnerMarker`/`readOwnerMarker`,
   `adoptGuestMovements`/`countUnadoptedGuestMovements`/`finishConsentedAdoption`/

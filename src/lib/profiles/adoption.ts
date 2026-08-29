@@ -1,5 +1,10 @@
 import { db, type ProfileDb } from '@/lib/db'
-import { clearAdoptionConsent, getAdoptionConsent } from '@/lib/deviceStore'
+import {
+  clearAdoptionConsent,
+  getAdoptedMovementIds,
+  getAdoptionConsent,
+  markMovementAdopted,
+} from '@/lib/deviceStore'
 import { enqueueOperation } from '@/lib/outbox'
 import { getProfileDatabase } from '@/lib/profiles/profileDb'
 import type { ProfileRecord } from '@/lib/profiles/profileRegistry'
@@ -27,18 +32,20 @@ export const adoptGuestMovements = async (target: ProfileRecord): Promise<Adopti
   const toCopy = guestMovements.filter((m) => !targetIdSet.has(m.id))
   if (toCopy.length > 0) await targetDb.movimientos.bulkPut(toCopy)
 
+  const alreadyAdopted = await getAdoptedMovementIds(
+    target.id,
+    guestMovements.map((m) => m.id),
+  )
+
   let adoptedCount = 0
   for (const mov of guestMovements) {
-    const alreadyQueued = await targetDb.outbox
-      .where('[entity+entityId]')
-      .equals(['movimiento', mov.id])
-      .count()
-    if (alreadyQueued > 0) continue
+    if (alreadyAdopted.has(mov.id)) continue
     const queued = await enqueueOperation(
       { entity: 'movimiento', op: 'put', payload: mov },
       targetDb,
     )
     if (!queued) throw new Error(`adoption: could not queue movement "${mov.id}" for Drive`)
+    await markMovementAdopted(target.id, mov.id)
     adoptedCount += 1
   }
 

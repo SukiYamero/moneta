@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { db } from '@/lib/db'
+import { deviceDb } from '@/lib/deviceStore'
 import type { Movimiento } from '@/lib/schema'
 import {
   __clearProfileDatabaseCacheForTests,
@@ -44,6 +45,7 @@ afterEach(async () => {
   await targetDb.outbox.clear()
   __clearProfileDatabaseCacheForTests(TARGET_DB_NAME)
   await __clearRegistryForTests()
+  await deviceDb.adoptedMovements.clear()
 })
 
 describe('useGuestAdoptionEntry', () => {

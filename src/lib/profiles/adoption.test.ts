@@ -1,7 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { db } from '@/lib/db'
 import type { Movimiento } from '@/lib/schema'
-import { clearAdoptionConsent, getAdoptionConsent, setAdoptionConsent } from '@/lib/deviceStore'
+import {
+  clearAdoptionConsent,
+  deviceDb,
+  getAdoptionConsent,
+  setAdoptionConsent,
+} from '@/lib/deviceStore'
+import { removeOperations } from '@/lib/outbox'
 import {
   __clearProfileDatabaseCacheForTests,
   __clearRegistryForTests,
@@ -48,6 +54,7 @@ afterEach(async () => {
   __clearProfileDatabaseCacheForTests(TARGET_DB_NAME)
   await __clearRegistryForTests()
   await clearAdoptionConsent()
+  await deviceDb.adoptedMovements.clear()
 })
 
 describe('countUnadoptedGuestMovements', () => {
@@ -163,6 +170,27 @@ describe('adoptGuestMovements', () => {
     expect((await targetDb.movimientos.toArray()).map((m) => m.id).toSorted()).toEqual(
       ['first', 'second'].toSorted(),
     )
+  })
+
+  it('does not re-enqueue movements already delivered once their outbox rows are gone — only the new delta gets a fresh entry', async () => {
+    const target = await registerTarget()
+    const targetDb = getProfileDatabase(TARGET_DB_NAME)
+    await db.movimientos.bulkPut([movimiento({ id: 'mA' }), movimiento({ id: 'mB' })])
+
+    const first = await adoptGuestMovements(target)
+    expect(first.adoptedCount).toBe(2)
+
+    // simulates sync/engine.ts's push() removing outbox rows after a successful Drive push
+    const pushedIds = (await targetDb.outbox.toArray()).map((e) => e.id)
+    await removeOperations(pushedIds, targetDb)
+    expect(await targetDb.outbox.count()).toBe(0)
+
+    await db.movimientos.put(movimiento({ id: 'mC' }))
+    const second = await adoptGuestMovements(target)
+
+    expect(second.adoptedCount).toBe(1)
+    const finalQueue = await targetDb.outbox.toArray()
+    expect(finalQueue.map((e) => e.entityId)).toEqual(['mC'])
   })
 
   it('is resumable after an interruption: a partial failure never leaves a copied record unqueued, and calling it again finishes the job', async () => {

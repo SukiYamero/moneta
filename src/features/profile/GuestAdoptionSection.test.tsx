@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { db } from '@/lib/db'
+import { deviceDb } from '@/lib/deviceStore'
 import type { Movimiento } from '@/lib/schema'
 import {
   __clearProfileDatabaseCacheForTests,
@@ -45,6 +46,7 @@ afterEach(async () => {
   await targetDb.outbox.clear()
   __clearProfileDatabaseCacheForTests(TARGET_DB_NAME)
   await __clearRegistryForTests()
+  await deviceDb.adoptedMovements.clear()
 })
 
 describe('GuestAdoptionSection', () => {
