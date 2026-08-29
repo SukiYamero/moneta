@@ -68,14 +68,24 @@
       "partialScopeGrant": "Para que tus datos queden guardados y sincronizados sin problemas, necesitamos los dos permisos de Drive. Inténtalo de nuevo y acepta ambos."
     },
     "adoption": {
-      "title": "¿Traer tus movimientos a esta cuenta?",
-      "description_one": "Tienes {{count}} movimiento guardado solo en este dispositivo. Si lo traes, queda bajo esta cuenta y se pone en cola para tu Drive.",
-      "description_other": "Tienes {{count}} movimientos guardados solo en este dispositivo. Si los traes, quedan bajo esta cuenta y se ponen en cola para tu Drive.",
+      "title": "¿Agregar tus movimientos a esta cuenta?",
+      "description_one": "Tienes {{count}} movimiento guardado solo en este dispositivo. Si lo agregas, se copia a esta cuenta y se pone en cola para tu Drive, sin quitarlo de este dispositivo.",
+      "description_other": "Tienes {{count}} movimientos guardados solo en este dispositivo. Si los agregas, se copian a esta cuenta y se ponen en cola para tu Drive, sin quitarlos de este dispositivo.",
       "declineNote": "Si eliges que no, se quedan en este dispositivo, en su propio perfil, y puedes verlos cuando quieras.",
-      "acceptCta": "Sí, traerlos",
+      "acceptCta": "Sí, agregarlos",
       "declineCta": "No, dejarlos aquí",
-      "moving": "Moviendo…",
-      "error": "No se pudieron traer los movimientos. Intenta de nuevo."
+      "adding": "Agregando…",
+      "error": "No se pudieron agregar los movimientos. Intenta de nuevo.",
+      "entry": {
+        "heading": "Datos de invitado",
+        "description_one": "Hay {{count}} movimiento guardado en este dispositivo que todavía no está en esta cuenta.",
+        "description_other": "Hay {{count}} movimientos guardados en este dispositivo que todavía no están en esta cuenta.",
+        "cta": "Agregar a esta cuenta",
+        "adding": "Agregando…",
+        "success_one": "Se agregó {{count}} movimiento a esta cuenta.",
+        "success_other": "Se agregaron {{count}} movimientos a esta cuenta.",
+        "error": "No se pudieron agregar los movimientos. Intenta de nuevo."
+      }
     }
   },
   "driveConsent": {

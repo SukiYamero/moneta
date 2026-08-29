@@ -68,14 +68,24 @@
       "partialScopeGrant": "Para que seus dados fiquem salvos e sincronizados sem problemas, precisamos das duas permissões do Drive. Tente de novo e aceite as duas."
     },
     "adoption": {
-      "title": "Trazer seus lançamentos para esta conta?",
-      "description_one": "Você tem {{count}} lançamento guardado só neste aparelho. Se trouxer, ele passa a ficar nesta conta e entra na fila para o seu Drive.",
-      "description_other": "Você tem {{count}} lançamentos guardados só neste aparelho. Se trouxer, eles passam a ficar nesta conta e entram na fila para o seu Drive.",
+      "title": "Adicionar seus lançamentos a esta conta?",
+      "description_one": "Você tem {{count}} lançamento guardado só neste aparelho. Ao adicionar, ele é copiado para esta conta e entra na fila para o seu Drive, sem sair deste aparelho.",
+      "description_other": "Você tem {{count}} lançamentos guardados só neste aparelho. Ao adicionar, eles são copiados para esta conta e entram na fila para o seu Drive, sem sair deste aparelho.",
       "declineNote": "Se você disser que não, eles ficam neste aparelho, no próprio perfil, e você pode acessá-los quando quiser.",
-      "acceptCta": "Sim, trazer",
+      "acceptCta": "Sim, adicionar",
       "declineCta": "Não, deixar aqui",
-      "moving": "Movendo…",
-      "error": "Não foi possível trazer os lançamentos. Tente de novo."
+      "adding": "Adicionando…",
+      "error": "Não foi possível adicionar os lançamentos. Tente de novo.",
+      "entry": {
+        "heading": "Dados de convidado",
+        "description_one": "Há {{count}} lançamento salvo neste aparelho que ainda não está nesta conta.",
+        "description_other": "Há {{count}} lançamentos salvos neste aparelho que ainda não estão nesta conta.",
+        "cta": "Adicionar a esta conta",
+        "adding": "Adicionando…",
+        "success_one": "{{count}} lançamento foi adicionado a esta conta.",
+        "success_other": "{{count}} lançamentos foram adicionados a esta conta.",
+        "error": "Não foi possível adicionar os lançamentos. Tente de novo."
+      }
     }
   },
   "driveConsent": {

@@ -11,9 +11,10 @@ import { bootstrap, type DriveLayout } from '@/lib/bootstrap'
 import { invalidateBootForSignOut } from '@/lib/boot'
 import { hasVault, resetVault, updateSession } from '@/lib/pinLock'
 import {
-  countGuestMovements,
+  countUnadoptedGuestMovements,
   finishConsentedAdoption,
   getProfile,
+  getProfileDatabase,
   resolveGoogleProfile,
   setActiveProfileId,
   DEFAULT_PROFILE_ID,
@@ -113,13 +114,13 @@ const syncProfileForAccount = async (user: GoogleUser | null): Promise<ProfileRe
 }
 
 const checkGuestAdoption = async (
-  targetProfileId: string,
+  target: ProfileRecord,
 ): Promise<{ profileId: string; count: number } | null> => {
   try {
     if (await hasDeclinedAdoption()) return null
-    const count = await countGuestMovements()
+    const count = await countUnadoptedGuestMovements(getProfileDatabase(target.databaseName))
     if (count === 0) return null
-    return { profileId: targetProfileId, count }
+    return { profileId: target.id, count }
   } catch (e) {
     console.warn('adoption: could not check for local guest data to offer', e)
     return null
@@ -211,7 +212,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       void reacquireDriveIfNeeded(driveOptIn, set, get)
       await markLoggedIn()
       if (generation === authGeneration && resolvedProfile) {
-        const pending = await checkGuestAdoption(resolvedProfile.id)
+        const pending = await checkGuestAdoption(resolvedProfile)
         if (generation === authGeneration && pending) set({ pendingAdoption: pending })
       }
       await clearGuestUsed()

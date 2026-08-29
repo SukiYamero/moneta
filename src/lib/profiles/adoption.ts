@@ -4,20 +4,31 @@ import { enqueueOperation } from '@/lib/outbox'
 import { getProfileDatabase } from '@/lib/profiles/profileDb'
 import type { ProfileRecord } from '@/lib/profiles/profileRegistry'
 
-export const countGuestMovements = async (): Promise<number> => db.movimientos.count()
+export const countUnadoptedGuestMovements = async (targetDb: ProfileDb): Promise<number> => {
+  const [guestIds, targetIds] = await Promise.all([
+    db.movimientos.toCollection().primaryKeys(),
+    targetDb.movimientos.toCollection().primaryKeys(),
+  ])
+  const targetIdSet = new Set(targetIds)
+  return guestIds.filter((id) => !targetIdSet.has(id)).length
+}
 
 export interface AdoptionResult {
-  movedCount: number
+  adoptedCount: number
 }
 
 export const adoptGuestMovements = async (target: ProfileRecord): Promise<AdoptionResult> => {
-  const movements = await db.movimientos.toArray()
-  if (movements.length === 0) return { movedCount: 0 }
-
   const targetDb: ProfileDb = getProfileDatabase(target.databaseName)
-  await targetDb.movimientos.bulkPut(movements)
+  const guestMovements = await db.movimientos.toArray()
+  if (guestMovements.length === 0) return { adoptedCount: 0 }
 
-  for (const mov of movements) {
+  const targetIds = await targetDb.movimientos.toCollection().primaryKeys()
+  const targetIdSet = new Set(targetIds)
+  const toCopy = guestMovements.filter((m) => !targetIdSet.has(m.id))
+  if (toCopy.length > 0) await targetDb.movimientos.bulkPut(toCopy)
+
+  let adoptedCount = 0
+  for (const mov of guestMovements) {
     const alreadyQueued = await targetDb.outbox
       .where('[entity+entityId]')
       .equals(['movimiento', mov.id])
@@ -28,10 +39,10 @@ export const adoptGuestMovements = async (target: ProfileRecord): Promise<Adopti
       targetDb,
     )
     if (!queued) throw new Error(`adoption: could not queue movement "${mov.id}" for Drive`)
+    adoptedCount += 1
   }
 
-  await db.movimientos.bulkDelete(movements.map((m) => m.id))
-  return { movedCount: movements.length }
+  return { adoptedCount }
 }
 
 export const finishConsentedAdoption = async (target: ProfileRecord): Promise<AdoptionResult> => {

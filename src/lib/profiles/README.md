@@ -29,20 +29,24 @@ database per profile (`src/lib/db.ts`'s `createProfileDb()`), not a
   starts the new one's only if the target's `accountKey` matches the
   currently authenticated account. Not re-exported from `index.ts` (imports
   `authStore.ts`, which imports this barrel).
-- `adoption.ts` — `countGuestMovements()` / `adoptGuestMovements(target)`
-  move the local/guest profile's movements (only `Movimiento`, no `Activo`)
-  into `target`'s database and outbox; a merge, resumable by re-running it.
-  `finishConsentedAdoption(target)` runs the move then clears the durable
-  `adoptionConsent` marker (`deviceStore.ts`). `resumePendingAdoption
-  (activeProfile)` is `boot.ts`'s fire-and-forget entry point: no-op if no
-  consent is pending, or if the pending consent names a different profile
-  id/account key than the one now active.
+- `adoption.ts` — `countUnadoptedGuestMovements(targetDb)` diffs the
+  local/guest profile's movement ids against `targetDb`'s; `adoptGuestMovements
+  (target)` **copies** (only `Movimiento`, no `Activo`, never deletes from the
+  guest db) whatever's missing into `target`'s database and outbox — a merge,
+  idempotent, safe to re-run with nothing pending. `finishConsentedAdoption
+  (target)` runs the copy then clears the durable `adoptionConsent` marker
+  (`deviceStore.ts`). `resumePendingAdoption(activeProfile)` is `boot.ts`'s
+  fire-and-forget entry point: no-op if no consent is pending, or if the
+  pending consent names a different profile id/account key than the one now
+  active.
 - `index.ts` — the public barrel: profile types, registry functions,
   `getProfileDatabase`, `ensureOwnerMarker`/`readOwnerMarker`,
-  `adoptGuestMovements`/`countGuestMovements`/`finishConsentedAdoption`/
+  `adoptGuestMovements`/`countUnadoptedGuestMovements`/`finishConsentedAdoption`/
   `resumePendingAdoption`. Not `switchToProfile`.
 
 Consumed by `src/lib/repoProvider.ts`'s `resolveActiveProfileBinding()`
 (called once per boot by `src/lib/boot.ts`) and `src/lib/authStore.ts`. The
 switcher UI is `src/features/profile/ProfilesSection.tsx`, through
-`useProfiles.ts`.
+`useProfiles.ts`; the repeatable Profile-screen entry point for adoption is
+`src/features/profile/GuestAdoptionSection.tsx`, through
+`useGuestAdoptionEntry.ts`.

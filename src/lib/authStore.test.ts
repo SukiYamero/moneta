@@ -21,8 +21,9 @@ vi.mock('@/lib/profiles', () => ({
   resolveGoogleProfile: vi.fn(),
   setActiveProfileId: vi.fn(),
   getProfile: vi.fn(),
+  getProfileDatabase: vi.fn(),
   finishConsentedAdoption: vi.fn(),
-  countGuestMovements: vi.fn(),
+  countUnadoptedGuestMovements: vi.fn(),
   DEFAULT_PROFILE_ID: 'kurobello',
 }))
 vi.mock('@/lib/deviceStore', () => ({
@@ -57,9 +58,10 @@ import { bootstrap } from '@/lib/bootstrap'
 import { invalidateBootForSignOut } from '@/lib/boot'
 import { hasVault, resetVault, updateSession } from '@/lib/pinLock'
 import {
-  countGuestMovements,
+  countUnadoptedGuestMovements,
   finishConsentedAdoption,
   getProfile,
+  getProfileDatabase,
   resolveGoogleProfile,
   setActiveProfileId,
 } from '@/lib/profiles'
@@ -96,9 +98,10 @@ const mHasUsedGuestBefore = vi.mocked(hasUsedGuestBefore)
 const mMarkGuestUsed = vi.mocked(markGuestUsed)
 const mClearGuestUsed = vi.mocked(clearGuestUsed)
 const mGetProfile = vi.mocked(getProfile)
+const mGetProfileDatabase = vi.mocked(getProfileDatabase)
 const mFinishConsentedAdoption = vi.mocked(finishConsentedAdoption)
 const mSetAdoptionConsent = vi.mocked(setAdoptionConsent)
-const mCountGuestMovements = vi.mocked(countGuestMovements)
+const mCountUnadoptedGuestMovements = vi.mocked(countUnadoptedGuestMovements)
 const mHasDeclinedAdoption = vi.mocked(hasDeclinedAdoption)
 const mMarkAdoptionDeclined = vi.mocked(markAdoptionDeclined)
 
@@ -119,10 +122,11 @@ beforeEach(() => {
   mHasLoggedInBefore.mockResolvedValue(true)
   mHasUsedGuestBefore.mockResolvedValue(false)
   mGetDriveDecision.mockResolvedValue(undefined)
-  mCountGuestMovements.mockResolvedValue(0)
+  mGetProfileDatabase.mockReturnValue({} as never)
+  mCountUnadoptedGuestMovements.mockResolvedValue(0)
   mHasDeclinedAdoption.mockResolvedValue(false)
   mGetProfile.mockResolvedValue(undefined)
-  mFinishConsentedAdoption.mockResolvedValue({ movedCount: 0 })
+  mFinishConsentedAdoption.mockResolvedValue({ adoptedCount: 0 })
   mSetAdoptionConsent.mockResolvedValue(undefined)
   useAuthStore.setState({
     status: 'idle',
@@ -445,7 +449,7 @@ describe('useAuthStore.login', () => {
     it('offers adoption when the local profile has movements and the device has never declined', async () => {
       mToken.mockResolvedValue({ accessToken: 'tok', expiresAt: 1 })
       mUser.mockResolvedValue({ sub: 'sub-1', email: 'a@b.com', name: 'Ana' })
-      mCountGuestMovements.mockResolvedValue(3)
+      mCountUnadoptedGuestMovements.mockResolvedValue(3)
 
       await useAuthStore.getState().login()
 
@@ -455,7 +459,7 @@ describe('useAuthStore.login', () => {
     it('never offers adoption when there is nothing local to bring — the common first-sign-in case', async () => {
       mToken.mockResolvedValue({ accessToken: 'tok', expiresAt: 1 })
       mUser.mockResolvedValue({ sub: 'sub-1', email: 'a@b.com', name: 'Ana' })
-      mCountGuestMovements.mockResolvedValue(0)
+      mCountUnadoptedGuestMovements.mockResolvedValue(0)
 
       await useAuthStore.getState().login()
 
@@ -465,7 +469,7 @@ describe('useAuthStore.login', () => {
     it('never re-offers adoption once this device has already declined', async () => {
       mToken.mockResolvedValue({ accessToken: 'tok', expiresAt: 1 })
       mUser.mockResolvedValue({ sub: 'sub-1', email: 'a@b.com', name: 'Ana' })
-      mCountGuestMovements.mockResolvedValue(5)
+      mCountUnadoptedGuestMovements.mockResolvedValue(5)
       mHasDeclinedAdoption.mockResolvedValue(true)
 
       await useAuthStore.getState().login()
@@ -476,7 +480,7 @@ describe('useAuthStore.login', () => {
     it('does not fail or block login when the adoption check itself fails', async () => {
       mToken.mockResolvedValue({ accessToken: 'tok', expiresAt: 1 })
       mUser.mockResolvedValue({ sub: 'sub-1', email: 'a@b.com', name: 'Ana' })
-      mCountGuestMovements.mockRejectedValue(new Error('IDB blocked'))
+      mCountUnadoptedGuestMovements.mockRejectedValue(new Error('IDB blocked'))
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
       await expect(useAuthStore.getState().login()).resolves.toBeUndefined()
@@ -489,7 +493,7 @@ describe('useAuthStore.login', () => {
     it('reads local guest data directly, not the guest-used device marker clearGuestUsed() is about to clear', async () => {
       mToken.mockResolvedValue({ accessToken: 'tok', expiresAt: 1 })
       mUser.mockResolvedValue({ sub: 'sub-1', email: 'a@b.com', name: 'Ana' })
-      mCountGuestMovements.mockResolvedValue(1)
+      mCountUnadoptedGuestMovements.mockResolvedValue(1)
 
       await useAuthStore.getState().login()
 
@@ -511,7 +515,7 @@ describe('useAuthStore.acceptGuestAdoption / declineGuestAdoption', () => {
     expect(mFinishConsentedAdoption).not.toHaveBeenCalled()
   })
 
-  it('moves the movements and clears the pending offer on success', async () => {
+  it('adopts the movements and clears the pending offer on success', async () => {
     mGetProfile.mockResolvedValue({
       id: 'p1',
       label: 'Ana',
@@ -521,7 +525,7 @@ describe('useAuthStore.acceptGuestAdoption / declineGuestAdoption', () => {
       createdAt: 'T',
       lastUsedAt: 'T',
     })
-    mFinishConsentedAdoption.mockResolvedValue({ movedCount: 3 })
+    mFinishConsentedAdoption.mockResolvedValue({ adoptedCount: 3 })
 
     await useAuthStore.getState().acceptGuestAdoption()
 
@@ -532,7 +536,7 @@ describe('useAuthStore.acceptGuestAdoption / declineGuestAdoption', () => {
     expect(s.adoptionError).toBeNull()
   })
 
-  it('persists the consent for the target profile before attempting the move', async () => {
+  it('persists the consent for the target profile before attempting the copy', async () => {
     mGetProfile.mockResolvedValue({
       id: 'p1',
       label: 'Ana',
