@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useDataStore } from '@/lib/dataStore'
 import {
   adoptGuestMovements,
   countUnadoptedGuestMovements,
@@ -68,6 +69,8 @@ export const useGuestAdoptionEntry = (): UseGuestAdoptionEntryResult => {
       const result = await adoptGuestMovements(target)
       const nextCount = await countUnadoptedGuestMovements(getProfileDatabase(target.databaseName))
       if (result.adoptedCount > 0) {
+        useDataStore.getState().reset()
+        await useDataStore.getState().load()
         setState({
           visible: true,
           phase: 'success',
