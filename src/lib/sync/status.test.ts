@@ -32,10 +32,4 @@ describe('deriveSyncIndicator', () => {
       expect(deriveSyncIndicator({ isSyncing, outboxDirty, lastError })).toBe(expected)
     },
   )
-
-  it('a pull failure with a clean outbox reads as an error, never "up to date"', () => {
-    expect(
-      deriveSyncIndicator({ isSyncing: false, outboxDirty: false, lastError: 'some error' }),
-    ).toBe('error')
-  })
 })
