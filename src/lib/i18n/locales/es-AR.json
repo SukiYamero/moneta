@@ -323,8 +323,19 @@
       "exporting": "Exportando…",
       "exportFailed": "No se pudo exportar el archivo. Intentá de nuevo.",
       "deleteStored": {
-        "cta": "Eliminar datos guardados en este dispositivo",
-        "note": "Todavía no disponible. Vas a poder borrar la copia local de este dispositivo."
+        "cta": "Eliminar datos guardados",
+        "deleting": "Eliminando…",
+        "unavailableNote": "Conectá Google Drive para poder eliminar tus datos guardados ahí y en este dispositivo.",
+        "confirm": {
+          "title": "¿Eliminar tus datos guardados?",
+          "description": "Esto borra tus movimientos y activos de Google Drive y de este dispositivo, ahora mismo. Si tenés otro dispositivo conectado a esta cuenta, podría volver a subir sus propios datos la próxima vez que sincronice.",
+          "confirmCta": "Eliminar",
+          "cancelCta": "Cancelar"
+        },
+        "success": "Tus datos se eliminaron de Google Drive y de este dispositivo.",
+        "failedDrive": "No pudimos eliminar tus datos de Google Drive. Todavía no se borró nada: intentá de nuevo.",
+        "failedLocal": "Ya eliminamos tus datos de Google Drive, pero no pudimos borrar la copia de este dispositivo. Intentá de nuevo.",
+        "failed": "No pudimos eliminar tus datos. Intentá de nuevo."
       }
     },
     "preferences": {

@@ -2,17 +2,21 @@ import { useState } from 'react'
 import { Download, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
+import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { exportMovimientosToCsv } from '@/lib/export'
 import { useLocaleFormatting } from '@/lib/i18n/localeFormatting'
 import { RepoError } from '@/lib/repo'
 import { repoErrorCopyKey } from '@/lib/errorCopy'
 import { toast } from '@/lib/toastStore'
 import { ProfileSectionHeading } from '@/features/profile/ProfileSectionHeading'
+import { useDataErase } from '@/features/profile/useDataErase'
 
 export const DataSection = () => {
   const { t } = useTranslation('profile')
   const { locale } = useLocaleFormatting()
   const [exporting, setExporting] = useState(false)
+  const { driveAvailable, confirmOpen, erasing, requestErase, confirmErase, cancelErase } =
+    useDataErase()
 
   const onExport = async () => {
     setExporting(true)
@@ -46,15 +50,29 @@ export const DataSection = () => {
           type="button"
           variant="destructive"
           size="touch"
-          disabled
-          aria-disabled="true"
+          disabled={!driveAvailable || erasing}
+          onClick={requestErase}
           className="w-full justify-center gap-2"
         >
           <Trash2 aria-hidden="true" />
-          {t('data.deleteStored.cta')}
+          {erasing ? t('data.deleteStored.deleting') : t('data.deleteStored.cta')}
         </Button>
-        <p className="text-sm font-medium text-fg-tertiary">{t('data.deleteStored.note')}</p>
+        {driveAvailable ? null : (
+          <p className="text-sm font-medium text-fg-tertiary">
+            {t('data.deleteStored.unavailableNote')}
+          </p>
+        )}
       </div>
+      <ConfirmDialog
+        open={confirmOpen}
+        onClose={cancelErase}
+        onConfirm={() => void confirmErase()}
+        title={t('data.deleteStored.confirm.title')}
+        description={t('data.deleteStored.confirm.description')}
+        confirmLabel={t('data.deleteStored.confirm.confirmCta')}
+        cancelLabel={t('data.deleteStored.confirm.cancelCta')}
+        destructive
+      />
     </section>
   )
 }
