@@ -1,5 +1,5 @@
 import { useMemo, useState, type Ref } from 'react'
-import { format, parseISO, startOfMonth, type Locale } from 'date-fns'
+import { endOfDay, format, parseISO, startOfMonth, type Locale } from 'date-fns'
 import { useTranslation } from 'react-i18next'
 import { CalendarDays, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -13,6 +13,7 @@ export interface DateChipPickerProps {
   firstDayOfWeek?: 0 | 1
   locale: string
   dateFnsLocale: Locale
+  maxDate?: Date
   className?: string
   ref?: Ref<HTMLDivElement>
 }
@@ -23,6 +24,7 @@ export const DateChipPicker = ({
   firstDayOfWeek = 1,
   locale,
   dateFnsLocale,
+  maxDate,
   className,
   ref,
 }: DateChipPickerProps) => {
@@ -91,6 +93,8 @@ export const DateChipPicker = ({
             onMonthChange={setViewMonth}
             weekStartsOn={firstDayOfWeek}
             locale={dateFnsLocale}
+            endMonth={maxDate}
+            disabled={maxDate && { after: endOfDay(maxDate) }}
             labels={{
               labelPrevious: () => t('prevMonth'),
               labelNext: () => t('nextMonth'),

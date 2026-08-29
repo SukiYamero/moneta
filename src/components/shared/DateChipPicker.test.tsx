@@ -200,6 +200,72 @@ describe('DateChipPicker', () => {
     },
   )
 
+  describe('maxDate', () => {
+    it('disables days after maxDate and leaves maxDate itself selectable', async () => {
+      const user = userEvent.setup()
+      const onChange = vi.fn()
+      render(
+        <DateChipPicker
+          value="2026-08-08"
+          onChange={onChange}
+          locale="es-CO"
+          dateFnsLocale={es}
+          maxDate={new Date('2026-08-10T12:00:00')}
+        />,
+      )
+
+      await user.click(screen.getByRole('button', { name: /8 de agosto/ }))
+
+      expect(screen.getByRole('button', { name: 'lunes, 10 de agosto de 2026' })).toBeEnabled()
+      expect(screen.getByRole('button', { name: 'martes, 11 de agosto de 2026' })).toBeDisabled()
+
+      await user.click(screen.getByRole('button', { name: 'martes, 11 de agosto de 2026' }))
+      expect(onChange).not.toHaveBeenCalled()
+    })
+
+    it('caps the year select at the maxDate year instead of one year ahead', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] })
+      vi.setSystemTime(new Date('2026-08-10T12:00:00'))
+      try {
+        const user = userEvent.setup()
+        render(
+          <DateChipPicker
+            value="2026-08-08"
+            onChange={() => {}}
+            locale="es-CO"
+            dateFnsLocale={es}
+            maxDate={new Date('2026-08-10T12:00:00')}
+          />,
+        )
+
+        await user.click(screen.getByRole('button', { name: /8 de agosto/ }))
+
+        const years = within(screen.getByRole('combobox', { name: 'Elegir año' }))
+          .getAllByRole('option')
+          .map((option) => option.textContent)
+
+        expect(years).toEqual(Array.from({ length: 16 }, (_, i) => String(2011 + i)))
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('with no maxDate, keeps the default 1-year-ahead range and every day selectable', async () => {
+      const user = userEvent.setup()
+      const onChange = vi.fn()
+      render(
+        <DateChipPicker value="2026-08-08" onChange={onChange} locale="es-CO" dateFnsLocale={es} />,
+      )
+
+      await user.click(screen.getByRole('button', { name: /8 de agosto/ }))
+
+      const future = screen.getByRole('button', { name: 'martes, 11 de agosto de 2026' })
+      expect(future).toBeEnabled()
+      await user.click(future)
+      expect(onChange).toHaveBeenCalledWith('2026-08-11')
+    })
+  })
+
   describe('month and year dropdowns', () => {
     it('moving either dropdown moves the calendar to that month/year', async () => {
       const user = userEvent.setup()

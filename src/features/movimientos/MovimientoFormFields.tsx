@@ -107,6 +107,7 @@ export const MovimientoFormFields = ({
           firstDayOfWeek={firstDayOfWeek}
           locale={locale}
           dateFnsLocale={dateFnsLocale}
+          maxDate={new Date()}
         />
       </div>
 

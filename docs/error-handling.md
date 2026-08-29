@@ -565,3 +565,12 @@ has settled, so the panel flew up and landed back, exposing the page behind it â
 Android, which never pans, was fine. Rule: when the platform already handles a
 gesture, adding a JS correction on top of it is the defect; delete the
 correction rather than tuning it.
+
+**A new movement defaulted to tomorrow's date every evening, west of UTC.**
+`useMovimientoForm`'s `todayIso()` computed `new Date().toISOString().slice(0,
+10)` â€” the UTC calendar day, not the device's. Past ~7pm in UTC-5 (worse the
+further west), that's already the next day, and nothing caught it: the value
+was a syntactically valid ISO date, so it saved silently. Rule: a calendar-only
+date derived from "now" must go through a local-time formatter
+(`movimientoStats.ts`'s `toIsoDate`, backed by date-fns `format`), never
+`Date.prototype.toISOString`, which is UTC by definition.

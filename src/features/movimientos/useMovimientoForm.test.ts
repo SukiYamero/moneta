@@ -14,6 +14,7 @@ import { __resetNetworkStoreForTests, useNetworkStore } from '@/lib/networkStore
 import { __resetDeviceIdForTests, deviceDb } from '@/lib/deviceStore'
 import { __resetOutboxClockForTests } from '@/lib/outbox'
 import { useDataStore } from '@/lib/dataStore'
+import { toIsoDate } from '@/lib/movimientoStats'
 import { formatAmountForInput } from '@/lib/i18n/amountFormat'
 import { useMovimientoForm } from '@/features/movimientos/useMovimientoForm'
 
@@ -86,10 +87,31 @@ describe('useMovimientoForm — create mode defaults', () => {
     expect(result.current.amountRaw).toBe('')
     expect(result.current.nota).toBe('')
     expect(result.current.categoriaId).toBeUndefined()
-    expect(result.current.fecha).toBe(new Date().toISOString().slice(0, 10))
+    expect(result.current.fecha).toBe(toIsoDate(new Date()))
     expect(result.current.submitting).toBe(false)
     expect(result.current.amountErrorReason).toBeUndefined()
     expect(result.current.categoriaMissing).toBe(false)
+  })
+
+  it('defaults fecha to the local calendar day even when UTC has already rolled to the next one', () => {
+    vi.stubEnv('TZ', 'America/Bogota')
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-08-29T03:12:00.000Z'))
+    try {
+      const { result } = renderHook(() =>
+        useMovimientoForm({
+          mode: 'create',
+          locale: LOCALE,
+          monedaPrincipal: 'COP',
+          onSaved: vi.fn(),
+        }),
+      )
+
+      expect(result.current.fecha).toBe('2026-08-28')
+    } finally {
+      vi.useRealTimers()
+      vi.unstubAllEnvs()
+    }
   })
 })
 

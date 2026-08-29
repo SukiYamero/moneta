@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { Categoria, Moneda, Movimiento, TipoMovimiento } from '@/lib/schema'
 import { useDataStore } from '@/lib/dataStore'
+import { toIsoDate } from '@/lib/movimientoStats'
 import {
   formatAmountForInput,
   parseAmountForInput,
@@ -47,8 +48,6 @@ export interface UseMovimientoFormResult {
   applyParsedFields: (patch: MovimientoFormPatch) => void
 }
 
-const todayIso = (): string => new Date().toISOString().slice(0, 10)
-
 interface FormFields {
   tipo: TipoMovimiento
   amountRaw: string
@@ -74,7 +73,7 @@ const defaultsFor = (
   return {
     tipo: 'gasto',
     amountRaw: '',
-    fecha: todayIso(),
+    fecha: toIsoDate(new Date()),
     nota: '',
     categoriaId: undefined,
   }
