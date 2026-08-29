@@ -57,6 +57,20 @@ export const requestAccessToken = (
             reject(new AuthError(resp.error))
             return
           }
+          // Only Drive's consent screen offers per-scope checkboxes, and only there is a partial
+          // grant unusable (Drive sync needs both drive.file and drive.appdata) — checking this
+          // against IDENTITY_SCOPES too would risk rejecting every login outright if Google ever
+          // doesn't echo back "openid" as a granted scope for a pure access-token request.
+          if (scope === DRIVE_SCOPES) {
+            const [firstScope, ...restScopes] = scope.split(' ')
+            if (!google.accounts.oauth2.hasGrantedAllScopes(resp, firstScope!, ...restScopes)) {
+              // Best-effort cleanup: revoke() has no documented guarantee its callback fires on
+              // failure, so rejecting only inside it risks hanging this promise forever.
+              google.accounts.oauth2.revoke(resp.access_token, () => {})
+              reject(new AuthError('partial_scope_grant'))
+              return
+            }
+          }
           resolve({
             accessToken: resp.access_token,
             expiresAt: Date.now() + Number(resp.expires_in) * 1000,

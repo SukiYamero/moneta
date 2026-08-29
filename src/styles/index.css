@@ -5,7 +5,13 @@
 
 @custom-variant dark (&:is(.dark *));
 
-html,
+html {
+  /* svh (not dvh) so this never dynamically resizes — iOS WebKit shrinks dvh
+     on the first keyboard open and never recovers it for the rest of the
+     session; svh is fixed to the small viewport from the start instead. */
+  height: 100svh;
+}
+
 body,
 #root {
   height: 100%;

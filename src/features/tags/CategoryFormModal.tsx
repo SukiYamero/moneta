@@ -171,7 +171,7 @@ export const CategoryFormModal = ({
         />
 
         <div className="flex flex-col gap-1.5">
-          <span className="text-xs font-bold text-fg-tertiary">{t('form.iconLabel')}</span>
+          <span className="text-sm font-bold text-fg-tertiary">{t('form.iconLabel')}</span>
           <PagedGrid
             items={rankedIcons}
             columns={ICON_GRID_COLUMNS}
@@ -205,7 +205,7 @@ export const CategoryFormModal = ({
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <span className="text-xs font-bold text-fg-tertiary">{t('form.colorLabel')}</span>
+          <span className="text-sm font-bold text-fg-tertiary">{t('form.colorLabel')}</span>
           <div role="group" aria-label={t('form.colorLabel')} className="flex flex-wrap gap-2">
             {ICON_AVATAR_TINTS.map((tint) => (
               <button

@@ -106,7 +106,7 @@ export const HistoryScreen = () => {
               <div className="truncate text-xl font-extrabold tracking-tight capitalize">
                 {label.title}
               </div>
-              <div className="truncate text-xs font-medium text-fg-tertiary capitalize">
+              <div className="truncate text-sm font-medium text-fg-tertiary capitalize">
                 {label.subtitle}
               </div>
             </>
@@ -166,7 +166,7 @@ export const HistoryScreen = () => {
             <SearchIcon className="size-9 text-fg-disabled" aria-hidden="true" />
             <div>
               <p className="text-sm font-bold text-fg-tertiary">{t('empty.title')}</p>
-              <p className="mt-1 text-xs font-medium text-fg-disabled">{t('empty.subtitle')}</p>
+              <p className="mt-1 text-sm font-medium text-fg-disabled">{t('empty.subtitle')}</p>
             </div>
           </div>
         ) : (

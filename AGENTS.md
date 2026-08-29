@@ -138,21 +138,19 @@ category icon/tint resolution (`movimientoView.ts`), and form field state
 
 ### Patterns — copy these files
 
-| Need                     | Copy from                                                                                                    |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------ |
-| Feature folder shape     | `src/features/movimientos/` — hook owns state/validation/submit, component is presentational                 |
-| Sheet / modal            | `BottomSheet.tsx` or `CenterModal.tsx`, both on `useOverlay.ts` (focus trap, scroll lock, nesting)           |
-| Loading + error states   | `HistoryScreen.tsx` with `usePendingDelay()`, plus a `*LoadingState`/`*ErrorState` pair                      |
-| UI copy                  | `useTranslation('<ns>')` + `t('key')`; add to `locales/es.json` first, then the other three at the same path |
-| Form + validation        | `useMovimientoForm.ts` — errors surface only after a submit attempt                                          |
-| Mutation failure         | `dataStore.runMutation()` — optimistic apply, rollback, toast                                                |
-| Action failure on screen | `features/auth/errorCopy.ts` — message-keyed table into `role="alert"`, never `error.message` raw            |
-| Styles                   | Tailwind utilities from the tokens in `src/styles/index.css`, composed with `cn()`                           |
+| Need                     | Copy from                                                                                                                                                                       |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Feature folder shape     | `src/features/movimientos/` — hook owns state/validation/submit, component is presentational                                                                                    |
+| Sheet / modal            | `BottomSheet.tsx` or `CenterModal.tsx`, both on `useOverlay.ts` (focus trap, scroll lock, nesting)                                                                              |
+| Loading + error states   | `HistoryScreen.tsx` with `usePendingDelay()`, plus a `*LoadingState`/`*ErrorState` pair                                                                                         |
+| UI copy                  | `useTranslation('<ns>')` + `t('key')`; add to `locales/es.json` first, then the other three at the same path. Phrasing follows [docs/voice-and-tone.md](docs/voice-and-tone.md) |
+| Form + validation        | `useMovimientoForm.ts` — errors surface only after a submit attempt                                                                                                             |
+| Mutation failure         | `dataStore.runMutation()` — optimistic apply, rollback, toast                                                                                                                   |
+| Action failure on screen | `features/auth/errorCopy.ts` — message-keyed table into `role="alert"`, never `error.message` raw                                                                               |
+| Styles                   | Tailwind utilities from the tokens in `src/styles/index.css`, composed with `cn()`                                                                                              |
 
 ### Stubs — do not mistake these for finished patterns
 
-- `repo.drive.ts` delegates to `createLocalRepo` and has no production call
-  site at all; the real Drive path is outbox → `sync/engine.ts`.
 - `Activo` has no outbox variant, so it never pushes to Drive.
 - `config` sync is whole-object last-write-wins, no field-level merge.
 - `DataSection.tsx`'s "delete stored data" is a disabled stub.

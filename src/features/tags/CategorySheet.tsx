@@ -125,7 +125,7 @@ export const CategorySheet = ({
         >
           <span className="flex h-4/5 w-4/5 flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-border-strong px-1.5 py-2.5 text-fg-tertiary">
             <Plus className="size-4" aria-hidden="true" />
-            <span className="line-clamp-2 text-center text-xs font-bold">
+            <span className="line-clamp-2 text-center text-sm font-bold">
               {t('sheet.customCta')}
             </span>
           </span>
@@ -154,7 +154,7 @@ export const CategorySheet = ({
           )}
         >
           <IconAvatar icon={Icon} tint={tint} size="tile" />
-          <span className="line-clamp-2 text-xs font-bold">{categoria.nombre}</span>
+          <span className="line-clamp-2 text-sm font-bold">{categoria.nombre}</span>
         </span>
       </button>
     )

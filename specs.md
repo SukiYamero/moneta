@@ -207,6 +207,7 @@ outcome as a rule in the relevant §10 entry.
 - Login requests identity scopes only (`openid email profile`); it never touches Drive.
 - `connectDrive` is the only path that provisions Drive: creates the `KuroBello` folder, `movimientos.json`, `activos.json` (`[]`), and `appDataFolder/config.json` (seeded from `CONFIG_SEMILLA`).
 - Repeated `connectDrive` calls must not duplicate the folder/files — find-before-create.
+- `drive.file` and `drive.appdata` are requested together and required together — the consent screen lets a user uncheck either individually, so `requestAccessToken` checks `hasGrantedAllScopes` and treats a partial grant as a failure (revokes the token best-effort, rejects immediately with `partial_scope_grant` without waiting on `revoke`'s callback) rather than proceeding into a bootstrap that would fail confusingly partway through. This check runs only for the Drive scope request, never for `IDENTITY_SCOPES` — Google's basic OIDC scopes have no per-scope checkbox to begin with, and checking them risks rejecting every login outright if Google ever doesn't echo "openid" back as granted.
 - The access token is never persisted unencrypted.
 - `RequireAuth` blocks the rest of the app until authenticated.
 
@@ -560,7 +561,8 @@ outcome as a rule in the relevant §10 entry.
 
 **Rules.**
 
-- When the device's login marker is present but silent re-auth fails, show `ReturningUserScreen`, not `WelcomeScreen`.
+- When the device's login marker is present and the device is online, `restore()` never attempts a silent Google login — it goes straight to `ReturningUserScreen` for an explicit tap. GIS's "silent" `prompt: ''` still opens a visible popup under iOS WebKit's third-party-cookie blocking, which reads as an unrequested login on every refresh; a real tap on this screen is the only thing that ever opens Google's window for a returning device.
+- Offline is the one exception: with no network to ask Google anything, a returning device trusts its local cache directly into `authenticated` instead of showing this screen — see §10.11.
 - No marker at all (genuine first visit) → `WelcomeScreen`, unchanged. Deliberate sign-out (§10.20) clears the marker → `WelcomeScreen` too.
 - One primary action: "continue with Google," greeting the person by name from the profile registry.
 - No guest option, no value proposition, no first-run legal copy on this screen by default — that's what "reset" would look like. (§10.37 later carves out a narrow, gated guest escape hatch here — see that section.)
@@ -711,7 +713,7 @@ outcome as a rule in the relevant §10 entry.
 - There is no full-screen loading/boot screen at all — the design has no splash/boot artboard. A sync-status pill in the top bar is the only "we are busy" signal, and it never covers the screen.
 - A returning user must never see the Welcome/login screen flash while auth `restore()` resolves — the pre-content span renders the real app shell with the Home skeleton (§10.9 Tier 2), not a distinct loading screen.
 - The skeleton renders only when `deviceStore.hasLoggedInBefore()` says a session has existed on this device before; a device that never signed in goes straight to Welcome, promising nothing.
-- A returning user whose session actually expired lands on `ReturningUserScreen` rather than Home once the skeleton resolves — accepted, not a bug.
+- A returning, online user always lands on `ReturningUserScreen` rather than Home once the skeleton resolves — `restore()` no longer attempts a silent Google login (§10.21), only an explicit tap does.
 - A genuinely fresh sign-in's first-time Drive download view (§10.26) may still follow, seamlessly — no flash of Home, no gap, no extra spinner.
 
 **Implementation.** `RequireAuth.tsx` composes `PreContentSkeleton` (`src/features/boot/`) directly; there is no separate boot-gate screen.
@@ -874,9 +876,10 @@ outcome as a rule in the relevant §10 entry.
 **Rules.**
 
 - Any plain in-flow root using `min-h-dvh` (not `fixed`) sits inside `body`'s own safe-area-padded content box, so it demands more room than that box has and forces the whole page to scroll by exactly the inset amount on a device with a real notch/home-indicator — invisible in a desktop browser or DevTools emulation (zero inset there).
-- The fix is `min-h-dvh` → `min-h-full` everywhere the bug applies — `min-h-full` resolves against the real `html`/`body`/`#root` chain (all `height: 100%`) and can never demand more than `body`'s own padded content box actually gives.
+- The fix is `min-h-dvh` → `min-h-full` everywhere the bug applies — `min-h-full` resolves against the `html`/`body`/`#root` chain and can never demand more than `body`'s own padded content box actually gives.
 - The one legitimate exemption is `fixed` positioning, not "portaled" in general — a portaled-but-not-`fixed` element still lands inside `body`'s padded flow and carries the identical bug.
 - The guard (`scripts/no-in-flow-min-h-dvh.sh`, in `bun run check`) scans the whole tree for a bare `min-h-dvh` not paired with `fixed` on the same line — a line-based grep, not a parser, so a `className` wrapping those two across separate lines would slip past it.
+- `html` itself is `height: 100svh`, not `100%`/`100dvh` — `body`/`#root` stay `height: 100%` (of that). `svh` resolves to the real visible viewport on load on iOS WebKit, where a bare `100%`/`vh` root resolves against the browser-chrome-collapsed viewport and leaves a few pixels of empty, harmless-but-real scroll on every screen until the page is touched once. `dvh` was rejected here too: WebKit shrinks it on the first keyboard open and never recovers it for the rest of the session (§10.2's `inputMode="none"` area, and the `dvh`-in-PWA limitation in the backlog) — `svh` is fixed from the start, so it never has that failure mode.
 
 **Implementation.** The swap applies to `AppShell.tsx`, `AppErrorBoundary.tsx`, `RouteErrorFallback.tsx`, `boot/BootErrorScreen.tsx`, `auth/DrivePermissionScreen.tsx`, `auth/ReturningUserScreen.tsx`, `lock/LockScreen.tsx` (both branches), `sync/DriveDownloadScreen.tsx`, `components/shared/ScreenLoading.tsx`, and `boot/PreContentSkeleton.tsx` (the last moved to `h-full`, §10.43, since its geometry mirrors `AppShell`'s) — any new file reintroducing the shape is caught by the guard.
 
@@ -1097,14 +1100,12 @@ outcome as a rule in the relevant §10 entry.
 
 ### Sync & outbox correctness
 
-- **`ProfilesSection.test.tsx`'s "this device" case fails intermittently in a full run** and passes in isolation — a test-isolation leak, not a product defect. A test that fails one run in three trains everyone to rerun instead of look.
+- **`ProfilesSection.test.tsx`'s "this device" case failed intermittently in a full run, never in isolation.** Reviewed: no state-leak found (the one non-atomic read-then-write in `getActiveProfile()` converges on a fixed id, so it's benign, not the cause). Mitigated by widening that assertion's `findByText` timeout (full-suite CPU contention vs. Testing Library's 1000ms default is the best-supported explanation) — not a confirmed root cause. If it recurs, capture the actual CI failure output before guessing further.
 - **The search filter's custom range is two chips, not one range calendar.** `poc/date-range` carries a `RangeDateChipPicker` (two-tap draft, explicit apply, footer outside the scroll region) that works but has no tests and is not wired into `main`. Deciding it in means writing its coverage and choosing whether it lives in `features/search/` or moves to `components/shared/`.
-- **Two tabs of the same account can race each other's Drive writes.** No cross-tab coordination exists — `src/lib/sync/engine.ts`/`driveFiles.ts` guard reentrancy with plain module-level in-flight maps, real within one tab, invisible across two. A cross-tab leader election (Web Locks API) is the natural fix.
-- **A profile switch or fast logout+relogin racing a live write can enqueue into, or drain from, the wrong profile's outbox.** `src/lib/dataStore.ts`'s write path calls `enqueueOperation` with no explicit database, still resolving the target from `outbox.ts`'s module-level binding — unlike `sync/engine.ts`'s `push()`/`pull()`, which now take an explicit profile-scoped database.
-- **A `config` sync operation still carries the whole `Config` object** (`src/lib/outbox.ts`'s `OutboxOperation`), so two offline devices each changing config replay as two whole-object `put`s and the later one silently wins a category the earlier device added.
-- **`Activo` has no sync push path.** Pull/materialize is fully built (`sync/engine.ts`), but `OutboxOperation`'s union has no `activo` variant and nothing in `dataStore.ts` enqueues one.
+- **Two tabs of the same account can race each other's Drive writes; scoped as `docs/tasks/single-tab-guard.md`.**
+- **A profile switch or fast logout+relogin racing a live write can enqueue into the wrong profile's outbox; scoped as `docs/tasks/outbox-profile-integrity.md`.**
+- **A `config` sync operation still carries the whole `Config` object** under a single shared entity id, so two offline devices each writing config replay as two whole-object `put`s and the later one silently wins outright. The `categorias` half of this — the part that causes real, visible data loss — is scoped as `docs/tasks/categoria-own-sync-entity.md`; the remaining scalar `preferencias` fields keep whole-object last-write-wins, an accepted low-stakes risk.
 - **The Drive status row can read "up to date" right after a sync attempt that just failed** — `src/lib/sync/status.ts`'s `deriveSyncIndicator` never reads `useSyncStore.lastError`, only `isSyncing`/`outboxDirty`.
-- **`src/lib/repo.drive.ts` is a stub that just delegates to `createLocalRepo`** — real Drive sync happens through the outbox/engine push-pull mechanism, not this file. Worth deleting or documenting as vestigial.
 
 ### Auth, lock & profiles
 
@@ -1118,10 +1119,9 @@ outcome as a rule in the relevant §10 entry.
 
 - **`Movimiento.metodo` has no writer anywhere** — optional field, seeded only by `repo.fake.ts`'s demo data, no UI control writes it (`src/lib/schema.ts`).
 - **`MovimientoRow` has no amount-masking prop**, so History's hide/show-amounts toggle from the design isn't built (`src/features/history/README.md`).
-- **No `Activo` export** — `src/lib/export/index.ts` only exports `Movimiento`.
-- **`Activo` has no UI at all** — the type, the repo methods and the sync pull path exist, but no screen anywhere under `src/features/` reads or writes one.
 - **"Áreas" (category groups) is designed but unbuilt** — `src/features/home/AreasBanner.tsx` renders disabled; `schema.ts` has no `Grupo` concept, so it needs a new type or an `extra` field on `Categoria` first.
 - **Future-dated movements, if ever wanted, should stay flag-free** — derive "counts toward the balance" from `fecha <= today` in `movimientoStats.ts` at read time, not a stored pending/confirmed state; totals are already derived, never cached, so a future date starts counting on its own the moment it's reached.
+- **No CI check catches a `SCHEMA_VERSION` bump that ships without a matching entry in `repo.local.ts`'s `MIGRATIONS`** — only the "structural change ⇒ bump + migration in the same change" rule (`AGENTS.md`) prevents it today. Worth a test asserting every version from 1 to `SCHEMA_VERSION` has a registered migration, but not before the app has real users — revisit close to a production launch, not now.
 
 ### i18n & accessibility
 
@@ -1148,8 +1148,10 @@ outcome as a rule in the relevant §10 entry.
 ### Branding / polish
 
 - **Diff every design-canvas artboard against its spec section** — a one-time audit, still not done for most of the 19 artboards.
+- **Google's consent screen shows "Learn why you're not seeing links to kurobello.com privacy or terms of service"** — Google withholds those links until a Privacy Policy and Terms of Service page are published under the domain, the domain is verified via Google Search Console, and both are set in the OAuth consent screen's config alongside `kurobello.com` in "Authorized domains". Purely cosmetic on the consent screen today, no functional block — deferred until closer to a real launch, when the domain needs real pages anyway.
 - Rename the OAuth consent screen to the current brand name in Google Cloud Console — a user action, no code change.
 - **Profile → Preferences doesn't communicate its state clearly and shows unspecified erratic behavior** — needs a UX pass; not yet diagnosed (`src/features/profile/PreferencesSection.tsx`, `src/features/settings/PreferencesEditor.tsx`).
+- **`FilterSheet`'s Clear/Apply buttons sit at the end of the scrolling body**, after the tag grid — with many categories the buttons scroll far below the fold. `BottomSheet`/`OverlayShellProps` has no fixed-footer slot today; `poc/date-range`'s `RangeDateChipPicker` already prototypes a footer pinned outside the scroll region, the pattern to generalize into `BottomSheet` rather than inventing a floating control (`src/features/search/FilterSheet.tsx`).
 
 ### Waiting on the user
 

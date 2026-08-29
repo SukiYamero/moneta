@@ -53,7 +53,7 @@ export const DataSection = () => {
           <Trash2 aria-hidden="true" />
           {t('data.deleteStored.cta')}
         </Button>
-        <p className="text-xs font-medium text-fg-tertiary">{t('data.deleteStored.note')}</p>
+        <p className="text-sm font-medium text-fg-tertiary">{t('data.deleteStored.note')}</p>
       </div>
     </section>
   )

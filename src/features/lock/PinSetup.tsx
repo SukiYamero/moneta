@@ -96,7 +96,7 @@ export const PinSetup = ({ open, onClose, mode }: PinSetupProps) => {
       initialFocus={inputRef}
       header={
         <div className="flex items-center justify-between px-5">
-          <span className="text-xs font-bold tracking-wide text-muted-foreground uppercase">
+          <span className="text-sm font-bold tracking-wide text-muted-foreground uppercase">
             {t(kickerKey)}
           </span>
           <button

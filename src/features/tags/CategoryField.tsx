@@ -17,7 +17,7 @@ export const CategoryField = ({ categoria, tipo, onOpen }: CategoryFieldProps) =
 
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-xs font-bold tracking-wide text-fg-tertiary uppercase">
+      <span className="text-sm font-bold tracking-wide text-fg-tertiary uppercase">
         {t('sheet.fieldLabel')}
       </span>
       <button

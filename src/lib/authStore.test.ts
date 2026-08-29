@@ -583,26 +583,6 @@ describe('useAuthStore.acceptGuestAdoption / declineGuestAdoption', () => {
 })
 
 describe('useAuthStore.restore', () => {
-  it('silently authenticates with prompt "" and falls back to idle on failure', async () => {
-    mToken.mockRejectedValue(new Error('access: no session'))
-    await useAuthStore.getState().restore()
-    expect(mToken).toHaveBeenCalledWith('')
-    expect(useAuthStore.getState().status).toBe('idle')
-  })
-
-  it('caches the fresh session in the lock vault when one exists', async () => {
-    mToken.mockResolvedValue({ accessToken: 'tok', expiresAt: 1 })
-    mUser.mockResolvedValue({ email: 'a@b.com', name: 'Ana' })
-    mHasVault.mockResolvedValue(true)
-
-    await useAuthStore.getState().restore()
-
-    expect(mUpdateSession).toHaveBeenCalledWith(
-      { accessToken: 'tok', expiresAt: 1 },
-      { email: 'a@b.com', name: 'Ana' },
-    )
-  })
-
   it('is a no-op when status is not idle, so it can only run once on boot', async () => {
     useAuthStore.setState({ status: 'authenticating' })
 
@@ -611,96 +591,14 @@ describe('useAuthStore.restore', () => {
     expect(mToken).not.toHaveBeenCalled()
   })
 
-  it('does not attempt a silent restore before any login has ever succeeded on this device', async () => {
+  it('falls back to idle when neither marker is set (a genuine first visit)', async () => {
     mHasLoggedInBefore.mockResolvedValue(false)
+    mHasUsedGuestBefore.mockResolvedValue(false)
 
     await useAuthStore.getState().restore()
 
-    expect(mToken).not.toHaveBeenCalled()
     expect(useAuthStore.getState().status).toBe('idle')
-  })
-
-  it('attempts a silent restore once a login has succeeded on this device before', async () => {
-    mHasLoggedInBefore.mockResolvedValue(true)
-    mToken.mockResolvedValue({ accessToken: 'tok', expiresAt: 1 })
-    mUser.mockResolvedValue({ email: 'a@b.com', name: 'Ana' })
-
-    await useAuthStore.getState().restore()
-
-    expect(mToken).toHaveBeenCalledWith('')
-    expect(useAuthStore.getState().status).toBe('authenticated')
-  })
-
-  it('resolves this account in the profile registry on a successful silent restore', async () => {
-    mHasLoggedInBefore.mockResolvedValue(true)
-    mToken.mockResolvedValue({ accessToken: 'tok', expiresAt: 1 })
-    mUser.mockResolvedValue({ email: 'a@b.com', name: 'Ana' })
-
-    await useAuthStore.getState().restore()
-
-    expect(mResolveGoogleProfile).toHaveBeenCalledWith({ accountKey: 'a@b.com', label: 'Ana' })
-  })
-
-  it('resolves the account in the profile registry before status flips to authenticated', async () => {
-    mHasLoggedInBefore.mockResolvedValue(true)
-    mToken.mockResolvedValue({ accessToken: 'tok', expiresAt: 1 })
-    mUser.mockResolvedValue({ sub: 'google-sub-1', email: 'a@b.com', name: 'Ana' })
-    let resolveProfile!: () => void
-    mResolveGoogleProfile.mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          resolveProfile = () => resolve({ id: 'p1' } as never)
-        }),
-    )
-
-    const pending = useAuthStore.getState().restore()
-    await vi.waitFor(() => expect(mResolveGoogleProfile).toHaveBeenCalled())
-    expect(useAuthStore.getState().status).toBe('authenticating')
-
-    resolveProfile()
-    await pending
-
-    expect(useAuthStore.getState().status).toBe('authenticated')
-  })
-
-  it('resolves a previously persisted Drive decision and silently re-acquires Drive access', async () => {
-    mHasLoggedInBefore.mockResolvedValue(true)
-    mToken
-      .mockResolvedValueOnce({ accessToken: 'identity-tok', expiresAt: 1 })
-      .mockResolvedValueOnce({ accessToken: 'drive-tok', expiresAt: 2 })
-    mUser.mockResolvedValue({ email: 'a@b.com', name: 'Ana' })
-    mGetDriveDecision.mockResolvedValue('connected')
-    mBootstrap.mockResolvedValue({
-      folderId: 'F',
-    })
-
-    await useAuthStore.getState().restore()
-    await vi.waitFor(() => expect(useAuthStore.getState().drive).not.toBeNull())
-
-    const s = useAuthStore.getState()
-    expect(s.driveOptIn).toBe('connected')
-    expect(s.drive?.folderId).toBe('F')
-    expect(s.session?.accessToken).toBe('drive-tok')
-  })
-
-  it('does not fail restore or surface driveError when the silent re-acquire fails', async () => {
-    mHasLoggedInBefore.mockResolvedValue(true)
-    mToken
-      .mockResolvedValueOnce({ accessToken: 'identity-tok', expiresAt: 1 })
-      .mockRejectedValueOnce(new Error('drive: 403'))
-    mUser.mockResolvedValue({ email: 'a@b.com', name: 'Ana' })
-    mGetDriveDecision.mockResolvedValue('connected')
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-
-    await useAuthStore.getState().restore()
-    await vi.waitFor(() => expect(warn).toHaveBeenCalled())
-
-    const s = useAuthStore.getState()
-    expect(s.status).toBe('authenticated')
-    expect(s.driveOptIn).toBe('connected')
-    expect(s.drive).toBeNull()
-    expect(s.driveError).toBeNull()
-    warn.mockRestore()
+    expect(mToken).not.toHaveBeenCalled()
   })
 
   describe('the guest marker', () => {
@@ -717,37 +615,24 @@ describe('useAuthStore.restore', () => {
       expect(mToken).not.toHaveBeenCalled()
     })
 
-    it('falls back to idle when neither marker is set (a genuine first visit)', async () => {
-      mHasLoggedInBefore.mockResolvedValue(false)
-      mHasUsedGuestBefore.mockResolvedValue(false)
+    it('never attempts a silent login when both markers are set — the account marker wins, never guest status', async () => {
+      mHasLoggedInBefore.mockResolvedValue(true)
+      mHasUsedGuestBefore.mockResolvedValue(true)
 
       await useAuthStore.getState().restore()
 
-      expect(useAuthStore.getState().status).toBe('idle')
       expect(mToken).not.toHaveBeenCalled()
-    })
-
-    it('attempts the account restore when both markers are set, never guest status', async () => {
-      mHasLoggedInBefore.mockResolvedValue(true)
-      mHasUsedGuestBefore.mockResolvedValue(true)
-      mToken.mockResolvedValue({ accessToken: 'tok', expiresAt: 1 })
-      mUser.mockResolvedValue({ email: 'a@b.com', name: 'Ana' })
-
-      await useAuthStore.getState().restore()
-
-      expect(mToken).toHaveBeenCalledWith('')
-      expect(useAuthStore.getState().status).toBe('authenticated')
-    })
-
-    it('does not enter guest status when the account restore fails, even with a guest marker present', async () => {
-      mHasLoggedInBefore.mockResolvedValue(true)
-      mHasUsedGuestBefore.mockResolvedValue(true)
-      mToken.mockRejectedValue(new Error('access: no session'))
-
-      await useAuthStore.getState().restore()
-
       expect(useAuthStore.getState().status).toBe('idle')
     })
+  })
+
+  it('never attempts a silent Google login when online, even for a device that logged in before — it lands on idle for an explicit tap on ReturningUserScreen instead', async () => {
+    mHasLoggedInBefore.mockResolvedValue(true)
+
+    await useAuthStore.getState().restore()
+
+    expect(mToken).not.toHaveBeenCalled()
+    expect(useAuthStore.getState().status).toBe('idle')
   })
 
   describe('offline', () => {

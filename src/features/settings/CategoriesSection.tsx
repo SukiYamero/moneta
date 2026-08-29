@@ -115,7 +115,7 @@ export const CategoriesSection = () => {
                 type="button"
                 onClick={() => setArchivedOpen((v) => !v)}
                 aria-expanded={archivedOpen}
-                className="flex min-h-11 items-center gap-1.5 text-xs font-bold text-fg-tertiary"
+                className="flex min-h-11 items-center gap-1.5 text-sm font-bold text-fg-tertiary"
               >
                 <ChevronDown
                   className={`size-3.5 transition-transform ${archivedOpen ? '' : '-rotate-90'}`}

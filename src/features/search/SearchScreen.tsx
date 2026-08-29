@@ -144,7 +144,7 @@ export const SearchScreen = () => {
         <div className="min-w-0 flex-1">
           <h1 className="text-5xl font-extrabold tracking-tight text-balance">{t('title')}</h1>
           {ready && (
-            <p className="mt-0.5 text-xs font-medium text-fg-tertiary">
+            <p className="mt-0.5 text-sm font-medium text-fg-tertiary">
               {t('resultsCount', { count: filteredMovimientos.length })}
             </p>
           )}
@@ -206,7 +206,7 @@ export const SearchScreen = () => {
               onClick={chip.onRemove}
               className="inline-flex min-h-11 shrink-0 items-center"
             >
-              <span className="flex h-9 items-center gap-1.5 rounded-md border border-primary/35 bg-primary/12 px-3 text-xs font-semibold whitespace-nowrap text-primary">
+              <span className="flex h-9 items-center gap-1.5 rounded-md border border-primary/35 bg-primary/12 px-3 text-sm font-semibold whitespace-nowrap text-primary">
                 <chip.icon className="size-3.5" aria-hidden="true" />
                 {chip.label}
               </span>

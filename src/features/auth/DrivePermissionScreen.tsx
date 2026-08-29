@@ -50,7 +50,7 @@ export const DrivePermissionScreen = () => {
           </div>
         </div>
 
-        <div className="mt-4 flex items-center justify-center gap-2 text-xs font-medium text-fg-disabled">
+        <div className="mt-4 flex items-center justify-center gap-2 text-sm font-medium text-fg-disabled">
           <ShieldCheck className="size-3.5" />
           {t('revocable')}
         </div>
@@ -78,7 +78,7 @@ export const DrivePermissionScreen = () => {
         >
           {t('dismissCta')}
         </button>
-        <p className="text-center text-xs leading-relaxed font-medium text-fg-disabled">
+        <p className="text-center text-sm leading-relaxed font-medium text-fg-disabled">
           {t('reassurance')}
         </p>
       </div>

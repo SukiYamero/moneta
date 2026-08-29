@@ -13,7 +13,7 @@ export const RouteErrorFallback = () => {
         {APP_NAME} tuvo un problema inesperado.
       </p>
       <p className="text-sm text-muted-foreground">Intenta recargar la página.</p>
-      {detail ? <p className="text-xs text-fg-disabled">{detail}</p> : null}
+      {detail ? <p className="text-sm text-fg-disabled">{detail}</p> : null}
     </main>
   )
 }

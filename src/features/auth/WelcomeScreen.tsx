@@ -39,7 +39,7 @@ export const WelcomeScreen = () => {
         </GoogleSignInButton>
         <div className="my-3 flex items-center gap-3" aria-hidden="true">
           <span className="h-px flex-1 bg-border-subtle" />
-          <span className="text-xs font-semibold tracking-wide text-fg-disabled uppercase">
+          <span className="text-sm font-semibold tracking-wide text-fg-disabled uppercase">
             {t('welcome.orDivider')}
           </span>
           <span className="h-px flex-1 bg-border-subtle" />
@@ -48,11 +48,11 @@ export const WelcomeScreen = () => {
           <GuestSignInButton onClick={() => continueAsGuest()} disabled={busy}>
             {t('welcome.guestCta')}
           </GuestSignInButton>
-          <p className="text-center text-xs leading-relaxed font-medium text-fg-disabled">
+          <p className="text-center text-sm leading-relaxed font-medium text-fg-disabled">
             {t('welcome.guestReassurance')}
           </p>
         </div>
-        <p className="mt-2 text-center text-xs leading-relaxed font-medium text-fg-disabled">
+        <p className="mt-2 text-center text-sm leading-relaxed font-medium text-fg-disabled">
           <Trans
             t={t}
             i18nKey="welcome.legal"

@@ -249,19 +249,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ status: 'authenticated', session: null, user: null, driveOptIn, error: null })
       return
     }
-    try {
-      const { session, user } = await authenticate('')
-      const driveOptIn = await resolveDriveOptIn(get().driveOptIn)
-      if (generation !== authGeneration) return
-      await syncProfileForAccount(user)
-      if (generation !== authGeneration) return
-      set({ status: 'authenticated', session, user, driveOptIn })
-      await syncLockedSession(session, user)
-      void reacquireDriveIfNeeded(driveOptIn, set, get)
-    } catch {
-      if (generation !== authGeneration) return
-      set({ status: 'idle' })
-    }
+    // A previously logged-in device always lands on ReturningUserScreen for an explicit tap —
+    // no silent requestAccessToken('') attempt. GIS's "silent" mode still opens a visible popup
+    // under iOS WebKit's third-party-cookie blocking, which looks like an unrequested login.
+    if (generation !== authGeneration) return
+    set({ status: 'idle' })
   },
   logout: () => {
     authGeneration += 1

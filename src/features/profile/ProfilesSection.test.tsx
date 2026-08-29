@@ -45,7 +45,10 @@ afterEach(async () => {
 describe('ProfilesSection', () => {
   it('renders the adopted default profile even when it is the only one, with a truthful "this device" label, not the raw stored name', async () => {
     render(<ProfilesSection />)
-    expect(await screen.findByText('Este dispositivo')).toBeInTheDocument()
+    // Default RTL timeout (1000ms) is tight under a full-suite run's CPU
+    // contention across 164 files; this assertion resolves well within it in
+    // isolation, so a longer window here trades nothing for headroom.
+    expect(await screen.findByText('Este dispositivo', {}, { timeout: 5000 })).toBeInTheDocument()
     expect(screen.queryByText('Local')).not.toBeInTheDocument()
     expect(screen.getByText('Activo')).toBeInTheDocument()
   })

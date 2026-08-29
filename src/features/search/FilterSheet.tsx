@@ -22,7 +22,7 @@ export interface FilterSheetProps {
 }
 
 const SectionHeading = ({ children }: { children: string }) => (
-  <h3 className="mb-2.5 text-xs font-bold tracking-wide text-fg-tertiary uppercase">{children}</h3>
+  <h3 className="mb-2.5 text-sm font-bold tracking-wide text-fg-tertiary uppercase">{children}</h3>
 )
 
 export const FilterSheet = ({
@@ -72,7 +72,7 @@ export const FilterSheet = ({
 
           {filters.rangePreset === 'custom' && (
             <div className="mt-3.5 flex flex-wrap items-start gap-4">
-              <div className="flex flex-col gap-1.5 text-xs font-bold text-fg-tertiary">
+              <div className="flex flex-col gap-1.5 text-sm font-bold text-fg-tertiary">
                 {t('filters.dateRange.from')}
                 <DateChipPicker
                   value={filters.customFrom}
@@ -82,7 +82,7 @@ export const FilterSheet = ({
                   dateFnsLocale={dateFnsLocale}
                 />
               </div>
-              <div className="flex flex-col gap-1.5 text-xs font-bold text-fg-tertiary">
+              <div className="flex flex-col gap-1.5 text-sm font-bold text-fg-tertiary">
                 {t('filters.dateRange.to')}
                 <DateChipPicker
                   value={filters.customTo}

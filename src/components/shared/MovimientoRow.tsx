@@ -68,7 +68,7 @@ export const MovimientoRow = ({
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm font-bold">{categoriaLabel}</div>
         <div className="mt-0.5 flex items-center gap-1.5">
-          <span className="text-xs font-medium text-fg-tertiary">{label}</span>
+          <span className="text-sm font-medium text-fg-tertiary">{label}</span>
           {pending && (
             <span className="inline-flex items-center gap-0.5 rounded-sm bg-warning/15 px-1.5 py-0.5 text-2xs font-extrabold text-warning">
               <CircleHelp className="size-2.5" /> Estimado

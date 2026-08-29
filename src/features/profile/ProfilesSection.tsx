@@ -64,7 +64,7 @@ export const ProfilesSection = () => {
                   {isSwitching ? (
                     <Loader2 className="size-4 animate-spin text-fg-tertiary" aria-hidden="true" />
                   ) : isActive ? (
-                    <span className="flex items-center gap-1 rounded-full bg-primary/15 px-2.5 py-1 text-xs font-bold text-primary">
+                    <span className="flex items-center gap-1 rounded-full bg-primary/15 px-2.5 py-1 text-sm font-bold text-primary">
                       <Check className="size-3.5" aria-hidden="true" />
                       {t('profiles.activeBadge')}
                     </span>

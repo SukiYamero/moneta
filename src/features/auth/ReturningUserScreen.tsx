@@ -71,7 +71,7 @@ export const ReturningUserScreen = () => {
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-bold">{name || t('return.greetingGeneric')}</p>
             {email ? (
-              <p className="truncate text-xs font-medium text-fg-tertiary">{email}</p>
+              <p className="truncate text-sm font-medium text-fg-tertiary">{email}</p>
             ) : null}
           </div>
           <span className="shrink-0 rounded-full bg-warning/15 px-2.5 py-1 text-2xs font-bold text-warning">

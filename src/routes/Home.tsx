@@ -51,7 +51,7 @@ export const Home = () => {
             <BalanceCard totals={dashboard.totals} moneda={dashboard.moneda} />
           </div>
           {otherCurrenciesLabel && (
-            <p className="-mt-2 px-1 text-xs font-medium text-fg-tertiary">
+            <p className="-mt-2 px-1 text-sm font-medium text-fg-tertiary">
               {t('common:otherCurrencyNote', { currencies: otherCurrenciesLabel })}
             </p>
           )}

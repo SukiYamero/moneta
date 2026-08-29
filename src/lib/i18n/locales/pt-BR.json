@@ -64,7 +64,8 @@
       "popupClosed": "Você fechou a janela do Google antes de terminar. Tente de novo.",
       "popupFailedToOpen": "Seu navegador bloqueou a janela do Google. Verifique o bloqueador de pop-ups.",
       "loginDefault": "Não foi possível entrar. Tente de novo.",
-      "driveDefault": "Não foi possível conectar ao Drive. Tente de novo."
+      "driveDefault": "Não foi possível conectar ao Drive. Tente de novo.",
+      "partialScopeGrant": "Para que seus dados fiquem salvos e sincronizados sem problemas, precisamos das duas permissões do Drive. Tente de novo e aceite as duas."
     },
     "adoption": {
       "title": "Trazer seus lançamentos para esta conta?",

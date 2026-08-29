@@ -64,7 +64,8 @@
       "popupClosed": "Cerraste la ventana de Google antes de terminar. Intentá de nuevo.",
       "popupFailedToOpen": "El navegador bloqueó la ventana de Google. Revisá el bloqueador de ventanas emergentes.",
       "loginDefault": "No se pudo iniciar sesión. Intentá de nuevo.",
-      "driveDefault": "No se pudo conectar con Drive. Intentá de nuevo."
+      "driveDefault": "No se pudo conectar con Drive. Intentá de nuevo.",
+      "partialScopeGrant": "Para que tus datos queden guardados y sincronizados sin problemas, necesitamos los dos permisos de Drive. Intentalo de nuevo y aceptá ambos."
     },
     "adoption": {
       "title": "¿Traer tus movimientos a esta cuenta?",

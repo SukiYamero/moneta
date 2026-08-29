@@ -46,7 +46,7 @@ export const BalanceCard = ({ totals, moneda }: BalanceCardProps) => {
       </div>
       <div className="mt-4 flex gap-2.5">
         <div className="flex-1 rounded-2xl bg-surface-sunken px-3.5 py-2.75">
-          <div className="flex items-center gap-1.75 text-xs font-semibold text-success">
+          <div className="flex items-center gap-1.75 text-sm font-semibold text-success">
             <span className="flex size-5.5 items-center justify-center rounded-full bg-success/20">
               <ArrowDownLeft className="size-3" aria-hidden="true" />
             </span>
@@ -57,7 +57,7 @@ export const BalanceCard = ({ totals, moneda }: BalanceCardProps) => {
           </div>
         </div>
         <div className="flex-1 rounded-2xl bg-surface-sunken px-3.5 py-2.75">
-          <div className="flex items-center gap-1.75 text-xs font-semibold text-danger">
+          <div className="flex items-center gap-1.75 text-sm font-semibold text-danger">
             <span className="flex size-5.5 items-center justify-center rounded-full bg-danger/20">
               <ArrowUpRight className="size-3" aria-hidden="true" />
             </span>

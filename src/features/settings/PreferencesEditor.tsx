@@ -49,7 +49,7 @@ export const PreferencesEditor = ({ preferencias, onChange }: PreferencesEditorP
       <ProfileSectionHeading>{t('settings:preferences.heading')}</ProfileSectionHeading>
       <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-1.5">
-          <span className="text-xs font-bold text-fg-tertiary">
+          <span className="text-sm font-bold text-fg-tertiary">
             {t('profile:preferences.theme.label')}
           </span>
           <OptionList
@@ -61,7 +61,7 @@ export const PreferencesEditor = ({ preferencias, onChange }: PreferencesEditorP
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <span className="text-xs font-bold text-fg-tertiary">
+          <span className="text-sm font-bold text-fg-tertiary">
             {t('profile:preferences.weekStart.label')}
           </span>
           <SegmentedControl
@@ -73,7 +73,7 @@ export const PreferencesEditor = ({ preferencias, onChange }: PreferencesEditorP
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <span className="text-xs font-bold text-fg-tertiary">
+          <span className="text-sm font-bold text-fg-tertiary">
             {t('profile:preferences.language.label')}
           </span>
           <OptionList
@@ -85,7 +85,7 @@ export const PreferencesEditor = ({ preferencias, onChange }: PreferencesEditorP
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <span className="text-xs font-bold text-fg-tertiary">
+          <span className="text-sm font-bold text-fg-tertiary">
             {t('profile:preferences.currency.label')}
           </span>
           <OptionList

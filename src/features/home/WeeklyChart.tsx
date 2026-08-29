@@ -39,7 +39,7 @@ export const WeeklyChart = ({ chart, totalGastos, moneda, todayIso }: WeeklyChar
       <div className="flex items-end justify-between">
         <div>
           <div className="text-base font-bold">{t('chart.title')}</div>
-          <div className="mt-0.75 text-xs font-medium text-fg-tertiary">{t('chart.subtitle')}</div>
+          <div className="mt-0.75 text-sm font-medium text-fg-tertiary">{t('chart.subtitle')}</div>
         </div>
         <div className="text-4xl font-extrabold">{formatMonto(totalGastos, moneda, locale)}</div>
       </div>
@@ -60,7 +60,7 @@ export const WeeklyChart = ({ chart, totalGastos, moneda, todayIso }: WeeklyChar
           <span
             key={bucket.bucketStart}
             className={cn(
-              'flex-1 text-center text-xs font-semibold',
+              'flex-1 text-center text-sm font-semibold',
               bucket.bucketStart === todayIso ? 'text-primary' : 'text-fg-tertiary',
             )}
           >

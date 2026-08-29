@@ -63,7 +63,7 @@ export const BreakdownCard = ({
     <div className="mb-3.5 rounded-3xl border border-border-subtle bg-card p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="text-xs font-bold tracking-wide text-fg-faint uppercase">
+          <div className="text-sm font-bold tracking-wide text-fg-faint uppercase">
             {balanceLabel[scope]}
           </div>
           <div
@@ -86,14 +86,14 @@ export const BreakdownCard = ({
       </div>
 
       {otherCurrenciesLabel && (
-        <p className="mt-2 text-xs font-medium text-fg-tertiary">
+        <p className="mt-2 text-sm font-medium text-fg-tertiary">
           {t('common:otherCurrencyNote', { currencies: otherCurrenciesLabel })}
         </p>
       )}
 
       <div className="mt-4 border-t border-border-subtle pt-3.5">
         <div className="mb-3 flex items-center gap-2.5">
-          <span className="flex-1 text-xs font-bold tracking-wide text-fg-faint uppercase">
+          <span className="flex-1 text-sm font-bold tracking-wide text-fg-faint uppercase">
             {t('breakdown.title')}
           </span>
           <SegmentedControl
@@ -128,7 +128,7 @@ export const BreakdownCard = ({
                     <span className="text-ms font-bold">
                       {formatMonto(entry.total, moneda, locale)}
                     </span>
-                    <span className="w-8.5 text-right text-xs font-semibold text-fg-faint">
+                    <span className="w-8.5 text-right text-sm font-semibold text-fg-faint">
                       {percent}%
                     </span>
                   </div>

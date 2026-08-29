@@ -214,7 +214,7 @@ export const MovimientoAmountInput = ({
 
   return (
     <div ref={wrapperRef} onFocus={handleWrapperFocus} className="flex flex-col items-center gap-2">
-      <span className="text-xs font-semibold text-fg-tertiary">{t('form.amountLabel')}</span>
+      <span className="text-sm font-semibold text-fg-tertiary">{t('form.amountLabel')}</span>
       <div className="flex w-full items-center justify-center gap-2">
         <span aria-hidden="true" className="shrink-0 text-6xl font-extrabold text-fg-faint">
           {symbol}

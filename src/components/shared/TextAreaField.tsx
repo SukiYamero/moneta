@@ -61,7 +61,7 @@ export const TextAreaField = ({
         {...props}
       />
       {maxLength !== undefined && (
-        <p id={counterId} className="min-h-4 text-right text-xs text-fg-tertiary">
+        <p id={counterId} className="min-h-4 text-right text-sm text-fg-tertiary">
           {showCounter && t('characterCount', { count: value.length, max: maxLength })}
         </p>
       )}

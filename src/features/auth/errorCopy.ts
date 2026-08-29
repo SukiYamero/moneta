@@ -8,6 +8,7 @@ const AUTH_ERROR_KEY: Record<string, AuthErrorKey> = {
   'auth: access_denied': 'errors.accessDenied',
   'auth: popup_closed': 'errors.popupClosed',
   'auth: popup_failed_to_open': 'errors.popupFailedToOpen',
+  'auth: partial_scope_grant': 'errors.partialScopeGrant',
 }
 
 const DEFAULT_LOGIN_KEY: AuthErrorKey = 'errors.loginDefault'

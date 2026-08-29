@@ -12,10 +12,8 @@ Shared stores, helpers, and the Drive/auth/lock logic layer. No UI here.
   migration gate, generic `CrudRepo<T>` factory with keyset pagination.
 - `repo.fake.ts` — in-memory `Repo` seeded with sample data
   (`createFakeRepo()`, and the `fakeRepo` singleton).
-- `repo.drive.ts` — `createDriveRepo(database)`, a thin wrapper around
-  `repo.local.ts`; the Drive sync itself lives in `sync/engine.ts`.
 - `repo.contract.ts` — `testRepoContract()`, the shared behavior suite run
-  against all three `Repo` implementations.
+  against both `Repo` implementations.
 - `repoProvider.ts` — `getRepo()`, the single swap point every screen reads
   through. `resolveActiveProfileBinding()`/`bindActiveProfile()`/
   `getActiveProfileBinding()` manage the active profile's `{ profile,
