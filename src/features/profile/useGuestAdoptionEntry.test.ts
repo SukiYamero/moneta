@@ -2,6 +2,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { db } from '@/lib/db'
 import { deviceDb } from '@/lib/deviceStore'
+import { useDataStore } from '@/lib/dataStore'
+import {
+  __resetRepoBindingForTests,
+  bindActiveProfile,
+  resolveActiveProfileBinding,
+} from '@/lib/repoProvider'
 import type { Movimiento } from '@/lib/schema'
 import {
   __clearProfileDatabaseCacheForTests,
@@ -34,6 +40,10 @@ const registerGoogleTarget = async () => {
     databaseName: TARGET_DB_NAME,
   })
   await setActiveProfileId(record.id)
+  // Mirrors boot.ts's own bindActiveProfile() call — production always renders
+  // this hook behind BootGate, so dataStore.load()'s getRepo() call always has
+  // a binding by the time adopt() can run.
+  bindActiveProfile(await resolveActiveProfileBinding())
   return record
 }
 
@@ -46,6 +56,8 @@ afterEach(async () => {
   __clearProfileDatabaseCacheForTests(TARGET_DB_NAME)
   await __clearRegistryForTests()
   await deviceDb.adoptedMovements.clear()
+  __resetRepoBindingForTests()
+  useDataStore.getState().reset()
 })
 
 describe('useGuestAdoptionEntry', () => {
@@ -95,6 +107,21 @@ describe('useGuestAdoptionEntry', () => {
       ['m1', 'm2'].toSorted(),
     )
     expect((await db.movimientos.toArray()).map((m) => m.id).toSorted()).toEqual(
+      ['m1', 'm2'].toSorted(),
+    )
+  })
+
+  it('refreshes dataStore with the newly adopted movements, so Home/History reflect them without a reload', async () => {
+    await registerGoogleTarget()
+    await db.movimientos.bulkPut([movimiento({ id: 'm1' }), movimiento({ id: 'm2' })])
+
+    const { result } = renderHook(() => useGuestAdoptionEntry())
+    await waitFor(() => expect(result.current.visible).toBe(true))
+    expect(useDataStore.getState().movimientos).toEqual([])
+
+    await act(() => result.current.adopt())
+
+    expect(useDataStore.getState().movimientos.map((m) => m.id).toSorted()).toEqual(
       ['m1', 'm2'].toSorted(),
     )
   })
