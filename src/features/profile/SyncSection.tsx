@@ -1,4 +1,4 @@
-import { Check, CloudOff, RefreshCw } from 'lucide-react'
+import { Check, CircleAlert, CloudOff, RefreshCw } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import { useTranslation } from 'react-i18next'
 import { accountKeyOf, useAuthStore } from '@/lib/authStore'
@@ -17,12 +17,14 @@ const STATUS_LABEL_KEY: Record<SyncIndicator, StatusKey> = {
   syncing: 'status.syncing',
   pending: 'status.pending',
   up_to_date: 'status.upToDate',
+  error: 'status.error',
 }
 
 const STATUS_ICON: Record<'offline' | SyncIndicator, typeof Check> = {
   syncing: RefreshCw,
   pending: RefreshCw,
   up_to_date: Check,
+  error: CircleAlert,
   offline: CloudOff,
 }
 
@@ -35,6 +37,7 @@ export const SyncSection = () => {
   const user = useAuthStore((s) => s.user)
   const online = useNetworkStore((s) => s.online)
   const phase = useSyncStore((s) => s.phase)
+  const lastError = useSyncStore((s) => s.lastError)
   const outboxDirty = useOutboxStore((s) => s.dirty)
   const watermark = useSyncWatermark()
 
@@ -58,7 +61,7 @@ export const SyncSection = () => {
     )
   }
 
-  const indicator = deriveSyncIndicator({ isSyncing: phase !== 'idle', outboxDirty })
+  const indicator = deriveSyncIndicator({ isSyncing: phase !== 'idle', outboxDirty, lastError })
   const key: 'offline' | SyncIndicator = online ? indicator : 'offline'
   const Icon = STATUS_ICON[key]
   const lastAt = watermark?.lastPullAt ?? watermark?.lastPushAt

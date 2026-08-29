@@ -16,16 +16,26 @@ describe('hasEverSynced', () => {
 })
 
 describe('deriveSyncIndicator', () => {
-  it('syncing wins over everything else', () => {
-    expect(deriveSyncIndicator({ isSyncing: true, outboxDirty: true })).toBe('syncing')
-    expect(deriveSyncIndicator({ isSyncing: true, outboxDirty: false })).toBe('syncing')
-  })
+  it.each([
+    // isSyncing, outboxDirty, lastError, expected
+    [true, true, 'boom', 'syncing'],
+    [true, true, null, 'syncing'],
+    [true, false, 'boom', 'syncing'],
+    [true, false, null, 'syncing'],
+    [false, true, 'boom', 'error'],
+    [false, false, 'boom', 'error'],
+    [false, true, null, 'pending'],
+    [false, false, null, 'up_to_date'],
+  ] as const)(
+    'isSyncing=%s outboxDirty=%s lastError=%s -> %s',
+    (isSyncing, outboxDirty, lastError, expected) => {
+      expect(deriveSyncIndicator({ isSyncing, outboxDirty, lastError })).toBe(expected)
+    },
+  )
 
-  it('pending when not syncing but the outbox has unpushed writes', () => {
-    expect(deriveSyncIndicator({ isSyncing: false, outboxDirty: true })).toBe('pending')
-  })
-
-  it('up to date when idle and nothing pending', () => {
-    expect(deriveSyncIndicator({ isSyncing: false, outboxDirty: false })).toBe('up_to_date')
+  it('a pull failure with a clean outbox reads as an error, never "up to date"', () => {
+    expect(
+      deriveSyncIndicator({ isSyncing: false, outboxDirty: false, lastError: 'some error' }),
+    ).toBe('error')
   })
 })
