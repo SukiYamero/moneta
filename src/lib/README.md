@@ -19,7 +19,7 @@ Shared stores, helpers, and the Drive/auth/lock logic layer. No UI here.
 - `repoProvider.ts` — `getRepo()`, the single swap point every screen reads
   through. `resolveActiveProfileBinding()`/`bindActiveProfile()`/
   `getActiveProfileBinding()` manage the active profile's `{ profile,
-  database, repo }` binding that `getRepo()` reads.
+database, repo }` binding that `getRepo()` reads.
 - `db.ts` — the Dexie (IndexedDB) instance/schema, and `createProfileDb(name)`,
   the factory behind every profile's own database (`db` is
   `createProfileDb('kurobello')`).
@@ -63,6 +63,10 @@ Shared stores, helpers, and the Drive/auth/lock logic layer. No UI here.
 - `boot.ts` — `useBootStore.run()`: resolves and binds the active profile,
   redirects the outbox to it, resets/reloads `dataStore` on a rebind.
   `invalidateBootForSignOut()` resets boot status on logout.
+- `bootRecovery.ts` — `clearLocalDatabaseAndReload()`: the `schema_mismatch`
+  boot-error recovery path (`BootErrorScreen.tsx`). Deletes the active
+  profile's IndexedDB database and reloads; never touches `kurobello-device`
+  or Drive.
 - `bootstrap.ts` — `bootstrap(token)`: idempotent Drive provisioning (folder,
   `LEEME.txt`, first-run `Config` seed).
 
@@ -71,6 +75,9 @@ Shared stores, helpers, and the Drive/auth/lock logic layer. No UI here.
 - `categoryIconKeys.ts` — `CATEGORY_ICON_KEYS`/`CategoryIconKey`, no
   `lucide-react` import (see `src/components/shared/categoryIcons.ts`).
 - `iconAvatarTint.ts` — `ICON_AVATAR_TINTS`/`IconAvatarTint`.
+- `categoryTree.ts` — `groupCategoriasByParent`/`isTopLevelCategoria`, the
+  single correct-at-any-depth padreId grouping both `CategorySheet.tsx` and
+  `CategoriesSection.tsx` read through.
 - `branding.ts` — `APP_NAME`, the single source for the display name.
 - `initials.ts` — `getInitials(name)`.
 - `i18n/` — the translation table (`react-i18next`). Own `README.md`.

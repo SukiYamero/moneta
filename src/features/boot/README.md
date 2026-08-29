@@ -13,6 +13,9 @@ logic itself (`useBootStore`) lives in `src/lib/boot.ts`, not here.
   layout. Used by both `BootGate` and `RequireAuth` (while a returning
   device's `restore()` is resolving).
 - `BootErrorScreen.tsx` — full-screen failure state when the local database
-  can't be opened, with a retry that calls `run()` again.
+  can't be opened, with a retry that calls `run()` again. On `schema_mismatch`
+  specifically, a second, destructive action (behind `ConfirmDialog`) offers
+  `bootRecovery.ts`'s `clearLocalDatabaseAndReload()` — for a device stuck on
+  pre-migration data with no in-app upgrade path.
 
 No barrel — both call sites import `BootGate` directly.
