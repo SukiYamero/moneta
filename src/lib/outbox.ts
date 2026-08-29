@@ -119,7 +119,7 @@ export const enqueueOperation = async (
       operation,
     }
     await table.add(entry)
-    if (!database) useOutboxStore.setState({ dirty: true })
+    if (table === entries) useOutboxStore.setState({ dirty: true })
     return true
   } catch (e) {
     console.warn('outbox: could not enqueue operation, this device will not sync it', e)

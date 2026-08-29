@@ -17,6 +17,7 @@ import {
   __resetOutboxDatabaseForTests,
   listPendingOperations,
   setOutboxDatabase,
+  useOutboxStore,
 } from '@/lib/outbox'
 import { useDataStore } from '@/lib/dataStore'
 
@@ -326,6 +327,23 @@ describe('runMutation — outbox profile integrity across a racing profile switc
 
     expect(await listPendingOperations(originalDb)).toHaveLength(1)
     expect(await listPendingOperations(switchedDb)).toHaveLength(0)
+  })
+})
+
+describe('runMutation — outbox dirty flag on a normal (non-racing) write', () => {
+  beforeEach(() => {
+    useOutboxStore.setState({ dirty: false })
+  })
+
+  it('marks the outbox dirty so the debounced push trigger fires', async () => {
+    mGetActiveProfileBinding.mockReturnValue({ database: db } as unknown as ProfileBinding)
+    const repo = makeFakeRepo()
+    mGetRepo.mockReturnValue(repo)
+    vi.mocked(repo.movimientos.add).mockImplementation((item) => Promise.resolve(item))
+
+    await useDataStore.getState().createMovimiento(movimiento())
+
+    expect(useOutboxStore.getState().dirty).toBe(true)
   })
 })
 
