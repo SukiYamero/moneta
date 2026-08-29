@@ -509,7 +509,7 @@ export interface SyncContext {
   locale: SupportedLocale
 }
 
-const PUSH_DEBOUNCE_MS = 8_000
+const PUSH_DEBOUNCE_MS = 6_000
 
 export interface SyncTriggerHandle {
   stop: () => void
