@@ -62,7 +62,7 @@ export const CATEGORY_CONCEPTS: readonly CategoryConcept[] = [
   {
     icon: 'utensils',
     tint: 'amber',
-    keywords: ['comida', 'almuerzo', 'cena', 'food', 'meal', 'comida', 'restaurante', 'restaurant'],
+    keywords: ['comida', 'almuerzo', 'cena', 'food', 'meal', 'restaurante', 'restaurant'],
   },
   {
     icon: 'shopping-cart',
@@ -95,7 +95,7 @@ export const CATEGORY_CONCEPTS: readonly CategoryConcept[] = [
   {
     icon: 'bike',
     tint: 'blue',
-    keywords: ['bicicleta', 'bici', 'bike', 'bicycle', 'bicicleta'],
+    keywords: ['bicicleta', 'bici', 'bike', 'bicycle'],
   },
   {
     icon: 'fuel',
@@ -134,7 +134,7 @@ export const CATEGORY_CONCEPTS: readonly CategoryConcept[] = [
   {
     icon: 'music',
     tint: 'rose',
-    keywords: ['musica', 'música', 'music', 'spotify', 'streaming', 'música'],
+    keywords: ['musica', 'música', 'music', 'spotify', 'streaming'],
   },
   {
     icon: 'heart-pulse',
@@ -190,7 +190,7 @@ export const CATEGORY_CONCEPTS: readonly CategoryConcept[] = [
   {
     icon: 'smartphone',
     tint: 'blue',
-    keywords: ['celular', 'telefono', 'teléfono', 'phone', 'movil', 'móvil', 'celular'],
+    keywords: ['celular', 'telefono', 'teléfono', 'phone', 'movil', 'móvil'],
   },
   {
     icon: 'credit-card',
