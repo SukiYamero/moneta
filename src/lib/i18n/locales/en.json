@@ -333,7 +333,7 @@
           "cancelCta": "Cancel"
         },
         "success": "Your data was deleted from Google Drive and this device.",
-        "failedDrive": "We couldn't delete your data from Google Drive. Nothing was deleted yet — try again.",
+        "failedDrive": "We couldn't finish deleting your data from Google Drive — some of it may already be gone. Try again to finish the job.",
         "failedLocal": "Your data was deleted from Google Drive, but we couldn't clear this device's copy. Try again.",
         "failed": "We couldn't delete your data. Try again."
       }

@@ -333,7 +333,7 @@
           "cancelCta": "Cancelar"
         },
         "success": "Tus datos se eliminaron de Google Drive y de este dispositivo.",
-        "failedDrive": "No pudimos eliminar tus datos de Google Drive. Todavía no se borró nada: intentá de nuevo.",
+        "failedDrive": "No terminamos de eliminar tus datos de Google Drive: es posible que ya se haya borrado parte. Intentá de nuevo para completar el borrado.",
         "failedLocal": "Ya eliminamos tus datos de Google Drive, pero no pudimos borrar la copia de este dispositivo. Intentá de nuevo.",
         "failed": "No pudimos eliminar tus datos. Intentá de nuevo."
       }
