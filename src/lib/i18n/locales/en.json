@@ -25,6 +25,11 @@
       "body": "This app is designed to be used in portrait mode. Switch back to that mode for the best experience.",
       "skip": "Skip and continue"
     },
+    "singleTabGuard": {
+      "title": "Already open in another tab",
+      "body": "To keep your data saved correctly, {{appName}} can only be open in one place at a time. Close that other tab or window, or switch back to it, then retry here.",
+      "retry": "Retry"
+    },
     "characterCount": "{{count}} of {{max}} characters",
     "pagination": {
       "pageAria": "Page {{page}} of {{count}}"

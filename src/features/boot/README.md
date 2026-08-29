@@ -17,5 +17,11 @@ logic itself (`useBootStore`) lives in `src/lib/boot.ts`, not here.
   specifically, a second, destructive action (behind `ConfirmDialog`) offers
   `bootRecovery.ts`'s `clearLocalDatabaseAndReload()` — for a device stuck on
   pre-migration data with no in-app upgrade path.
+- `SingleTabGuard.tsx` — wraps `AppLock`/the router in `src/main.tsx`, ahead
+  of everything else. Drives `useSingleTabGuardStore` (`@/lib/singleTabGuard`)
+  and renders `children` once this tab holds the app's Web Locks lock, or
+  unconditionally if `navigator.locks` isn't supported; otherwise a
+  full-screen "already open elsewhere" state with a retry action, blocking
+  the app shell from mounting underneath it.
 
-No barrel — both call sites import `BootGate` directly.
+No barrel — every call site imports these directly.
