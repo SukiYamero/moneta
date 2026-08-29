@@ -1,21 +1,27 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('@/lib/repoProvider', () => ({ getRepo: vi.fn() }))
+vi.mock('@/lib/repoProvider', () => ({ getRepo: vi.fn(), getActiveProfileBinding: vi.fn() }))
 vi.mock('@/lib/toastStore', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
 import type { Activo, Categoria, Config, Movimiento } from '@/lib/schema'
 import { CONFIG_SEMILLA } from '@/lib/schema'
 import type { Repo } from '@/lib/repo'
 import { RepoError } from '@/lib/repo'
-import { getRepo } from '@/lib/repoProvider'
+import { getActiveProfileBinding, getRepo, type ProfileBinding } from '@/lib/repoProvider'
 import { toast } from '@/lib/toastStore'
-import { db } from '@/lib/db'
+import { createProfileDb, db } from '@/lib/db'
 import { __resetNetworkStoreForTests, useNetworkStore } from '@/lib/networkStore'
 import { __resetDeviceIdForTests, deviceDb } from '@/lib/deviceStore'
-import { __resetOutboxClockForTests, listPendingOperations } from '@/lib/outbox'
+import {
+  __resetOutboxClockForTests,
+  __resetOutboxDatabaseForTests,
+  listPendingOperations,
+  setOutboxDatabase,
+} from '@/lib/outbox'
 import { useDataStore } from '@/lib/dataStore'
 
 const mGetRepo = vi.mocked(getRepo)
+const mGetActiveProfileBinding = vi.mocked(getActiveProfileBinding)
 const mToastError = vi.mocked(toast.error)
 
 const movimiento = (overrides: Partial<Movimiento> = {}): Movimiento => ({
@@ -88,6 +94,7 @@ const makeFakeRepo = ({
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mGetActiveProfileBinding.mockReturnValue(null)
   useDataStore.setState({
     movimientos: [],
     activos: [],
@@ -102,6 +109,7 @@ afterEach(async () => {
   __resetNetworkStoreForTests()
   __resetOutboxClockForTests()
   __resetDeviceIdForTests()
+  __resetOutboxDatabaseForTests()
   await db.outbox.clear()
   await deviceDb.deviceId.clear()
 })
@@ -288,6 +296,36 @@ describe('useDataStore.createMovimiento', () => {
     expect(useDataStore.getState().movimientos).toEqual([])
     expect(mToastError).toHaveBeenCalledWith('home:error.codes.invalidInput')
     expect(await listPendingOperations()).toEqual([])
+  })
+})
+
+describe('runMutation — outbox profile integrity across a racing profile switch', () => {
+  const switchedDbName = 'kurobello-run-mutation-switch-test'
+
+  afterEach(async () => {
+    const other = createProfileDb(switchedDbName)
+    await other.outbox.clear()
+    await other.delete()
+  })
+
+  it('queues into the database bound when the mutation started, not one a switch rebinds to mid-write', async () => {
+    const originalDb = db
+    const switchedDb = createProfileDb(switchedDbName)
+    mGetActiveProfileBinding.mockReturnValue({ database: originalDb } as unknown as ProfileBinding)
+    const repo = makeFakeRepo()
+    mGetRepo.mockReturnValue(repo)
+    vi.mocked(repo.movimientos.add).mockImplementation((item) => {
+      mGetActiveProfileBinding.mockReturnValue({
+        database: switchedDb,
+      } as unknown as ProfileBinding)
+      setOutboxDatabase(switchedDb)
+      return Promise.resolve(item)
+    })
+
+    await useDataStore.getState().createMovimiento(movimiento())
+
+    expect(await listPendingOperations(originalDb)).toHaveLength(1)
+    expect(await listPendingOperations(switchedDb)).toHaveLength(0)
   })
 })
 
