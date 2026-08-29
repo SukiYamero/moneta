@@ -535,7 +535,7 @@ outcome as a rule in the relevant §10 entry.
 - A concurrent delete-vs-edit **revives the movement** with a brief on-screen explanation — never a silent data loss.
 - No `isSynced` boolean — derive sync status from a **watermark** (last successful push/pull) on the profile record. A profile with no successful-pull watermark shows a full-screen download view (real progress, honest failure+retry) instead of the dashboard.
 - Push on reconnect/foreground/write-burst-debounce/`pagehide`, only when dirty; pull on open/reconnect via a `files.list` revision check first. Never write-through on the user's action — a delete disappears locally instantly and is pushed by the same background flush.
-- Everything read from Drive is untrusted input: a malformed file/entry or a newer `schemaVersion` degrades to "skip and keep going," never a thrown boot or silent zero; an unrecognized op or newer-version file is ignored and left untouched, never deleted.
+- Everything read from Drive is untrusted input: a malformed file/entry or a `config` whose `schemaVersion` isn't exactly the local `SCHEMA_VERSION` — newer **or older** — degrades to "skip and keep going," never a thrown boot, a silent zero, or a downgrade overwriting a correctly-migrated local config; an unrecognized op or newer-version file is ignored and left untouched, never deleted.
 
 **Implementation.** `src/lib/sync/engine.ts` (push/pull/compaction), `src/lib/sync/driveFiles.ts`, `src/lib/sync/opLog.ts`, `src/lib/sync/validate.ts`, `src/lib/hlc.ts`, `src/lib/repo.drive.ts`, `src/lib/sync/status.ts`. `bootstrap` also writes a localized `LEEME.txt` explaining the files in plain language, and yearly compaction writes a flat CSV through the existing export module (§10.12, never a second CSV writer) — both derived/disposable, the JSON stays authoritative. A guest never starts sync triggers.
 
@@ -695,8 +695,9 @@ outcome as a rule in the relevant §10 entry.
 - Sign-out-then-sign-in-as-a-different-account must fully rebind the profile/repo/outbox — a binding resolved once at boot and never invalidated is the bug this design must avoid.
 - IndexedDB unavailable (private mode, denied storage, exhausted quota) is an honest error via the existing offline taxonomy, never a white screen.
 - The sequence must be idempotent under React `StrictMode` double-invoke and back-to-back calls, the same way `dataStore.load()`/`authStore.restore()` already are.
+- A `schema_mismatch` failure (local data older than `SCHEMA_VERSION`, no migration registered) offers a destructive, confirmed recovery action that deletes the active profile's own IndexedDB database and reloads — the only in-app way off an otherwise permanent boot loop. Scoped to that one database: never `kurobello-device`, never Drive.
 
-**Implementation.** `src/lib/boot.ts`, `src/main.tsx`, `src/lib/repoProvider.ts`.
+**Implementation.** `src/lib/boot.ts`, `src/main.tsx`, `src/lib/repoProvider.ts`. The recovery action: `src/lib/bootRecovery.ts`, `src/features/boot/BootErrorScreen.tsx`.
 
 **Watch out.** There is no full-screen boot screen — §10.29 has the loading treatment (a sync pill plus the app's own skeleton). The sequence above (lock → resolve → bind → load → render) is unaffected by what covers it visually.
 
@@ -720,7 +721,7 @@ outcome as a rule in the relevant §10 entry.
 
 **Rules.**
 
-- The five `chart-*` tint tokens differ between themes — a category tint must clear WCAG's 3.0 graphical-element threshold on its own surface in both themes, by holding hue/saturation and lowering lightness for light rather than reusing dark's values.
+- The `chart-*` tint tokens (13, extended past the design export's original five) differ between themes — a category tint must clear WCAG's 3.0 graphical-element threshold on its own surface in both themes, by holding hue/saturation and lowering lightness for light rather than reusing dark's values.
 - The four danger/warning tokens get the same dark→light relationship as the design's own danger pair.
 - `--muted`/`--accent`/`--secondary` correctly collapse to the same white as `--card` in light — surfaces separate by shadow/border, not fill; this is intended, not a translation error.
 - The theme resolves synchronously at first paint via a tiny inline script in `index.html` reading a stored preference — `Config` from IndexedDB resolves too late to avoid a full-screen color-inversion flash.

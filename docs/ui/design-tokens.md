@@ -26,10 +26,14 @@ numbers rather than reproducing them verbatim, because the export's own
 values fail contrast when measured against a real card background (WCAG 3.0)
 or have no light source in the export at all:
 
-- The five `chart-*` tints keep the export's hue/saturation and lower
+- The first five `chart-*` tints keep the export's hue/saturation and lower
   lightness to the minimum that passes contrast — the same operation the
   design itself already performs on the accent color — landing at
-  `#1c9465`, `#4180e9`, `#af7809`, `#f72121`, `#a958fb`.
+  `#1c9465`, `#4180e9`, `#af7809`, `#f72121`, `#a958fb`. `chart-6`
+  through `chart-9` (teal, indigo, orange, magenta) extend the set past what
+  the export provides, chosen by the same method — natural hue/saturation,
+  lightness set to the same ≥3:1 contrast margin against each theme's card —
+  rather than sourced from a design value.
 - `--destructive`/`--danger-strong`/`--danger-foreground`/`--warning` have no
   light source in the export (their dark values trace to a literal hardcoded
   hex, not a design variable). Adapted from the nearest design token that
