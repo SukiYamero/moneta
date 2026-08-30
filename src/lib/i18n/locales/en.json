@@ -83,12 +83,12 @@
       "error": "Couldn't add your movements. Try again.",
       "entry": {
         "heading": "Guest data",
-        "description_one": "{{count}} movement saved on this device isn't in this account yet.",
-        "description_other": "{{count}} movements saved on this device aren't in this account yet.",
-        "cta": "Add to this account",
+        "description_one": "{{count}} movement saved on this device isn't in this profile yet.",
+        "description_other": "{{count}} movements saved on this device aren't in this profile yet.",
+        "cta": "Add to this profile",
         "adding": "Adding…",
-        "success_one": "Added {{count}} movement to this account.",
-        "success_other": "Added {{count}} movements to this account.",
+        "success_one": "Added {{count}} movement to this profile.",
+        "success_other": "Added {{count}} movements to this profile.",
         "error": "Couldn't add the movements. Try again."
       }
     }

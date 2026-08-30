@@ -83,12 +83,12 @@
       "error": "Não foi possível adicionar os lançamentos. Tente de novo.",
       "entry": {
         "heading": "Dados de convidado",
-        "description_one": "Há {{count}} lançamento salvo neste aparelho que ainda não está nesta conta.",
-        "description_other": "Há {{count}} lançamentos salvos neste aparelho que ainda não estão nesta conta.",
-        "cta": "Adicionar a esta conta",
+        "description_one": "Há {{count}} lançamento salvo neste aparelho que ainda não está neste perfil.",
+        "description_other": "Há {{count}} lançamentos salvos neste aparelho que ainda não estão neste perfil.",
+        "cta": "Adicionar a este perfil",
         "adding": "Adicionando…",
-        "success_one": "{{count}} lançamento foi adicionado a esta conta.",
-        "success_other": "{{count}} lançamentos foram adicionados a esta conta.",
+        "success_one": "{{count}} lançamento foi adicionado a este perfil.",
+        "success_other": "{{count}} lançamentos foram adicionados a este perfil.",
         "error": "Não foi possível adicionar os lançamentos. Tente de novo."
       }
     }
