@@ -1,37 +1,55 @@
 import { db, type ProfileDb } from '@/lib/db'
-import { clearAdoptionConsent, getAdoptionConsent } from '@/lib/deviceStore'
+import {
+  clearAdoptionConsent,
+  getAdoptedMovementIds,
+  getAdoptionConsent,
+  markMovementAdopted,
+} from '@/lib/deviceStore'
 import { enqueueOperation } from '@/lib/outbox'
 import { getProfileDatabase } from '@/lib/profiles/profileDb'
 import type { ProfileRecord } from '@/lib/profiles/profileRegistry'
 
-export const countGuestMovements = async (): Promise<number> => db.movimientos.count()
+export const countUnadoptedGuestMovements = async (targetDb: ProfileDb): Promise<number> => {
+  const [guestIds, targetIds] = await Promise.all([
+    db.movimientos.toCollection().primaryKeys(),
+    targetDb.movimientos.toCollection().primaryKeys(),
+  ])
+  const targetIdSet = new Set(targetIds)
+  return guestIds.filter((id) => !targetIdSet.has(id)).length
+}
 
 export interface AdoptionResult {
-  movedCount: number
+  adoptedCount: number
 }
 
 export const adoptGuestMovements = async (target: ProfileRecord): Promise<AdoptionResult> => {
-  const movements = await db.movimientos.toArray()
-  if (movements.length === 0) return { movedCount: 0 }
-
   const targetDb: ProfileDb = getProfileDatabase(target.databaseName)
-  await targetDb.movimientos.bulkPut(movements)
+  const guestMovements = await db.movimientos.toArray()
+  if (guestMovements.length === 0) return { adoptedCount: 0 }
 
-  for (const mov of movements) {
-    const alreadyQueued = await targetDb.outbox
-      .where('[entity+entityId]')
-      .equals(['movimiento', mov.id])
-      .count()
-    if (alreadyQueued > 0) continue
+  const targetIds = await targetDb.movimientos.toCollection().primaryKeys()
+  const targetIdSet = new Set(targetIds)
+  const toCopy = guestMovements.filter((m) => !targetIdSet.has(m.id))
+  if (toCopy.length > 0) await targetDb.movimientos.bulkPut(toCopy)
+
+  const alreadyAdopted = await getAdoptedMovementIds(
+    target.id,
+    guestMovements.map((m) => m.id),
+  )
+
+  let adoptedCount = 0
+  for (const mov of guestMovements) {
+    if (alreadyAdopted.has(mov.id)) continue
     const queued = await enqueueOperation(
       { entity: 'movimiento', op: 'put', payload: mov },
       targetDb,
     )
     if (!queued) throw new Error(`adoption: could not queue movement "${mov.id}" for Drive`)
+    await markMovementAdopted(target.id, mov.id)
+    adoptedCount += 1
   }
 
-  await db.movimientos.bulkDelete(movements.map((m) => m.id))
-  return { movedCount: movements.length }
+  return { adoptedCount }
 }
 
 export const finishConsentedAdoption = async (target: ProfileRecord): Promise<AdoptionResult> => {

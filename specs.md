@@ -520,7 +520,7 @@ outcome as a rule in the relevant §10 entry.
 - Preferences are read-only until the write path (§10.13) exists for them — no second write path invented here.
 - The sheet must scroll inside its own `max-h` and clear the safe area rather than pushing the bottom nav off-screen.
 
-**Implementation.** `src/features/profile/**` (`ProfileSheet.tsx` composes `IdentitySection`, `ProfilesSection`, `SyncSection`, `SecuritySection`, `DataSection`, `PreferencesSection`).
+**Implementation.** `src/features/profile/**` (`ProfileSheet.tsx` composes `IdentitySection`, `ProfilesSection`, `GuestAdoptionSection`, `SyncSection`, `SecuritySection`, `DataSection`, `PreferencesSection`).
 
 ### 10.19 Drive sync — the file layout and the merge rule
 

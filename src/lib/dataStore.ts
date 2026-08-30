@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import type { Activo, Categoria, Config, Movimiento } from '@/lib/schema'
 import { RepoError, type RepoErrorCode } from '@/lib/repo'
-import { getRepo } from '@/lib/repoProvider'
+import { getActiveProfileBinding, getRepo } from '@/lib/repoProvider'
 import { type MutationKind, useNetworkStore, type WriteRefusalReason } from '@/lib/networkStore'
 import { toast, type ToastMessageKey } from '@/lib/toastStore'
 import { enqueueOperation, type OutboxOperation } from '@/lib/outbox'
@@ -50,6 +50,7 @@ const runMutation = async <TResult>(
     toast.error(REFUSAL_TOAST_KEY[decision.reason])
     return false
   }
+  const database = getActiveProfileBinding()?.database
   applyOptimistic()
   let result: TResult
   try {
@@ -60,7 +61,7 @@ const runMutation = async <TResult>(
     toast.error(WRITE_ERROR_TOAST_KEY[code])
     return false
   }
-  const queued = await enqueueOperation(onSuccess(result))
+  const queued = await enqueueOperation(onSuccess(result), database)
   if (!queued) {
     toast.error('errors:sync.notQueued')
   }

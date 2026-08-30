@@ -88,6 +88,10 @@ database, repo }` binding that `getRepo()` reads.
   `toast.success`/`toast.error`, `setToastsSuppressed`.
 - `landscapeGateStore.ts` — in-memory, unpersisted "skip the landscape
   gate this session" flag.
+- `singleTabGuard.ts` — `useSingleTabGuardStore`: requests the Web Locks API
+  exclusive lock (`SINGLE_TAB_LOCK_NAME`) that keeps the app usable in only
+  one tab per storage partition, with a short grace-period retry so a plain
+  refresh doesn't false-positive. Feature-detects `navigator.locks`.
 - `swUpdate.ts` — service-worker update lifecycle:
   `createSwUpdateController(registerSW)`, `initServiceWorkerUpdates()`,
   `applyServiceWorkerUpdate()`.

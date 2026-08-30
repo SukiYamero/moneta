@@ -7,6 +7,7 @@ import {
   clearGuestUsed,
   clearLoggedIn,
   deviceDb,
+  getAdoptedMovementIds,
   getAdoptionConsent,
   getDeviceId,
   getDriveDecision,
@@ -15,6 +16,7 @@ import {
   hasUsedGuestBefore,
   markGuestUsed,
   markLoggedIn,
+  markMovementAdopted,
   setAdoptionConsent,
   setDriveDecision,
   setGuestLock,
@@ -28,6 +30,7 @@ afterEach(async () => {
   await clearGuestUsed()
   await clearAdoptionConsent()
   await deviceDb.deviceId.clear()
+  await deviceDb.adoptedMovements.clear()
   __resetDeviceIdForTests()
 })
 
@@ -237,6 +240,17 @@ test('clearAdoptionConsent on an already-clear consent is a no-op, not an error'
   expect(await getAdoptionConsent()).toBeUndefined()
 })
 
+test('getAdoptedMovementIds is empty for movements never marked adopted', async () => {
+  expect(await getAdoptedMovementIds('p1', ['m1', 'm2'])).toEqual(new Set())
+})
+
+test('markMovementAdopted marks only that movement id for that profile', async () => {
+  await markMovementAdopted('p1', 'm1')
+
+  expect(await getAdoptedMovementIds('p1', ['m1', 'm2'])).toEqual(new Set(['m1']))
+  expect(await getAdoptedMovementIds('p2', ['m1'])).toEqual(new Set())
+})
+
 const READ_FAILURE_CASES = [
   {
     name: 'hasLoggedInBefore degrades to false',
@@ -287,6 +301,17 @@ test.each(READ_FAILURE_CASES)(
   },
 )
 
+test('getAdoptedMovementIds degrades to an empty set (treating nothing as adopted) on a storage read failure', async () => {
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  const spy = vi.spyOn(deviceDb.adoptedMovements, 'bulkGet').mockRejectedValue(new Error('IDB blocked'))
+
+  expect(await getAdoptedMovementIds('p1', ['m1'])).toEqual(new Set())
+  expect(warn).toHaveBeenCalled()
+
+  spy.mockRestore()
+  warn.mockRestore()
+})
+
 const WRITE_FAILURE_CASES = [
   {
     name: 'markLoggedIn',
@@ -315,6 +340,12 @@ const WRITE_FAILURE_CASES = [
     arrange: () =>
       vi.spyOn(deviceDb.adoptionConsent, 'put').mockRejectedValue(new Error('IDB blocked')),
     act: () => setAdoptionConsent({ profileId: 'p1', accountKey: 'ana@example.com' }),
+  },
+  {
+    name: 'markMovementAdopted',
+    arrange: () =>
+      vi.spyOn(deviceDb.adoptedMovements, 'put').mockRejectedValue(new Error('IDB blocked')),
+    act: () => markMovementAdopted('p1', 'm1'),
   },
 ] as const
 

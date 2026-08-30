@@ -25,6 +25,11 @@
       "body": "This app is designed to be used in portrait mode. Switch back to that mode for the best experience.",
       "skip": "Skip and continue"
     },
+    "singleTabGuard": {
+      "title": "Already open in another tab",
+      "body": "To keep your data saved correctly, {{appName}} can only be open in one place at a time. Close that other tab or window, or switch back to it, then retry here.",
+      "retry": "Retry"
+    },
     "characterCount": "{{count}} of {{max}} characters",
     "pagination": {
       "pageAria": "Page {{page}} of {{count}}"
@@ -68,14 +73,24 @@
       "partialScopeGrant": "To keep your data saved and synced without issues, we need both Drive permissions. Try again and accept both."
     },
     "adoption": {
-      "title": "Bring your movements into this account?",
-      "description_one": "You have {{count}} movement saved only on this device. Bringing it in keeps it under this account and queues it for your Drive.",
-      "description_other": "You have {{count}} movements saved only on this device. Bringing them in keeps them under this account and queues them for your Drive.",
+      "title": "Add your movements to this account?",
+      "description_one": "You have {{count}} movement saved only on this device. Adding it copies it into this account and queues it for your Drive, without removing it from this device.",
+      "description_other": "You have {{count}} movements saved only on this device. Adding them copies them into this account and queues them for your Drive, without removing them from this device.",
       "declineNote": "If you say no, they stay on this device, in their own profile, and you can still reach them anytime.",
-      "acceptCta": "Yes, bring them",
+      "acceptCta": "Yes, add them",
       "declineCta": "No, leave them here",
-      "moving": "Moving…",
-      "error": "Couldn't bring your movements over. Try again."
+      "adding": "Adding…",
+      "error": "Couldn't add your movements. Try again.",
+      "entry": {
+        "heading": "Guest data",
+        "description_one": "{{count}} movement saved on this device isn't in this profile yet.",
+        "description_other": "{{count}} movements saved on this device aren't in this profile yet.",
+        "cta": "Add to this profile",
+        "adding": "Adding…",
+        "success_one": "Added {{count}} movement to this profile.",
+        "success_other": "Added {{count}} movements to this profile.",
+        "error": "Couldn't add the movements. Try again."
+      }
     }
   },
   "driveConsent": {
@@ -323,8 +338,19 @@
       "exporting": "Exporting…",
       "exportFailed": "Couldn't export the file. Try again.",
       "deleteStored": {
-        "cta": "Delete data stored on this device",
-        "note": "Not available yet. You'll be able to delete this device's local copy."
+        "cta": "Delete stored data",
+        "deleting": "Deleting…",
+        "unavailableNote": "Connect Google Drive to delete your data there and on this device.",
+        "confirm": {
+          "title": "Delete your stored data?",
+          "description": "This permanently deletes your movements and assets from Google Drive and this device right now. If another device is signed into this account, it may upload its own copy again the next time it syncs.",
+          "confirmCta": "Delete",
+          "cancelCta": "Cancel"
+        },
+        "success": "Your data was deleted from Google Drive and this device.",
+        "failedDrive": "We couldn't finish deleting your data from Google Drive — some of it may already be gone. Try again to finish the job.",
+        "failedLocal": "Your data was deleted from Google Drive, but we couldn't clear this device's copy. Try again.",
+        "failed": "We couldn't delete your data. Try again."
       }
     },
     "preferences": {
@@ -449,6 +475,7 @@
       "upToDate": "Up to date",
       "pending": "Changes pending sync",
       "syncing": "Syncing…",
+      "error": "Couldn't sync — your data is still saved on this device",
       "offline": "Offline — will sync when reconnected",
       "lastSync": "Last synced: {{when}}",
       "neverSynced": "Not synced yet",

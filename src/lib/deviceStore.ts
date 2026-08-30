@@ -24,6 +24,7 @@ export type GuestMarkerRow = { id: number }
 export type ActiveProfileRow = { id: number; profileId: string }
 export type AdoptionDeclinedRow = { id: number }
 export type AdoptionConsentRow = { id: number; profileId: string; accountKey?: string }
+export type AdoptedMovementRow = { id: string }
 
 const MARKER_ID = 1 as const
 const GUEST_MARKER_ID = 1 as const
@@ -47,6 +48,7 @@ export const deviceDb = new Dexie('kurobello-device') as Dexie & {
   activeProfile: EntityTable<ActiveProfileRow, 'id'>
   adoptionDeclined: EntityTable<AdoptionDeclinedRow, 'id'>
   adoptionConsent: EntityTable<AdoptionConsentRow, 'id'>
+  adoptedMovements: EntityTable<AdoptedMovementRow, 'id'>
 }
 deviceDb.version(1).stores({ marker: 'id' })
 deviceDb.version(2).stores({ marker: 'id', driveDecision: 'id' })
@@ -158,6 +160,21 @@ deviceDb.version(12).stores({
   adoptionConsent: 'id',
   landscapeGateSkipped: null,
 })
+deviceDb.version(13).stores({
+  marker: 'id',
+  driveDecision: 'id',
+  anchor: 'id',
+  profiles: 'id, kind, lastUsedAt',
+  deviceId: 'id',
+  syncTips: 'id',
+  syncFileCache: 'id',
+  guestLock: 'id',
+  guestMarker: 'id',
+  activeProfile: 'id',
+  adoptionDeclined: 'id',
+  adoptionConsent: 'id',
+  adoptedMovements: 'id',
+})
 
 export const hasLoggedInBefore = async (): Promise<boolean> => {
   try {
@@ -248,6 +265,33 @@ export const clearAdoptionConsent = async (): Promise<void> => {
     await deviceDb.adoptionConsent.delete(ADOPTION_CONSENT_ID)
   } catch (e) {
     console.warn('device: could not clear the adoption consent', e)
+  }
+}
+
+const adoptedMovementKey = (profileId: string, movimientoId: string): string =>
+  `${profileId}:${movimientoId}`
+
+export const getAdoptedMovementIds = async (
+  profileId: string,
+  movimientoIds: string[],
+): Promise<Set<string>> => {
+  if (movimientoIds.length === 0) return new Set()
+  try {
+    const rows = await deviceDb.adoptedMovements.bulkGet(
+      movimientoIds.map((id) => adoptedMovementKey(profileId, id)),
+    )
+    return new Set(movimientoIds.filter((_, i) => rows[i] !== undefined))
+  } catch (e) {
+    console.warn('device: could not read adopted-movement markers, treating as none adopted', e)
+    return new Set()
+  }
+}
+
+export const markMovementAdopted = async (profileId: string, movimientoId: string): Promise<void> => {
+  try {
+    await deviceDb.adoptedMovements.put({ id: adoptedMovementKey(profileId, movimientoId) })
+  } catch (e) {
+    console.warn('device: could not persist the adopted-movement marker', e)
   }
 }
 

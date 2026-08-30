@@ -25,6 +25,11 @@
       "body": "Este app foi pensado para ser usado na vertical. Volte a esse modo para a melhor experiência.",
       "skip": "Pular e continuar"
     },
+    "singleTabGuard": {
+      "title": "Já está aberto em outra aba",
+      "body": "Para que seus dados sejam salvos sem problemas, o {{appName}} só pode estar aberto em um lugar por vez. Feche essa outra aba ou janela, ou volte a ela, e tente novamente aqui.",
+      "retry": "Tentar novamente"
+    },
     "characterCount": "{{count}} de {{max}} caracteres",
     "pagination": {
       "pageAria": "Página {{page}} de {{count}}"
@@ -68,14 +73,24 @@
       "partialScopeGrant": "Para que seus dados fiquem salvos e sincronizados sem problemas, precisamos das duas permissões do Drive. Tente de novo e aceite as duas."
     },
     "adoption": {
-      "title": "Trazer seus lançamentos para esta conta?",
-      "description_one": "Você tem {{count}} lançamento guardado só neste aparelho. Se trouxer, ele passa a ficar nesta conta e entra na fila para o seu Drive.",
-      "description_other": "Você tem {{count}} lançamentos guardados só neste aparelho. Se trouxer, eles passam a ficar nesta conta e entram na fila para o seu Drive.",
+      "title": "Adicionar seus lançamentos a esta conta?",
+      "description_one": "Você tem {{count}} lançamento guardado só neste aparelho. Ao adicionar, ele é copiado para esta conta e entra na fila para o seu Drive, sem sair deste aparelho.",
+      "description_other": "Você tem {{count}} lançamentos guardados só neste aparelho. Ao adicionar, eles são copiados para esta conta e entram na fila para o seu Drive, sem sair deste aparelho.",
       "declineNote": "Se você disser que não, eles ficam neste aparelho, no próprio perfil, e você pode acessá-los quando quiser.",
-      "acceptCta": "Sim, trazer",
+      "acceptCta": "Sim, adicionar",
       "declineCta": "Não, deixar aqui",
-      "moving": "Movendo…",
-      "error": "Não foi possível trazer os lançamentos. Tente de novo."
+      "adding": "Adicionando…",
+      "error": "Não foi possível adicionar os lançamentos. Tente de novo.",
+      "entry": {
+        "heading": "Dados de convidado",
+        "description_one": "Há {{count}} lançamento salvo neste aparelho que ainda não está neste perfil.",
+        "description_other": "Há {{count}} lançamentos salvos neste aparelho que ainda não estão neste perfil.",
+        "cta": "Adicionar a este perfil",
+        "adding": "Adicionando…",
+        "success_one": "{{count}} lançamento foi adicionado a este perfil.",
+        "success_other": "{{count}} lançamentos foram adicionados a este perfil.",
+        "error": "Não foi possível adicionar os lançamentos. Tente de novo."
+      }
     }
   },
   "driveConsent": {
@@ -323,8 +338,19 @@
       "exporting": "Exportando…",
       "exportFailed": "Não foi possível exportar o arquivo. Tente novamente.",
       "deleteStored": {
-        "cta": "Excluir dados guardados neste dispositivo",
-        "note": "Ainda não disponível. Você vai poder apagar a cópia local deste dispositivo."
+        "cta": "Excluir dados guardados",
+        "deleting": "Excluindo…",
+        "unavailableNote": "Conecte o Google Drive para poder excluir seus dados guardados lá e neste dispositivo.",
+        "confirm": {
+          "title": "Excluir seus dados guardados?",
+          "description": "Isso apaga seus movimentos e ativos do Google Drive e deste dispositivo agora mesmo. Se outro dispositivo estiver conectado a esta conta, ele pode enviar sua própria cópia de novo na próxima sincronização.",
+          "confirmCta": "Excluir",
+          "cancelCta": "Cancelar"
+        },
+        "success": "Seus dados foram excluídos do Google Drive e deste dispositivo.",
+        "failedDrive": "Não terminamos de excluir seus dados do Google Drive: é possível que parte já tenha sido apagada. Tente novamente para concluir a exclusão.",
+        "failedLocal": "Seus dados já foram excluídos do Google Drive, mas não conseguimos apagar a cópia deste dispositivo. Tente novamente.",
+        "failed": "Não conseguimos excluir seus dados. Tente novamente."
       }
     },
     "preferences": {
@@ -449,6 +475,7 @@
       "upToDate": "Em dia",
       "pending": "Alterações pendentes de sincronização",
       "syncing": "Sincronizando…",
+      "error": "Não foi possível sincronizar — seus dados continuam salvos neste dispositivo",
       "offline": "Sem conexão — vai sincronizar ao reconectar",
       "lastSync": "Última sincronização: {{when}}",
       "neverSynced": "Ainda não sincronizou",

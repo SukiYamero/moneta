@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('@/lib/repoProvider', () => ({ getRepo: vi.fn() }))
+vi.mock('@/lib/repoProvider', () => ({ getRepo: vi.fn(), getActiveProfileBinding: vi.fn(() => null) }))
 vi.mock('@/lib/toastStore', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
 import { act, renderHook, waitFor } from '@testing-library/react'

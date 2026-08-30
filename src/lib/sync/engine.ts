@@ -70,6 +70,7 @@ export const getSyncIndicator = (): SyncIndicator =>
   deriveSyncIndicator({
     isSyncing: useSyncStore.getState().phase !== 'idle',
     outboxDirty: useOutboxStore.getState().dirty,
+    lastError: useSyncStore.getState().lastError,
   })
 
 const materializeMovimientos = async (
@@ -509,7 +510,7 @@ export interface SyncContext {
   locale: SupportedLocale
 }
 
-const PUSH_DEBOUNCE_MS = 8_000
+const PUSH_DEBOUNCE_MS = 6_000
 
 export interface SyncTriggerHandle {
   stop: () => void

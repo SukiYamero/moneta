@@ -1,7 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { db } from '@/lib/db'
 import type { Movimiento } from '@/lib/schema'
-import { clearAdoptionConsent, getAdoptionConsent, setAdoptionConsent } from '@/lib/deviceStore'
+import {
+  clearAdoptionConsent,
+  deviceDb,
+  getAdoptionConsent,
+  setAdoptionConsent,
+} from '@/lib/deviceStore'
+import { removeOperations } from '@/lib/outbox'
 import {
   __clearProfileDatabaseCacheForTests,
   __clearRegistryForTests,
@@ -11,7 +17,7 @@ import {
 import type { ProfileRecord } from '@/lib/profiles'
 import {
   adoptGuestMovements,
-  countGuestMovements,
+  countUnadoptedGuestMovements,
   finishConsentedAdoption,
   resumePendingAdoption,
 } from '@/lib/profiles/adoption'
@@ -48,35 +54,52 @@ afterEach(async () => {
   __clearProfileDatabaseCacheForTests(TARGET_DB_NAME)
   await __clearRegistryForTests()
   await clearAdoptionConsent()
+  await deviceDb.adoptedMovements.clear()
 })
 
-describe('countGuestMovements', () => {
+describe('countUnadoptedGuestMovements', () => {
   it('is 0 on a device with no local guest data — the common first-sign-in case', async () => {
-    expect(await countGuestMovements()).toBe(0)
+    const target = await registerTarget()
+    expect(await countUnadoptedGuestMovements(getProfileDatabase(target.databaseName))).toBe(0)
   })
 
-  it('counts the local/guest profile’s movements', async () => {
+  it('counts guest movements not yet present in the target', async () => {
+    const target = await registerTarget()
     await db.movimientos.bulkPut([movimiento(), movimiento(), movimiento()])
-    expect(await countGuestMovements()).toBe(3)
+    expect(await countUnadoptedGuestMovements(getProfileDatabase(target.databaseName))).toBe(3)
+  })
+
+  it('excludes guest movements already present in the target, by id', async () => {
+    const target = await registerTarget()
+    const targetDb = getProfileDatabase(target.databaseName)
+    const already = movimiento({ id: 'already-there' })
+    await db.movimientos.bulkPut([already, movimiento({ id: 'still-pending' })])
+    await targetDb.movimientos.put(already)
+
+    expect(await countUnadoptedGuestMovements(targetDb)).toBe(1)
   })
 
   it('propagates a storage failure rather than degrading to 0', async () => {
-    const spy = vi.spyOn(db.movimientos, 'count').mockRejectedValue(new Error('IDB blocked'))
+    const target = await registerTarget()
+    const targetDb = getProfileDatabase(target.databaseName)
+    const spy = vi.spyOn(db.movimientos, 'toCollection').mockImplementation(() => {
+      throw new Error('IDB blocked')
+    })
 
-    await expect(countGuestMovements()).rejects.toThrow('IDB blocked')
+    await expect(countUnadoptedGuestMovements(targetDb)).rejects.toThrow('IDB blocked')
 
     spy.mockRestore()
   })
 })
 
 describe('adoptGuestMovements', () => {
-  it('does nothing and reports 0 moved when there is nothing local to bring', async () => {
+  it('does nothing and reports 0 adopted when there is nothing local to bring', async () => {
     const target = await registerTarget()
     const result = await adoptGuestMovements(target)
-    expect(result).toEqual({ movedCount: 0 })
+    expect(result).toEqual({ adoptedCount: 0 })
   })
 
-  it('moves every local movement into the target profile’s own database, and enqueues it for Drive', async () => {
+  it('copies every local movement into the target profile’s own database, and enqueues it for Drive', async () => {
     const target = await registerTarget()
     const a = movimiento({ id: 'mA' })
     const b = movimiento({ id: 'mB' })
@@ -84,7 +107,7 @@ describe('adoptGuestMovements', () => {
 
     const result = await adoptGuestMovements(target)
 
-    expect(result).toEqual({ movedCount: 2 })
+    expect(result).toEqual({ adoptedCount: 2 })
     const targetDb = getProfileDatabase(TARGET_DB_NAME)
     expect((await targetDb.movimientos.toArray()).map((m) => m.id).toSorted()).toEqual(
       ['mA', 'mB'].toSorted(),
@@ -94,13 +117,16 @@ describe('adoptGuestMovements', () => {
     expect(queued.every((e) => e.operation.op === 'put')).toBe(true)
   })
 
-  it('empties the local/guest profile once its movements have been moved', async () => {
+  it('never removes anything from the local/guest profile — adoption is a copy, not a move', async () => {
     const target = await registerTarget()
-    await db.movimientos.bulkPut([movimiento()])
+    const guestMovements = [movimiento(), movimiento()]
+    await db.movimientos.bulkPut(guestMovements)
 
     await adoptGuestMovements(target)
 
-    expect(await db.movimientos.toArray()).toEqual([])
+    expect((await db.movimientos.toArray()).map((m) => m.id).toSorted()).toEqual(
+      guestMovements.map((m) => m.id).toSorted(),
+    )
   })
 
   it('merges with data the target profile already has, rather than replacing it', async () => {
@@ -113,12 +139,61 @@ describe('adoptGuestMovements', () => {
 
     const result = await adoptGuestMovements(target)
 
-    expect(result).toEqual({ movedCount: 1 })
+    expect(result).toEqual({ adoptedCount: 1 })
     const finalIds = (await targetDb.movimientos.toArray()).map((m) => m.id).toSorted()
     expect(finalIds).toEqual(['existing', 'guest-1'].toSorted())
   })
 
-  it('is resumable after an interruption: a partial failure never half-moves data, and calling it again finishes the job', async () => {
+  it('is idempotent: calling it again with nothing new adopts and enqueues nothing further', async () => {
+    const target = await registerTarget()
+    await db.movimientos.bulkPut([movimiento(), movimiento()])
+    await adoptGuestMovements(target)
+    const targetDb = getProfileDatabase(TARGET_DB_NAME)
+    const queuedAfterFirstCall = (await targetDb.outbox.toArray()).length
+
+    const result = await adoptGuestMovements(target)
+
+    expect(result).toEqual({ adoptedCount: 0 })
+    expect(await targetDb.outbox.count()).toBe(queuedAfterFirstCall)
+  })
+
+  it('picks up a movement added to the guest profile after a first successful copy, and only that one', async () => {
+    const target = await registerTarget()
+    await db.movimientos.bulkPut([movimiento({ id: 'first' })])
+    await adoptGuestMovements(target)
+
+    await db.movimientos.put(movimiento({ id: 'second' }))
+    const result = await adoptGuestMovements(target)
+
+    expect(result).toEqual({ adoptedCount: 1 })
+    const targetDb = getProfileDatabase(TARGET_DB_NAME)
+    expect((await targetDb.movimientos.toArray()).map((m) => m.id).toSorted()).toEqual(
+      ['first', 'second'].toSorted(),
+    )
+  })
+
+  it('does not re-enqueue movements already delivered once their outbox rows are gone — only the new delta gets a fresh entry', async () => {
+    const target = await registerTarget()
+    const targetDb = getProfileDatabase(TARGET_DB_NAME)
+    await db.movimientos.bulkPut([movimiento({ id: 'mA' }), movimiento({ id: 'mB' })])
+
+    const first = await adoptGuestMovements(target)
+    expect(first.adoptedCount).toBe(2)
+
+    // simulates sync/engine.ts's push() removing outbox rows after a successful Drive push
+    const pushedIds = (await targetDb.outbox.toArray()).map((e) => e.id)
+    await removeOperations(pushedIds, targetDb)
+    expect(await targetDb.outbox.count()).toBe(0)
+
+    await db.movimientos.put(movimiento({ id: 'mC' }))
+    const second = await adoptGuestMovements(target)
+
+    expect(second.adoptedCount).toBe(1)
+    const finalQueue = await targetDb.outbox.toArray()
+    expect(finalQueue.map((e) => e.entityId)).toEqual(['mC'])
+  })
+
+  it('is resumable after an interruption: a partial failure never leaves a copied record unqueued, and calling it again finishes the job', async () => {
     const target = await registerTarget()
     const targetDb = getProfileDatabase(TARGET_DB_NAME)
     await db.movimientos.bulkPut([movimiento({ id: 'm1' }), movimiento({ id: 'm2' })])
@@ -137,39 +212,28 @@ describe('adoptGuestMovements', () => {
     addSpy.mockRestore()
 
     const result = await adoptGuestMovements(target)
-    expect(result).toEqual({ movedCount: 2 })
-    expect(await db.movimientos.toArray()).toEqual([])
-    expect((await targetDb.movimientos.toArray()).map((m) => m.id).toSorted()).toEqual(
+    expect(result).toEqual({ adoptedCount: 2 })
+    expect((await db.movimientos.toArray()).map((m) => m.id).toSorted()).toEqual(
       ['m1', 'm2'].toSorted(),
     )
     const finalQueue = await targetDb.outbox.toArray()
     expect(finalQueue.map((e) => e.entityId).toSorted()).toEqual(['m1', 'm2'].toSorted())
   })
-
-  it('is a safe no-op when called again after a completed adoption', async () => {
-    const target = await registerTarget()
-    await db.movimientos.bulkPut([movimiento()])
-    await adoptGuestMovements(target)
-
-    const result = await adoptGuestMovements(target)
-
-    expect(result).toEqual({ movedCount: 0 })
-  })
 })
 
 describe('finishConsentedAdoption', () => {
-  it('moves the movements and only then clears the consent marker', async () => {
+  it('adopts the movements and only then clears the consent marker', async () => {
     const target = await registerTarget()
     await db.movimientos.bulkPut([movimiento({ id: 'm1' })])
     await setAdoptionConsent({ profileId: target.id, accountKey: target.accountKey })
 
     const result = await finishConsentedAdoption(target)
 
-    expect(result).toEqual({ movedCount: 1 })
+    expect(result).toEqual({ adoptedCount: 1 })
     expect(await getAdoptionConsent()).toBeUndefined()
   })
 
-  it('leaves the consent marker in place when the move itself fails', async () => {
+  it('leaves the consent marker in place when the copy itself fails', async () => {
     const target = await registerTarget()
     const targetDb = getProfileDatabase(TARGET_DB_NAME)
     await db.movimientos.bulkPut([movimiento({ id: 'm1' })])
@@ -198,7 +262,7 @@ describe('resumePendingAdoption', () => {
     expect(await db.movimientos.toArray()).toHaveLength(1)
   })
 
-  it('moves the data and clears the consent marker on an uninterrupted resume', async () => {
+  it('copies the data and clears the consent marker on an uninterrupted resume', async () => {
     const target = await registerTarget()
     await db.movimientos.bulkPut([movimiento({ id: 'm1' })])
     await setAdoptionConsent({ profileId: target.id, accountKey: target.accountKey })
@@ -207,11 +271,11 @@ describe('resumePendingAdoption', () => {
 
     const targetDb = getProfileDatabase(TARGET_DB_NAME)
     expect((await targetDb.movimientos.toArray()).map((m) => m.id)).toEqual(['m1'])
-    expect(await db.movimientos.toArray()).toEqual([])
+    expect(await db.movimientos.toArray()).toHaveLength(1)
     expect(await getAdoptionConsent()).toBeUndefined()
   })
 
-  it('finishes an adoption interrupted mid-move when resumed silently on a later boot, with no prompt', async () => {
+  it('finishes an adoption interrupted mid-copy when resumed silently on a later boot, with no prompt', async () => {
     const target = await registerTarget()
     const targetDb = getProfileDatabase(TARGET_DB_NAME)
     await db.movimientos.bulkPut([movimiento({ id: 'm1' }), movimiento({ id: 'm2' })])
@@ -232,7 +296,9 @@ describe('resumePendingAdoption', () => {
 
     await resumePendingAdoption(target)
 
-    expect(await db.movimientos.toArray()).toEqual([])
+    expect((await db.movimientos.toArray()).map((m) => m.id).toSorted()).toEqual(
+      ['m1', 'm2'].toSorted(),
+    )
     expect((await targetDb.movimientos.toArray()).map((m) => m.id).toSorted()).toEqual(
       ['m1', 'm2'].toSorted(),
     )

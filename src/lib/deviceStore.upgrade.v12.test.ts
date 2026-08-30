@@ -142,7 +142,7 @@ test('an existing v11 device with a stale landscape-gate dismissal upgrades to v
 
   expect(await hasLoggedInBefore()).toBe(true)
   expect(await getDeviceId()).toBe('olddevic')
-  expect(deviceDb.verno).toBe(12)
+  expect(deviceDb.verno).toBeGreaterThanOrEqual(12)
 })
 
 test('the landscapeGateSkipped table is dropped on upgrade — the old dismissal no longer exists anywhere', async () => {

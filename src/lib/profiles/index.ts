@@ -26,7 +26,7 @@ export { __clearProfileDatabaseCacheForTests, getProfileDatabase } from '@/lib/p
 export { ensureOwnerMarker, readOwnerMarker } from '@/lib/profiles/profileOwner'
 export {
   adoptGuestMovements,
-  countGuestMovements,
+  countUnadoptedGuestMovements,
   finishConsentedAdoption,
   resumePendingAdoption,
   type AdoptionResult,

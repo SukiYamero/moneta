@@ -25,6 +25,11 @@
       "body": "Esta app está pensada para usarse en vertical. Vuelve a ese modo para la mejor experiencia.",
       "skip": "Omitir y continuar"
     },
+    "singleTabGuard": {
+      "title": "Ya está abierta en otra pestaña",
+      "body": "Para que tus datos se guarden sin problemas, {{appName}} solo puede estar abierta en un lugar a la vez. Cierra esa otra pestaña o ventana, o vuelve a ella, y reintenta aquí.",
+      "retry": "Reintentar"
+    },
     "characterCount": "{{count}} de {{max}} caracteres",
     "pagination": {
       "pageAria": "Página {{page}} de {{count}}"
@@ -68,14 +73,24 @@
       "partialScopeGrant": "Para que tus datos queden guardados y sincronizados sin problemas, necesitamos los dos permisos de Drive. Inténtalo de nuevo y acepta ambos."
     },
     "adoption": {
-      "title": "¿Traer tus movimientos a esta cuenta?",
-      "description_one": "Tienes {{count}} movimiento guardado solo en este dispositivo. Si lo traes, queda bajo esta cuenta y se pone en cola para tu Drive.",
-      "description_other": "Tienes {{count}} movimientos guardados solo en este dispositivo. Si los traes, quedan bajo esta cuenta y se ponen en cola para tu Drive.",
+      "title": "¿Agregar tus movimientos a esta cuenta?",
+      "description_one": "Tienes {{count}} movimiento guardado solo en este dispositivo. Si lo agregas, se copia a esta cuenta y se pone en cola para tu Drive, sin quitarlo de este dispositivo.",
+      "description_other": "Tienes {{count}} movimientos guardados solo en este dispositivo. Si los agregas, se copian a esta cuenta y se ponen en cola para tu Drive, sin quitarlos de este dispositivo.",
       "declineNote": "Si eliges que no, se quedan en este dispositivo, en su propio perfil, y puedes verlos cuando quieras.",
-      "acceptCta": "Sí, traerlos",
+      "acceptCta": "Sí, agregarlos",
       "declineCta": "No, dejarlos aquí",
-      "moving": "Moviendo…",
-      "error": "No se pudieron traer los movimientos. Intenta de nuevo."
+      "adding": "Agregando…",
+      "error": "No se pudieron agregar los movimientos. Intenta de nuevo.",
+      "entry": {
+        "heading": "Datos de invitado",
+        "description_one": "Hay {{count}} movimiento guardado en este dispositivo que todavía no está en este perfil.",
+        "description_other": "Hay {{count}} movimientos guardados en este dispositivo que todavía no están en este perfil.",
+        "cta": "Agregar a este perfil",
+        "adding": "Agregando…",
+        "success_one": "Se agregó {{count}} movimiento a este perfil.",
+        "success_other": "Se agregaron {{count}} movimientos a este perfil.",
+        "error": "No se pudieron agregar los movimientos. Intenta de nuevo."
+      }
     }
   },
   "driveConsent": {
@@ -323,8 +338,19 @@
       "exporting": "Exportando…",
       "exportFailed": "No se pudo exportar el archivo. Intenta de nuevo.",
       "deleteStored": {
-        "cta": "Eliminar datos guardados en este dispositivo",
-        "note": "Todavía no disponible. Vas a poder borrar la copia local de este dispositivo."
+        "cta": "Eliminar datos guardados",
+        "deleting": "Eliminando…",
+        "unavailableNote": "Conecta Google Drive para poder eliminar tus datos guardados ahí y en este dispositivo.",
+        "confirm": {
+          "title": "¿Eliminar tus datos guardados?",
+          "description": "Esto borra tus movimientos y activos de Google Drive y de este dispositivo, ahora mismo. Si tienes otro dispositivo conectado a esta cuenta, podría volver a subir sus propios datos la próxima vez que sincronice.",
+          "confirmCta": "Eliminar",
+          "cancelCta": "Cancelar"
+        },
+        "success": "Tus datos se eliminaron de Google Drive y de este dispositivo.",
+        "failedDrive": "No terminamos de eliminar tus datos de Google Drive: es posible que ya se haya borrado parte. Intenta de nuevo para completar el borrado.",
+        "failedLocal": "Ya eliminamos tus datos de Google Drive, pero no pudimos borrar la copia de este dispositivo. Intenta de nuevo.",
+        "failed": "No pudimos eliminar tus datos. Intenta de nuevo."
       }
     },
     "preferences": {
@@ -449,6 +475,7 @@
       "upToDate": "Al día",
       "pending": "Cambios pendientes por sincronizar",
       "syncing": "Sincronizando…",
+      "error": "No se pudo sincronizar — tus datos siguen guardados en este dispositivo",
       "offline": "Sin conexión — se sincronizará al reconectar",
       "lastSync": "Última sincronización: {{when}}",
       "neverSynced": "Todavía no se sincronizó",
