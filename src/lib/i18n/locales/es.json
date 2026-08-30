@@ -78,12 +78,12 @@
       "error": "No se pudieron agregar los movimientos. Intenta de nuevo.",
       "entry": {
         "heading": "Datos de invitado",
-        "description_one": "Hay {{count}} movimiento guardado en este dispositivo que todavía no está en esta cuenta.",
-        "description_other": "Hay {{count}} movimientos guardados en este dispositivo que todavía no están en esta cuenta.",
-        "cta": "Agregar a esta cuenta",
+        "description_one": "Hay {{count}} movimiento guardado en este dispositivo que todavía no está en este perfil.",
+        "description_other": "Hay {{count}} movimientos guardados en este dispositivo que todavía no están en este perfil.",
+        "cta": "Agregar a este perfil",
         "adding": "Agregando…",
-        "success_one": "Se agregó {{count}} movimiento a esta cuenta.",
-        "success_other": "Se agregaron {{count}} movimientos a esta cuenta.",
+        "success_one": "Se agregó {{count}} movimiento a este perfil.",
+        "success_other": "Se agregaron {{count}} movimientos a este perfil.",
         "error": "No se pudieron agregar los movimientos. Intenta de nuevo."
       }
     }
