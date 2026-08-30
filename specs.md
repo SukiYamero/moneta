@@ -662,6 +662,7 @@ outcome as a rule in the relevant §10 entry.
 - `push()` must be serialized against itself (refuse or coalesce a concurrent call) — an unserialized read-modify-write on a Drive shard can silently drop an operation that a second overlapping push's stale read never saw, breaking §10.19's "exactly one writer" invariant in practice even though it holds by design.
 - Sync triggers take a **getter** for the token and active profile, never a captured value — the token refreshes and the profile changes on sign-in/out.
 - Triggers start only with a Drive-scoped session and an active profile (never for a guest, never unconditionally at import), and stop on sign-out, losing Drive scope, or lock — something in production must own the returned stop handle.
+- A dirty outbox debounces into a push after `PUSH_DEBOUNCE_MS` (6s) of quiet, not on every write — a burst of edits coalesces into one push.
 - A genuinely fresh session (no successful-pull watermark) shows the full-screen download view with real progress and an honest failure+retry, never a dashboard of zeros; a returning user with local data pulls in the background instead.
 - The Drive status row (syncing/up to date/pending) reads from `sync/status.ts`.
 - A revived movement (§10.19's delete-vs-edit conflict) gets a one-line Toast explanation, not a screen.
@@ -749,25 +750,27 @@ outcome as a rule in the relevant §10 entry.
 - Switching reuses `boot.ts`'s rebind path (resolve, bind repo, redirect outbox, reset the data store, then load) — it does not grow a second rebind mechanism.
 - Sync triggers stop for the old profile and start for the new one only if that profile's account has a live Drive session — switching to a Google profile you're not currently signed into shows its local data with sync explicitly off, never a silently-stuck pill.
 - A push in flight during a switch must be threaded through a profile-scoped database reference, not the outbox's stale module-level binding — otherwise a mid-flight redirect drains the wrong profile's outbox.
+- Every local write's `runMutation` captures its target database synchronously, before `write()` runs, and threads that captured value explicitly into `enqueueOperation` — never the implicit module-level fallback. A switch racing a write can then never enqueue the write into the profile that became active after it started. `outbox.ts`'s dirty flag tracks "did this write land in the currently-bound table," by reference, not "was no database argument passed" — the latter breaks once a caller can legitimately pass the active profile's database explicitly.
 
-**Implementation.** `src/lib/profiles/profileRegistry.ts` (explicit `activeProfileId` via `getActiveProfileId`/`setActiveProfileId`), `src/lib/profiles/profileOwner.ts` (owner marker), `src/lib/profiles/switchProfile.ts`, `src/features/profile/ProfilesSection.tsx`.
+**Implementation.** `src/lib/profiles/profileRegistry.ts` (explicit `activeProfileId` via `getActiveProfileId`/`setActiveProfileId`), `src/lib/profiles/profileOwner.ts` (owner marker), `src/lib/profiles/switchProfile.ts`, `src/features/profile/ProfilesSection.tsx`, `src/lib/dataStore.ts` (`runMutation`), `src/lib/outbox.ts`.
 
 **Watch out.** Two tabs on the same device with two different profiles is out of scope by design (the registry is device-wide) — do not invent cross-tab coordination for it.
 
-### 10.32 Bringing guest data into an account — the prompt, and why it is a prompt
+### 10.32 Bringing guest data into a profile — the prompt, the persistent entry, and why adoption is a copy
 
-**Goal.** Signing in with Google after using the app as a guest never looks like the app forgot the person's data.
+**Goal.** Signing in with Google after using the app as a guest never looks like the app forgot the person's data, and bringing guest movements over stays available for as long as there's something to bring, not just once at login.
 
 **Rules.**
 
-- A guest with local data who signs in is **asked once** whether to bring their movements into the new account — never migrated automatically, because moving data into an account means uploading it to that person's Drive, and guest mode may have been chosen precisely to avoid that.
-- The prompt states a concrete count of movements, states plainly that they'd go into this account's Drive, and states that declining leaves the data exactly where it was, reachable through the profile switcher (§10.31).
-- Adoption is a merge, not a replace — safe by construction because movement ids are `crypto.randomUUID()`; both an existing Drive account's data and the adopted guest data end up present.
-- An interrupted adoption (tab closed mid-move) must be resumable, never leaving data split half-and-half across two profiles. The consent itself is persisted the moment "yes" is tapped (before the move starts); resuming after an interruption is completion of that consent, not a new offer, and runs silently.
-- A resumed adoption must only ever resume into the _same_ profile + account key it was originally consented to — never "whatever profile happens to be active." On a mismatch the consent marker is left in place, not discarded, so it stays resumable if that profile becomes active again.
+- A guest with local data who signs in is **offered once**, at login, whether to bring their movements into the new profile — never migrated automatically, because bringing data into a Google profile means uploading it to that person's Drive, and guest mode may have been chosen precisely to avoid that. The prompt cannot be dismissed by a backdrop tap or Escape — only its own two buttons resolve it, since an accidental dismissal here reads as data loss.
+- Adoption is a **copy, never a move**: `adoptGuestMovements` only ever `bulkPut`s into the target profile — the guest profile keeps every movement it had, unchanged, indefinitely.
+- The login prompt is a one-time discoverability nudge, not the only way in. A **persistent entry on the Profile screen** (`GuestAdoptionSection`) is visible any time the active profile is Google-authenticated and has at least one guest movement not yet copied into it — including after declining the login prompt, losing it to an app close mid-decision, or adding more guest movements after an earlier adoption. Re-invoking it is safe with nothing left to copy (hides itself at zero) and copies the outstanding delta.
+- Adopting refreshes `dataStore` immediately (`reset()` + `load()`) — the copy bypasses `runMutation`'s optimistic `set()`, so without an explicit refresh the newly-copied movements would only appear after an unrelated reload.
+- Copy wording says **profile**, not account, throughout — the app already lists Google/local profiles by that name in the switcher (§10.31), so guest-data copy stays consistent with it rather than switching terms mid-flow.
+- An interrupted adoption is resumable — repeated calls only enqueue what a device-local marker (`deviceStore.ts`'s `adoptedMovements`) hasn't already recorded as delivered, marked only after a successful enqueue, never after the `bulkPut` alone. This is what keeps a second adoption from re-enqueuing and over-reporting movements whose outbox rows were already compacted away by a prior successful push.
 - The emptied guest profile is never deleted — it is the default local profile and always exists.
 
-**Implementation.** `src/lib/profiles/adoption.ts` (`adoptGuestMovements`, `countGuestMovements`), `src/lib/deviceStore.ts` (persisted `adoptionConsent` marker), `src/lib/boot.ts` (silent resume hook), `src/features/auth/GuestAdoptionPrompt.tsx`.
+**Implementation.** `src/lib/profiles/adoption.ts` (`adoptGuestMovements`, `countUnadoptedGuestMovements`), `src/lib/deviceStore.ts` (persisted `adoptionConsent`/`adoptionDeclined`/`adoptedMovements`), `src/lib/boot.ts` (silent resume hook), `src/features/auth/GuestAdoptionPrompt.tsx`, `src/features/profile/GuestAdoptionSection.tsx` + `useGuestAdoptionEntry.ts` (the persistent entry, composed into `ProfileSheet.tsx` per §10.18).
 
 ### 10.33 A guest who comes back — persisting guest mode, and what the guest lock actually protects
 
@@ -1096,19 +1099,33 @@ outcome as a rule in the relevant §10 entry.
 
 **Watch out.** A `click` is re-hit-tested against the post-collapse DOM on touch in Blink, so deferring to `pointerup` protects that gesture's own `pointerup` and not its `click` — §10.35's backdrop rule is what covers the rest.
 
+### 10.55 Single-tab guard — one browsing context at a time
+
+**Goal.** The app is only usable in one tab at a time, on one browser storage partition — a second tab sees a clear "already open" screen instead of a second live instance racing the first.
+
+**Rules.**
+
+- The guard applies to every session, guest included — the one-tab rule is a deliberate, simple product-wide rule, not conditioned on whether Drive sync (the actual race it closes) is active.
+- `navigator.locks.request(LOCK_NAME, { mode: 'exclusive', ifAvailable: true }, ...)`, held for the tab's entire lifetime via a callback that returns a never-resolving promise — the browser releases it automatically on tab close, navigation away, or crash.
+- Feature-detected: where `navigator.locks` is unsupported, the guard renders `children` unconditionally and never blocks — never break the app over what is otherwise a nice-to-have.
+- A short grace-period retry (~250–300ms) before declaring conflict — a hard refresh briefly overlaps the old context releasing the lock with the new one requesting it, and without the retry that overlap intermittently misreports "already open."
+- Two tabs of a genuinely different storage partition (a normal tab and a private/incognito one, or two different origins) are never detected or blocked — that boundary is a deliberate browser privacy wall, not a gap, and `specs.md` §10.19's per-device sharding already treats it as just another device.
+
+**Implementation.** `src/lib/singleTabGuard.ts` (the lock/retry store), `src/features/boot/SingleTabGuard.tsx` (mounted in `src/main.tsx`, ahead of `AppLock`/the router, the same architectural spot as `LandscapeGuard`).
+
 ## 11. Backlog (pending verification / deferred work)
 
 ### Sync & outbox correctness
 
 - **`ProfilesSection.test.tsx`'s "this device" case failed intermittently in a full run, never in isolation.** Reviewed: no state-leak found (the one non-atomic read-then-write in `getActiveProfile()` converges on a fixed id, so it's benign, not the cause). Mitigated by widening that assertion's `findByText` timeout (full-suite CPU contention vs. Testing Library's 1000ms default is the best-supported explanation) — not a confirmed root cause. If it recurs, capture the actual CI failure output before guessing further.
 - **The search filter's custom range is two chips, not one range calendar.** `poc/date-range` carries a `RangeDateChipPicker` (two-tap draft, explicit apply, footer outside the scroll region) that works but has no tests and is not wired into `main`. Deciding it in means writing its coverage and choosing whether it lives in `features/search/` or moves to `components/shared/`.
-- **Two tabs of the same account can race each other's Drive writes; scoped as `docs/tasks/single-tab-guard.md`.**
-- **A profile switch or fast logout+relogin racing a live write can enqueue into the wrong profile's outbox; scoped as `docs/tasks/outbox-profile-integrity.md`.**
 - **A `config` sync operation still carries the whole `Config` object** under a single shared entity id, so two offline devices each writing config replay as two whole-object `put`s and the later one silently wins outright. The `categorias` half of this — the part that causes real, visible data loss — is scoped as `docs/tasks/categoria-own-sync-entity.md`; the remaining scalar `preferencias` fields keep whole-object last-write-wins, an accepted low-stakes risk.
 - **The Drive status row can read "up to date" right after a sync attempt that just failed** — `src/lib/sync/status.ts`'s `deriveSyncIndicator` never reads `useSyncStore.lastError`, only `isSyncing`/`outboxDirty`.
 
 ### Auth, lock & profiles
 
+- **Switching to a different profile keeps showing the Google account's own name rather than the profile being switched to** (e.g. no "Guest" label after switching to the local profile) — not yet traced to a specific component, needs investigation.
+- **A Google-authenticated profile can read as "active" with the cloud icon without Drive ever having been connected** — declining `DrivePermissionScreen` at login leaves no visible entry point back to it (`driveConsent.reassurance` promises "you'll be able to do it later from your Profile," but nothing in the Profile screen does that yet). `docs/tasks/profile-data-erasure.md` and `docs/tasks/drive-status-honesty.md` both need a real Drive-connected profile to verify by hand and are currently blocked on this. Once resolved, also worth a manual check: a guest movement adopted while offline should push to Drive on its own once the device reconnects (the adopt itself never depends on connectivity, only the deferred push does).
 - **A vault-invalidation failure on sign-out is only logged, not retried** — `src/lib/authStore.ts`'s `invalidateVaultOnLogout` catches `resetVault()` throwing with `console.error` alone; the tab still signs out, leaving a vault row that can resurface a stale PIN screen later.
 - **`resolveGoogleProfile` never refreshes a profile's stored label when the Google display name changes**, and no rename UI exists yet (`src/lib/profiles/profileRegistry.ts`).
 - **`ProfileRecord`/`ProfileRow` has no `email` field** — only `accountKey` (the Google `sub`), so the returning-user screen can show an email only on the rare profile where `accountKey` happens to be one (`profileRegistry.ts`, `src/lib/deviceStore.ts`).
@@ -1140,6 +1157,10 @@ outcome as a rule in the relevant §10 entry.
 - The 7-hour offline-write window compares wall-clock time, so a device clock change can shift the boundary — benign either direction, no trusted time source exists without a backend.
 - `config-<device>.json` never compacts — fine unless a real account's file is observed growing unreasonably.
 - The "most recently used" profile comparison only works within one device — revisit if profiles are ever synced cross-device (no such sync exists).
+
+### Shell & viewport
+
+- **`AppShell`'s outer shell scrolls as a whole, in addition to its own inner content scroll, on a real iPhone** — dragging from around the bottom-nav area drags the whole shell (nav included) up rather than only scrolling the inner content, revealing space below it. Confirmed on `main` directly, unrelated to the guest-adoption/single-tab-guard/outbox batch. Not reproducible on desktop or in Playwright (`env(safe-area-inset-*)` is 0 there); the same class of bug §10.34/§10.39's `min-h-dvh` sweep already covers, but that sweep alone hasn't closed this instance.
 
 ### Onboarding
 

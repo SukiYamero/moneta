@@ -13,6 +13,10 @@ Things only the user can do — design work in the Claude Design canvas, decisio
 
 ## Open
 
+### 31. Is "welcome back" on every reload without a PIN the right trade-off? — `owner: user`
+
+Without a PIN/biometric lock configured, `authStore` never persists a session across a reload — `restore()` deliberately never attempts a silent Google re-auth, since GIS's silent mode can pop a visible window under iOS WebKit's third-party-cookie blocking. The only path that survives a reload without re-tapping is having PIN/biometric lock enabled, which caches an encrypted token. The decision needed: keep this as-is (push people toward PIN for persistence), or look for a middle ground — accept it as intentional, or want it revisited.
+
 ### 30. Clear stored data before the new category model runs — `owner: user`
 
 `SCHEMA_VERSION` goes to 2 with the category-experience work and no migration is registered, so the app throws `schema_mismatch` against anything already stored. Nothing is lost that matters — there are no users and the data is test data — but the app will not boot until the old data is gone, and stale Drive data would otherwise pull the old taxonomy straight back over the new seed. Three steps, all of them the user's: (1) in the browser's DevTools, Application → Storage → **Clear site data** for the dev origin, which removes the `kurobello`, `kurobello-<profile>` and `kurobello-device` IndexedDB databases and the service-worker cache — do it for every origin the app has been opened on, including the HTTPS dev origin used from the phone; (2) on `drive.google.com`, delete the **`KuroBello`** folder and empty the trash; (3) on `drive.google.com` → Settings → **Manage apps** → the app → Options → **Delete hidden app data**, which is the only way to reach the `appDataFolder` holding `config-<device>.json` — it is invisible in the normal Drive UI. The check afterwards: open the app, get through onboarding, and confirm the category sheet shows the seeded catalog and not five old categories.
