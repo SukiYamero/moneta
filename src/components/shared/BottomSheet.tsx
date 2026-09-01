@@ -1,4 +1,4 @@
-import { useRef, type PointerEvent as ReactPointerEvent } from 'react'
+import { useCallback, useRef, type PointerEvent as ReactPointerEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { cn } from '@/lib/utils'
 import {
@@ -32,10 +32,13 @@ export const BottomSheet = ({
     onClose,
   )
   const panelRef = useRef<HTMLDivElement | null>(null)
-  const setPanelRef = (node: HTMLDivElement | null) => {
-    panelRef.current = node
-    setOverlayRef(node)
-  }
+  const setPanelRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      panelRef.current = node
+      setOverlayRef(node)
+    },
+    [setOverlayRef],
+  )
   const dragOffsetRef = useRef(0)
   const draggingRef = useRef(false)
   const dragStartY = useRef(0)
