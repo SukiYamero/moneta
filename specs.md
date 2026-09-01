@@ -1120,6 +1120,14 @@ outcome as a rule in the relevant §10 entry.
 - **`BottomSheet`'s drag-to-dismiss re-renders React on every `pointermove`** — `handlePointerMove` calls `setDragY` per event instead of mutating the panel's `transform` directly via a ref during the drag, only committing to state once on release. Every sheet in the app (categories, add movimiento, profile) inherits the jank from this one component (`src/components/shared/BottomSheet.tsx`).
 - **Horizontal scroll rows have no `overscroll-behavior-x: contain`** — `CategoryPicker` and `PeriodPickerRow` can chain their scroll into the page's vertical scroll at their horizontal edges (`src/features/tags/CategoryPicker.tsx`, `src/features/history/PeriodPickerRow.tsx`).
 
+### Native distribution — Capacitor migration (priority 2)
+
+- **Distribution moves to the app stores; the web build stops being a usable target.** Google Play and the Apple App Store become the primary (only) way people run the app; the site at the current domain turns into a landing page whose one job is to send a visitor to the right store listing. Resolves `docs/pendientes-usuario.md`'s former item 28 (TWA vs. Capacitor) — Capacitor wins because the App Store cannot install a TWA at all, and it wraps the existing React/Vite/TS codebase instead of demanding a rewrite.
+- **Local storage moves from dexie/IndexedDB to Capacitor's SQLite plugin** (`@capacitor-community/sqlite`), reached through the same `Repo` port (§10.3) — `repo.local.ts` gets a SQLite-backed sibling behind the existing interface, no screen changes.
+- Resolves the two iOS keyboard bugs the web has no fix for (§10.5.1/item 27, item 29): `Keyboard.setAccessoryBarVisible(false)` removes the AutoFill bar over the sheet bottom, `Keyboard.setResizeMode('native')` removes the `dvh`-drift viewport pan.
+- `vite-plugin-pwa`, the service-worker update flow (§10.16) and static hosting stop being load-bearing once the app stores are the distribution path — evaluate what to keep only for the landing page versus what gets removed with the migration.
+- Auth/Drive sync (§5, §10.19) is unaffected in principle — Capacitor's WebView still runs the same GIS/Drive code — but the OAuth redirect flow needs a native-capable variant (`@capacitor/browser` or an in-app browser tab) since a packaged app has no origin for the popup-based flow to return to.
+
 ### Sync & outbox correctness
 
 - **`ProfilesSection.test.tsx`'s "this device" case failed intermittently in a full run, never in isolation.** Reviewed: no state-leak found (the one non-atomic read-then-write in `getActiveProfile()` converges on a fixed id, so it's benign, not the cause). Mitigated by widening that assertion's `findByText` timeout (full-suite CPU contention vs. Testing Library's 1000ms default is the best-supported explanation) — not a confirmed root cause. If it recurs, capture the actual CI failure output before guessing further.

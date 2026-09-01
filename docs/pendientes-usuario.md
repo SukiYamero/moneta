@@ -23,15 +23,11 @@ Without a PIN/biometric lock configured, `authStore` never persists a session ac
 
 ### 27. `dvh` never recovers in the installed PWA on iOS — `owner: user`
 
-Measured on a real iPhone in an installed PWA: `100dvh` reads 852 before the first keyboard, 793 after it, and stays 793 for the rest of the session — `window.innerHeight` and `visualViewport.height` drift with it. It is a WebKit bug with no web-side fix, and it means `max-h-[88dvh]` on both overlay shells silently resolves ~7% short once any field has been focused. Not visible in a Safari tab, only in the installed app. The decision needed: accept the shorter sheet, or replace `dvh` on the shells with a measured height taken once at boot. Tied to item 28 — a native wrapper would make this moot.
-
-### 28. Native wrapper for the App Store — `owner: user`
-
-Distribution priority is: installed from the app stores first, mobile web second, desktop web last. Play Store needs a TWA (Bubblewrap/PWABuilder); the App Store cannot use a TWA and needs a WKWebView wrapper such as Capacitor. That choice also decides two iOS keyboard problems that have no web-side fix at all: `Keyboard.setAccessoryBarVisible(false)` removes the AutoFill bar that overlays the bottom of a sheet, and `Keyboard.setResizeMode('native')` removes the viewport pan entirely. Worth deciding before hardening any further web-only workaround for either.
+Measured on a real iPhone in an installed PWA: `100dvh` reads 852 before the first keyboard, 793 after it, and stays 793 for the rest of the session — `window.innerHeight` and `visualViewport.height` drift with it. It is a WebKit bug with no web-side fix, and it means `max-h-[88dvh]` on both overlay shells silently resolves ~7% short once any field has been focused. Not visible in a Safari tab, only in the installed app. Superseded by the Capacitor migration decided in item 28 (`specs.md` §11) — stays open only until that migration actually ships and the web-only workaround question becomes moot for real.
 
 ### 29. The AutoFill bar overlapping the sheet bottom — `owner: user`
 
-With the keyboard up, iOS floats its AutoFill bar (key/card/location, ~20–44px depending on whether QuickType is collapsed) over the bottom of the sheet. `visualViewport.height` does not subtract it and no CSS `env()` or web API exposes its height, so the only web-side option is reserving a fixed bottom buffer that is wrong on some devices. Deliberately not compensated for. Deferred by the user until store packaging (item 28), which removes the bar outright.
+With the keyboard up, iOS floats its AutoFill bar (key/card/location, ~20–44px depending on whether QuickType is collapsed) over the bottom of the sheet. `visualViewport.height` does not subtract it and no CSS `env()` or web API exposes its height, so the only web-side option is reserving a fixed bottom buffer that is wrong on some devices. Deliberately not compensated for. Superseded by the Capacitor migration decided in item 28 (`specs.md` §11), which removes the bar outright — stays open until that migration ships.
 
 ### 25. Does the iOS picker wheel close the calendar? — `owner: user`
 
@@ -102,3 +98,7 @@ Same root cause as the keyboard/viewport clipping fixes (overlays painting at `.
 ### 10 (partial). The two judgment-call colors on light theme
 
 `#f72121` (rose) and `#af7809` (amber) confirmed acceptable on the light theme.
+
+### 28. Native wrapper for the App Store
+
+Decided: Capacitor. Distribution moves to the app stores as the only real target — desktop/mobile web becomes a landing page that redirects to the Play Store / App Store listings, not a usable copy of the app. Capacitor wins over a TWA because the App Store cannot install a TWA at all, and it wraps the existing React/Vite/TS codebase instead of forcing a rewrite. Tracked as backlog priority 2 in `specs.md` §11, including the storage move from dexie/IndexedDB to Capacitor's SQLite plugin. Items 27 and 29 stay open until that migration actually ships.
