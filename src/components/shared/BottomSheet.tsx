@@ -1,4 +1,4 @@
-import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { useRef, type PointerEvent as ReactPointerEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { cn } from '@/lib/utils'
 import {
@@ -26,30 +26,47 @@ export const BottomSheet = ({
   autoFocus,
   ref,
 }: BottomSheetProps) => {
-  const panelRef = useOverlay<HTMLDivElement>({ open, onClose, initialFocus, autoFocus, ref })
+  const setOverlayRef = useOverlay<HTMLDivElement>({ open, onClose, initialFocus, autoFocus, ref })
   const { backdropRef, onClick: handleBackdropClick } = useBackdropDismiss<HTMLDivElement>(
     open,
     onClose,
   )
-  const [dragY, setDragY] = useState(0)
-  const [dragging, setDragging] = useState(false)
+  const panelRef = useRef<HTMLDivElement | null>(null)
+  const setPanelRef = (node: HTMLDivElement | null) => {
+    panelRef.current = node
+    setOverlayRef(node)
+  }
+  const dragOffsetRef = useRef(0)
+  const draggingRef = useRef(false)
   const dragStartY = useRef(0)
   const pointerIdRef = useRef<number | null>(null)
 
   if (!open) return null
 
+  const resetPanelStyle = () => {
+    const panel = panelRef.current
+    if (!panel) return
+    panel.style.transitionDuration = ''
+    panel.style.transform = ''
+  }
+
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (pointerIdRef.current !== null) return
     dragStartY.current = event.clientY
     pointerIdRef.current = event.pointerId
-    setDragging(true)
+    draggingRef.current = true
     event.currentTarget.setPointerCapture?.(event.pointerId)
+    if (panelRef.current) panelRef.current.style.transitionDuration = '0ms'
   }
 
   const handlePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.pointerId !== pointerIdRef.current) return
-    if (!dragging) return
-    setDragY(Math.max(0, event.clientY - dragStartY.current))
+    if (!draggingRef.current) return
+    const offset = Math.max(0, event.clientY - dragStartY.current)
+    dragOffsetRef.current = offset
+    if (panelRef.current) {
+      panelRef.current.style.transform = offset ? `translateY(${offset}px)` : ''
+    }
   }
 
   const releaseCapture = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -63,17 +80,23 @@ export const BottomSheet = ({
   const endDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.pointerId !== pointerIdRef.current) return
     releaseCapture(event)
-    if (!dragging) return
-    setDragging(false)
-    if (dragY > DRAG_DISMISS_THRESHOLD_PX) onClose()
-    setDragY(0)
+    if (!draggingRef.current) return
+    draggingRef.current = false
+    const offset = dragOffsetRef.current
+    dragOffsetRef.current = 0
+    if (offset > DRAG_DISMISS_THRESHOLD_PX) {
+      onClose()
+      return
+    }
+    resetPanelStyle()
   }
 
   const cancelDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.pointerId !== pointerIdRef.current) return
     releaseCapture(event)
-    setDragging(false)
-    setDragY(0)
+    draggingRef.current = false
+    dragOffsetRef.current = 0
+    resetPanelStyle()
   }
 
   // The only event guaranteed to fire when a drag ends outside the window —
@@ -81,9 +104,10 @@ export const BottomSheet = ({
   const handleLostPointerCapture = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.pointerId !== pointerIdRef.current) return
     pointerIdRef.current = null
-    if (!dragging) return
-    setDragging(false)
-    setDragY(0)
+    if (!draggingRef.current) return
+    draggingRef.current = false
+    dragOffsetRef.current = 0
+    resetPanelStyle()
   }
 
   return createPortal(
@@ -104,16 +128,12 @@ export const BottomSheet = ({
         className={cn('pointer-events-none fixed inset-0 z-50', OVERLAY_FIXED_LAYER_OPACITY_CLASS)}
       >
         <div
-          ref={panelRef}
+          ref={setPanelRef}
           role="dialog"
           aria-modal="true"
           aria-labelledby={labelledBy}
           aria-label={ariaLabel}
           tabIndex={-1}
-          style={{
-            transform: dragY ? `translateY(${dragY}px)` : undefined,
-            transitionDuration: dragging ? '0ms' : undefined,
-          }}
           className={cn(
             'pointer-events-auto absolute inset-x-0 bottom-0 flex max-h-[88dvh] flex-col rounded-t-5xl border-t border-border-subtle bg-card animate-sheet-up transition-transform duration-200 ease-out',
             OVERLAY_PANEL_CLASS,

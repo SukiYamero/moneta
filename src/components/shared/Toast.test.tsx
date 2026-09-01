@@ -1,3 +1,4 @@
+import { Profiler } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -72,7 +73,7 @@ describe('Toast', () => {
       expect(onDismiss).toHaveBeenCalledOnce()
     })
 
-    it('does not dismiss when swiped below the threshold', async () => {
+    it('does not dismiss when swiped below the threshold, and snaps back animated rather than staying stuck at the swipe offset', async () => {
       const user = userEvent.setup()
       const onDismiss = vi.fn()
       render(<Toast item={item()} onDismiss={onDismiss} />)
@@ -85,9 +86,12 @@ describe('Toast', () => {
       ])
 
       expect(onDismiss).not.toHaveBeenCalled()
+      expect(card.style.transform).toBe('')
+      expect(card.style.opacity).toBe('')
+      expect(card.style.transitionDuration).toBe('')
     })
 
-    it('never dismisses on pointercancel, regardless of swipe distance', async () => {
+    it('never dismisses on pointercancel, regardless of swipe distance, and fully clears the visual transform/opacity', async () => {
       const user = userEvent.setup()
       const onDismiss = vi.fn()
       render(<Toast item={item()} onDismiss={onDismiss} />)
@@ -95,11 +99,57 @@ describe('Toast', () => {
 
       await user.pointer({ keys: '[MouseLeft>]', target: card, coords: { clientX: 0 } })
       await user.pointer({ coords: { clientX: -200 } })
+      expect(card.style.transform).not.toBe('')
+
       card.dispatchEvent(
         new PointerEvent('pointercancel', { bubbles: true, cancelable: true, pointerId: 1 }),
       )
 
       expect(onDismiss).not.toHaveBeenCalled()
+      expect(card.style.transform).toBe('')
+      expect(card.style.opacity).toBe('')
+      expect(card.style.transitionDuration).toBe('')
+    })
+
+    it('resets fully when the swipe is released outside the window (lostpointercapture), the only event guaranteed to fire there', async () => {
+      const user = userEvent.setup()
+      const onDismiss = vi.fn()
+      render(<Toast item={item()} onDismiss={onDismiss} />)
+      const card = getCard()
+
+      await user.pointer({ keys: '[MouseLeft>]', target: card, coords: { clientX: 0 } })
+      await user.pointer({ coords: { clientX: -200 } })
+      expect(card.style.transform).not.toBe('')
+
+      card.dispatchEvent(new Event('lostpointercapture', { bubbles: true }))
+
+      expect(onDismiss).not.toHaveBeenCalled()
+      expect(card.style.transform).toBe('')
+      expect(card.style.opacity).toBe('')
+      expect(card.style.transitionDuration).toBe('')
+    })
+
+    it('tracks a pointermove flood entirely through the card style, with zero React re-renders', async () => {
+      const user = userEvent.setup()
+      const onDismiss = vi.fn()
+      let renderCount = 0
+      render(
+        <Profiler id="toast" onRender={() => (renderCount += 1)}>
+          <Toast item={item()} onDismiss={onDismiss} />
+        </Profiler>,
+      )
+      const card = getCard()
+      renderCount = 0
+
+      await user.pointer({ keys: '[MouseLeft>]', target: card, coords: { clientX: 0 } })
+      for (const clientX of [-10, -20, -30, -40, -50, -60, -70]) {
+        await user.pointer({ coords: { clientX } })
+      }
+      expect(card.style.transform).toBe('translateX(-70px)')
+      expect(renderCount).toBe(0)
+
+      await user.pointer('[/MouseLeft]')
+      expect(renderCount).toBe(0)
     })
   })
 
