@@ -184,7 +184,7 @@ describe('AddMovimientoSheet', () => {
 
       await user.keyboard('{Escape}')
 
-      expect(screen.getAllByRole('dialog')).toHaveLength(1)
+      await waitFor(() => expect(screen.getAllByRole('dialog')).toHaveLength(1))
       expect(useMovimientoSheetStore.getState().addOpen).toBe(true)
       expect(screen.getByRole('textbox', { name: /monto/i })).toHaveValue('5.000')
     })
@@ -205,7 +205,7 @@ describe('AddMovimientoSheet', () => {
 
       await pickCategory(user, 'Servicios')
 
-      expect(screen.getAllByRole('dialog')).toHaveLength(1)
+      await waitFor(() => expect(screen.getAllByRole('dialog')).toHaveLength(1))
       expect(useMovimientoSheetStore.getState().addOpen).toBe(true)
       expect(screen.getByRole('textbox', { name: /monto/i })).toHaveValue('5.000')
       expect(screen.getByRole('button', { name: 'Servicios' })).toBeInTheDocument()

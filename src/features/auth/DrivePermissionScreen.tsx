@@ -14,7 +14,7 @@ export const DrivePermissionScreen = () => {
 
   return (
     <main className="relative flex min-h-full flex-col bg-background text-foreground">
-      <div className="flex flex-1 flex-col overflow-y-auto px-7 pt-16">
+      <div className="flex flex-1 flex-col overflow-y-auto overscroll-y-contain px-7 pt-16">
         <div className="my-5 flex items-center justify-center gap-3.5">
           <div className="flex size-15 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,var(--primary),color-mix(in_oklch,var(--primary),black_18%))] text-primary-foreground">
             <Coins className="size-8" strokeWidth={2.25} />

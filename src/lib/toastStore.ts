@@ -24,6 +24,7 @@ export interface ToastItem {
   message: string
   count: number
   action?: ToastAction
+  exiting: boolean
 }
 
 interface ToastStoreState {
@@ -53,8 +54,17 @@ const clearAllTimers = (): void => {
   timers.clear()
 }
 
+// Requests dismissal — flags the toast so its own exit animation can play; the
+// real removal only happens once that animation calls removeToast.
 export const dismissToast = (id: string): void => {
   clearTimer(id)
+  useToastStore.setState((state) => ({
+    items: state.items.map((item) => (item.id === id ? { ...item, exiting: true } : item)),
+  }))
+}
+
+// The actual removal from the stack, called by Toast once its exit animation finishes.
+export const removeToast = (id: string): void => {
   useToastStore.setState((state) => ({ items: state.items.filter((item) => item.id !== id) }))
 }
 
@@ -85,7 +95,9 @@ const raiseToast = (
   const message = i18next.t(key, values)
 
   const { items } = useToastStore.getState()
-  const duplicate = items.find((item) => item.variant === variant && item.message === message)
+  const duplicate = items.find(
+    (item) => !item.exiting && item.variant === variant && item.message === message,
+  )
 
   if (duplicate) {
     clearTimer(duplicate.id)
@@ -100,11 +112,17 @@ const raiseToast = (
 
   const id = crypto.randomUUID()
   useToastStore.setState((state) => {
-    const nextItems = [...state.items, { id, variant, message, count: 1, action }]
-    if (nextItems.length <= STACK_CAP) return { items: nextItems }
-    const oldest = nextItems[0]
-    if (oldest) clearTimer(oldest.id)
-    return { items: nextItems.slice(1) }
+    const nextItems = [...state.items, { id, variant, message, count: 1, action, exiting: false }]
+    const visible = nextItems.filter((item) => !item.exiting)
+    if (visible.length <= STACK_CAP) return { items: nextItems }
+    // Over the cap: the oldest visible toast exits through the same animated path as any
+    // other dismissal (flagged here, actually removed by removeToast once it plays out).
+    const oldest = visible[0]
+    if (!oldest) return { items: nextItems }
+    clearTimer(oldest.id)
+    return {
+      items: nextItems.map((item) => (item.id === oldest.id ? { ...item, exiting: true } : item)),
+    }
   })
   scheduleDismiss(id, variant)
 }

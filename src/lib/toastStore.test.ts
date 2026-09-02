@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { i18next } from '@/lib/i18n'
 import {
   dismissToast,
+  removeToast,
   setToastsSuppressed,
   toast,
   useToastStore,
@@ -27,7 +28,13 @@ describe('toast.success / toast.error', () => {
   it('adds a toast that a subscriber can read, resolved from a translation key', () => {
     toast.success('toast:demo.saved')
     expect(items()).toEqual([
-      { id: expect.any(String), variant: 'success', message: T('toast:demo.saved'), count: 1 },
+      {
+        id: expect.any(String),
+        variant: 'success',
+        message: T('toast:demo.saved'),
+        count: 1,
+        exiting: false,
+      },
     ])
   })
 
@@ -42,20 +49,20 @@ describe('toast.success / toast.error', () => {
     expect(items().map((item) => item.message)).toEqual([T('toast:demo.one'), T('toast:demo.two')])
   })
 
-  it('dismisses a success toast after its own 4s timer', () => {
+  it('flags a success toast as exiting after its own 4s timer, without removing it yet', () => {
     toast.success('toast:demo.saved')
     vi.advanceTimersByTime(3999)
-    expect(items()).toHaveLength(1)
+    expect(items()[0]).toMatchObject({ exiting: false })
     vi.advanceTimersByTime(1)
-    expect(items()).toHaveLength(0)
+    expect(items()[0]).toMatchObject({ exiting: true })
   })
 
-  it('dismisses an error toast after its own 7s timer', () => {
+  it('flags an error toast as exiting after its own 7s timer', () => {
     toast.error('toast:demo.saveFailed')
     vi.advanceTimersByTime(6999)
-    expect(items()).toHaveLength(1)
+    expect(items()[0]).toMatchObject({ exiting: false })
     vi.advanceTimersByTime(1)
-    expect(items()).toHaveLength(0)
+    expect(items()[0]).toMatchObject({ exiting: true })
   })
 
   it("a later, distinct arrival never resets an earlier toast's own timer", () => {
@@ -63,7 +70,8 @@ describe('toast.success / toast.error', () => {
     vi.advanceTimersByTime(3000)
     toast.success('toast:demo.two')
     vi.advanceTimersByTime(1000)
-    expect(items().map((item) => item.message)).toEqual([T('toast:demo.two')])
+    const first = items().find((item) => item.message === T('toast:demo.one'))
+    expect(first).toMatchObject({ exiting: true })
   })
 
   it('collapses an identical (variant, message) re-raise into the same card and bumps its count', () => {
@@ -78,9 +86,18 @@ describe('toast.success / toast.error', () => {
     vi.advanceTimersByTime(3000)
     toast.success('toast:demo.saved')
     vi.advanceTimersByTime(3999)
-    expect(items()).toHaveLength(1)
+    expect(items()[0]).toMatchObject({ exiting: false })
     vi.advanceTimersByTime(1)
-    expect(items()).toHaveLength(0)
+    expect(items()[0]).toMatchObject({ exiting: true })
+  })
+
+  it('a re-raise while an identical earlier one is already exiting starts a fresh card instead of reviving it', () => {
+    toast.success('toast:demo.saved')
+    dismissToast(items()[0]!.id)
+    toast.success('toast:demo.saved')
+    expect(items()).toHaveLength(2)
+    expect(items()[0]).toMatchObject({ exiting: true, count: 1 })
+    expect(items()[1]).toMatchObject({ exiting: false, count: 1 })
   })
 
   it('a different variant with the same message text does not collapse', () => {
@@ -89,11 +106,26 @@ describe('toast.success / toast.error', () => {
     expect(items()).toHaveLength(2)
   })
 
-  it('drops the oldest toast once a 4th distinct one arrives, keeping the cap at 3', () => {
+  it('flags the oldest toast as exiting (not removed yet) once a 4th distinct one arrives, keeping 3 visible', () => {
     toast.success('toast:demo.one')
     toast.success('toast:demo.two')
     toast.success('toast:demo.three')
     toast.success('toast:demo.four')
+
+    expect(items().map((item) => item.message)).toEqual([
+      T('toast:demo.one'),
+      T('toast:demo.two'),
+      T('toast:demo.three'),
+      T('toast:demo.four'),
+    ])
+    expect(items()[0]).toMatchObject({ exiting: true })
+    expect(
+      items()
+        .slice(1)
+        .every((item) => !item.exiting),
+    ).toBe(true)
+
+    removeToast(items()[0]!.id)
     expect(items().map((item) => item.message)).toEqual([
       T('toast:demo.two'),
       T('toast:demo.three'),
@@ -135,13 +167,23 @@ describe('setToastsSuppressed', () => {
 })
 
 describe('dismissToast', () => {
-  it('removes the toast immediately and cancels its pending timer', () => {
+  it('flags the toast as exiting and cancels its pending auto-dismiss timer, without removing it yet', () => {
     toast.success('toast:demo.saved')
     const [item] = items()
     dismissToast(item!.id)
-    expect(items()).toHaveLength(0)
+    expect(items()).toMatchObject([{ exiting: true }])
 
     vi.advanceTimersByTime(10_000)
+    expect(items()).toMatchObject([{ exiting: true }])
+  })
+})
+
+describe('removeToast', () => {
+  it('removes the toast from the stack', () => {
+    toast.success('toast:demo.saved')
+    const [item] = items()
+    dismissToast(item!.id)
+    removeToast(item!.id)
     expect(items()).toHaveLength(0)
   })
 })

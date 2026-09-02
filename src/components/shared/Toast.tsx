@@ -1,18 +1,23 @@
 import { CircleAlert, CircleCheck, X } from 'lucide-react'
-import { useRef, type PointerEvent as ReactPointerEvent } from 'react'
+import { useEffect, useRef, type PointerEvent as ReactPointerEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { IconAvatar, type IconAvatarTint } from '@/components/shared/IconAvatar'
+import { createVelocityTracker, prefersReducedMotion, shouldCommitSwipe } from '@/lib/gesture'
 import { i18next } from '@/lib/i18n'
 import type { ToastItem, ToastVariant } from '@/lib/toastStore'
 
 export interface ToastProps {
   item: ToastItem
   onDismiss: () => void
+  /** Called once the exit animation finishes — the real removal from the stack. */
+  onExited: () => void
 }
 
 const SWIPE_DISMISS_THRESHOLD_PX = 80
+const SWIPE_DISMISS_VELOCITY_PX_MS = 0.5
 const SWIPE_OPACITY_FLOOR = 0.3
 const SWIPE_OPACITY_RANGE_PX = 200
+const EXIT_DURATION_MS = 200
 
 const VARIANT_ICON = {
   success: CircleCheck,
@@ -24,15 +29,36 @@ const VARIANT_TINT: Record<ToastVariant, IconAvatarTint> = {
   error: 'danger',
 }
 
-export const Toast = ({ item, onDismiss }: ToastProps) => {
+export const Toast = ({ item, onDismiss, onExited }: ToastProps) => {
   const { t } = useTranslation('toast')
   const cardRef = useRef<HTMLDivElement>(null)
   const dragOffsetRef = useRef(0)
   const draggingRef = useRef(false)
   const dragStartX = useRef(0)
   const pointerIdRef = useRef<number | null>(null)
+  const velocityTracker = useRef(createVelocityTracker())
+  // The signed offset a drag-dismiss committed from — 0 for any non-drag dismissal
+  // (button, action, auto-timeout), which exits as a plain fade instead of a slide.
+  const exitDirectionRef = useRef(0)
 
   const Icon = VARIANT_ICON[item.variant]
+
+  useEffect(() => {
+    if (!item.exiting) return
+    const card = cardRef.current
+    if (!card) {
+      onExited()
+      return
+    }
+    const width = card.offsetWidth || SWIPE_OPACITY_RANGE_PX
+    const direction = Math.sign(exitDirectionRef.current)
+    card.style.transitionDuration = ''
+    card.style.transform = direction ? `translateX(${direction * width}px)` : ''
+    card.style.opacity = '0'
+    const timer = setTimeout(onExited, prefersReducedMotion() ? 0 : EXIT_DURATION_MS)
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item.exiting])
 
   const applyDragStyle = (offset: number) => {
     const card = cardRef.current
@@ -55,12 +81,15 @@ export const Toast = ({ item, onDismiss }: ToastProps) => {
     dragStartX.current = event.clientX
     pointerIdRef.current = event.pointerId
     draggingRef.current = true
+    velocityTracker.current.reset()
+    velocityTracker.current.record(event.clientX, event.timeStamp)
     event.currentTarget.setPointerCapture?.(event.pointerId)
     if (cardRef.current) cardRef.current.style.transitionDuration = '0ms'
   }
 
   const handlePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (!draggingRef.current) return
+    velocityTracker.current.record(event.clientX, event.timeStamp)
     const offset = event.clientX - dragStartX.current
     dragOffsetRef.current = offset
     applyDragStyle(offset)
@@ -80,7 +109,14 @@ export const Toast = ({ item, onDismiss }: ToastProps) => {
     draggingRef.current = false
     const offset = dragOffsetRef.current
     dragOffsetRef.current = 0
-    if (Math.abs(offset) > SWIPE_DISMISS_THRESHOLD_PX) {
+    const commit = shouldCommitSwipe({
+      distance: offset,
+      velocity: velocityTracker.current.velocity(event.timeStamp),
+      distanceThreshold: SWIPE_DISMISS_THRESHOLD_PX,
+      velocityThreshold: SWIPE_DISMISS_VELOCITY_PX_MS,
+    })
+    if (commit) {
+      exitDirectionRef.current = offset
       onDismiss()
       return
     }

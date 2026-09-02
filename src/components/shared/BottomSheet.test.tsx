@@ -4,6 +4,7 @@ import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { BottomSheet } from '@/components/shared/BottomSheet'
 import { OVERLAY_FIXED_LAYER_OPACITY_CLASS } from '@/components/shared/useOverlay'
+import { dispatchTimestampedPointer } from '@/test/pointerEvents'
 
 const Harness = ({ open, onClose }: { open: boolean; onClose: () => void }) => {
   return (
@@ -205,18 +206,43 @@ describe('BottomSheet', () => {
       expect(onClose).toHaveBeenCalledOnce()
     })
 
-    it('does not close when dragged below the dismiss threshold, and snaps back animated rather than staying stuck at the drag offset', async () => {
-      const user = userEvent.setup()
+    it('closes on a fast short downward flick that never reaches the distance threshold', () => {
+      const onClose = vi.fn()
+      render(<Harness open onClose={onClose} />)
+      const handle = getHandle()
+
+      dispatchTimestampedPointer(handle, 'pointerdown', { clientY: 0 }, 1000)
+      dispatchTimestampedPointer(handle, 'pointermove', { clientY: 40 }, 1010)
+      dispatchTimestampedPointer(handle, 'pointerup', { clientY: 40 }, 1010)
+
+      expect(onClose).toHaveBeenCalledOnce()
+    })
+
+    it('does not close on a fast short upward movement, even though its speed alone would clear the velocity threshold', () => {
       const onClose = vi.fn()
       render(<Harness open onClose={onClose} />)
       const handle = getHandle()
       const panel = screen.getByRole('dialog')
 
-      await user.pointer([
-        { keys: '[MouseLeft>]', target: handle, coords: { clientY: 0 } },
-        { coords: { clientY: 40 } },
-        '[/MouseLeft]',
-      ])
+      dispatchTimestampedPointer(handle, 'pointerdown', { clientY: 50 }, 1000)
+      dispatchTimestampedPointer(handle, 'pointermove', { clientY: 10 }, 1010)
+      dispatchTimestampedPointer(handle, 'pointerup', { clientY: 10 }, 1010)
+
+      expect(onClose).not.toHaveBeenCalled()
+      expect(panel.style.transform).toBe('')
+    })
+
+    it('does not close when dragged below the dismiss threshold, and snaps back animated rather than staying stuck at the drag offset', () => {
+      const onClose = vi.fn()
+      render(<Harness open onClose={onClose} />)
+      const handle = getHandle()
+      const panel = screen.getByRole('dialog')
+
+      // Explicit, comfortably slow timestamps on every event — real userEvent timing is
+      // too fast and jitter-prone to reliably stay under the velocity threshold here.
+      dispatchTimestampedPointer(handle, 'pointerdown', { clientY: 0 }, 1000)
+      dispatchTimestampedPointer(handle, 'pointermove', { clientY: 40 }, 1200)
+      dispatchTimestampedPointer(handle, 'pointerup', { clientY: 40 }, 1200)
 
       expect(onClose).not.toHaveBeenCalled()
       expect(panel.style.transform).toBe('')
@@ -316,6 +342,84 @@ describe('BottomSheet', () => {
       dispatch('pointerup', 1, 300)
 
       expect(onClose).toHaveBeenCalledOnce()
+    })
+  })
+
+  describe('exit animation', () => {
+    it('keeps the panel mounted through the exit animation after a drag-dismiss, then removes it', () => {
+      vi.useFakeTimers()
+      const onClose = vi.fn()
+      const { rerender } = render(<Harness open onClose={onClose} />)
+      const dialog = screen.getByRole('dialog')
+      const handle = dialog.firstElementChild as HTMLElement
+
+      act(() => {
+        handle.dispatchEvent(
+          new PointerEvent('pointerdown', {
+            bubbles: true,
+            cancelable: true,
+            pointerId: 1,
+            clientY: 0,
+          }),
+        )
+        handle.dispatchEvent(
+          new PointerEvent('pointermove', {
+            bubbles: true,
+            cancelable: true,
+            pointerId: 1,
+            clientY: 200,
+          }),
+        )
+        handle.dispatchEvent(
+          new PointerEvent('pointerup', {
+            bubbles: true,
+            cancelable: true,
+            pointerId: 1,
+            clientY: 200,
+          }),
+        )
+      })
+      expect(onClose).toHaveBeenCalledOnce()
+
+      rerender(<Harness open={false} onClose={onClose} />)
+      expect(screen.getByRole('dialog')).toBeInTheDocument()
+
+      act(() => vi.advanceTimersByTime(200))
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+      vi.useRealTimers()
+    })
+
+    it('keeps the panel mounted through the exit animation after a backdrop dismiss, then removes it', () => {
+      vi.useFakeTimers()
+      const onClose = vi.fn()
+      const { rerender } = render(<Harness open onClose={onClose} />)
+      const backdrop = document.querySelector('[aria-hidden="true"]') as HTMLElement
+      act(() => {
+        backdrop.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
+        backdrop.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }))
+        backdrop.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      })
+      expect(onClose).toHaveBeenCalledOnce()
+
+      rerender(<Harness open={false} onClose={onClose} />)
+      expect(screen.getByRole('dialog')).toBeInTheDocument()
+
+      act(() => vi.advanceTimersByTime(200))
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+      vi.useRealTimers()
+    })
+
+    it('clears the leftover off-screen transform when reopened before the exit animation finishes', () => {
+      const onClose = vi.fn()
+      const { rerender } = render(<Harness open onClose={onClose} />)
+      const dialog = screen.getByRole('dialog')
+      Object.defineProperty(dialog, 'offsetHeight', { value: 400, configurable: true })
+
+      rerender(<Harness open={false} onClose={onClose} />)
+      expect(dialog.style.transform).toBe('translateY(400px)')
+
+      rerender(<Harness open onClose={onClose} />)
+      expect(dialog.style.transform).toBe('')
     })
   })
 })

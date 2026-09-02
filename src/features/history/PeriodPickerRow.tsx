@@ -17,7 +17,11 @@ export const PeriodPickerRow = ({
 
   useEffect(() => {
     // jsdom has no scrollIntoView implementation.
-    selectedRef.current?.scrollIntoView?.({ inline: 'center', block: 'nearest' })
+    selectedRef.current?.scrollIntoView?.({
+      inline: 'center',
+      block: 'nearest',
+      behavior: 'smooth',
+    })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [options])
 
@@ -25,7 +29,7 @@ export const PeriodPickerRow = ({
     <div
       role="listbox"
       aria-label={ariaLabel}
-      className="flex touch-pan-x gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      className="flex touch-pan-x gap-1.5 overflow-x-auto overscroll-x-contain pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
       {options.map((option) => (
         <button

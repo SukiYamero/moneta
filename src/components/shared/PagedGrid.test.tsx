@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { PagedGrid, type PagedGridProps } from '@/components/shared/PagedGrid'
+import { dispatchTimestampedPointer } from '@/test/pointerEvents'
 
 interface GridItem {
   id: string
@@ -99,21 +100,33 @@ describe('PagedGrid', () => {
     expect(onPageChange).toHaveBeenCalledWith(1)
   })
 
-  it('springs back without paging on a 20px drag, animated rather than stuck at the drag offset', async () => {
-    const user = userEvent.setup()
+  it('springs back without paging on a 20px drag, animated rather than stuck at the drag offset', () => {
     const onPageChange = vi.fn()
     render(<Harness items={makeItems(20)} page={0} onPageChange={onPageChange} />)
     const track = getTrack()
 
-    await user.pointer([
-      { keys: '[MouseLeft>]', target: track, coords: { clientX: 0 } },
-      { coords: { clientX: -20 } },
-      '[/MouseLeft]',
-    ])
+    // Explicit, comfortably slow timestamps on every event — real userEvent timing is
+    // too fast and jitter-prone to reliably stay under the velocity threshold here.
+    dispatchTimestampedPointer(track, 'pointerdown', { clientX: 0 }, 1000)
+    dispatchTimestampedPointer(track, 'pointermove', { clientX: -20 }, 1200)
+    dispatchTimestampedPointer(track, 'pointerup', { clientX: -20 }, 1200)
 
     expect(onPageChange).not.toHaveBeenCalled()
     expect(track.style.transform).toBe('')
     expect(track.style.transitionDuration).toBe('')
+  })
+
+  it('commits to the next page on a fast short flick that never reaches the distance threshold', () => {
+    const onPageChange = vi.fn()
+    render(<Harness items={makeItems(20)} page={0} onPageChange={onPageChange} />)
+    const track = getTrack()
+
+    dispatchTimestampedPointer(track, 'pointerdown', { clientX: 0 }, 1000)
+    dispatchTimestampedPointer(track, 'pointermove', { clientX: -20 }, 1010)
+    dispatchTimestampedPointer(track, 'pointerup', { clientX: -20 }, 1010)
+
+    expect(onPageChange).toHaveBeenCalledOnce()
+    expect(onPageChange).toHaveBeenCalledWith(1)
   })
 
   it('commits to the previous page on a 60px rightward drag', async () => {
@@ -131,6 +144,28 @@ describe('PagedGrid', () => {
     expect(onPageChange).toHaveBeenCalledWith(0)
   })
 
+  it('pages toward the release-moment velocity direction, not the total drag distance, when a flick reverses direction', () => {
+    const onPageChange = vi.fn()
+    render(<Harness items={makeItems(20)} page={1} onPageChange={onPageChange} />)
+    const track = getTrack()
+
+    // Drags left fast, then reverses right just before release — the reversal is what the
+    // velocity window (last 60ms) and the release itself measure, even though the drag's total
+    // distance from pointerdown is still leftward and under the distance threshold.
+    dispatchTimestampedPointer(track, 'pointerdown', { clientX: 0 }, 1000)
+    dispatchTimestampedPointer(track, 'pointermove', { clientX: -100 }, 1050)
+    dispatchTimestampedPointer(track, 'pointermove', { clientX: -20 }, 1090)
+    dispatchTimestampedPointer(track, 'pointerup', { clientX: -20 }, 1090)
+
+    expect(onPageChange).toHaveBeenCalledOnce()
+    expect(onPageChange).toHaveBeenCalledWith(0)
+  })
+
+  it('opts the track out of native touch panning so a diagonal swipe never wins native scroll', () => {
+    render(<Harness items={makeItems(20)} page={0} onPageChange={vi.fn()} />)
+    expect(getTrack().className).toMatch(/\btouch-none\b/)
+  })
+
   it('abandons the gesture on a mostly-vertical drag, without preventing default or paging', () => {
     const onPageChange = vi.fn()
     render(<Harness items={makeItems(20)} page={0} onPageChange={onPageChange} />)
@@ -145,6 +180,25 @@ describe('PagedGrid', () => {
     dispatchPointer(track, 'pointerup', { pointerId: 1, clientX: 5, clientY: 60 })
 
     expect(moveEvent.defaultPrevented).toBe(false)
+    expect(onPageChange).not.toHaveBeenCalled()
+  })
+
+  it('forwards a mostly-vertical drag to the nearest scrollable ancestor', () => {
+    const onPageChange = vi.fn()
+    render(
+      <div data-testid="scroll-parent" style={{ overflowY: 'auto' }}>
+        <Harness items={makeItems(20)} page={0} onPageChange={onPageChange} />
+      </div>,
+    )
+    const scrollParent = screen.getByTestId('scroll-parent')
+    scrollParent.scrollTop = 100
+    const track = getTrack()
+
+    dispatchPointer(track, 'pointerdown', { pointerId: 1, clientX: 0, clientY: 0 })
+    dispatchPointer(track, 'pointermove', { pointerId: 1, clientX: 2, clientY: 30 })
+    dispatchPointer(track, 'pointermove', { pointerId: 1, clientX: 2, clientY: 50 })
+
+    expect(scrollParent.scrollTop).toBe(50)
     expect(onPageChange).not.toHaveBeenCalled()
   })
 
@@ -188,7 +242,9 @@ describe('PagedGrid', () => {
   })
 
   it('tracks a pointermove flood entirely through the track style, with zero React re-renders', async () => {
-    const user = userEvent.setup()
+    // An explicit delay keeps this a slow, deliberate drag: fast enough steps would
+    // read as a flick and legitimately commit under the new velocity-aware threshold.
+    const user = userEvent.setup({ delay: 15 })
     const onPageChange = vi.fn()
     let renderCount = 0
     render(

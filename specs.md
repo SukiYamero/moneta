@@ -325,6 +325,9 @@ outcome as a rule in the relevant §10 entry.
 - `movimientoView.ts`'s `Intl.NumberFormat` instances are memoized per `Moneda` at module scope, never built per row per render.
 - `BottomSheet`'s drag-to-dismiss feature-detects `setPointerCapture`/`hasPointerCapture`/`releasePointerCapture` (`?.()`); `pointercancel` resets drag state without checking the dismiss threshold (a cancelled gesture is never dismiss intent); `lostpointercapture` is the catch-all for a drag that ends outside the window.
 - The live drag offset is tracked in a ref and mutates the panel's `transform`/`transitionDuration` directly on the DOM node during the gesture — never React state — so a `pointermove` flood never re-renders the tree beneath the sheet. `Toast` (§10.6) and `PagedGrid` (§10.5.2) follow the identical pattern.
+- A drag-to-dismiss commits on distance **or** release velocity (`src/lib/gesture.ts`'s `shouldCommitSwipe`/`createVelocityTracker`) — a short, fast flick commits the same as a slow drag past the threshold; only a downward velocity counts, so a reversed-direction flick never dismisses.
+- `open` going false doesn't unmount the panel immediately — an internal `open → closing → closed` phase (derived during render, not an effect, to land in the same commit as the prop change) keeps it mounted through a real exit transition, continuing from wherever the drag/rest position left it, before finally unmounting. Blurring whatever was focused inside the panel before entering `closing` is required: React's own commit restores focus to the pre-commit active element if it's still connected, and without the blur it fights `useOverlay`'s own trigger-focus restoration.
+- `open` flipping back to true while still `closing` (`BottomSheet`) clears the exit transform the same render it re-enters `open` — otherwise the panel renders as open while stuck at its off-screen exit position.
 
 **Implementation.** `src/components/shared/useOverlay.ts` also exports `FOCUSABLE_SELECTOR` and the `OverlayShellProps<T>` type both shells' public `Props` re-export, and `useHasOpenOverlay()` (§10.53) — the same stack exposed via `useSyncExternalStore`.
 
@@ -334,14 +337,15 @@ outcome as a rule in the relevant §10 entry.
 
 **Rules.**
 
-- A gesture locks to horizontal or vertical once either axis clears 4px of movement; only a horizontal lock calls `preventDefault()` and pages, never a vertical one (`touch-pan-y` lets the browser own vertical panning otherwise).
-- A horizontal drag past `SWIPE_COMMIT_THRESHOLD_PX` (40px) pages forward/backward; short of that, or at either end with no adjacent page, it springs back to 0.
+- A gesture locks to horizontal or vertical once either axis clears 4px of movement; only a horizontal lock calls `preventDefault()` and pages. The track is `touch-action: none`, so a touch starting on the grid never hands its default handling to the browser — a diagonal swipe can no longer race the axis lock and scroll the ancestor sheet/modal instead of paging.
+- A vertical lock instead manually forwards the drag to the nearest scrollable ancestor (`findScrollableAncestor` in `src/lib/gesture.ts`, walking `parentElement` for `overflow-y: auto`/`scroll`): its `scrollTop` is set directly from the drag delta each move, since `touch-action: none` means the browser will not do this on its own. Starting a drag on the grid still scrolls the enclosing sheet/modal — just without the race, and without native momentum after release.
+- A horizontal drag past `SWIPE_COMMIT_THRESHOLD_PX` (40px) **or** release velocity past `SWIPE_COMMIT_VELOCITY_PX_MS` (0.5px/ms, `shouldCommitSwipe` in `src/lib/gesture.ts`) pages forward/backward; short of both, or at either end with no adjacent page, it springs back to 0.
+- The page direction follows distance once distance alone clears its threshold; below that, the commit was granted on velocity, so direction follows velocity's sign instead — a flick that reverses right before release must page toward where it ended up moving, not toward the drag's total (now-stale) distance.
+- On commit, the track is repositioned just off the edge the swipe was already headed toward (an instant write plus a forced-reflow read, no `requestAnimationFrame`) before `onPageChange` swaps in the new page's items — the incoming page continues the finger's motion instead of restarting from the old drag offset.
 - The reserved height is the tallest page seen for the current `items` list, re-baselined whenever `items` itself changes (not on every page change) so a shorter list never inherits a taller one's height.
 - The drag offset is ref-tracked and DOM-mutated exactly like `BottomSheet`/`Toast` (§10.5.1) — never React state.
 
 **Implementation.** `src/components/shared/PagedGrid.tsx`; used by the category icon picker (`src/features/tags/CategoryFormModal.tsx`, §10.22.1).
-
-**Watch out.** The axis lock only takes effect once it resolves — on a genuinely diagonal swipe, the browser can already have committed to its own vertical scroll (via `touch-pan-y`) before the 4px threshold decides horizontal, and a `preventDefault()` after that point does not undo a scroll the browser already started. An imperfectly-horizontal swipe can page and scroll at the same time; no fix is in place yet.
 
 ### 10.6 Toast — the global notification surface
 
@@ -351,7 +355,9 @@ outcome as a rule in the relevant §10 entry.
 
 - Toasts stack in arrival order; concurrent toasts never replace one another, and each keeps its own independent dismissal timer.
 - Sits above every overlay (`z-[60]`, above the shells' `z-50`) and clear of the safe-area insets and the bottom nav.
-- Swipe-to-dismiss via Pointer Events plus a keyboard-reachable close button — a timed message must stay dismissible without the gesture (WCAG 2.2.1). The live offset is ref-tracked and DOM-mutated, never React state (§10.5.1).
+- Swipe-to-dismiss via Pointer Events plus a keyboard-reachable close button — a timed message must stay dismissible without the gesture (WCAG 2.2.1). The live offset is ref-tracked and DOM-mutated, never React state (§10.5.1). A drag commits on distance or velocity, same rule as `BottomSheet`/`PagedGrid` (§10.5.1/§10.5.2).
+- Dismissal is two-phase in the store (`src/lib/toastStore.ts`): `dismissToast` (auto-timer, the close button, the action button, or a fast/threshold swipe) only flags `exiting: true` and cancels the timer; `removeToast` is the actual removal, called by `Toast` once its own exit transition finishes (a drag continues from its offset in the drag's direction, any other trigger fades in place). A re-raise of an identical (variant, message) toast that's already `exiting` starts a fresh card instead of reviving the dying one.
+- A new distinct toast past the 3-visible cap (`STACK_CAP`, counting only non-`exiting` toasts) pushes the oldest visible one through this same `exiting` path rather than removing it outright — an overflow never skips its own exit animation.
 - It is a notification, never a dialog: it never blocks, traps focus, or asks a question — anything needing a decision is a `CenterModal`.
 - Errors announce assertively (`role="alert"`); confirmations politely (`role="status"`).
 - Must never render while the app is locked — a notification about data is content, and the lock exists to hide content.
@@ -1131,10 +1137,10 @@ outcome as a rule in the relevant §10 entry.
 
 ## 11. Backlog (pending verification / deferred work)
 
-### Performance & gestures (priority)
+### Overlay/gesture polish
 
-- **A diagonal swipe on `PagedGrid` can page and scroll at the same time** (§10.5.2's "Watch out") — the axis lock resolves after 4px, but the browser can already have committed to its own vertical scroll under `touch-pan-y` before that, and a later `preventDefault()` doesn't undo it. Most visible swiping between pages of the category icon picker.
-- **Horizontal scroll rows have no `overscroll-behavior-x: contain`** — `CategoryPicker` and `PeriodPickerRow` can chain their scroll into the page's vertical scroll at their horizontal edges (`src/features/tags/CategoryPicker.tsx`, `src/features/history/PeriodPickerRow.tsx`).
+- **`CenterModal` still unmounts instantly on close, no exit transition** — `BottomSheet` (§10.5.1) now keeps its panel mounted through a real exit animation; `CenterModal` doesn't, so the app's two modal shells diverge in dismiss feel despite sharing the same `useOverlay`/`useBackdropDismiss` infrastructure.
+- **A vertical drag on `PagedGrid` (§10.5.2) that scrolls its ancestor has no momentum** — the manual `scrollTop` forwarding tracks the finger 1:1 but drops the native fling/deceleration a drag starting outside the grid still gets, a perceptible difference in an area meant to feel native.
 
 ### Native distribution — Capacitor migration (priority 2)
 

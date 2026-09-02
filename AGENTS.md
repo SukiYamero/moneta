@@ -328,6 +328,13 @@ category icon/tint resolution (`movimientoView.ts`), and form field state
     `src/styles/index.css`; don't bypass it with an inline animation.
   - `-webkit-tap-highlight-color` is already suppressed globally; don't
     reintroduce the default tap flash on interactive elements.
+  - Text selection defaults to off globally (`user-select: none` /
+    `-webkit-touch-callout: none` in `src/styles/index.css`) — long-pressing a
+    card, button, icon, or any other UI chrome must never raise the native
+    selection highlight or callout menu. It's re-enabled only on `h1`–`h6`,
+    `p`, `input`, and `textarea`; a new element whose content is meant to be
+    copyable needs one of those tags, not an assumption that selection works
+    by default.
 - Style with Tailwind utility classes; no separate CSS modules unless unavoidable.
 - Use shadcn/ui components from `@/components/ui`. Add new ones with
   `bunx shadcn@latest add <name>`. Compose with the `cn()` helper from `@/lib/utils`.

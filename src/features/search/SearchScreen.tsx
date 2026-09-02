@@ -198,7 +198,7 @@ export const SearchScreen = () => {
       </div>
 
       {activeChips.length > 0 && (
-        <div className="mt-3 flex items-center gap-2 overflow-x-auto pb-1">
+        <div className="mt-3 flex items-center gap-2 overflow-x-auto overscroll-x-contain pb-1">
           {activeChips.map((chip) => (
             <button
               key={chip.key}

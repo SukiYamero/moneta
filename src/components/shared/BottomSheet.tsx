@@ -1,5 +1,13 @@
-import { useCallback, useRef, type PointerEvent as ReactPointerEvent } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+} from 'react'
 import { createPortal } from 'react-dom'
+import { createVelocityTracker, prefersReducedMotion, shouldCommitSwipe } from '@/lib/gesture'
 import { cn } from '@/lib/utils'
 import {
   OVERLAY_BACKDROP_OVERSCAN_BLOCK,
@@ -14,6 +22,8 @@ import {
 export type BottomSheetProps = OverlayShellProps<HTMLDivElement>
 
 const DRAG_DISMISS_THRESHOLD_PX = 120
+const DRAG_DISMISS_VELOCITY_PX_MS = 0.6
+const EXIT_DURATION_MS = 200
 
 export const BottomSheet = ({
   open,
@@ -43,8 +53,7 @@ export const BottomSheet = ({
   const draggingRef = useRef(false)
   const dragStartY = useRef(0)
   const pointerIdRef = useRef<number | null>(null)
-
-  if (!open) return null
+  const velocityTracker = useRef(createVelocityTracker())
 
   const resetPanelStyle = () => {
     const panel = panelRef.current
@@ -53,11 +62,58 @@ export const BottomSheet = ({
     panel.style.transform = ''
   }
 
+  // Derived during render (not an effect) so the open->closing transition lands in the
+  // same commit as the prop change.
+  const [phase, setPhase] = useState<'open' | 'closing' | 'closed'>(open ? 'open' : 'closed')
+  const prevOpenRef = useRef(open)
+  if (prevOpenRef.current !== open) {
+    prevOpenRef.current = open
+    if (open) {
+      // A reopen while still mid-exit-animation must clear the closing effect's leftover
+      // off-screen transform — otherwise the panel renders "open" but stuck off-screen.
+      resetPanelStyle()
+      setPhase('open')
+    } else if (phase !== 'closed') {
+      // React's own commit restores focus to whatever was active before this
+      // update if that element is still connected — blurring it first, before
+      // the panel it lives in stays mounted through the exit animation, is
+      // what lets useOverlay's own trigger-focus restoration actually stick.
+      const panel = panelRef.current
+      if (panel?.contains(document.activeElement)) {
+        ;(document.activeElement as HTMLElement).blur()
+      }
+      setPhase('closing')
+    }
+  }
+
+  // Continues the panel from wherever the drag/rest position left it to fully off-screen.
+  useLayoutEffect(() => {
+    if (phase !== 'closing') return
+    const panel = panelRef.current
+    if (!panel) return
+    const target = panel.offsetHeight
+    panel.style.transitionDuration = ''
+    panel.style.transform = target ? `translateY(${target}px)` : ''
+  }, [phase])
+
+  useEffect(() => {
+    if (phase !== 'closing') return
+    const timer = setTimeout(
+      () => setPhase('closed'),
+      prefersReducedMotion() ? 0 : EXIT_DURATION_MS,
+    )
+    return () => clearTimeout(timer)
+  }, [phase])
+
+  if (phase === 'closed') return null
+
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (pointerIdRef.current !== null) return
     dragStartY.current = event.clientY
     pointerIdRef.current = event.pointerId
     draggingRef.current = true
+    velocityTracker.current.reset()
+    velocityTracker.current.record(event.clientY, event.timeStamp)
     event.currentTarget.setPointerCapture?.(event.pointerId)
     if (panelRef.current) panelRef.current.style.transitionDuration = '0ms'
   }
@@ -65,6 +121,7 @@ export const BottomSheet = ({
   const handlePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.pointerId !== pointerIdRef.current) return
     if (!draggingRef.current) return
+    velocityTracker.current.record(event.clientY, event.timeStamp)
     const offset = Math.max(0, event.clientY - dragStartY.current)
     dragOffsetRef.current = offset
     if (panelRef.current) {
@@ -87,7 +144,15 @@ export const BottomSheet = ({
     draggingRef.current = false
     const offset = dragOffsetRef.current
     dragOffsetRef.current = 0
-    if (offset > DRAG_DISMISS_THRESHOLD_PX) {
+    const commit = shouldCommitSwipe({
+      distance: offset,
+      // Only a downward flick counts — an upward one that never reversed the clamped
+      // offset should never read as dismiss intent.
+      velocity: Math.max(0, velocityTracker.current.velocity(event.timeStamp)),
+      distanceThreshold: DRAG_DISMISS_THRESHOLD_PX,
+      velocityThreshold: DRAG_DISMISS_VELOCITY_PX_MS,
+    })
+    if (commit) {
       onClose()
       return
     }

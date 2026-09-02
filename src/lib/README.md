@@ -84,8 +84,11 @@ database, repo }` binding that `getRepo()` reads.
 - `syncStoredTheme.ts` — the `dataStore` subscription that applies a
   resolved `tema` to the document and tracks `prefers-color-scheme` live.
 - `errorCopy.ts` — `RepoErrorCode` → translation key.
+- `gesture.ts` — `createVelocityTracker`/`shouldCommitSwipe`/`prefersReducedMotion`,
+  the swipe-commit math shared by `BottomSheet`/`Toast`/`PagedGrid`.
 - `toastStore.ts` — the global notification store behind `Toaster`:
-  `toast.success`/`toast.error`, `setToastsSuppressed`.
+  `toast.success`/`toast.error`, `setToastsSuppressed`, `dismissToast` (flags
+  `exiting`) vs `removeToast` (the real removal, called post-exit-animation).
 - `landscapeGateStore.ts` — in-memory, unpersisted "skip the landscape
   gate this session" flag.
 - `singleTabGuard.ts` — `useSingleTabGuardStore`: requests the Web Locks API

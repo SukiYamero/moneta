@@ -207,7 +207,7 @@ describe('MovimientoSheet — delete', () => {
 })
 
 describe('MovimientoSheet — the movement vanishing underneath an open sheet', () => {
-  it('closes the sheet and raises a toast instead of rendering blank', () => {
+  it('closes the sheet and raises a toast instead of rendering blank', async () => {
     state.movimientos = [movimiento()]
     useMovimientoSheetStore.setState({ viewId: 'mov_1' })
     const { rerender } = render(<MovimientoSheet />)
@@ -216,7 +216,7 @@ describe('MovimientoSheet — the movement vanishing underneath an open sheet', 
     state.movimientos = []
     rerender(<MovimientoSheet />)
 
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
     expect(useMovimientoSheetStore.getState().viewId).toBeNull()
     expect(mToastError).toHaveBeenCalledWith('movimientos:vanished')
   })

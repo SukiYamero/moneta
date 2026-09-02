@@ -26,6 +26,24 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
+* {
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p,
+input,
+textarea {
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+
 /* touch-action: manipulation disables double-tap-to-zoom — the one zoom
    gesture the viewport meta's maximum-scale/user-scalable doesn't reach. */
 html {

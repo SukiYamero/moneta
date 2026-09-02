@@ -1,6 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, render, screen } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 import { Toaster } from '@/components/shared/Toaster'
 import { i18next } from '@/lib/i18n'
 import { setToastsSuppressed, toast, useToastStore, type ToastMessageKey } from '@/lib/toastStore'
@@ -58,16 +57,20 @@ describe('Toaster', () => {
     expect(cards[1]).toHaveTextContent(T('toast:demo.two'))
   })
 
-  it('removes a toast from the stack without disturbing the others when its own close button is used', async () => {
-    const user = userEvent.setup()
+  it('flags a toast as exiting on close, then removes it once its exit animation finishes, without disturbing the others', () => {
+    vi.useFakeTimers()
     render(<Toaster />)
     raise(() => toast.success('toast:demo.one'))
     raise(() => toast.success('toast:demo.two'))
 
     const [firstClose] = screen.getAllByRole('button', { name: /descartar/i })
-    await user.click(firstClose!)
+    act(() => firstClose!.click())
 
+    expect(screen.getByText(T('toast:demo.one'))).toBeInTheDocument()
+
+    act(() => vi.advanceTimersByTime(200))
     expect(screen.queryByText(T('toast:demo.one'))).not.toBeInTheDocument()
     expect(screen.getByText(T('toast:demo.two'))).toBeInTheDocument()
+    vi.useRealTimers()
   })
 })

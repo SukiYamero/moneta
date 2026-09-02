@@ -269,6 +269,7 @@ describe('SearchScreen', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Comida' }))
     await user.click(within(dialog).getByRole('button', { name: /^ver \d+ resultados?$/i }))
 
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
     expect(screen.getByRole('button', { name: 'Comida' })).toBeInTheDocument()
     expect(screen.queryByText('cat_comida')).not.toBeInTheDocument()
   })
@@ -302,6 +303,7 @@ describe('SearchScreen', () => {
     await user.click(within(screen.getByRole('dialog')).getByRole('radio', { name: /ingresos/i }))
     await user.keyboard('{Escape}')
 
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
     expect(screen.queryByText('Café de la mañana')).not.toBeInTheDocument()
     const chip = screen.getByRole('button', { name: /ingresos/i })
 

@@ -13,6 +13,10 @@ Things only the user can do — design work in the Claude Design canvas, decisio
 
 ## Open
 
+### 32. Does the swipe/drag flick-and-exit feel native on a real phone? — `owner: user`
+
+`BottomSheet`, `Toast`, and `PagedGrid` now commit on a fast short flick (not just a full-distance drag), and a dismissed sheet/toast actually animates off-screen before disappearing instead of vanishing instantly — confirmed correct via unit tests (jsdom has no real layout/timing, so the _feel_ is unverified). The velocity/distance thresholds (`SWIPE_COMMIT_VELOCITY_PX_MS` etc. in `PagedGrid.tsx`/`BottomSheet.tsx`/`Toast.tsx`) are a first guess, tunable. `PagedGrid`'s track is also now `touch-action: none` so a diagonal swipe can no longer race the browser's own scroll and simultaneously page-and-scroll the enclosing sheet/modal — confirmed by unit test, not on real touch hardware. The check: on a real iPhone, do a quick short flick to dismiss the Add sheet, a toast, and to page the category icon picker — does it commit like a native gesture would? Does the sheet/toast sliding off-screen before it disappears look smooth, not janky or truncated? Also swipe deliberately diagonally over the icon picker — does it page cleanly without the modal scrolling underneath it, and can you still scroll the modal by starting the touch outside the icon grid?
+
 ### 31. Is "welcome back" on every reload without a PIN the right trade-off? — `owner: user`
 
 Without a PIN/biometric lock configured, `authStore` never persists a session across a reload — `restore()` deliberately never attempts a silent Google re-auth, since GIS's silent mode can pop a visible window under iOS WebKit's third-party-cookie blocking. The only path that survives a reload without re-tapping is having PIN/biometric lock enabled, which caches an encrypted token. The decision needed: keep this as-is (push people toward PIN for persistence), or look for a middle ground — accept it as intentional, or want it revisited.

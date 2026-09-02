@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from 'react'
 import { useTranslation } from 'react-i18next'
+import { createVelocityTracker, findScrollableAncestor, shouldCommitSwipe } from '@/lib/gesture'
 import { cn } from '@/lib/utils'
 
 export interface PagedGridProps<T> {
@@ -26,6 +27,7 @@ export interface PagedGridProps<T> {
 }
 
 const SWIPE_COMMIT_THRESHOLD_PX = 40
+const SWIPE_COMMIT_VELOCITY_PX_MS = 0.5
 const AXIS_LOCK_DISTANCE_PX = 4
 
 type DragAxis = 'horizontal' | 'vertical' | null
@@ -54,6 +56,9 @@ export const PagedGrid = <T,>({
   const pointerId = useRef<number | null>(null)
   const suppressNextClick = useRef(false)
   const trackRef = useRef<HTMLDivElement>(null)
+  const velocityTracker = useRef(createVelocityTracker())
+  const scrollAncestor = useRef<HTMLElement | null>(null)
+  const verticalScrollStart = useRef(0)
   const [minHeight, setMinHeight] = useState<number>()
 
   useEffect(() => {
@@ -116,6 +121,8 @@ export const PagedGrid = <T,>({
     dragStart.current = { x: event.clientX, y: event.clientY }
     dragAxis.current = null
     suppressNextClick.current = false
+    velocityTracker.current.reset()
+    velocityTracker.current.record(event.clientX, event.timeStamp)
     event.currentTarget.setPointerCapture?.(event.pointerId)
   }
 
@@ -130,27 +137,65 @@ export const PagedGrid = <T,>({
       if (dragAxis.current === 'horizontal') {
         suppressNextClick.current = true
         if (trackRef.current) trackRef.current.style.transitionDuration = '0ms'
+      } else {
+        scrollAncestor.current = findScrollableAncestor(trackRef.current)
+        verticalScrollStart.current = scrollAncestor.current?.scrollTop ?? 0
       }
     }
 
-    if (dragAxis.current !== 'horizontal') return
+    if (dragAxis.current === 'vertical') {
+      if (scrollAncestor.current)
+        scrollAncestor.current.scrollTop = verticalScrollStart.current - dy
+      return
+    }
+
     event.preventDefault()
+    velocityTracker.current.record(event.clientX, event.timeStamp)
     const offset = clampOffset(dx)
     dragOffsetRef.current = offset
     applyDragStyle(offset)
   }
 
-  const commitOrSpring = (dx: number) => {
+  // Repositions the track just off the visible edge the swipe was already headed toward, so the
+  // incoming page's content continues the finger's motion instead of restarting from the old offset.
+  const continueSlideAfterCommit = (dx: number) => {
+    const track = trackRef.current
+    if (!track) return
+    const width = track.offsetWidth
+    if (!width) return
+    const continuation = dx < 0 ? width + dx : dx - width
+    track.style.transitionDuration = '0ms'
+    track.style.transform = `translateX(${continuation}px)`
+    void track.offsetHeight
+  }
+
+  const commitOrSpring = (dx: number, releaseTime: number) => {
     if (dragAxis.current !== 'horizontal') return
-    if (Math.abs(dx) < SWIPE_COMMIT_THRESHOLD_PX) return
-    if (dx < 0 && hasNextPage) onPageChange(safePage + 1)
-    else if (dx > 0 && hasPrevPage) onPageChange(safePage - 1)
+    const velocity = velocityTracker.current.velocity(releaseTime)
+    const commit = shouldCommitSwipe({
+      distance: dx,
+      velocity,
+      distanceThreshold: SWIPE_COMMIT_THRESHOLD_PX,
+      velocityThreshold: SWIPE_COMMIT_VELOCITY_PX_MS,
+    })
+    if (!commit) return
+    // Distance decides direction once it alone clears the threshold; below that, the commit
+    // was granted on velocity, so trust velocity's sign — a short flick can end back near 0
+    // distance while its final-moment direction (what velocity measures) is what the user meant.
+    const direction = Math.abs(dx) >= SWIPE_COMMIT_THRESHOLD_PX ? dx : velocity
+    if (direction < 0 && hasNextPage) {
+      onPageChange(safePage + 1)
+      continueSlideAfterCommit(dx)
+    } else if (direction > 0 && hasPrevPage) {
+      onPageChange(safePage - 1)
+      continueSlideAfterCommit(dx)
+    }
   }
 
   const handlePointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.pointerId !== pointerId.current) return
     releaseCapture(event)
-    commitOrSpring(dragOffsetRef.current)
+    commitOrSpring(dragOffsetRef.current, event.timeStamp)
     resetDrag()
   }
 
@@ -204,7 +249,7 @@ export const PagedGrid = <T,>({
           onClickCapture={handleClickCapture}
           onKeyDown={handleKeyDown}
           style={trackStyle}
-          className="grid touch-pan-y select-none gap-2 rounded-lg outline-none transition-transform duration-300 ease-[var(--ease-ios)] focus-visible:ring-3 focus-visible:ring-ring/50"
+          className="grid touch-none select-none gap-2 rounded-lg outline-none transition-transform duration-300 ease-[var(--ease-ios)] focus-visible:ring-3 focus-visible:ring-ring/50"
         >
           {pageItems.map((item, index) => (
             <div key={itemKey(item, index)}>{renderItem(item, index)}</div>
