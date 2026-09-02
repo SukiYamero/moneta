@@ -255,7 +255,7 @@ describe('BottomSheet', () => {
       await user.pointer({ coords: { clientY: 300 } })
       expect(panel.style.transform).not.toBe('')
 
-      handle.dispatchEvent(new Event('lostpointercapture', { bubbles: true }))
+      handle.dispatchEvent(new PointerEvent('lostpointercapture', { bubbles: true, pointerId: 1 }))
 
       expect(onClose).not.toHaveBeenCalled()
       expect(panel.style.transform).toBe('')
