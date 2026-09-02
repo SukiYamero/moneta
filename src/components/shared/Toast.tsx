@@ -1,5 +1,5 @@
 import { CircleAlert, CircleCheck, X } from 'lucide-react'
-import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { useRef, type PointerEvent as ReactPointerEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { IconAvatar, type IconAvatarTint } from '@/components/shared/IconAvatar'
 import { i18next } from '@/lib/i18n'
@@ -11,6 +11,8 @@ export interface ToastProps {
 }
 
 const SWIPE_DISMISS_THRESHOLD_PX = 80
+const SWIPE_OPACITY_FLOOR = 0.3
+const SWIPE_OPACITY_RANGE_PX = 200
 
 const VARIANT_ICON = {
   success: CircleCheck,
@@ -24,23 +26,44 @@ const VARIANT_TINT: Record<ToastVariant, IconAvatarTint> = {
 
 export const Toast = ({ item, onDismiss }: ToastProps) => {
   const { t } = useTranslation('toast')
-  const [dragX, setDragX] = useState(0)
-  const [dragging, setDragging] = useState(false)
+  const cardRef = useRef<HTMLDivElement>(null)
+  const dragOffsetRef = useRef(0)
+  const draggingRef = useRef(false)
   const dragStartX = useRef(0)
   const pointerIdRef = useRef<number | null>(null)
 
   const Icon = VARIANT_ICON[item.variant]
 
+  const applyDragStyle = (offset: number) => {
+    const card = cardRef.current
+    if (!card) return
+    card.style.transform = offset ? `translateX(${offset}px)` : ''
+    card.style.opacity = String(
+      Math.max(SWIPE_OPACITY_FLOOR, 1 - Math.abs(offset) / SWIPE_OPACITY_RANGE_PX),
+    )
+  }
+
+  const resetCardStyle = () => {
+    const card = cardRef.current
+    if (!card) return
+    card.style.transitionDuration = ''
+    card.style.transform = ''
+    card.style.opacity = ''
+  }
+
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     dragStartX.current = event.clientX
     pointerIdRef.current = event.pointerId
-    setDragging(true)
+    draggingRef.current = true
     event.currentTarget.setPointerCapture?.(event.pointerId)
+    if (cardRef.current) cardRef.current.style.transitionDuration = '0ms'
   }
 
   const handlePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (!dragging) return
-    setDragX(event.clientX - dragStartX.current)
+    if (!draggingRef.current) return
+    const offset = event.clientX - dragStartX.current
+    dragOffsetRef.current = offset
+    applyDragStyle(offset)
   }
 
   const releaseCapture = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -53,33 +76,36 @@ export const Toast = ({ item, onDismiss }: ToastProps) => {
 
   const endDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
     releaseCapture(event)
-    if (!dragging) return
-    setDragging(false)
-    if (Math.abs(dragX) > SWIPE_DISMISS_THRESHOLD_PX) onDismiss()
-    else setDragX(0)
+    if (!draggingRef.current) return
+    draggingRef.current = false
+    const offset = dragOffsetRef.current
+    dragOffsetRef.current = 0
+    if (Math.abs(offset) > SWIPE_DISMISS_THRESHOLD_PX) {
+      onDismiss()
+      return
+    }
+    resetCardStyle()
   }
 
   const cancelDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
     releaseCapture(event)
-    setDragging(false)
-    setDragX(0)
+    draggingRef.current = false
+    dragOffsetRef.current = 0
+    resetCardStyle()
   }
 
   const handleLostPointerCapture = () => {
     pointerIdRef.current = null
-    if (!dragging) return
-    setDragging(false)
-    setDragX(0)
+    if (!draggingRef.current) return
+    draggingRef.current = false
+    dragOffsetRef.current = 0
+    resetCardStyle()
   }
 
   return (
     <div
+      ref={cardRef}
       role={item.variant === 'error' ? 'alert' : 'status'}
-      style={{
-        transform: dragX ? `translateX(${dragX}px)` : undefined,
-        opacity: dragging ? Math.max(0.3, 1 - Math.abs(dragX) / 200) : undefined,
-        transitionDuration: dragging ? '0ms' : undefined,
-      }}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={endDrag}

@@ -1,3 +1,4 @@
+import { Profiler } from 'react'
 import { describe, it, expect, vi } from 'vitest'
 import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -204,11 +205,12 @@ describe('BottomSheet', () => {
       expect(onClose).toHaveBeenCalledOnce()
     })
 
-    it('does not close when dragged below the dismiss threshold', async () => {
+    it('does not close when dragged below the dismiss threshold, and snaps back animated rather than staying stuck at the drag offset', async () => {
       const user = userEvent.setup()
       const onClose = vi.fn()
       render(<Harness open onClose={onClose} />)
       const handle = getHandle()
+      const panel = screen.getByRole('dialog')
 
       await user.pointer([
         { keys: '[MouseLeft>]', target: handle, coords: { clientY: 0 } },
@@ -217,22 +219,74 @@ describe('BottomSheet', () => {
       ])
 
       expect(onClose).not.toHaveBeenCalled()
+      expect(panel.style.transform).toBe('')
+      expect(panel.style.transitionDuration).toBe('')
     })
 
-    it('never closes on pointercancel, regardless of drag distance', async () => {
+    it('never closes on pointercancel, regardless of drag distance, and fully clears the visual transform', async () => {
       const user = userEvent.setup()
       const onClose = vi.fn()
       render(<Harness open onClose={onClose} />)
       const handle = getHandle()
+      const panel = screen.getByRole('dialog')
 
       // user-event's pointer API has no pointercancel equivalent, so it's dispatched as a raw native event.
       await user.pointer({ keys: '[MouseLeft>]', target: handle, coords: { clientY: 0 } })
       await user.pointer({ coords: { clientY: 300 } })
+      expect(panel.style.transform).not.toBe('')
+
       handle.dispatchEvent(
         new PointerEvent('pointercancel', { bubbles: true, cancelable: true, pointerId: 1 }),
       )
 
       expect(onClose).not.toHaveBeenCalled()
+      expect(panel.style.transform).toBe('')
+      expect(panel.style.transitionDuration).toBe('')
+    })
+
+    it('resets fully when the drag is released outside the window (lostpointercapture), the only event guaranteed to fire there', async () => {
+      const user = userEvent.setup()
+      const onClose = vi.fn()
+      render(<Harness open onClose={onClose} />)
+      const handle = getHandle()
+      const panel = screen.getByRole('dialog')
+
+      await user.pointer({ keys: '[MouseLeft>]', target: handle, coords: { clientY: 0 } })
+      await user.pointer({ coords: { clientY: 300 } })
+      expect(panel.style.transform).not.toBe('')
+
+      handle.dispatchEvent(new PointerEvent('lostpointercapture', { bubbles: true, pointerId: 1 }))
+
+      expect(onClose).not.toHaveBeenCalled()
+      expect(panel.style.transform).toBe('')
+      expect(panel.style.transitionDuration).toBe('')
+    })
+
+    it('tracks a pointermove flood entirely through the panel style, with zero React re-renders', async () => {
+      const user = userEvent.setup()
+      const onClose = vi.fn()
+      let renderCount = 0
+      render(
+        <Profiler id="sheet" onRender={() => (renderCount += 1)}>
+          <Harness open onClose={onClose} />
+        </Profiler>,
+      )
+      await vi.waitFor(() => {
+        expect(screen.getByRole('button', { name: 'Primero' })).toHaveFocus()
+      })
+      const panel = screen.getByRole('dialog')
+      const handle = getHandle()
+      renderCount = 0
+
+      await user.pointer({ keys: '[MouseLeft>]', target: handle, coords: { clientY: 0 } })
+      for (const clientY of [10, 20, 30, 40, 50, 60, 70, 80]) {
+        await user.pointer({ coords: { clientY } })
+      }
+      expect(panel.style.transform).toBe('translateY(80px)')
+      expect(renderCount).toBe(0)
+
+      await user.pointer('[/MouseLeft]')
+      expect(renderCount).toBe(0)
     })
 
     it('ignores a second finger touching the handle instead of letting it hijack the drag', () => {
