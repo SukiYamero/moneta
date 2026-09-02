@@ -324,8 +324,24 @@ outcome as a rule in the relevant §10 entry.
 - Every interactive control keeps a real ≥44px touch target via an invisible-padding wrapper around a visually smaller pill/icon, never by inflating the visible chip itself. `disabled` is supported on `TagChip` and per-option on `SegmentedControlOption`; arrow-key nav skips a disabled option rather than making it reachable but inert.
 - `movimientoView.ts`'s `Intl.NumberFormat` instances are memoized per `Moneda` at module scope, never built per row per render.
 - `BottomSheet`'s drag-to-dismiss feature-detects `setPointerCapture`/`hasPointerCapture`/`releasePointerCapture` (`?.()`); `pointercancel` resets drag state without checking the dismiss threshold (a cancelled gesture is never dismiss intent); `lostpointercapture` is the catch-all for a drag that ends outside the window.
+- The live drag offset is tracked in a ref and mutates the panel's `transform`/`transitionDuration` directly on the DOM node during the gesture — never React state — so a `pointermove` flood never re-renders the tree beneath the sheet. `Toast` (§10.6) and `PagedGrid` (§10.5.2) follow the identical pattern.
 
 **Implementation.** `src/components/shared/useOverlay.ts` also exports `FOCUSABLE_SELECTOR` and the `OverlayShellProps<T>` type both shells' public `Props` re-export, and `useHasOpenOverlay()` (§10.53) — the same stack exposed via `useSyncExternalStore`.
+
+### 10.5.2 PagedGrid — swipeable paged grid
+
+**Goal.** A fixed-size grid of items that pages horizontally by swipe, tap-to-jump dot, or arrow key, reserving a stable height so a shorter page never collapses the layout.
+
+**Rules.**
+
+- A gesture locks to horizontal or vertical once either axis clears 4px of movement; only a horizontal lock calls `preventDefault()` and pages, never a vertical one (`touch-pan-y` lets the browser own vertical panning otherwise).
+- A horizontal drag past `SWIPE_COMMIT_THRESHOLD_PX` (40px) pages forward/backward; short of that, or at either end with no adjacent page, it springs back to 0.
+- The reserved height is the tallest page seen for the current `items` list, re-baselined whenever `items` itself changes (not on every page change) so a shorter list never inherits a taller one's height.
+- The drag offset is ref-tracked and DOM-mutated exactly like `BottomSheet`/`Toast` (§10.5.1) — never React state.
+
+**Implementation.** `src/components/shared/PagedGrid.tsx`; used by the category icon picker (`src/features/tags/CategoryFormModal.tsx`, §10.22.1).
+
+**Watch out.** The axis lock only takes effect once it resolves — on a genuinely diagonal swipe, the browser can already have committed to its own vertical scroll (via `touch-pan-y`) before the 4px threshold decides horizontal, and a `preventDefault()` after that point does not undo a scroll the browser already started. An imperfectly-horizontal swipe can page and scroll at the same time; no fix is in place yet.
 
 ### 10.6 Toast — the global notification surface
 
@@ -335,7 +351,7 @@ outcome as a rule in the relevant §10 entry.
 
 - Toasts stack in arrival order; concurrent toasts never replace one another, and each keeps its own independent dismissal timer.
 - Sits above every overlay (`z-[60]`, above the shells' `z-50`) and clear of the safe-area insets and the bottom nav.
-- Swipe-to-dismiss via Pointer Events plus a keyboard-reachable close button — a timed message must stay dismissible without the gesture (WCAG 2.2.1).
+- Swipe-to-dismiss via Pointer Events plus a keyboard-reachable close button — a timed message must stay dismissible without the gesture (WCAG 2.2.1). The live offset is ref-tracked and DOM-mutated, never React state (§10.5.1).
 - It is a notification, never a dialog: it never blocks, traps focus, or asks a question — anything needing a decision is a `CenterModal`.
 - Errors announce assertively (`role="alert"`); confirmations politely (`role="status"`).
 - Must never render while the app is locked — a notification about data is content, and the lock exists to hide content.
@@ -1117,7 +1133,7 @@ outcome as a rule in the relevant §10 entry.
 
 ### Performance & gestures (priority)
 
-- **`BottomSheet`'s drag-to-dismiss re-renders React on every `pointermove`** — `handlePointerMove` calls `setDragY` per event instead of mutating the panel's `transform` directly via a ref during the drag, only committing to state once on release. Every sheet in the app (categories, add movimiento, profile) inherits the jank from this one component (`src/components/shared/BottomSheet.tsx`).
+- **A diagonal swipe on `PagedGrid` can page and scroll at the same time** (§10.5.2's "Watch out") — the axis lock resolves after 4px, but the browser can already have committed to its own vertical scroll under `touch-pan-y` before that, and a later `preventDefault()` doesn't undo it. Most visible swiping between pages of the category icon picker.
 - **Horizontal scroll rows have no `overscroll-behavior-x: contain`** — `CategoryPicker` and `PeriodPickerRow` can chain their scroll into the page's vertical scroll at their horizontal edges (`src/features/tags/CategoryPicker.tsx`, `src/features/history/PeriodPickerRow.tsx`).
 
 ### Native distribution — Capacitor migration (priority 2)
