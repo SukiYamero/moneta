@@ -48,8 +48,7 @@ export const PagedGrid = <T,>({
   const hasPrevPage = safePage > 0
   const hasNextPage = safePage < pageCount - 1
 
-  const [dragOffset, setDragOffset] = useState(0)
-  const [dragging, setDragging] = useState(false)
+  const dragOffsetRef = useRef(0)
   const dragStart = useRef({ x: 0, y: 0 })
   const dragAxis = useRef<DragAxis>(null)
   const pointerId = useRef<number | null>(null)
@@ -92,10 +91,23 @@ export const PagedGrid = <T,>({
     pointerId.current = null
   }
 
+  const applyDragStyle = (offset: number) => {
+    const track = trackRef.current
+    if (!track) return
+    track.style.transform = offset ? `translateX(${offset}px)` : ''
+  }
+
+  const resetTrackStyle = () => {
+    const track = trackRef.current
+    if (!track) return
+    track.style.transitionDuration = ''
+    track.style.transform = ''
+  }
+
   const resetDrag = () => {
     dragAxis.current = null
-    setDragging(false)
-    setDragOffset(0)
+    dragOffsetRef.current = 0
+    resetTrackStyle()
   }
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -116,14 +128,16 @@ export const PagedGrid = <T,>({
       if (Math.max(Math.abs(dx), Math.abs(dy)) < AXIS_LOCK_DISTANCE_PX) return
       dragAxis.current = Math.abs(dx) > Math.abs(dy) ? 'horizontal' : 'vertical'
       if (dragAxis.current === 'horizontal') {
-        setDragging(true)
         suppressNextClick.current = true
+        if (trackRef.current) trackRef.current.style.transitionDuration = '0ms'
       }
     }
 
     if (dragAxis.current !== 'horizontal') return
     event.preventDefault()
-    setDragOffset(clampOffset(dx))
+    const offset = clampOffset(dx)
+    dragOffsetRef.current = offset
+    applyDragStyle(offset)
   }
 
   const commitOrSpring = (dx: number) => {
@@ -136,7 +150,7 @@ export const PagedGrid = <T,>({
   const handlePointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.pointerId !== pointerId.current) return
     releaseCapture(event)
-    commitOrSpring(dragOffset)
+    commitOrSpring(dragOffsetRef.current)
     resetDrag()
   }
 
@@ -172,8 +186,6 @@ export const PagedGrid = <T,>({
   const trackStyle: CSSProperties = {
     gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
     minHeight: minHeight ? `${minHeight}px` : undefined,
-    transform: dragOffset ? `translateX(${dragOffset}px)` : undefined,
-    transitionDuration: dragging ? '0ms' : undefined,
   }
 
   return (

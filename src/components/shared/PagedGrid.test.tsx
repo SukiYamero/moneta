@@ -1,3 +1,4 @@
+import { Profiler } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -98,18 +99,21 @@ describe('PagedGrid', () => {
     expect(onPageChange).toHaveBeenCalledWith(1)
   })
 
-  it('springs back without paging on a 20px drag', async () => {
+  it('springs back without paging on a 20px drag, animated rather than stuck at the drag offset', async () => {
     const user = userEvent.setup()
     const onPageChange = vi.fn()
     render(<Harness items={makeItems(20)} page={0} onPageChange={onPageChange} />)
+    const track = getTrack()
 
     await user.pointer([
-      { keys: '[MouseLeft>]', target: getTrack(), coords: { clientX: 0 } },
+      { keys: '[MouseLeft>]', target: track, coords: { clientX: 0 } },
       { coords: { clientX: -20 } },
       '[/MouseLeft]',
     ])
 
     expect(onPageChange).not.toHaveBeenCalled()
+    expect(track.style.transform).toBe('')
+    expect(track.style.transitionDuration).toBe('')
   })
 
   it('commits to the previous page on a 60px rightward drag', async () => {
@@ -142,6 +146,71 @@ describe('PagedGrid', () => {
 
     expect(moveEvent.defaultPrevented).toBe(false)
     expect(onPageChange).not.toHaveBeenCalled()
+  })
+
+  it('fully clears the visual transform on pointercancel mid-drag, without checking the commit threshold', () => {
+    const onPageChange = vi.fn()
+    render(<Harness items={makeItems(20)} page={0} onPageChange={onPageChange} />)
+    const track = getTrack()
+
+    dispatchPointer(track, 'pointerdown', { pointerId: 1, clientX: 0 })
+    dispatchPointer(track, 'pointermove', { pointerId: 1, clientX: -60 })
+    expect(track.style.transform).not.toBe('')
+
+    const event = new PointerEvent('pointercancel', {
+      bubbles: true,
+      cancelable: true,
+      pointerId: 1,
+    })
+    act(() => {
+      track.dispatchEvent(event)
+    })
+
+    expect(onPageChange).not.toHaveBeenCalled()
+    expect(track.style.transform).toBe('')
+    expect(track.style.transitionDuration).toBe('')
+  })
+
+  it('fully clears the visual transform when the drag is released outside the window (lostpointercapture)', () => {
+    const onPageChange = vi.fn()
+    render(<Harness items={makeItems(20)} page={0} onPageChange={onPageChange} />)
+    const track = getTrack()
+
+    dispatchPointer(track, 'pointerdown', { pointerId: 1, clientX: 0 })
+    dispatchPointer(track, 'pointermove', { pointerId: 1, clientX: -60 })
+    expect(track.style.transform).not.toBe('')
+
+    dispatchPointer(track, 'lostpointercapture', { pointerId: 1 })
+
+    expect(onPageChange).not.toHaveBeenCalled()
+    expect(track.style.transform).toBe('')
+    expect(track.style.transitionDuration).toBe('')
+  })
+
+  it('tracks a pointermove flood entirely through the track style, with zero React re-renders', async () => {
+    const user = userEvent.setup()
+    const onPageChange = vi.fn()
+    let renderCount = 0
+    render(
+      <Profiler id="paged-grid" onRender={() => (renderCount += 1)}>
+        <Harness items={makeItems(20)} page={0} onPageChange={onPageChange} />
+      </Profiler>,
+    )
+    const track = getTrack()
+    renderCount = 0
+
+    await user.pointer({ keys: '[MouseLeft>]', target: track, coords: { clientX: 0 } })
+    for (const clientX of [-5, -10, -15, -20, -25, -30]) {
+      await user.pointer({ coords: { clientX } })
+    }
+    expect(track.style.transform).toBe('translateX(-30px)')
+    expect(renderCount).toBe(0)
+
+    await user.pointer('[/MouseLeft]')
+    expect(onPageChange).not.toHaveBeenCalled()
+    expect(renderCount).toBe(0)
+    expect(track.style.transform).toBe('')
+    expect(track.style.transitionDuration).toBe('')
   })
 
   it('is inert at the last page against a further leftward drag', async () => {
