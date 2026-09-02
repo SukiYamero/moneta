@@ -1115,6 +1115,11 @@ outcome as a rule in the relevant §10 entry.
 
 ## 11. Backlog (pending verification / deferred work)
 
+### Performance & gestures (priority)
+
+- **`BottomSheet`'s drag-to-dismiss re-renders React on every `pointermove`** — `handlePointerMove` calls `setDragY` per event instead of mutating the panel's `transform` directly via a ref during the drag, only committing to state once on release. Every sheet in the app (categories, add movimiento, profile) inherits the jank from this one component (`src/components/shared/BottomSheet.tsx`).
+- **Horizontal scroll rows have no `overscroll-behavior-x: contain`** — `CategoryPicker` and `PeriodPickerRow` can chain their scroll into the page's vertical scroll at their horizontal edges (`src/features/tags/CategoryPicker.tsx`, `src/features/history/PeriodPickerRow.tsx`).
+
 ### Sync & outbox correctness
 
 - **`ProfilesSection.test.tsx`'s "this device" case failed intermittently in a full run, never in isolation.** Reviewed: no state-leak found (the one non-atomic read-then-write in `getActiveProfile()` converges on a fixed id, so it's benign, not the cause). Mitigated by widening that assertion's `findByText` timeout (full-suite CPU contention vs. Testing Library's 1000ms default is the best-supported explanation) — not a confirmed root cause. If it recurs, capture the actual CI failure output before guessing further.
