@@ -1,6 +1,9 @@
+import { useEffect, useState } from 'react'
 import { LogIn, LogOut } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/lib/authStore'
+import { useBootStore } from '@/lib/boot'
+import { getActiveProfile, type ProfileRecord } from '@/lib/profiles'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { getInitials } from '@/lib/initials'
@@ -15,10 +18,30 @@ export const IdentitySection = () => {
   const user = useAuthStore((s) => s.user)
   const authError = useAuthStore((s) => s.error)
   const login = useAuthStore((s) => s.login)
+  const bootStatus = useBootStore((s) => s.status)
   const { confirmOpen, pendingCount, checking, requestSignOut, confirmSignOut, cancelSignOut } =
     useSignOutConfirm()
 
-  const isAuthenticated = status === 'authenticated'
+  // authStore reflects the device's live Google session, not which profile is bound right
+  // now — a Google-authenticated device can have its local/guest profile active. Re-reads
+  // once boot settles, which also happens after switchToProfile's own boot.run() rebind, so
+  // this stays in sync with a switch performed elsewhere in the same open sheet.
+  const [activeProfile, setActiveProfile] = useState<ProfileRecord>()
+  useEffect(() => {
+    if (bootStatus !== 'ready') return
+    let cancelled = false
+    void getActiveProfile().then((profile) => {
+      if (!cancelled) setActiveProfile(profile)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [bootStatus])
+
+  // Unresolved (activeProfile not fetched yet) trusts the live session alone, same as before
+  // this fix existed.
+  const isLocalProfileActive = activeProfile?.kind === 'local'
+  const isAuthenticated = !isLocalProfileActive && status === 'authenticated'
   const busy = status === 'authenticating'
 
   return (

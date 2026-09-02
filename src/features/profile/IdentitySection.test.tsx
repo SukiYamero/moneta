@@ -1,7 +1,9 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useAuthStore } from '@/lib/authStore'
+import { __resetBootStoreForTests, useBootStore } from '@/lib/boot'
+import { __clearRegistryForTests, registerProfile, setActiveProfileId } from '@/lib/profiles'
 import { IdentitySection } from '@/features/profile/IdentitySection'
 
 vi.mock('@/lib/outbox', () => ({ listPendingOperations: vi.fn() }))
@@ -20,6 +22,11 @@ beforeEach(() => {
     error: null,
     driveOptIn: 'connected',
   })
+  __resetBootStoreForTests()
+})
+
+afterEach(async () => {
+  await __clearRegistryForTests()
 })
 
 describe('IdentitySection', () => {
@@ -183,5 +190,40 @@ describe('IdentitySection', () => {
     useAuthStore.setState({ status: 'authenticated', user: null })
     render(<IdentitySection />)
     expect(screen.getByText(/cargando cuenta/i)).toBeInTheDocument()
+  })
+
+  it('shows the guest card, not the Google account, once the active profile resolves to local — even while the device stays authenticated', async () => {
+    useAuthStore.setState({
+      status: 'authenticated',
+      user: { email: 'alex@example.com', name: 'Alex Rivera' },
+    })
+    render(<IdentitySection />)
+    expect(screen.getByText('Alex Rivera')).toBeInTheDocument()
+
+    useBootStore.setState({ status: 'ready' })
+
+    expect(await screen.findByText('Invitado')).toBeInTheDocument()
+    expect(screen.queryByText('Alex Rivera')).not.toBeInTheDocument()
+  })
+
+  it('keeps showing the Google account once the active profile resolves to that same google profile', async () => {
+    const profile = await registerProfile({
+      id: 'p-google',
+      label: 'Alex Rivera',
+      kind: 'google',
+      databaseName: 'kurobello-p-google',
+      accountKey: 'sub-1',
+    })
+    await setActiveProfileId(profile.id)
+    useAuthStore.setState({
+      status: 'authenticated',
+      user: { email: 'alex@example.com', name: 'Alex Rivera' },
+    })
+    render(<IdentitySection />)
+
+    useBootStore.setState({ status: 'ready' })
+
+    await screen.findByText('Alex Rivera')
+    expect(screen.getByRole('button', { name: /cerrar sesión/i })).toBeInTheDocument()
   })
 })
