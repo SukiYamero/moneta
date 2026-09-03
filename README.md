@@ -10,6 +10,25 @@ user's Drive, the developer stores nothing.
 > lock HKDF info) are frozen at the 2026-08-18 baseline and do not follow later
 > renames.
 
+## Status
+
+This repo holds the **web MVP — feature-complete and functional** for the
+product's core flows (movimientos, activos, Drive sync, PIN lock). It stays
+up and working as a live reference for the product's business logic, data
+model and UX, but it is not where new feature work happens.
+
+Active development has moved to a **native app built with Kotlin
+Multiplatform**: one shared Kotlin module for the data/business logic,
+compiled natively for Android and iOS — no WebView, no bridge. A WebView
+wrapper (Capacitor) was the original plan, but Google blocking OAuth inside
+embedded WebViews and iOS viewport/keyboard drift are exactly the class of
+bug a genuinely native app avoids by construction, hence the move. Android
+ships first, UI in Jetpack Compose; iOS follows once Android is working, with
+**Compose Multiplatform** — sharing the same Compose UI code natively on iOS
+too — as the leading option for its UI. See
+[`docs/tasks/native-kmp-migration.md`](docs/tasks/native-kmp-migration.md)
+for the full plan and rationale.
+
 ## Where to start
 
 - **`specs.md`** — the source of truth: architecture, data model, security
