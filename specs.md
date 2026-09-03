@@ -1138,18 +1138,10 @@ outcome as a rule in the relevant §10 entry.
 
 ## 11. Backlog (pending verification / deferred work)
 
-### Overlay/gesture polish
+### Native distribution — Kotlin Multiplatform, Android first (priority 2)
 
-- **`CenterModal` still unmounts instantly on close, no exit transition** — `BottomSheet` (§10.5.1) now keeps its panel mounted through a real exit animation; `CenterModal` doesn't, so the app's two modal shells diverge in dismiss feel despite sharing the same `useOverlay`/`useBackdropDismiss` infrastructure.
-- **A vertical drag on `PagedGrid` (§10.5.2) that scrolls its ancestor has no momentum** — the manual `scrollTop` forwarding tracks the finger 1:1 but drops the native fling/deceleration a drag starting outside the grid still gets, a perceptible difference in an area meant to feel native.
-
-### Native distribution — Capacitor migration (priority 2)
-
-- **Distribution moves to the app stores; the web build stops being a usable target.** Google Play and the Apple App Store become the primary (only) way people run the app; the site at the current domain turns into a landing page whose one job is to send a visitor to the right store listing. Resolves `docs/pendientes-usuario.md`'s former item 28 (TWA vs. Capacitor) — Capacitor wins because the App Store cannot install a TWA at all, and it wraps the existing React/Vite/TS codebase instead of demanding a rewrite.
-- **Local storage moves from dexie/IndexedDB to Capacitor's SQLite plugin** (`@capacitor-community/sqlite`), reached through the same `Repo` port (§10.3) — `repo.local.ts` gets a SQLite-backed sibling behind the existing interface, no screen changes.
-- Resolves the two iOS keyboard bugs the web has no fix for (§10.5.1/item 27, item 29): `Keyboard.setAccessoryBarVisible(false)` removes the AutoFill bar over the sheet bottom, `Keyboard.setResizeMode('native')` removes the `dvh`-drift viewport pan.
-- `vite-plugin-pwa`, the service-worker update flow (§10.16) and static hosting stop being load-bearing once the app stores are the distribution path — evaluate what to keep only for the landing page versus what gets removed with the migration.
-- Auth/Drive sync (§5, §10.19) is unaffected in principle — Capacitor's WebView still runs the same GIS/Drive code — but the OAuth redirect flow needs a native-capable variant (`@capacitor/browser` or an in-app browser tab) since a packaged app has no origin for the popup-based flow to return to.
+- **Distribution moves to genuinely native apps, Android first, iOS once Android ships** — one shared Kotlin module for the data/business logic (schema, `movimientoStats`, sync/outbox engine, validation), native UI per platform. The web build stops being a usable target; the current domain becomes a landing page pointing at the store listings. Full decision, rationale, and sequencing: `docs/tasks/native-kmp-migration.md`.
+- Supersedes the earlier Capacitor/WebView plan outright — not a stepping stone toward it.
 
 ### Sync & outbox correctness
 
